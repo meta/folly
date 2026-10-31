@@ -288,6 +288,11 @@ list(
   ${FOLLY_DIR}/test/TestUtils.h
 )
 
+if (FOLLY_USE_JEMALLOC)
+  # Consumers may include jemalloc before a Folly header.
+  target_compile_definitions(folly_deps INTERFACE JEMALLOC_NO_DEMANGLE)
+endif ()
+
 # Generate pkg-config variables from folly_deps before we add our own
 # build/install-time include directory generator expressions
 include(GenPkgConfig)
@@ -1475,6 +1480,10 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     memory_mallctl_helper_test
     SOURCES
     MallctlHelperTest.cpp
+    TEST
+    memory_malloc_test
+    SOURCES
+    MallocTest.cpp
     TEST
     memory_uninitialized_memory_hacks_test
     SOURCES
