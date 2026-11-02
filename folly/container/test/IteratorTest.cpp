@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <deque>
 #include <functional>
+#include <istream>
 #include <iterator>
 #include <list>
 #include <map>
@@ -63,6 +64,51 @@ TEST_F(IteratorTest, iterator_category_t) {
           folly::iterator_category_t<
               std::iterator<std::input_iterator_tag, int>>,
           std::output_iterator_tag>));
+}
+
+TEST_F(IteratorTest, iterator_concept_t) {
+  auto ints_iota = std::views::iota(0, 1);
+  using iota_iterator = decltype(ints_iota.begin());
+  using istream_iterator = std::ranges::iterator_t<
+      std::ranges::basic_istream_view<int, char, std::char_traits<char>>>;
+
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<int*>,
+          std::contiguous_iterator_tag>));
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<const int*>,
+          std::contiguous_iterator_tag>));
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<std::vector<int>::iterator>,
+          std::contiguous_iterator_tag>));
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<std::reverse_iterator<int*>>,
+          std::random_access_iterator_tag>));
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<folly::reverse_iterator<int*>>,
+          std::random_access_iterator_tag>));
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<iota_iterator>,
+          std::random_access_iterator_tag>));
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<std::list<int>::iterator>,
+          std::bidirectional_iterator_tag>));
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<istream_iterator>,
+          std::input_iterator_tag>));
+  EXPECT_TRUE(( //
+      std::is_same_v<
+          folly::iterator_concept_t<
+              std::iterator<std::forward_iterator_tag, int>>,
+          std::forward_iterator_tag>));
 }
 
 TEST_F(IteratorTest, iterator_category_matches_v) {

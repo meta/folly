@@ -85,6 +85,33 @@ using iterator_category_t =
 
 namespace detail {
 
+template <typename Iter>
+using traits_iterator_concept_t =
+    typename std::iterator_traits<Iter>::iterator_concept;
+
+template <typename Iter>
+using member_iterator_concept_t = typename Iter::iterator_concept;
+
+template <typename Iter>
+using member_iterator_concept_or_category_t = conditional_apply_t<requires {
+  typename Iter::iterator_concept;
+}, member_iterator_concept_t, iterator_category_t, Iter>;
+
+} // namespace detail
+
+//  iterator_concept_t
+//
+//  Extracts iterator_concept from an iterator, falling back to
+//  iterator_category, like the standard's exposition-only ITER_CONCEPT.
+template <typename Iter>
+using iterator_concept_t = conditional_apply_t<
+    requires { typename std::iterator_traits<Iter>::iterator_concept; },
+    detail::traits_iterator_concept_t,
+    detail::member_iterator_concept_or_category_t,
+    Iter>;
+
+namespace detail {
+
 template <typename Iter, typename Category, typename = void>
 inline constexpr bool iterator_category_matches_v_ =
     !require_sizeof<Iter> || !require_sizeof<Category>;
