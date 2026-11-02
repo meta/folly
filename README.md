@@ -61,10 +61,34 @@ documentation.
 
 # What's in it?
 
-Because of folly's fairly flat structure, the best way to see what's in it
-is to look at the headers in [top level `folly/` directory](https://github.com/meta/folly/tree/main/folly). You can also
-check the [`docs` folder](folly/docs) for documentation, starting with the
-[overview](folly/docs/Overview.md).
+Notable components include:
+
+- Containers
+  - [F14](folly/container/F14.md): fast hash maps and sets
+  - [`small_vector`](folly/docs/small_vector.md): a vector that stores a few elements inline
+  - [`sorted_vector_map` and `sorted_vector_set`](folly/container/sorted_vector_types.h): maps and sets backed by a sorted vector
+  - [`ConcurrentHashMap`](folly/concurrency/ConcurrentHashMap.h): a concurrent hash map
+- Concurrency
+  - [`Synchronized`](folly/docs/Synchronized.md): data protected by a mutex
+  - [`SharedMutex`](folly/SharedMutex.h): a fast reader-writer lock
+  - [`ThreadLocal`](folly/docs/ThreadLocal.md): thread-local storage for non-trivial types
+  - [Hazard pointers](folly/docs/Hazptr.md): safe memory reclamation for concurrent data structures
+  - [Executors](folly/docs/Executors.md): thread pools and other executors
+- Async
+  - [Futures](folly/docs/Futures.md): composable futures and promises
+  - [`folly::coro`](folly/coro/README.md): C++20 coroutine tasks and utilities
+  - [`EventBase` and async sockets](folly/io/async/README.md): an event loop and asynchronous I/O
+- I/O and data
+  - [`IOBuf`](folly/io/IOBuf.h): chained, reference-counted byte buffers
+  - [`dynamic` and JSON](folly/docs/Dynamic.md): a dynamically typed value with JSON support
+- Utilities
+  - [`Conv`](folly/docs/Conv.md): `to<T>` conversions between strings and numbers
+  - [`ScopeGuard`](folly/ScopeGuard.h): code that runs when a scope exits
+  - [`Function`](folly/docs/Function.md): a move-only, type-erased callable
+  - [`Benchmark`](folly/docs/Benchmark.md): a microbenchmark framework
+
+For everything else, see the [overview](folly/docs/Overview.md) and the
+[`docs` folder](folly/docs).
 
 Folly is published on GitHub at https://github.com/meta/folly.
 
