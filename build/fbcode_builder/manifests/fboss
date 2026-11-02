@@ -33,6 +33,9 @@ FBOSS_BUILD_PROFILE=exported_libraries
 # dir leaves .built-by-getdeps matching and getdeps skips the rebuild.
 [depends.environment]
 FBOSS_BUILD_PROFILE
+FBOSS_SOURCE_REVISION
+FBOSS_SOURCE_DIRTY
+FBOSS_BUILD_VERSION
 
 [dependencies]
 folly-python
