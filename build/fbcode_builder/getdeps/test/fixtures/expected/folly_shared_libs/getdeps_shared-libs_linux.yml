@@ -56,9 +56,6 @@ jobs:
       name: Query paths
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages query-paths --recursive --src-dir=. folly  >> "$GITHUB_OUTPUT"
 
-    - name: Fetch libaio
-      if: ${{ steps.paths.outputs.libaio_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests libaio
     - name: Fetch openssl
       if: ${{ steps.paths.outputs.openssl_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests openssl
@@ -95,12 +92,6 @@ jobs:
     - name: Fetch zlib
       if: ${{ steps.paths.outputs.zlib_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests zlib
-    - name: Fetch lz4
-      if: ${{ steps.paths.outputs.lz4_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests lz4
-    - name: Fetch snappy
-      if: ${{ steps.paths.outputs.snappy_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests snappy
     - name: Fetch zstd
       if: ${{ steps.paths.outputs.zstd_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests zstd
@@ -116,15 +107,9 @@ jobs:
     - name: Fetch libiberty
       if: ${{ steps.paths.outputs.libiberty_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests libiberty
-    - name: Fetch libsodium
-      if: ${{ steps.paths.outputs.libsodium_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests libsodium
     - name: Fetch libunwind
       if: ${{ steps.paths.outputs.libunwind_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests libunwind
-    - name: Fetch xz
-      if: ${{ steps.paths.outputs.xz_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests xz
 
     - name: Build folly
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages build --build-type RelWithDebInfo --shared-lib --src-dir=. folly --project-install-prefix folly:/usr/local

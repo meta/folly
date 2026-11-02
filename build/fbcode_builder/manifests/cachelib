@@ -16,7 +16,8 @@ job_weight_mib = 3072
 zlib
 fizz
 fmt
-folly
+# Navy's device layer uses folly::AsyncIO.
+folly = libaio
 fbthrift
 googletest
 sparsemap

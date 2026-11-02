@@ -65,15 +65,15 @@ jobs:
     - name: Fetch xxhash
       if: ${{ steps.paths.outputs.xxhash_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests xxhash
+    - name: Fetch zlib
+      if: ${{ steps.paths.outputs.zlib_SOURCE }}
+      run: python3 build/fbcode_builder/getdeps.py fetch --no-tests zlib
     - name: Fetch zstd
       if: ${{ steps.paths.outputs.zstd_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests zstd
     - name: Fetch fast_float
       if: ${{ steps.paths.outputs.fast_float_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests fast_float
-    - name: Fetch libaio
-      if: ${{ steps.paths.outputs.libaio_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py fetch --no-tests libaio
     - name: Fetch libdwarf
       if: ${{ steps.paths.outputs.libdwarf_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests libdwarf
@@ -86,21 +86,18 @@ jobs:
     - name: Fetch openssl
       if: ${{ steps.paths.outputs.openssl_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests openssl
-    - name: Fetch snappy
-      if: ${{ steps.paths.outputs.snappy_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py fetch --no-tests snappy
     - name: Fetch range-v3
       if: ${{ steps.paths.outputs.range-v3_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests range-v3
     - name: Fetch re2
       if: ${{ steps.paths.outputs.re2_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests re2
+    - name: Fetch snappy
+      if: ${{ steps.paths.outputs.snappy_SOURCE }}
+      run: python3 build/fbcode_builder/getdeps.py fetch --no-tests snappy
     - name: Fetch liboqs
       if: ${{ steps.paths.outputs.liboqs_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests liboqs
-    - name: Fetch zlib
-      if: ${{ steps.paths.outputs.zlib_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py fetch --no-tests zlib
     - name: Fetch autoconf
       if: ${{ steps.paths.outputs.autoconf_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests autoconf
@@ -119,9 +116,6 @@ jobs:
     - name: Fetch libunwind
       if: ${{ steps.paths.outputs.libunwind_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests libunwind
-    - name: Fetch xz
-      if: ${{ steps.paths.outputs.xz_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py fetch --no-tests xz
     - name: Fetch folly
       if: ${{ steps.paths.outputs.folly_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests folly

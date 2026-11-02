@@ -24,6 +24,12 @@ xxhash
 llvm19
 clang19
 re2
+# cabal.project sets `tests: True`, so the BinaryTest suite's
+# `pkgconfig-depends: gtest_main` must resolve even for a plain build.
+googletest
+# thrift-http's streaming-commons, warp and http-client link zlib through the
+# Hackage zlib package.
+zlib
 
 [build]
 builder = make

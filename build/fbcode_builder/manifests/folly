@@ -14,24 +14,33 @@ job_weight_mib = 1024
 [dependencies]
 gflags
 glog
-googletest
 boost
 libdwarf
 libevent
-libsodium
 fast_float
 fmt
-lz4
 openssl
-snappy
 zstd
+
+[dependencies.test=on]
+googletest
+
+# LZ4 codecs in folly/compression, for consumers that use
+# `CodecType::LZ4*` and depend on `folly = lz4`.
+[dependencies.feature_lz4=on]
+lz4
+
+# folly::AsyncIO, for consumers that depend on `folly = libaio`.
+[dependencies.all(os=linux,feature_libaio=on)]
+libaio
 
 # Windows has no zlib, so we get to provide it
 [dependencies.os=windows]
 zlib
 
 [dependencies.os=linux]
-libaio
+# The allocation-free folly::demangle() that the symbolizer and the signal
+# handler use has no fallback without libiberty.
 libiberty
 libunwind
 # folly uses OpenSSL on every platform (SSL contexts, hashing, etc.).
@@ -41,11 +50,6 @@ libunwind
 # this, downstream consumers that don't otherwise pull in fizz/wangle/
 # fbthrift have to discover this transitive system dep themselves.
 openssl
-
-# xz depends on autoconf which does not build on
-# Windows
-[dependencies.not(os=windows)]
-xz
 
 [shipit.pathmap]
 xplat/folly/public_tld = .
@@ -58,6 +62,8 @@ xplat/folly = folly
 [features]
 default =
 shared_libs =
+lz4 =
+libaio =
 
 [cmake.defines]
 BUILD_SHARED_LIBS=OFF

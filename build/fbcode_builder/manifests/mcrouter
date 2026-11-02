@@ -8,7 +8,9 @@ shipit_fbcode_builder = true
 repo_url = https://github.com/facebook/mcrouter.git
 
 [dependencies]
-folly
+# mcrouter's LZ4 codecs need folly built with LZ4 and use <lz4.h> directly.
+folly = lz4
+lz4
 wangle
 fizz
 fbthrift

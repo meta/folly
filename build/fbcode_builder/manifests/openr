@@ -57,8 +57,10 @@ fb303
 fbthrift
 folly
 googletest
+libsodium
 re2
 range-v3
+snappy
 
 [dependencies.all(distro_family=rhel,distro_vers=9)]
 gcc12

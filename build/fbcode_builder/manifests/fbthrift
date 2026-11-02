@@ -49,10 +49,13 @@ THRIFT_BENCHMARKS=OFF
 
 [dependencies]
 fmt
-folly
+# Rocket compression uses folly's LZ4 codec.
+folly = lz4
 googletest
 zstd
 xxhash
+# thrift/lib/cpp requires zlib whether or not RPC is enabled.
+zlib
 # Thrift also depends on openssl but since the latter requires a platform-
 # specific configuration we rely on the folly manifest to provide this
 # dependency to avoid duplication.
