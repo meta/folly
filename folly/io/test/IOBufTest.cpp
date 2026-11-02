@@ -2028,6 +2028,49 @@ TEST(IOBuf, CoalesceHeadroomTailroom) {
   EXPECT_GE(buf->tailroom(), 8);
 }
 
+TEST(IOBuf, CloneCoalescedCapacityOverflow) {
+  constexpr auto kMax = std::numeric_limits<size_t>::max();
+  for (const bool chained : {false, true}) {
+    for (const bool overflowHeadroom : {false, true}) {
+      auto buf = chained ? seq({"abc", "de"}) : IOBuf::copyBuffer("abcde");
+      const size_t headroom = overflowHeadroom ? kMax : 0;
+      const size_t tailroom = overflowHeadroom ? 1 : kMax;
+      ASSERT_EQ(chained, buf->isChained());
+
+      EXPECT_THROW(
+          buf->cloneCoalescedWithHeadroomTailroom(headroom, tailroom),
+          std::bad_alloc);
+      EXPECT_THROW(
+          buf->cloneCoalescedAsValueWithHeadroomTailroom(headroom, tailroom),
+          std::bad_alloc);
+
+      EXPECT_EQ(chained, buf->isChained());
+      EXPECT_EQ("abcde", buf->to<std::string>());
+    }
+  }
+}
+
+TEST(IOBuf, CloneCoalescedHeadroomTailroom) {
+  for (const bool chained : {false, true}) {
+    auto buf = chained ? seq({"abc", "de"}) : IOBuf::copyBuffer("abcde");
+    ASSERT_EQ(chained, buf->isChained());
+
+    const auto clone = buf->cloneCoalescedWithHeadroomTailroom(4, 8);
+    const auto value = buf->cloneCoalescedAsValueWithHeadroomTailroom(4, 8);
+
+    EXPECT_FALSE(clone->isChained());
+    EXPECT_EQ("abcde", clone->to<std::string>());
+    EXPECT_EQ(4, clone->headroom());
+    EXPECT_GE(clone->tailroom(), 8);
+    EXPECT_FALSE(value.isChained());
+    EXPECT_EQ("abcde", value.to<std::string>());
+    EXPECT_EQ(4, value.headroom());
+    EXPECT_GE(value.tailroom(), 8);
+    EXPECT_EQ(chained, buf->isChained());
+    EXPECT_EQ("abcde", buf->to<std::string>());
+  }
+}
+
 TEST(IOBuf, MaybeSplitTail) {
   auto buf = IOBuf::create(256);
   append(buf, "Hello ");
