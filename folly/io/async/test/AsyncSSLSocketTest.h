@@ -220,7 +220,13 @@ class ExpectWriteErrorCallback : public WriteCallbackBase {
     EXPECT_EQ(
         exception.getType(),
         AsyncSocketException::AsyncSocketExceptionType::NETWORK_ERROR);
-    EXPECT_EQ(exception.getErrno(), 22);
+    // sendmsg() rejects the invalid flags, but the exact errno is
+    // kernel-dependent: kernels that validate the flags first fail with
+    // EINVAL (22), while kernels that act on the MSG_FASTOPEN bit set in
+    // -1 first fail with EISCONN (106) on the connected socket. Either
+    // proves the write failed as the test intends. (Numeric literals:
+    // EISCONN is unavailable on Windows builds.)
+    EXPECT_TRUE(exception.getErrno() == 22 || exception.getErrno() == 106);
     // Suppress the assert in  ~WriteCallbackBase()
     state = STATE_SUCCEEDED;
   }

@@ -3550,8 +3550,9 @@ TEST(AsyncSSLSocketTest, SendMsgParamsCallback) {
       std::make_shared<BlockingSocket>(server.getAddress(), sslContext);
   socket->open();
 
-  // Setting flags to "-1" to trigger "Invalid argument" error
-  // on attempt to use this flags in sendmsg() system call.
+  // Setting flags to "-1" to trigger an error on attempt to use these
+  // flags in the sendmsg() system call. The exact errno is
+  // kernel-dependent (EINVAL or EISCONN); see ExpectWriteErrorCallback.
   msgCallback.resetFlags(-1);
 
   // write()
