@@ -369,6 +369,19 @@
 #define FOLLY_MSVC_DISABLE_WARNING(warningNumber)
 #endif
 
+// Mark a region that intentionally uses raw pointer arithmetic, unchecked
+// buffer indexing, or unsafe libc buffer functions, exempting it from
+// -Wunsafe-buffer-usage. Regions cannot nest and must begin and end in the
+// same file.
+#if defined(__clang__) && FOLLY_HAS_WARNING("-Wunsafe-buffer-usage")
+#define FOLLY_UNSAFE_BUFFER_USAGE_BEGIN \
+  _Pragma("clang unsafe_buffer_usage begin")
+#define FOLLY_UNSAFE_BUFFER_USAGE_END _Pragma("clang unsafe_buffer_usage end")
+#else
+#define FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
+#define FOLLY_UNSAFE_BUFFER_USAGE_END
+#endif
+
 #ifdef FOLLY_HAVE_SHADOW_LOCAL_WARNINGS
 #define FOLLY_GCC_DISABLE_NEW_SHADOW_WARNINGS            \
   FOLLY_GNU_DISABLE_WARNING("-Wshadow-compatible-local") \
