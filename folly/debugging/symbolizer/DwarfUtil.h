@@ -24,9 +24,9 @@
 #include <folly/Range.h>
 #include <folly/debugging/symbolizer/Elf.h>
 #include <folly/debugging/symbolizer/ElfCache.h>
+#include <folly/debugging/symbolizer/detail/DwarfConstants.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
-#include <dwarf.h> // @manual
 
 namespace folly {
 namespace symbolizer {

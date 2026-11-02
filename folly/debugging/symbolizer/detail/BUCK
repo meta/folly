@@ -13,3 +13,9 @@ fb_dirsync_cpp_library(
         "//folly/system:libc",
     ],
 )
+
+fb_dirsync_cpp_library(
+    name = "dwarf_constants",
+    headers = ["DwarfConstants.h"],
+    use_raw_headers = True,
+)

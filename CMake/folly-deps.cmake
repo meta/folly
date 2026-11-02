@@ -459,10 +459,6 @@ if (SNAPPY_FOUND)
   list(APPEND FOLLY_LINK_LIBRARIES ${SNAPPY_LIBRARY})
 endif ()
 
-find_package(LibDwarf)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBDWARF_LIBRARIES})
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBDWARF_INCLUDE_DIRS})
-
 find_package(Libiberty)
 list(APPEND FOLLY_LINK_LIBRARIES ${LIBIBERTY_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBIBERTY_INCLUDE_DIRS})
@@ -510,7 +506,13 @@ check_include_file_cxx(elf.h FOLLY_HAVE_ELF)
 find_package(Backtrace)
 
 set(FOLLY_HAVE_BACKTRACE ${Backtrace_FOUND})
-set(FOLLY_HAVE_DWARF ${LIBDWARF_FOUND})
+# folly reads DWARF itself and needs no library for it, only ELF. It has not
+# been validated on FreeBSD.
+if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+  set(FOLLY_HAVE_DWARF OFF)
+else ()
+  set(FOLLY_HAVE_DWARF ${FOLLY_HAVE_ELF})
+endif ()
 if (NOT WIN32 AND NOT APPLE)
   set(FOLLY_USE_SYMBOLIZER ON)
 endif ()

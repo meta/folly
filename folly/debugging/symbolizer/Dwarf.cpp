@@ -22,12 +22,11 @@
 #include <folly/Optional.h>
 #include <folly/debugging/symbolizer/DwarfImpl.h>
 #include <folly/debugging/symbolizer/DwarfSection.h>
+#include <folly/debugging/symbolizer/detail/DwarfConstants.h>
 #include <folly/lang/SafeAssert.h>
 #include <folly/portability/Config.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
-
-#include <dwarf.h> // @manual
 
 namespace folly {
 namespace symbolizer {

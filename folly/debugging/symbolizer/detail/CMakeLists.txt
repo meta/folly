@@ -22,3 +22,8 @@ folly_add_library(
     folly_portability
     folly_system_libc
 )
+
+folly_add_library(
+  NAME dwarf_constants
+  HEADERS DwarfConstants.h
+)

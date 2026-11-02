@@ -31,7 +31,7 @@ fb_dirsync_cpp_library(
         ":symbolized_frame",
         "//folly:function",
         "//folly:range",
-        "//folly/portability/provide:libdwarf",  # @manual
+        "//folly/debugging/symbolizer/detail:dwarf_constants",
     ],
 )
 

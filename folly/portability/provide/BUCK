@@ -8,13 +8,6 @@ oncall("fbcode_entropy_wardens_folly")
 # This enables other rules across folly which may need these deps to extract the
 # complexity to here and to take simple deps on the rules here.
 fb_dirsync_cpp_library(
-    name = "libdwarf",
-    exported_deps = [
-        "fbsource//third-party/libdwarf:dwarf",
-    ],
-)
-
-fb_dirsync_cpp_library(
     name = "libunwind",
     exported_deps = select({
         "DEFAULT": [],

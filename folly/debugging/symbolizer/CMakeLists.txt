@@ -34,11 +34,11 @@ folly_add_library(
     folly_portability_config
     folly_portability_unistd
   EXPORTED_DEPS
+    folly_debugging_symbolizer_detail_dwarf_constants
     folly_debugging_symbolizer_elf
     folly_debugging_symbolizer_elf_cache
     folly_debugging_symbolizer_symbolized_frame
     folly_function
-    folly_portability_provide_libdwarf
     folly_range
 )
 

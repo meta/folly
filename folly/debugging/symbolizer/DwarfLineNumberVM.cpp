@@ -18,6 +18,7 @@
 
 #include <folly/Optional.h>
 #include <folly/debugging/symbolizer/DwarfSection.h>
+#include <folly/debugging/symbolizer/detail/DwarfConstants.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
 
