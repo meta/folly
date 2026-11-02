@@ -670,15 +670,7 @@ IOBuf::IOBuf(
 }
 
 IOBuf::~IOBuf() {
-  // Destroying an IOBuf destroys the entire chain.
-  // Users of IOBuf should only explicitly delete the head of any chain.
-  // The other elements in the chain will be automatically destroyed.
-  while (next_ != this) {
-    // Since unlink() returns unique_ptr() and we don't store it,
-    // it will automatically delete the unlinked element.
-    (void)next_->unlink();
-  }
-
+  unlinkAll();
   decrementRefcount();
 }
 
@@ -687,22 +679,14 @@ IOBuf& IOBuf::operator=(IOBuf&& other) noexcept {
     return *this;
   }
 
-  // If we are part of a chain, delete the rest of the chain.
-  while (next_ != this) {
-    // Since unlink() returns unique_ptr() and we don't store it,
-    // it will automatically delete the unlinked element.
-    (void)next_->unlink();
-  }
-
-  // Decrement our refcount on the current buffer
+  unlinkAll();
   decrementRefcount();
-
-  // Take ownership of the other buffer's data
-  data_ = other.data_;
-  buf_ = other.buf_;
-  length_ = other.length_;
-  capacity_ = other.capacity_;
-  sharedInfo_ = other.sharedInfo_;
+  setBuffer(
+      other.sharedInfo_,
+      other.buf_,
+      other.capacity_,
+      other.data_,
+      other.length_);
   // Reset other so it is a clean state to be destroyed.
   other.data_ = nullptr;
   other.buf_ = nullptr;
@@ -800,9 +784,7 @@ unique_ptr<IOBuf> IOBuf::cloneImpl(std::pmr::memory_resource* mr) const {
 }
 
 unique_ptr<IOBuf> IOBuf::cloneOneImpl(std::pmr::memory_resource* mr) const {
-  if (sharedInfo_) {
-    sharedInfo_->refcount.fetch_add(1, std::memory_order_relaxed);
-  }
+  incrementRefcount();
 
   auto [storage, mallocSize] = allocateStorage<HeapStorage>(mr);
   return unique_ptr<IOBuf>{new (&storage->buf) IOBuf(
@@ -830,9 +812,7 @@ IOBuf IOBuf::cloneAsValue() const {
 }
 
 IOBuf IOBuf::cloneOneAsValue() const {
-  if (sharedInfo_) {
-    sharedInfo_->refcount.fetch_add(1, std::memory_order_relaxed);
-  }
+  incrementRefcount();
   return IOBuf(
       InternalConstructor(), sharedInfo_, buf_, capacity_, data_, length_);
 }

@@ -1448,6 +1448,98 @@ TEST(IOBuf, CloneAsValue) {
   EXPECT_FALSE(buf->isShared());
 }
 
+TEST(IOBuf, MoveAssignmentReadsSourceAfterDestinationCleanup) {
+  auto source = IOBuf::copyBuffer("source");
+  auto destination = IOBuf::takeOwnership(
+      new uint8_t[1],
+      1,
+      [](void* buffer, void* userData) {
+        static_cast<IOBuf*>(userData)->trimStart(1);
+        delete[] static_cast<uint8_t*>(buffer);
+      },
+      source.get());
+
+  *destination = std::move(*source);
+
+  EXPECT_EQ("ource", destination->toString());
+  EXPECT_EQ(0, source->length());
+  EXPECT_EQ(nullptr, source->data());
+}
+
+TEST(IOBuf, CloneOneInto) {
+  auto src = IOBuf::create(100);
+  src->advance(10);
+  append(src, "hello world");
+
+  // empty destination shares the head buffer, preserving layout
+  IOBuf dest;
+  src->cloneOneInto(dest);
+  EXPECT_EQ(src->data(), dest.data());
+  EXPECT_EQ(src->length(), dest.length());
+  EXPECT_EQ(src->headroom(), dest.headroom());
+  EXPECT_EQ(src->capacity(), dest.capacity());
+  EXPECT_FALSE(dest.isChained());
+  EXPECT_TRUE(src->isShared());
+  EXPECT_TRUE(dest.isShared());
+  EXPECT_EQ("hello world", dest.toString());
+
+  // matches cloneOneAsValue field by field
+  auto expected = src->cloneOneAsValue();
+  EXPECT_EQ(expected.data(), dest.data());
+  EXPECT_EQ(expected.length(), dest.length());
+  EXPECT_EQ(expected.headroom(), dest.headroom());
+  EXPECT_EQ(expected.capacity(), dest.capacity());
+
+  // destination with its own buffer and chain is fully released
+  auto other = IOBuf::create(100);
+  append(other, "goodbye");
+  auto otherTail = IOBuf::create(100);
+  append(otherTail, " tail");
+  other->prependChain(std::move(otherTail));
+  ASSERT_TRUE(other->isChained());
+  src->cloneOneInto(*other);
+  EXPECT_FALSE(other->isChained());
+  EXPECT_EQ(src->data(), other->data());
+  EXPECT_EQ(src->length(), other->length());
+  EXPECT_EQ("hello world", other->toString());
+
+  // only the head of a chained source is cloned
+  auto head = IOBuf::create(100);
+  append(head, "head");
+  auto tail = IOBuf::create(100);
+  append(tail, "tail");
+  head->prependChain(std::move(tail));
+  ASSERT_TRUE(head->isChained());
+  IOBuf chained;
+  head->cloneOneInto(chained);
+  EXPECT_FALSE(chained.isChained());
+  EXPECT_EQ(head->data(), chained.data());
+  EXPECT_EQ("head", chained.toString());
+
+  // self clone truncates the chain but keeps the head buffer alive
+  head->cloneOneInto(*head);
+  EXPECT_FALSE(head->isChained());
+  EXPECT_EQ("head", head->toString());
+  EXPECT_EQ(chained.data(), head->data());
+  EXPECT_TRUE(head->isShared());
+
+  // aliased destination sharing the source buffer survives the release
+  auto alias = head->cloneOneAsValue();
+  ASSERT_EQ(head->data(), alias.data());
+  head->cloneOneInto(alias);
+  EXPECT_EQ(head->data(), alias.data());
+  EXPECT_EQ(head->toString(), alias.toString());
+
+  // cloning from an empty source empties the destination
+  IOBuf empty;
+  auto victim = IOBuf::create(100);
+  append(victim, "victim");
+  empty.cloneOneInto(*victim);
+  EXPECT_EQ(0, victim->length());
+  EXPECT_FALSE(victim->isChained());
+  EXPECT_EQ("", victim->toString());
+}
+
 namespace {
 // Use with string literals only
 std::unique_ptr<IOBuf> wrap(const char* str) {

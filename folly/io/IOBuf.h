@@ -2174,6 +2174,43 @@ class IOBuf {
       uint8_t* data,
       std::size_t length) noexcept;
 
+  FOLLY_ALWAYS_INLINE void incrementRefcount() const noexcept {
+    if (sharedInfo_) {
+      sharedInfo_->refcount.fetch_add(1, std::memory_order_relaxed);
+    }
+  }
+
+  FOLLY_ALWAYS_INLINE void unlinkAll() noexcept {
+    while (next_ != this) {
+      (void)next_->unlink();
+    }
+  }
+
+  FOLLY_ALWAYS_INLINE void setBuffer(
+      SharedInfo* const& sharedInfo,
+      uint8_t* const& buf,
+      const std::size_t& capacity,
+      uint8_t* const& data,
+      const std::size_t& length) noexcept {
+    data_ = data;
+    buf_ = buf;
+    length_ = length;
+    capacity_ = capacity;
+    sharedInfo_ = sharedInfo;
+  }
+
+  // By-value arguments preserve the source fields across destination cleanup.
+  FOLLY_ALWAYS_INLINE void assignBuffer(
+      SharedInfo* sharedInfo,
+      uint8_t* buf,
+      uint8_t* data,
+      std::size_t capacity,
+      std::size_t length) noexcept {
+    unlinkAll();
+    decrementRefcount();
+    setBuffer(sharedInfo, buf, capacity, data, length);
+  }
+
   void unshareOneSlow();
   void unshareChained();
   void makeManagedChained();
