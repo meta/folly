@@ -1040,7 +1040,7 @@ def get_arg_var_name(args):
     raise Exception("unable to determine argument variable name from %r" % (args,))
 
 
-def parse_args():
+def parse_args(argv: list[str] | None = None):
     # We want to allow common arguments to be specified either before or after
     # the subcommand name.  In order to do this we add them to the main parser
     # and to subcommand parsers.  In order for this to work, we need to tell
@@ -1104,6 +1104,16 @@ def parse_args():
         ),
         action="store_true",
         default=False,
+    )
+    add_common_arg(
+        "--features-from",
+        help=(
+            "Resolve features, with tests off, from the dependency graph of "
+            "this project instead of the one named on the command line. CI "
+            "passes it to every step of a job so that each dependency gets the "
+            "features the whole graph needs. Feature requests made only for "
+            "test builds are rejected."
+        ),
     )
     add_common_arg(
         "--extra-cmake-defines",
@@ -1177,7 +1187,7 @@ def parse_args():
 
     add_subcommands(sub, common_args)
 
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     for var_name, default_value in common_defaults.items():
         if not hasattr(args, var_name):
             setattr(args, var_name, default_value)

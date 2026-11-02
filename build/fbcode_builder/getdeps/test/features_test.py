@@ -468,3 +468,80 @@ name = extra
         ]
         self.assertIn("extra", order)
         self.assertLess(order.index("extra"), order.index("lib"))
+
+    _LIB = """
+[manifest]
+name = lib
+
+[features]
+default =
+b =
+"""
+
+    def test_features_from_rejects_test_only_request_for_a_plain_dep(self) -> None:
+        loader = _make_loader(
+            {
+                "root": """
+[manifest]
+name = root
+
+[dependencies.test=off]
+lib
+
+[dependencies.test=on]
+lib = b
+""",
+                "lib": self._LIB,
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "only for test builds"):
+            loader.resolve_features_from("root", "root")
+
+    def test_features_from_rejects_request_from_a_test_only_dep(self) -> None:
+        loader = _make_loader(
+            {
+                "root": """
+[manifest]
+name = root
+
+[dependencies]
+lib
+
+[dependencies.test=on]
+helper
+""",
+                "helper": """
+[manifest]
+name = helper
+
+[dependencies]
+lib = b
+""",
+                "lib": self._LIB,
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "only for test builds"):
+            loader.resolve_features_from("root", "root")
+
+    def test_features_from_accepts_a_test_only_dep_without_features(self) -> None:
+        loader = _make_loader(
+            {
+                "root": """
+[manifest]
+name = root
+
+[dependencies]
+lib = b
+
+[dependencies.test=on]
+googletest
+""",
+                "googletest": """
+[manifest]
+name = googletest
+""",
+                "lib": self._LIB,
+            }
+        )
+        loader.resolve_features_from("root", "lib")
+        self.assertEqual(loader.ctx_gen.get_context("lib").features(), {"b"})

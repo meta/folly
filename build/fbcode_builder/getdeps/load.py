@@ -173,6 +173,46 @@ class ManifestLoader:
 
         return self.manifests_by_name
 
+    def resolve_features_from(self, root_name: str, project_name: str) -> None:
+        """Resolve features from root_name's dependency graph, with tests off.
+
+        Building a dependency on its own resolves its features as if it were
+        the root, which can differ from what the projects above it request.
+        Resolving from the project that needs the dependency, in a context
+        that does not depend on what a step builds, gives every build of it
+        the same features and hash. A separate loader walks the root's graph,
+        so the projects this loader builds stay those of project_name.
+        """
+        names = self._resolve_graph_features(root_name, self.ctx_gen)
+        if project_name not in names:
+            raise ValueError(f"{project_name} is not a dependency of {root_name}")
+
+        # Feature requests made only for test builds would be ignored here, so
+        # reject any difference from a resolution with tests on.
+        test_ctx_gen = copy.deepcopy(self.ctx_gen)
+        test_ctx_gen.set_value_for_all_projects("test", "on")
+        test_names = self._resolve_graph_features(root_name, test_ctx_gen)
+        for name in sorted(names | test_names):
+            off = self.ctx_gen.get_context(name).features()
+            on = test_ctx_gen.get_context(name).features()
+            if off != on:
+                raise ValueError(
+                    f"{name} gets features {sorted(on)} in {root_name}'s graph "
+                    f"with tests on but {sorted(off)} with tests off; "
+                    "--features-from does not support feature requests made "
+                    "only for test builds"
+                )
+        self._features_resolved = True
+
+    def _resolve_graph_features(
+        self, root_name: str, ctx_gen: ContextGenerator
+    ) -> set[str]:
+        graph = ManifestLoader(self.build_opts, ctx_gen)
+        graph._loader = self._loader
+        root = graph.load_manifest(root_name)
+        graph.resolve_features([root])
+        return {m.name for m in graph.manifests_in_dependency_order(root)}
+
     def dependencies_of(self, manifest: ManifestParser) -> list[ManifestParser]:
         """Returns the dependencies of the given project, not including the project itself, in topological order."""
         return [

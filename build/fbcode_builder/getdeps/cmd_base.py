@@ -9,6 +9,7 @@ from typing import Any
 
 from .buildopts import setup_build_options
 from .load import ManifestLoader
+from .manifest import ManifestParser
 from .subcmd import SubCmd
 
 
@@ -27,6 +28,11 @@ BUILD_TYPE_ARG: dict[str, Any] = {
 
 class ProjectCmdBase(SubCmd):
     def run(self, args):
+        loader, manifest = self.create_loader(args)
+        return self.run_project_cmd(args, loader, manifest)
+
+    def create_loader(self, args) -> tuple[ManifestLoader, ManifestParser]:
+        """Set up the loader and project manifest that `run` operates on."""
         opts = setup_build_options(args)
 
         if args.current_project is not None:
@@ -46,6 +52,14 @@ class ProjectCmdBase(SubCmd):
             args.project = opts.repo_project
 
         ctx_gen = opts.get_context_generator()
+        loader = ManifestLoader(opts, ctx_gen)
+        self.process_project_dir_arguments(args, loader)
+        features_from = getattr(args, "features_from", None)
+        if features_from:
+            # Before the test settings below, so that every step of a job
+            # resolves features with the same context.
+            loader.resolve_features_from(features_from, args.project)
+
         if args.test_dependencies:
             ctx_gen.set_value_for_all_projects("test", "on")
         if args.enable_tests:
@@ -53,12 +67,7 @@ class ProjectCmdBase(SubCmd):
         else:
             ctx_gen.set_value_for_project(args.project, "test", "off")
 
-        loader = ManifestLoader(opts, ctx_gen)
-        self.process_project_dir_arguments(args, loader)
-
-        manifest = loader.load_manifest(args.project)
-
-        return self.run_project_cmd(args, loader, manifest)
+        return loader, loader.load_manifest(args.project)
 
     def process_project_dir_arguments(self, args, loader):
         def parse_project_arg(arg, arg_type):
