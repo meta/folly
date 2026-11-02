@@ -30,7 +30,7 @@ fbcode/watchman/oss = .
 fbcode/eden/fs = eden/fs
 
 [shipit.strip]
-^fbcode/eden/fs/(?!.*\.thrift|service/shipit_test_file\.txt|utils/GlobPath\.h$)
+^fbcode/eden/fs/(?!.*\.thrift|service/shipit_test_file\.txt)
 
 [cmake.defines.fb=on]
 ENABLE_EDEN_SUPPORT=ON
