@@ -502,6 +502,18 @@ class UnboundedQueue {
       Entry& e,
       Ticket t,
       const std::chrono::time_point<Clock, Duration>& deadline) noexcept {
+    if (SPSC) {
+      // A ticket that is taken but not yet posted belongs to an enqueue
+      // that has not returned, so reporting empty is still linearizable.
+      // Not loading the producer ticket keeps the producer's cache line
+      // out of the consumer's polling loop, and a non-waiting poll does
+      // not need the out-of-line tryWaitSlow(). With several consumers a
+      // retry costs a new hazard pointer, so they keep waiting in place.
+      if (deadline == std::chrono::time_point<Clock, Duration>::min()) {
+        return e.ready();
+      }
+      return e.tryWaitUntil(deadline);
+    }
     if (FOLLY_LIKELY(e.tryWaitUntil(deadline))) {
       return true;
     }
@@ -775,6 +787,8 @@ class UnboundedQueue {
       flag_.wait();
       return getItem();
     }
+
+    FOLLY_ALWAYS_INLINE bool ready() noexcept { return flag_.try_wait(); }
 
     FOLLY_ALWAYS_INLINE const T* peekItem() noexcept {
       flag_.wait();
