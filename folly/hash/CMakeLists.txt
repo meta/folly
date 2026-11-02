@@ -112,17 +112,21 @@ folly_add_library(
   EXPORTED_DEPS folly_lang_bits
 )
 
-folly_add_library(
-  NAME unique_hash_key
-  SRCS UniqueHashKey.cpp
-  HEADERS UniqueHashKey.h
-  DEPS
-    folly_lang_cast
-    folly_portability_openssl
-    folly_portability_unistd
-  EXPORTED_DEPS
-    folly_portability_config
-    folly_traits
-)
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME unique_hash_key
+    SRCS UniqueHashKey.cpp
+    HEADERS UniqueHashKey.h
+    DEPS
+      folly_lang_cast
+      folly_portability_openssl
+      folly_portability_unistd
+    EXPORTED_DEPS
+      folly_portability_config
+      folly_traits
+  )
+else ()
+  folly_exclude_headers(UniqueHashKey.h)
+endif ()
 
 add_subdirectory(detail)

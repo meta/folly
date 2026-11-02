@@ -262,22 +262,17 @@ list(
   hfiles
   ${FOLLY_DIR}/container/test/F14TestUtil.h
   ${FOLLY_DIR}/container/test/TrackingTypes.h
-  ${FOLLY_DIR}/io/async/test/AsyncSSLSocketTest.h
-  ${FOLLY_DIR}/io/async/test/AsyncSocketTest.h
   ${FOLLY_DIR}/io/async/test/AsyncSocketTest2.h
-  ${FOLLY_DIR}/io/async/test/BlockingSocket.h
   ${FOLLY_DIR}/io/async/test/CallbackStateEnum.h
   ${FOLLY_DIR}/io/async/test/ConnCallback.h
   ${FOLLY_DIR}/io/async/test/MockAsyncSocket.h
   ${FOLLY_DIR}/io/async/test/MockAsyncServerSocket.h
-  ${FOLLY_DIR}/io/async/test/MockAsyncSSLSocket.h
   ${FOLLY_DIR}/io/async/test/MockAsyncTransport.h
   ${FOLLY_DIR}/io/async/test/MockAsyncUDPSocket.h
   ${FOLLY_DIR}/io/async/test/MockTimeoutManager.h
   ${FOLLY_DIR}/io/async/test/ScopedBoundPort.h
   ${FOLLY_DIR}/io/async/test/SocketPair.h
   ${FOLLY_DIR}/io/async/test/TFOUtil.h
-  ${FOLLY_DIR}/io/async/test/TestSSLServer.h
   ${FOLLY_DIR}/io/async/test/TimeUtil.h
   ${FOLLY_DIR}/io/async/test/UndelayedDestruction.h
   ${FOLLY_DIR}/io/async/test/Util.h
@@ -287,6 +282,17 @@ list(
   ${FOLLY_DIR}/test/DeterministicSchedule.h
   ${FOLLY_DIR}/test/TestUtils.h
 )
+if (FOLLY_HAVE_OPENSSL)
+  list(
+    APPEND
+    hfiles
+    ${FOLLY_DIR}/io/async/test/AsyncSocketTest.h
+    ${FOLLY_DIR}/io/async/test/AsyncSSLSocketTest.h
+    ${FOLLY_DIR}/io/async/test/BlockingSocket.h
+    ${FOLLY_DIR}/io/async/test/MockAsyncSSLSocket.h
+    ${FOLLY_DIR}/io/async/test/TestSSLServer.h
+  )
+endif ()
 
 # Generate pkg-config variables from folly_deps before we add our own
 # build/install-time include directory generator expressions
@@ -330,6 +336,11 @@ folly_create_monolithic_library()
 
 # Resolve deferred dependencies (must be after monolithic library is created)
 folly_resolve_deferred_dependencies()
+
+get_property(folly_excluded_headers GLOBAL PROPERTY FOLLY_EXCLUDED_HEADERS)
+if (folly_excluded_headers)
+  list(REMOVE_ITEM hfiles ${folly_excluded_headers})
+endif ()
 
 # Define FOLLY_CERTS_DIR for the granular test_util target
 # This points to the SSL test certificates used by TestSSLServer and related tests
@@ -499,12 +510,10 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ${FOLLY_DIR}/container/test/TrackingTypes.h
     ${FOLLY_DIR}/futures/test/TestExecutor.cpp
     ${FOLLY_DIR}/futures/test/TestExecutor.h
-    ${FOLLY_DIR}/io/async/test/BlockingSocket.h
     ${FOLLY_DIR}/io/async/test/CallbackStateEnum.h
     ${FOLLY_DIR}/io/async/test/ConnCallback.h
     ${FOLLY_DIR}/io/async/test/MockAsyncServerSocket.h
     ${FOLLY_DIR}/io/async/test/MockAsyncSocket.h
-    ${FOLLY_DIR}/io/async/test/MockAsyncSSLSocket.h
     ${FOLLY_DIR}/io/async/test/MockAsyncTransport.h
     ${FOLLY_DIR}/io/async/test/MockAsyncUDPSocket.h
     ${FOLLY_DIR}/io/async/test/MockTimeoutManager.h
@@ -512,12 +521,8 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ${FOLLY_DIR}/io/async/test/ScopedBoundPort.h
     ${FOLLY_DIR}/io/async/test/SocketPair.cpp
     ${FOLLY_DIR}/io/async/test/SocketPair.h
-    ${FOLLY_DIR}/io/async/test/SSLUtil.cpp
-    ${FOLLY_DIR}/io/async/test/SSLUtil.h
     ${FOLLY_DIR}/io/async/test/TFOUtil.cpp
     ${FOLLY_DIR}/io/async/test/TFOUtil.h
-    ${FOLLY_DIR}/io/async/test/TestSSLServer.cpp
-    ${FOLLY_DIR}/io/async/test/TestSSLServer.h
     ${FOLLY_DIR}/io/async/test/TimeUtil.cpp
     ${FOLLY_DIR}/io/async/test/TimeUtil.h
     ${FOLLY_DIR}/io/async/test/UndelayedDestruction.h
@@ -543,6 +548,18 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
       ${LIBGMOCK_LIBRARIES}
       glog::glog
   )
+  if (FOLLY_HAVE_OPENSSL)
+    target_sources(
+      folly_test_support
+      PRIVATE
+        ${FOLLY_DIR}/io/async/test/BlockingSocket.h
+        ${FOLLY_DIR}/io/async/test/MockAsyncSSLSocket.h
+        ${FOLLY_DIR}/io/async/test/SSLUtil.cpp
+        ${FOLLY_DIR}/io/async/test/SSLUtil.h
+        ${FOLLY_DIR}/io/async/test/TestSSLServer.cpp
+        ${FOLLY_DIR}/io/async/test/TestSSLServer.h
+    )
+  endif ()
   apply_folly_compile_options_to_target(folly_test_support)
 
   folly_define_tests(
@@ -707,10 +724,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     container_merge_test
     SOURCES
     MergeTest.cpp
-    TEST
-    container_regex_match_cache_test
-    SOURCES
-    RegexMatchCacheTest.cpp
     TEST
     container_small_vector_test
     WINDOWS_DISABLED
@@ -1208,10 +1221,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     hash_traits_test
     SOURCES
     traits_test.cpp
-    TEST
-    hash_unique_hash_key_test
-    SOURCES
-    UniqueHashKeyTest.cpp
     DIRECTORY
     io/test/
     TEST
@@ -1253,27 +1262,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     SocketOptionValueTest.cpp
     DIRECTORY
     io/async/test/
-    # A number of tests in the async_test binary are unfortunately flaky.
-    # When run under Travis CI a number of the tests also hang (it looks
-    # like they do not get expected socket accept events, causing them
-    # to never break out of their event loops).
-    TEST
-    io_async_async_test
-    BROKEN
-    CONTENT_DIR
-    certs/
-    HEADERS
-    AsyncSocketTest.h
-    AsyncSSLSocketTest.h
-    SOURCES
-    AsyncPipeTest.cpp
-    AsyncSocketExceptionTest.cpp
-    AsyncSocketTest.cpp
-    AsyncSocketTest2.cpp
-    AsyncSSLSocketTest.cpp
-    AsyncSSLSocketTest2.cpp
-    AsyncSSLSocketWriteTest.cpp
-    AsyncTransportTest.cpp
     # This is disabled because it depends on things that don't exist
     # on Windows.
     # TODO: Refactor EventHandlerTest to not use eventfd so it can work on Mac OS X.
@@ -1346,21 +1334,9 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     SOURCES
     ScopedEventBaseThreadTest.cpp
     TEST
-    io_async_ssl_session_test
-    CONTENT_DIR
-    certs/
-    SOURCES
-    SSLSessionTest.cpp
-    TEST
     io_async_write_chain_async_transport_wrapper_test
     SOURCES
     WriteChainAsyncTransportWrapperTest.cpp
-    DIRECTORY
-    io/async/ssl/test/
-    TEST
-    io_async_ssl_ssl_errors_test
-    SOURCES
-    SSLErrorsTest.cpp
     DIRECTORY
     lang/test/
     TEST
@@ -1500,10 +1476,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     SOURCES
     LibgenTest.cpp
     TEST
-    portability_openssl_portability_test
-    SOURCES
-    OpenSSLPortabilityTest.cpp
-    TEST
     portability_pthread_test
     SOURCES
     PThreadTest.cpp
@@ -1512,12 +1484,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     WINDOWS_DISABLED
     SOURCES
     TimeTest.cpp
-    DIRECTORY
-    ssl/test/
-    TEST
-    ssl_openssl_hash_test
-    SOURCES
-    OpenSSLHashTest.cpp
     DIRECTORY
     stats/test/
     TEST
@@ -1822,10 +1788,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     fixed_string_test
     SOURCES
     FixedStringTest.cpp
-    TEST
-    fmt_utility_test
-    SOURCES
-    FmtUtilityTest.cpp
     TEST
     function_test
     BROKEN
@@ -2152,6 +2114,76 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     HOST thread_local_test
     SOURCES ${FOLLY_DIR}/test/ThreadLocalTestLib.cpp
   )
+
+  if (FOLLY_HAVE_OPENSSL)
+    folly_define_tests(
+      DIRECTORY
+      container/test/
+      TEST
+      container_regex_match_cache_test
+      SOURCES
+      RegexMatchCacheTest.cpp
+      DIRECTORY
+      hash/test/
+      TEST
+      hash_unique_hash_key_test
+      SOURCES
+      UniqueHashKeyTest.cpp
+      DIRECTORY
+      io/async/test/
+      # A number of tests in the async_test binary are unfortunately flaky.
+      # When run under Travis CI a number of the tests also hang (it looks
+      # like they do not get expected socket accept events, causing them
+      # to never break out of their event loops).
+      TEST
+      io_async_async_test
+      BROKEN
+      CONTENT_DIR
+      certs/
+      HEADERS
+      AsyncSocketTest.h
+      AsyncSSLSocketTest.h
+      SOURCES
+      AsyncPipeTest.cpp
+      AsyncSocketExceptionTest.cpp
+      AsyncSocketTest.cpp
+      AsyncSocketTest2.cpp
+      AsyncSSLSocketTest.cpp
+      AsyncSSLSocketTest2.cpp
+      AsyncSSLSocketWriteTest.cpp
+      AsyncTransportTest.cpp
+      TEST
+      io_async_ssl_session_test
+      CONTENT_DIR
+      certs/
+      SOURCES
+      SSLSessionTest.cpp
+      DIRECTORY
+      io/async/ssl/test/
+      TEST
+      io_async_ssl_ssl_errors_test
+      SOURCES
+      SSLErrorsTest.cpp
+      DIRECTORY
+      portability/test/
+      TEST
+      portability_openssl_portability_test
+      SOURCES
+      OpenSSLPortabilityTest.cpp
+      DIRECTORY
+      ssl/test/
+      TEST
+      ssl_openssl_hash_test
+      SOURCES
+      OpenSSLHashTest.cpp
+      DIRECTORY
+      test/
+      TEST
+      fmt_utility_test
+      SOURCES
+      FmtUtilityTest.cpp
+    )
+  endif ()
 
   if (${LIBSODIUM_FOUND})
     folly_define_tests(

@@ -142,14 +142,18 @@ folly_add_library(
   EXPORTED_DEPS folly_memory
 )
 
-folly_add_library(
-  NAME openssl
-  SRCS OpenSSL.cpp
-  HEADERS OpenSSL.h
-  EXPORTED_DEPS
-    folly_portability
-    folly_portability_windows
-)
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME openssl
+    SRCS OpenSSL.cpp
+    HEADERS OpenSSL.h
+    EXPORTED_DEPS
+      folly_portability
+      folly_portability_windows
+  )
+else ()
+  folly_exclude_headers(OpenSSL.h)
+endif ()
 
 folly_add_library(
   NAME pthread

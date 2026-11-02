@@ -104,8 +104,8 @@ and Linux (on the latest Ubuntu LTS release or newer.)
 
 ## Build with CMake
 
-The CMake build fetches any dependency it cannot find installed, so a clone and
-two commands are enough:
+The CMake build fetches any required dependency it cannot find installed, so a
+clone and two commands are enough:
 
     git clone https://github.com/meta/folly
     cd folly
@@ -133,6 +133,15 @@ nothing, and the `cli` libraries are not built. Declare folly's flags with the
 `FOLLY_GFLAGS_DECLARE_*` macros from `folly/portability/GFlags.h`, not with
 gflags' `DECLARE_*`, which would not match how folly defined them: without
 gflags, for example, a string flag is a `std::string` rather than a reference.
+
+OpenSSL is optional too. Without it, the libraries that need it are not built
+or installed: `folly/ssl`, `AsyncSSLSocket`, `SSLContext`, `SSLOptions` and the
+rest of `folly/io/async/ssl`, as well as `FmtUtility`, `hash/UniqueHashKey` and
+`container/RegexMatchCache`, which hash with OpenSSL. `FOLLY_HAVE_OPENSSL` in
+the installed `folly/folly-config.h` says which way folly was built. To build
+OpenSSL from source when it is not installed, configure with
+`-DFOLLY_BUILD_OPENSSL=ON`, which is the default when folly is built as part
+of another project.
 
 `cmake --install` needs CMake 3.28 or newer once anything has been fetched,
 because fetched dependencies are deliberately left out of what folly installs.

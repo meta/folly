@@ -537,19 +537,23 @@ folly_add_library(
     folly_utility
 )
 
-folly_add_library(
-  NAME fmt_utility
-  SRCS FmtUtility.cpp
-  HEADERS FmtUtility.h
-  DEPS
-    folly_range
-    folly_ssl_openssl_hash
-    folly_string
-  EXPORTED_DEPS
-    fmt::fmt
-    folly_cpp_attributes
-    folly_portability_fmt_compile
-)
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME fmt_utility
+    SRCS FmtUtility.cpp
+    HEADERS FmtUtility.h
+    DEPS
+      folly_range
+      folly_ssl_openssl_hash
+      folly_string
+    EXPORTED_DEPS
+      fmt::fmt
+      folly_cpp_attributes
+      folly_portability_fmt_compile
+  )
+else ()
+  folly_exclude_headers(FmtUtility.h)
+endif ()
 
 folly_add_library(
   NAME format

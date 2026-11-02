@@ -21,7 +21,9 @@
 #include <folly/coro/Baton.h>
 #include <folly/coro/Task.h>
 #include <folly/io/async/AsyncTransport.h>
+#if FOLLY_HAVE_OPENSSL
 #include <folly/io/async/ssl/SSLErrors.h>
+#endif
 
 #if FOLLY_HAS_COROUTINES
 
@@ -73,12 +75,13 @@ class TransportCallbackBase {
   folly::exception_wrapper error_;
 
   void storeException(const folly::AsyncSocketException& ex) {
-    auto sslErr = dynamic_cast<const folly::SSLException*>(&ex);
-    if (sslErr) {
+#if FOLLY_HAVE_OPENSSL
+    if (auto sslErr = dynamic_cast<const folly::SSLException*>(&ex)) {
       error_ = folly::make_exception_wrapper<folly::SSLException>(*sslErr);
-    } else {
-      error_ = folly::make_exception_wrapper<folly::AsyncSocketException>(ex);
+      return;
     }
+#endif
+    error_ = folly::make_exception_wrapper<folly::AsyncSocketException>(ex);
   }
 
  private:

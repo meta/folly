@@ -394,17 +394,35 @@ endif()
   set(OPENSSL_INCLUDE_DIR "${prefix}/include" PARENT_SCOPE)
 endfunction()
 
-find_package(OpenSSL 1.1.1 MODULE)
-# Only a system copy reaches folly's export set, so only then does a consumer
-# have to find it. folly-config.cmake.in substitutes this, so it has to be a
+# OpenSSL is optional: without it, folly leaves out the libraries that need it,
+# such as folly/ssl, AsyncSSLSocket and SSLContext. A project that builds folly
+# as a subproject usually needs OpenSSL itself, so there folly builds it from
+# source by default when it is not installed.
+if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+  set(folly_build_openssl_default OFF)
+else ()
+  set(folly_build_openssl_default ON)
+endif ()
+option(FOLLY_BUILD_OPENSSL "Build OpenSSL from source if it is not found"
+       ${folly_build_openssl_default})
+
+if (CMAKE_DISABLE_FIND_PACKAGE_OpenSSL)
+  # A parent project that found OpenSSL leaves OPENSSL_FOUND set here.
+  set(OPENSSL_FOUND OFF)
+else ()
+  find_package(OpenSSL 1.1.1 MODULE)
+endif ()
+# FOLLY_HAVE_OPENSSL decides which libraries are built. Only a system copy
+# reaches folly's export set, so only then does a consumer have to find it.
+# folly-config.cmake.in substitutes FOLLY_OPENSSL_SYSTEM, so both have to be a
 # literal ON or OFF rather than an unset OPENSSL_FOUND.
 if (OPENSSL_FOUND)
+  set(FOLLY_HAVE_OPENSSL ON)
   set(FOLLY_OPENSSL_SYSTEM ON)
-else ()
-  set(FOLLY_OPENSSL_SYSTEM OFF)
-endif ()
-if (NOT OPENSSL_FOUND)
+elseif (FOLLY_BUILD_OPENSSL AND NOT CMAKE_DISABLE_FIND_PACKAGE_OpenSSL)
   folly_build_openssl()
+  set(FOLLY_HAVE_OPENSSL ON)
+  set(FOLLY_OPENSSL_SYSTEM OFF)
   # BUILD_BYPRODUCTS orders the link step only, so compiles can reach
   # <openssl/*.h> before the headers are installed. Applied to folly_deps below.
   set(folly_openssl_external_project openssl)
@@ -413,13 +431,16 @@ if (NOT OPENSSL_FOUND)
   # folly_localize_deps() matches them.
   set_property(GLOBAL APPEND PROPERTY FOLLY_BUILD_LOCAL_TARGETS
     OpenSSL::SSL OpenSSL::Crypto)
-endif()
-list(APPEND FOLLY_LINK_LIBRARIES ${OPENSSL_LIBRARIES})
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE_DIR})
-list(APPEND CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
-list(APPEND CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
-list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
-list(REMOVE_ITEM CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
+else ()
+  message(STATUS "OpenSSL not found, so the folly libraries that need it are "
+                 "left out. Set FOLLY_BUILD_OPENSSL to build OpenSSL instead.")
+  set(FOLLY_HAVE_OPENSSL OFF)
+  set(FOLLY_OPENSSL_SYSTEM OFF)
+endif ()
+if (FOLLY_HAVE_OPENSSL)
+  list(APPEND FOLLY_LINK_LIBRARIES ${OPENSSL_LIBRARIES})
+  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE_DIR})
+endif ()
 if (ZLIB_FOUND)
   list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${ZLIB_LIBRARIES})
 endif ()

@@ -556,6 +556,24 @@ define_property(
   FULL_DOCS "These targets will be linked to the monolithic folly library")
 set_property(GLOBAL PROPERTY FOLLY_GRANULAR_INTERFACE_TARGETS "")
 
+# Headers of libraries this configuration does not build, such as the OpenSSL
+# ones without OpenSSL. They are left out of the install.
+define_property(
+  GLOBAL
+  PROPERTY FOLLY_EXCLUDED_HEADERS
+  BRIEF_DOCS "Headers not to install"
+  FULL_DOCS "Absolute paths, recorded by folly_exclude_headers()")
+set_property(GLOBAL PROPERTY FOLLY_EXCLUDED_HEADERS "")
+
+# Records headers in the current source directory that must not be installed,
+# because the library they belong to is not built.
+function (folly_exclude_headers)
+  foreach (_header IN LISTS ARGN)
+    set_property(GLOBAL APPEND PROPERTY FOLLY_EXCLUDED_HEADERS
+                                        "${CMAKE_CURRENT_SOURCE_DIR}/${_header}")
+  endforeach ()
+endfunction ()
+
 # Helper to add a folly library target
 # Creates:
 #   1. OBJECT library (${name}_obj) - for composition into monolithic target

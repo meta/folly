@@ -48,6 +48,8 @@ jobs:
 
     # Only the developer environment puts nmake and ninja on PATH, and folly
     # needs nmake to drive OpenSSL's own build when the image has no OpenSSL.
+    # OpenSSL is optional; FOLLY_BUILD_OPENSSL asks for that build, so the TLS
+    # libraries are tested too.
     - uses: ilammy/msvc-dev-cmd@v1
 
     # Whatever the runner already has is used; the rest is fetched or built by
@@ -61,6 +63,7 @@ jobs:
     - name: Configure
       run: >
         cmake -B _build -G Ninja
+        -DFOLLY_BUILD_OPENSSL=ON
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DBUILD_TESTS=ON
         -DCMAKE_C_COMPILER_LAUNCHER=sccache

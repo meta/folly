@@ -38,6 +38,15 @@ folly_add_library(
     folly_range
 )
 
+set(FOLLY_IO_CORO_TRANSPORT_CALLBACK_BASE_OPENSSL_DEPS)
+if (FOLLY_HAVE_OPENSSL)
+  list(
+    APPEND
+    FOLLY_IO_CORO_TRANSPORT_CALLBACK_BASE_OPENSSL_DEPS
+    folly_io_async_ssl_ssl_errors
+  )
+endif ()
+
 folly_add_library(
   NAME transport_callback_base
   HEADERS TransportCallbackBase.h
@@ -45,8 +54,8 @@ folly_add_library(
     folly_coro_baton
     folly_coro_task
     folly_io_async_async_transport
-    folly_io_async_ssl_ssl_errors
     folly_portability
+    ${FOLLY_IO_CORO_TRANSPORT_CALLBACK_BASE_OPENSSL_DEPS}
 )
 
 folly_add_library(

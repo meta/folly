@@ -264,36 +264,40 @@ folly_add_library(
     folly_network_address
 )
 
-folly_add_library(
-  NAME async_ssl_socket
-  SRCS AsyncSSLSocket.cpp
-  HEADERS AsyncSSLSocket.h
-  DEPS
-    fmt::fmt
-    folly_indestructible
-    folly_io_async_ssl_basic_transport_certificate
-    folly_network_address
-    folly_spin_lock
-  EXPORTED_DEPS
-    folly_io_async_async_base
-    folly_io_async_async_pipe
-    folly_io_async_async_socket
-    folly_io_async_certificate_identity_verifier
-    folly_io_async_ssl_context
-    folly_io_async_ssl_openssl_utils
-    folly_io_async_ssl_ssl_errors
-    folly_io_async_ssl_tls_definitions
-    folly_io_iobuf
-    folly_io_socket_option_map
-    folly_lang_bits
-    folly_optional
-    folly_portability_openssl
-    folly_portability_sockets
-    folly_ssl_openssl_ptr_types
-    folly_ssl_ssl_session
-    folly_ssl_ssl_session_manager
-    folly_string
-)
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME async_ssl_socket
+    SRCS AsyncSSLSocket.cpp
+    HEADERS AsyncSSLSocket.h
+    DEPS
+      fmt::fmt
+      folly_indestructible
+      folly_io_async_ssl_basic_transport_certificate
+      folly_network_address
+      folly_spin_lock
+    EXPORTED_DEPS
+      folly_io_async_async_base
+      folly_io_async_async_pipe
+      folly_io_async_async_socket
+      folly_io_async_certificate_identity_verifier
+      folly_io_async_ssl_context
+      folly_io_async_ssl_openssl_utils
+      folly_io_async_ssl_ssl_errors
+      folly_io_async_ssl_tls_definitions
+      folly_io_iobuf
+      folly_io_socket_option_map
+      folly_lang_bits
+      folly_optional
+      folly_portability_openssl
+      folly_portability_sockets
+      folly_ssl_openssl_ptr_types
+      folly_ssl_ssl_session
+      folly_ssl_ssl_session_manager
+      folly_string
+  )
+else ()
+  folly_exclude_headers(AsyncSSLSocket.h)
+endif ()
 
 folly_add_library(
   NAME async_transport
@@ -353,13 +357,17 @@ folly_add_library(
     folly_scope_guard
 )
 
-folly_add_library(
-  NAME certificate_identity_verifier
-  HEADERS CertificateIdentityVerifier.h
-  EXPORTED_DEPS
-    folly_io_async_async_transport_certificate
-    folly_portability_openssl
-)
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME certificate_identity_verifier
+    HEADERS CertificateIdentityVerifier.h
+    EXPORTED_DEPS
+      folly_io_async_async_transport_certificate
+      folly_portability_openssl
+  )
+else ()
+  folly_exclude_headers(CertificateIdentityVerifier.h)
+endif ()
 
 folly_add_library(
   NAME decorated_async_transport_wrapper
@@ -681,15 +689,19 @@ folly_add_library(
     folly_synchronization_wait_options
 )
 
-folly_add_library(
-  NAME password_in_file
-  SRCS PasswordInFile.cpp
-  HEADERS PasswordInFile.h
-  DEPS
-    folly_file_util
-    folly_portability_openssl
-  EXPORTED_DEPS folly_ssl_password_collector
-)
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME password_in_file
+    SRCS PasswordInFile.cpp
+    HEADERS PasswordInFile.h
+    DEPS
+      folly_file_util
+      folly_portability_openssl
+    EXPORTED_DEPS folly_ssl_password_collector
+  )
+else ()
+  folly_exclude_headers(PasswordInFile.h)
+endif ()
 
 folly_add_library(
   NAME request_context
@@ -772,41 +784,49 @@ folly_add_library(
     folly_synchronized
 )
 
-folly_add_library(
-  NAME ssl_context
-  SRCS SSLContext.cpp
-  HEADERS SSLContext.h
-  DEPS
-    folly_format
-    folly_memory
-    folly_random
-    folly_shared_mutex
-    folly_ssl_openssl_ticket_handler
-    folly_ssl_password_collector
-    folly_ssl_ssl_session_manager
-  EXPORTED_DEPS
-    ${GLOG_LIBRARIES}
-    folly_container_access
-    folly_function
-    folly_io_async_ssl_openssl_utils
-    folly_portability
-    folly_portability_openssl
-    folly_range
-    folly_ssl_openssl_ptr_types
-    folly_string
-)
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME ssl_context
+    SRCS SSLContext.cpp
+    HEADERS SSLContext.h
+    DEPS
+      folly_format
+      folly_memory
+      folly_random
+      folly_shared_mutex
+      folly_ssl_openssl_ticket_handler
+      folly_ssl_password_collector
+      folly_ssl_ssl_session_manager
+    EXPORTED_DEPS
+      ${GLOG_LIBRARIES}
+      folly_container_access
+      folly_function
+      folly_io_async_ssl_openssl_utils
+      folly_portability
+      folly_portability_openssl
+      folly_range
+      folly_ssl_openssl_ptr_types
+      folly_string
+  )
+else ()
+  folly_exclude_headers(SSLContext.h)
+endif ()
 
-folly_add_library(
-  NAME ssl_options
-  SRCS SSLOptions.cpp
-  HEADERS SSLOptions.h
-  DEPS
-    ${GLOG_LIBRARIES}
-    folly_format
-  EXPORTED_DEPS
-    folly_container_array
-    folly_io_async_ssl_context
-)
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME ssl_options
+    SRCS SSLOptions.cpp
+    HEADERS SSLOptions.h
+    DEPS
+      ${GLOG_LIBRARIES}
+      folly_format
+    EXPORTED_DEPS
+      folly_container_array
+      folly_io_async_ssl_context
+  )
+else ()
+  folly_exclude_headers(SSLOptions.h)
+endif ()
 
 folly_add_library(
   NAME terminate_cancellation_token
