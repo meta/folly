@@ -256,8 +256,8 @@ struct alignas(hardware_destructive_interference_size) ProducerConsumerQueue {
 
   //  std::malloc() only guarantees alignof(std::max_align_t), so a T with a
   //  stricter alignas needs storage from the aligned allocator; constructing
-  //  using storage allocated with malloc() would be misaligned, and can fault on the aligned
-  //  SIMD instructions the compiler is then entitled to use.
+  //  using storage allocated with malloc() would be misaligned, and can fault
+  //  on the aligned SIMD instructions the compiler is then entitled to use.
   static constexpr bool kOverAligned = alignof(T) > alignof(std::max_align_t);
 
   static T* allocate(uint32_t mask) {
