@@ -6,6 +6,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dir
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
 load("../../../defs.bzl", "fbcode_ci_default_labels")
 load(":validate_folly_symbolizer.bzl", "SPLIT_DWARF_FLAGS", "customized_unittest", "validate_folly_symbolizer", "validate_symbolizer_dwp")
 
@@ -69,6 +70,7 @@ fb_dirsync_cpp_binary(
     labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
+        "//folly:portability",
         "//folly/debugging/symbolizer:symbolizer",
     ],
 )
@@ -95,6 +97,17 @@ python_unittest(
         "ovr_config//os:linux",
         "ovr_config//runtime:fbcode",
     ],
+)
+
+python_unittest(
+    name = "small_sigaltstack_test",
+    srcs = ["small_sigaltstack_test.py"],
+    env = {
+        "SMALL_SIGALTSTACK_CRASH": "$(location :small_sigaltstack_crash)",
+    },
+    labels = fbcode_ci_default_labels(python = True),
+    network_access = network_access_utils.none(),
+    target_compatible_with = ["ovr_config//runtime:fbcode"],
 )
 
 fb_dirsync_cpp_unittest(

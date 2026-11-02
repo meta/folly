@@ -10,5 +10,6 @@ fb_dirsync_cpp_library(
     deps = [
         "fbsource//third-party/glibc:dl",
         "//folly:portability",
+        "//folly/system:libc",
     ],
 )

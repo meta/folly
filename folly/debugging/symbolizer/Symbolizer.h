@@ -380,9 +380,26 @@ inline std::string getStackTraceStr(
  * Note it's still unsafe even with that.
  */
 class UnsafeSelfAllocateStackTracePrinter : public SafeStackTracePrinter {
+ public:
+  /// Reserve the emergency stack and eagerly resolve context-switch bindings.
+  /// Construct before installing handlers: binding resolution is not
+  /// async-signal-safe.
+  explicit UnsafeSelfAllocateStackTracePrinter(int fd = STDERR_FILENO);
+  ~UnsafeSelfAllocateStackTracePrinter() override;
+
  protected:
   void printSymbolizedStackTrace() override;
-  const long pageSizeUnchecked_ = sysconf(_SC_PAGESIZE);
+
+ private:
+  struct AllocatedStack;
+  struct ContextFunctions;
+
+  static std::unique_ptr<AllocatedStack> allocateStack();
+  static void contextStart(UnsafeSelfAllocateStackTracePrinter* that);
+  bool runOnAllocatedStack();
+
+  const std::unique_ptr<AllocatedStack> stack_;
+  const std::unique_ptr<ContextFunctions> contextFunctions_;
 };
 
 #endif // FOLLY_HAVE_SWAPCONTEXT

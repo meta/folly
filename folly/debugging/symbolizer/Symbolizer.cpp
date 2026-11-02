@@ -627,54 +627,62 @@ namespace {
 // Size of mmap-allocated stack. Not to confuse with sigaltstack.
 const size_t kMmapStackSize = 1 * 1024 * 1024;
 
-using MmapPtr = std::unique_ptr<char, void (*)(char*)>;
+constexpr bool kUseAllocatedStack = !kIsSanitizeThread;
 
-MmapPtr getNull() {
-  return MmapPtr(nullptr, [](char*) {});
-}
-
-// Assign a mmap-allocated stack to oucp.
-// Return a non-empty smart pointer on success.
-MmapPtr allocateStack(ucontext_t* oucp, size_t pageSize) {
-  MmapPtr p(
-      (char*)mmap(
-          nullptr,
-          kMmapStackSize,
-          PROT_WRITE | PROT_READ,
-          MAP_ANONYMOUS | MAP_PRIVATE,
-          /* fd */ -1,
-          /* offset */ 0),
-      [](char* addr) {
-        // Usually runs inside a fatal signal handler.
-        // Error handling is skipped.
-        munmap(addr, kMmapStackSize);
-      });
-
-  if (!p) {
-    return getNull();
-  }
-
-  // Prepare read-only guard pages on both ends
-  if (pageSize * 2 >= kMmapStackSize) {
-    return getNull();
-  }
-  size_t upperBound = ((kMmapStackSize - 1) / pageSize) * pageSize;
-  if (mprotect(p.get(), pageSize, PROT_NONE) != 0) {
-    return getNull();
-  }
-  if (mprotect(p.get() + upperBound, kMmapStackSize - upperBound, PROT_NONE) !=
-      0) {
-    return getNull();
-  }
-
-  oucp->uc_stack.ss_sp = p.get() + pageSize;
-  oucp->uc_stack.ss_size = upperBound - pageSize;
-  oucp->uc_stack.ss_flags = 0;
-
-  return p;
+template <typename Function>
+Function resolve_libc_function(const char* name) {
+  auto* symbol = detail::get_libc_symbol(name);
+  return reinterpret_cast<Function>(symbol);
 }
 
 } // namespace
+
+struct UnsafeSelfAllocateStackTracePrinter::AllocatedStack {
+  AllocatedStack() = default;
+  AllocatedStack(const AllocatedStack&) = delete;
+  AllocatedStack& operator=(const AllocatedStack&) = delete;
+  AllocatedStack(AllocatedStack&&) = delete;
+  AllocatedStack& operator=(AllocatedStack&&) = delete;
+
+  ~AllocatedStack() {
+    if (mapping) {
+      munmap(mapping, kMmapStackSize);
+    }
+  }
+
+  char* mapping{nullptr};
+  void* bottom{nullptr};
+  size_t size{0};
+};
+
+struct UnsafeSelfAllocateStackTracePrinter::ContextFunctions {
+  ContextFunctions()
+      : getcontext(
+            resolve_libc_function<decltype(&::getcontext)>("getcontext")),
+        makecontext(
+            resolve_libc_function<decltype(&::makecontext)>("makecontext")),
+        swapcontext(
+            resolve_libc_function<decltype(&::swapcontext)>("swapcontext")) {}
+
+  explicit operator bool() const {
+    return getcontext && makecontext && swapcontext;
+  }
+
+  decltype(&::getcontext) getcontext;
+  decltype(&::makecontext) makecontext;
+  decltype(&::swapcontext) swapcontext;
+};
+
+#if __has_attribute(disable_sanitizer_instrumentation)
+#define FOLLY_DETAIL_SYMBOLIZER_RAW                  \
+  __attribute__((                                    \
+      noinline,                                      \
+      no_sanitize("address", "undefined", "thread"), \
+      disable_sanitizer_instrumentation))
+#else
+#define FOLLY_DETAIL_SYMBOLIZER_RAW \
+  __attribute__((noinline, no_sanitize("address", "undefined", "thread")))
+#endif
 
 FOLLY_PUSH_WARNING
 
@@ -683,53 +691,114 @@ FOLLY_PUSH_WARNING
 FOLLY_GNU_DISABLE_WARNING("-Wdeprecated-declarations")
 #endif
 
-void UnsafeSelfAllocateStackTracePrinter::printSymbolizedStackTrace() {
-  if (pageSizeUnchecked_ <= 0) {
-    return;
+std::unique_ptr<UnsafeSelfAllocateStackTracePrinter::AllocatedStack>
+UnsafeSelfAllocateStackTracePrinter::allocateStack() {
+  const long pageSizeUnchecked = sysconf(_SC_PAGESIZE);
+  if (pageSizeUnchecked <= 0) {
+    return nullptr;
+  }
+  const auto pageSize = static_cast<size_t>(pageSizeUnchecked);
+  if (pageSize * 2 >= kMmapStackSize) {
+    return nullptr;
+  }
+
+  auto* mapping = static_cast<char*>(mmap(
+      nullptr,
+      kMmapStackSize,
+      PROT_WRITE | PROT_READ,
+      MAP_ANONYMOUS | MAP_PRIVATE,
+      /* fd */ -1,
+      /* offset */ 0));
+  if (mapping == MAP_FAILED) {
+    return nullptr;
+  }
+  auto rollback = makeGuard([&] { munmap(mapping, kMmapStackSize); });
+  auto stack = std::make_unique<AllocatedStack>();
+  stack->mapping = mapping;
+  rollback.dismiss();
+
+  const size_t upperBound = ((kMmapStackSize - 1) / pageSize) * pageSize;
+  if (mprotect(mapping, pageSize, PROT_NONE) != 0 ||
+      mprotect(mapping + upperBound, kMmapStackSize - upperBound, PROT_NONE) !=
+          0) {
+    return nullptr;
+  }
+
+  stack->bottom = mapping + pageSize;
+  stack->size = upperBound - pageSize;
+  return stack;
+}
+
+UnsafeSelfAllocateStackTracePrinter::UnsafeSelfAllocateStackTracePrinter(int fd)
+    : SafeStackTracePrinter(fd),
+      stack_(kUseAllocatedStack ? allocateStack() : nullptr),
+      contextFunctions_(
+          kUseAllocatedStack ? std::make_unique<ContextFunctions>() : nullptr) {
+  // Initialize the pthread TLS key before a fatal signal can request an async
+  // stack. No stack is captured when there is no active async root.
+  (void)tryGetCurrentAsyncStackRoot();
+}
+
+UnsafeSelfAllocateStackTracePrinter::~UnsafeSelfAllocateStackTracePrinter() =
+    default;
+
+FOLLY_DETAIL_SYMBOLIZER_RAW void
+UnsafeSelfAllocateStackTracePrinter::contextStart(
+    UnsafeSelfAllocateStackTracePrinter* that) {
+  void const* fromStack;
+  size_t fromStackSize;
+  sanitizer_finish_switch_fiber(nullptr, &fromStack, &fromStackSize);
+  if (that) {
+    that->SafeStackTracePrinter::printSymbolizedStackTrace();
+  }
+  sanitizer_start_switch_fiber(nullptr, fromStack, fromStackSize);
+}
+
+FOLLY_DETAIL_SYMBOLIZER_RAW bool
+UnsafeSelfAllocateStackTracePrinter::runOnAllocatedStack() {
+  if (!stack_ || !contextFunctions_ || !*contextFunctions_) {
+    return false;
   }
 
   ucontext_t cur;
-  memset(&cur, 0, sizeof(cur));
   ucontext_t alt;
-  memset(&alt, 0, sizeof(alt));
-
-  if (getcontext(&alt) != 0) {
-    return;
+  if (contextFunctions_->getcontext(&alt) != 0) {
+    return false;
   }
   alt.uc_link = &cur;
+  alt.uc_stack.ss_sp = stack_->bottom;
+  alt.uc_stack.ss_size = stack_->size;
+  alt.uc_stack.ss_flags = 0;
 
-  MmapPtr p = allocateStack(&alt, (size_t)pageSizeUnchecked_);
-  if (!p) {
-    return;
-  }
-
-  auto contextStart = [](UnsafeSelfAllocateStackTracePrinter* that) {
-    void const* fromStack;
-    size_t fromStackSize;
-    sanitizer_finish_switch_fiber(nullptr, &fromStack, &fromStackSize);
-    if (that) {
-      that->SafeStackTracePrinter::printSymbolizedStackTrace();
-    }
-    sanitizer_start_switch_fiber(nullptr, fromStack, fromStackSize);
-  };
-
-  makecontext(
+  contextFunctions_->makecontext(
       &alt,
       (void (*)())(void (*)(UnsafeSelfAllocateStackTracePrinter*))(
-          contextStart),
+          &UnsafeSelfAllocateStackTracePrinter::contextStart),
       /* argc */ 1,
       /* arg */ this);
   void* currentFakestack;
   sanitizer_start_switch_fiber(
       &currentFakestack, alt.uc_stack.ss_sp, alt.uc_stack.ss_size);
   // NOTE: swapcontext is not async-signal-safe
-  if (swapcontext(&cur, &alt) != 0) {
+  const bool switched = contextFunctions_->swapcontext(&cur, &alt) == 0;
+  if (!switched) {
     contextStart(nullptr);
   }
   sanitizer_finish_switch_fiber(currentFakestack, nullptr, nullptr);
+  return switched;
+}
+
+FOLLY_DETAIL_SYMBOLIZER_RAW void
+UnsafeSelfAllocateStackTracePrinter::printSymbolizedStackTrace() {
+  const bool printed = kUseAllocatedStack && runOnAllocatedStack();
+  if (!printed) {
+    printUnsymbolizedStackTrace();
+  }
 }
 
 FOLLY_POP_WARNING
+
+#undef FOLLY_DETAIL_SYMBOLIZER_RAW
 
 #endif // FOLLY_HAVE_SWAPCONTEXT
 

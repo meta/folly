@@ -17,6 +17,7 @@
 #include <folly/debugging/symbolizer/detail/Debug.h>
 
 #include <folly/Portability.h>
+#include <folly/system/libc.h>
 
 #ifndef _WIN32
 #include <dlfcn.h>
@@ -33,6 +34,20 @@
 namespace folly {
 namespace symbolizer {
 namespace detail {
+
+namespace {
+
+void* get_libc_handle() {
+#ifndef _WIN32
+  static void* const handle = dlopen(
+      folly::detail::libc_soname(), RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
+  return handle;
+#else
+  return nullptr;
+#endif
+}
+
+} // namespace
 
 #if FOLLY_DETAIL_HAS_R_DEBUG
 
@@ -74,6 +89,18 @@ static r_debug* r_debug_cache_;
 struct r_debug* get_r_debug() {
 #if FOLLY_DETAIL_HAS_R_DEBUG
   return r_debug_cache_;
+#else
+  return nullptr;
+#endif
+}
+
+void* get_libc_symbol(const char* name) {
+  if (!name) {
+    return nullptr;
+  }
+#ifndef _WIN32
+  auto* handle = get_libc_handle();
+  return handle ? dlsym(handle, name) : nullptr;
 #else
   return nullptr;
 #endif

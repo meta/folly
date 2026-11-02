@@ -23,6 +23,7 @@ namespace symbolizer {
 namespace detail {
 
 struct r_debug* get_r_debug();
+void* get_libc_symbol(const char* name);
 
 } // namespace detail
 } // namespace symbolizer

@@ -18,5 +18,7 @@ folly_add_library(
   NAME debug
   SRCS Debug.cpp
   HEADERS Debug.h
-  DEPS folly_portability
+  DEPS
+    folly_portability
+    folly_system_libc
 )

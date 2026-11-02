@@ -16,14 +16,23 @@
 
 #include <signal.h>
 #include <array>
+#include <cstdio>
+#include <cstring>
 
+#include <folly/Portability.h>
 #include <folly/debugging/symbolizer/SignalHandler.h>
 
 namespace {
+#if defined(__aarch64__)
+std::array<char, 32768> stack;
+#elif defined(FOLLY_SANITIZE_THREAD)
+std::array<char, 16384> stack;
+#else
 std::array<char, 8192> stack;
-}
+#endif
+} // namespace
 
-int main() {
+int main(int argc, char** argv) {
   stack_t ss;
   ss.ss_sp = stack.data();
   ss.ss_size = stack.size();
@@ -31,5 +40,9 @@ int main() {
   sigaltstack(&ss, nullptr);
 
   folly::symbolizer::installFatalSignalHandler();
-  __builtin_trap();
+  if (argc == 2 && std::strcmp(argv[1], "--install-only") == 0) {
+    return 0;
+  }
+  std::fputs("crashing\n", stderr);
+  raise(SIGILL);
 }
