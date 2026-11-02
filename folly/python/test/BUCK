@@ -318,9 +318,9 @@ fb_dirsync_rule(
     # @autodeps-skip
     name = "test_set_executor_3_14",
     srcs = ["test_set_executor.py"],
-    fbcode_only = True,
     fbcode_rule = python_unittest,
     py_version = "3.14.free-threading",
+    target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         ":test_set_executor_cython",
     ],

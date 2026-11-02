@@ -504,7 +504,6 @@ fb_dirsync_cython_library(
     srcs = [
         "build_mode.pyx",
     ],
-    fbcode_only = True,
     package = "folly",
     types = [
         "build_mode.pyi",

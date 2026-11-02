@@ -26,6 +26,7 @@ fb_dirsync_cpp_binary(
     ],
     default_strip_mode = "none",
     modules = False,
+    target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         ":gdb_util",
         "//folly:network_address",
@@ -42,7 +43,6 @@ fb_dirsync_cpp_binary(
 # @fb-only[end= ]: fb_dirsync_rule(
     # @fb-only[end= ]: name = "test",
     # @fb-only[end= ]: binary = "main",
-    # @fb-only[end= ]: fbcode_only = True,
     # @fb-only[end= ]: fbcode_rule = gdb_unittest,
     # @fb-only[end= ]: gdb = "fbcode//third-party-buck/projects/gdb:bin/gdb",
     # @fb-only[end= ]: gdb_libraries = [
@@ -60,4 +60,5 @@ fb_dirsync_cpp_binary(
         # @fb-only[end= ]: "opt*",
     # @fb-only[end= ]: ],
     # @fb-only[end= ]: source_root = "fbcode",
+    # @fb-only[end= ]: target_compatible_with = ["ovr_config//runtime:fbcode"],
 # @fb-only[end= ]: )
