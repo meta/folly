@@ -19,8 +19,14 @@
 #include <cstddef>
 #include <map>
 #include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
+
+#include <fmt/format.h>
 
 #include <folly/Traits.h>
 #include <folly/portability/GTest.h>
@@ -94,6 +100,47 @@ TEST(MapUtil, getOrThrowSpecified) {
   m[1] = 2;
   EXPECT_EQ(2, get_or_throw<std::runtime_error>(m, 1));
   EXPECT_THROW(get_or_throw<std::runtime_error>(m, 2), std::runtime_error);
+}
+
+namespace {
+
+enum class ScopedKey { A = 1, B = 7 };
+enum UnscopedKey { kUnscopedA = 1, kUnscopedB = 42 };
+enum class FormattableKey { A = 1, B = 2 };
+
+template <typename Map, typename Key>
+std::string getOrThrowMessage(Map& map, const Key& key) {
+  try {
+    get_or_throw(map, key, "missing: ");
+  } catch (const std::out_of_range& e) {
+    return e.what();
+  }
+  return {};
+}
+
+} // namespace
+
+template <>
+struct fmt::formatter<FormattableKey> : fmt::formatter<std::string_view> {
+  auto format(FormattableKey key, fmt::format_context& ctx) const {
+    return fmt::formatter<std::string_view>::format(
+        key == FormattableKey::A ? "A" : "B", ctx);
+  }
+};
+
+TEST(MapUtil, getOrThrowEnumKey) {
+  std::map<ScopedKey, int> scoped{{ScopedKey::A, 1}};
+  EXPECT_EQ("missing: 7", getOrThrowMessage(scoped, ScopedKey::B));
+  EXPECT_EQ(
+      "missing: 7", getOrThrowMessage(std::as_const(scoped), ScopedKey::B));
+
+  std::map<UnscopedKey, int> unscoped{{kUnscopedA, 1}};
+  EXPECT_EQ("missing: 42", getOrThrowMessage(unscoped, kUnscopedB));
+  EXPECT_EQ(
+      "missing: 42", getOrThrowMessage(std::as_const(unscoped), kUnscopedB));
+
+  std::map<FormattableKey, int> formattable{{FormattableKey::A, 1}};
+  EXPECT_EQ("missing: B", getOrThrowMessage(formattable, FormattableKey::B));
 }
 
 TEST(MapUtil, getOptional) {

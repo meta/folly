@@ -1009,6 +1009,7 @@ fb_dirsync_cpp_unittest(
     name = "map_util_test",
     srcs = ["MapUtilTest.cpp"],
     deps = [
+        "fbsource//third-party/fmt:fmt",
         "//folly:map_util",
         "//folly:sorted_vector_types",
         "//folly:traits",

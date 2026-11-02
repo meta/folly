@@ -35,6 +35,17 @@
 
 namespace folly {
 
+namespace detail {
+
+template <typename Key>
+using map_util_format_key_t = typename std::conditional_t<
+    FMT_VERSION >= 100000 && std::is_enum_v<Key> &&
+        !fmt::is_formattable<Key>::value,
+    std::underlying_type<Key>,
+    std::type_identity<const Key&>>::type;
+
+} // namespace detail
+
 /**
  * Given a map and a key, return the value corresponding to the key in the map,
  * or a given default value if the key doesn't exist in the map.
@@ -136,7 +147,8 @@ const typename Map::mapped_type& get_or_throw(
   if (pos != map.end()) {
     return pos->second;
   }
-  throw_exception<E>(fmt::format("{}{}", exceptionStrPrefix, key));
+  throw_exception<E>(fmt::format(
+      "{}{}", exceptionStrPrefix, detail::map_util_format_key_t<Key>(key)));
 }
 
 template <
@@ -151,7 +163,8 @@ typename Map::mapped_type& get_or_throw(
   if (pos != map.end()) {
     return pos->second;
   }
-  throw_exception<E>(fmt::format("{}{}", exceptionStrPrefix, key));
+  throw_exception<E>(fmt::format(
+      "{}{}", exceptionStrPrefix, detail::map_util_format_key_t<Key>(key)));
 }
 
 /**
