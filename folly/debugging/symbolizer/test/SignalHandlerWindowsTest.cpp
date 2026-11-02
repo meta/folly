@@ -22,6 +22,7 @@
 
 #include <folly/CPortability.h>
 #include <folly/debugging/symbolizer/SignalHandler.h>
+#include <folly/portability/GMock.h>
 #include <folly/portability/Windows.h>
 
 namespace folly {
@@ -55,6 +56,7 @@ FOLLY_NOINLINE void crashStackOverflow() {
   volatile char buf[1024];
   buf[0] = 0;
   crashStackOverflow();
+  (void)buf[0];
 }
 
 // Throwing out of a noexcept function calls std::terminate, exercising the
@@ -93,22 +95,36 @@ TEST(SignalHandlerWindows, EmptySignalMaskAllowsLaterInstallation) {
 TEST(SignalHandlerWindows, AccessViolationRead) {
   EXPECT_DEATH(
       setupAndCrash(&crashAvRead),
-      "\\*\\*\\* Fatal exception 0xc0000005 \\(EXCEPTION_ACCESS_VIOLATION\\)"
-      ".*read at 0x0.*WinCallbackFired");
+      ::testing::AllOf(
+          ::testing::HasSubstr(
+              "*** Fatal exception 0xc0000005 (EXCEPTION_ACCESS_VIOLATION)"),
+          ::testing::HasSubstr("read at 0x0"),
+          ::testing::HasSubstr("faulting instruction at 0x"),
+          ::testing::HasSubstr(
+              "signal_handler_windows_test.exe module offset 0x"),
+          ::testing::HasSubstr("WinCallbackFired")));
 }
 
 TEST(SignalHandlerWindows, AccessViolationWrite) {
   EXPECT_DEATH(
       setupAndCrash(&crashAvWrite),
-      "\\*\\*\\* Fatal exception 0xc0000005 \\(EXCEPTION_ACCESS_VIOLATION\\)"
-      ".*write at 0x0.*WinCallbackFired");
+      ::testing::AllOf(
+          ::testing::HasSubstr(
+              "*** Fatal exception 0xc0000005 (EXCEPTION_ACCESS_VIOLATION)"),
+          ::testing::HasSubstr("write at 0x0"),
+          ::testing::HasSubstr("faulting instruction at 0x"),
+          ::testing::HasSubstr(
+              "signal_handler_windows_test.exe module offset 0x"),
+          ::testing::HasSubstr("WinCallbackFired")));
 }
 
 TEST(SignalHandlerWindows, StackOverflow) {
   EXPECT_DEATH(
       setupAndCrash(&crashStackOverflow),
-      "\\*\\*\\* Fatal exception 0xc00000fd \\(EXCEPTION_STACK_OVERFLOW\\)"
-      ".*WinCallbackFired");
+      ::testing::AllOf(
+          ::testing::HasSubstr(
+              "*** Fatal exception 0xc00000fd (EXCEPTION_STACK_OVERFLOW)"),
+          ::testing::HasSubstr("WinCallbackFired")));
 }
 
 // A throw escaping a noexcept function reaches std::terminate, not the VEH;
@@ -117,7 +133,9 @@ TEST(SignalHandlerWindows, StackOverflow) {
 TEST(SignalHandlerWindows, TerminateHandler) {
   EXPECT_DEATH(
       setupAndCrash(&throwFromNoexcept),
-      "\\*\\*\\* std::terminate called \\(boom\\).*WinCallbackFired");
+      ::testing::AllOf(
+          ::testing::HasSubstr("*** std::terminate called (boom)"),
+          ::testing::HasSubstr("WinCallbackFired")));
 }
 
 // MSVC C++ throws produce exception code 0xe06d7363, which the filter

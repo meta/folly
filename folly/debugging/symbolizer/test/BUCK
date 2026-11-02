@@ -14,6 +14,7 @@ oncall("fbcode_entropy_wardens_folly")
 WINDOWS_SIGNAL_HANDLER_TEST_DEPS = [
     "//folly:c_portability",
     "//folly/debugging/symbolizer:symbolizer",
+    "//folly/portability:gmock",
     "//folly/portability:windows",
 ]
 

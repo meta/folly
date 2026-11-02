@@ -52,6 +52,8 @@ namespace {
 constexpr size_t kMaxFrames = 64;
 constexpr size_t kMaxSymbolNameChars = 1024;
 
+void writeStderrW(const wchar_t* w, int wlen);
+
 void writeStderr(StringPiece sp) {
   DWORD written = 0;
   ::WriteFile(
@@ -137,6 +139,26 @@ void writeAccessViolationDetail(EXCEPTION_RECORD* rec) {
   writeStderr("\n");
 }
 
+void writeFaultingModule(void* address) {
+  HMODULE module = nullptr;
+  if (!::GetModuleHandleExW(
+          GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+          reinterpret_cast<LPCWSTR>(address),
+          &module)) {
+    return;
+  }
+  wchar_t path[1024];
+  const DWORD length = ::GetModuleFileNameW(module, path, 1024);
+  if (length > 0 && length < 1024) {
+    writeStderr(" in ");
+    writeStderrW(path, static_cast<int>(length));
+  }
+  writeStderr(" module offset ");
+  writeStderrHex(
+      reinterpret_cast<uint64_t>(address) - reinterpret_cast<uint64_t>(module));
+}
+
 void writeExceptionHeader(EXCEPTION_RECORD* rec) {
   writeStderr("\n*** Fatal exception ");
   writeStderrHex(rec->ExceptionCode);
@@ -150,6 +172,12 @@ void writeExceptionHeader(EXCEPTION_RECORD* rec) {
       rec->ExceptionCode == EXCEPTION_IN_PAGE_ERROR) {
     writeAccessViolationDetail(rec);
   }
+  writeStderr("  faulting instruction at ");
+  writeStderrHex(reinterpret_cast<uint64_t>(rec->ExceptionAddress));
+  if (rec->ExceptionCode != EXCEPTION_STACK_OVERFLOW) {
+    writeFaultingModule(rec->ExceptionAddress);
+  }
+  writeStderr("\n");
 }
 
 void writeRawFrames(void* const* frames, WORD count) {
