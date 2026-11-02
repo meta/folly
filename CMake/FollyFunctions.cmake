@@ -638,6 +638,12 @@ function (folly_add_library)
                         ${FOLLY_LIB_EXTERNAL_DEPS})
     target_link_libraries(${_target_name} INTERFACE folly_deps
                                                     ${_interface_deps})
+    # With no sources of its own, its users link what it uses.
+    if (FOLLY_LIB_DEPS)
+      list(JOIN FOLLY_LIB_DEPS "," _deps_str)
+      set_property(GLOBAL APPEND PROPERTY FOLLY_DEFERRED_DEPS
+                                          "${_target_name}|INTERFACE|${_deps_str}")
+    endif ()
     # Track external deps for monolithic library (header-only deps are used transitively)
     if (FOLLY_LIB_EXTERNAL_DEPS)
       set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS
@@ -841,6 +847,7 @@ function (folly_resolve_deferred_dependencies)
   cmake_policy(SET CMP0079 NEW)
 
   get_property(_deferred_deps GLOBAL PROPERTY FOLLY_DEFERRED_DEPS)
+  set(_remaining "")
 
   foreach (_spec IN LISTS _deferred_deps)
     # Parse the spec: "target|visibility|dep1,dep2,..."
@@ -859,9 +866,12 @@ function (folly_resolve_deferred_dependencies)
 
     # Filter to only existing targets (skip deps that weren't generated)
     set(_valid_deps "")
+    set(_missing_deps "")
     foreach (_dep IN LISTS _deps)
       if (TARGET ${_dep})
         list(APPEND _valid_deps ${_dep})
+      else ()
+        list(APPEND _missing_deps ${_dep})
       endif ()
     endforeach ()
 
@@ -869,7 +879,15 @@ function (folly_resolve_deferred_dependencies)
       folly_localize_deps(_valid_deps ${_valid_deps})
       target_link_libraries(${_target} ${_visibility} ${_valid_deps})
     endif ()
+    # folly/CMakeLists.txt and the top-level CMakeLists.txt both call this, the
+    # first time before the monolithic folly exists, so keep only what is still
+    # missing to link each dep once.
+    if (_missing_deps)
+      list(JOIN _missing_deps "," _missing_str)
+      list(APPEND _remaining "${_target}|${_visibility}|${_missing_str}")
+    endif ()
   endforeach ()
+  set_property(GLOBAL PROPERTY FOLLY_DEFERRED_DEPS "${_remaining}")
 endfunction ()
 
 # Create the monolithic folly library from all component OBJECT libraries
