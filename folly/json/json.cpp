@@ -23,12 +23,15 @@
 #include <iterator>
 #include <limits>
 #include <sstream>
+#include <string_view>
 #include <type_traits>
 
 #include <fmt/compile.h>
 #include <glog/logging.h>
 
+#include <folly/CPortability.h>
 #include <folly/Conv.h>
+#include <folly/Likely.h>
 #include <folly/Portability.h>
 #include <folly/Range.h>
 #include <folly/Unicode.h>
@@ -479,6 +482,26 @@ struct DefaultOptsPtr {
   serialization_opts operator*() const { return {}; }
 };
 
+// Match the configured quote, backslashes, and controls (< 0x20) in a word.
+// Pack input bytes least-significant first. Only the first marked byte is
+// exact; later marks may be borrow artifacts.
+struct StringBodyMatcher {
+  static constexpr uint64_t kOnes = 0x0101010101010101ULL;
+  static constexpr uint64_t kHighs = 0x8080808080808080ULL;
+
+  explicit StringBodyMatcher(char quoteChar)
+      : quoteBcast_(kOnes * static_cast<uint8_t>(quoteChar)) {}
+
+  FOLLY_ALWAYS_INLINE uint64_t operator()(uint64_t word) const {
+    const auto zeroByte = [](uint64_t v) { return (v - kOnes) & ~v & kHighs; };
+    const auto controls = (word - kOnes * 0x20) & ~word & kHighs;
+    return zeroByte(word ^ quoteBcast_) |
+        zeroByte(word ^ (kOnes * static_cast<uint8_t>('\\'))) | controls;
+  }
+
+  uint64_t quoteBcast_;
+};
+
 // Wraps our input buffer with some helper functions.
 template <class OptsPtr = serialization_opts const*>
 struct Input {
@@ -511,6 +534,108 @@ struct Input {
     range_.advance(skipped);
     storeCurrent();
     return ret;
+  }
+
+  // Consume the initial unescaped run after the opening quote.
+  // Return a borrowed span; leave quote/backslash or JSON5 CR/LF unconsumed.
+  StringPiece skipStringBody(char quoteChar) {
+    const char* const base = range_.data();
+    const size_t n = range_.size();
+    size_t i = 0;
+    const StringBodyMatcher matchBody(quoteChar);
+    while (n - i >= sizeof(uint64_t)) {
+      const auto word = Endian::little(loadUnaligned<uint64_t>(base + i));
+      const auto match = matchBody(word);
+      if (!match) {
+        i += sizeof(uint64_t);
+        continue;
+      }
+      i += (findFirstSet(match) - 1) >> 3;
+      const char c = base[i];
+      if (LIKELY(c == quoteChar) || c == '\\') {
+        goto bodyDone;
+      }
+      i = skipStringBodyWithControls(quoteChar, i);
+      goto bodyDone;
+    }
+    for (; i < n; ++i) {
+      const char c = base[i];
+      if (c == quoteChar || c == '\\') {
+        break;
+      }
+      if (static_cast<uint8_t>(c) < 0x20) {
+        i = skipStringBodyWithControls(quoteChar, i);
+        break;
+      }
+    }
+  bodyDone:
+    const auto ret = range_.subpiece(0, i);
+    range_.advance(i);
+    storeCurrent();
+    return ret;
+  }
+
+  // Scan [i, end) within the current input, using absolute offsets.
+  // Stop at quote/backslash or JSON5 CR/LF; return the stop index or end.
+  // Count accepted LF, but do not advance the cursor.
+  FOLLY_ALWAYS_INLINE size_t
+  skipStringBodyScalar(char quoteChar, bool json5, size_t i, size_t end) {
+    for (; i < end; ++i) {
+      const char c = range_[i];
+      if (c == quoteChar || c == '\\' || (json5 && (c == '\n' || c == '\r'))) {
+        break;
+      }
+      if (c == '\n') {
+        ++lineNum_;
+      }
+    }
+    return i;
+  }
+
+  // Use an inline eight-byte probe, then the hybrid scanner for longer runs.
+  // Same borrowed-span and cursor contract as skipStringBody().
+  StringPiece skipStringBodyAfterEscape(char quoteChar) {
+    const bool json5 = getOpts().allow_json5_experimental;
+    const size_t scalarEnd = std::min(range_.size(), sizeof(uint64_t));
+    size_t i = skipStringBodyScalar(quoteChar, json5, 0, scalarEnd);
+    if (i < scalarEnd) {
+      goto bodyDone;
+    }
+    if (i < range_.size()) {
+      i = skipStringBodyWithControls(quoteChar, i);
+    }
+  bodyDone:
+    const auto ret = range_.subpiece(0, i);
+    range_.advance(i);
+    storeCurrent();
+    return ret;
+  }
+
+  // Hybrid scan from offset i in the current range; earlier bytes are
+  // accounted. Count accepted LF and return the stop offset or range_.size().
+  // Leave the cursor unchanged.
+  FOLLY_NOINLINE size_t skipStringBodyWithControls(char quoteChar, size_t i) {
+    const bool json5 = getOpts().allow_json5_experimental;
+    const StringBodyMatcher matchBody(quoteChar);
+    const size_t n = range_.size();
+    while (i < n) {
+      const size_t scalarEnd = i + std::min(n - i, sizeof(uint64_t));
+      i = skipStringBodyScalar(quoteChar, json5, i, scalarEnd);
+      if (i < scalarEnd) {
+        return i;
+      }
+      while (n - i >= sizeof(uint64_t)) {
+        const auto word =
+            Endian::little(loadUnaligned<uint64_t>(range_.data() + i));
+        const auto match = matchBody(word);
+        if (match) {
+          i += (findFirstSet(match) - 1) >> 3;
+          break;
+        }
+        i += sizeof(uint64_t);
+      }
+    }
+    return i;
   }
 
   StringPiece skipDigits() {
@@ -611,6 +736,11 @@ struct Input {
 
   void operator++() {
     range_.pop_front();
+    storeCurrent();
+  }
+
+  void advance(size_t n) {
+    range_.advance(n);
     storeCurrent();
   }
 
@@ -949,18 +1079,19 @@ void decodeUnicodeEscape(Input<T>& in, std::string& out) {
   appendCodePointToUtf8(codePoint, out);
 }
 
+// Continue after firstRun, already consumed and accounted for.
+// Copy the borrowed span once and decode into an owned string.
+// Consume the closing quote on success.
 template <class T>
-std::string parseString(Input<T>& in, char quoteChar) {
+FOLLY_NOINLINE std::string parseStringEscapedTail(
+    Input<T>& in, char quoteChar, std::string_view firstRun) {
   const bool json5 = in.getOpts().allow_json5_experimental;
-  DCHECK_EQ(*in, quoteChar);
-  ++in;
-
+  const auto scanBody = [&] {
+    const auto range = in.skipStringBodyAfterEscape(quoteChar);
+    return std::string_view(range.data(), range.size());
+  };
   std::string ret;
-  for (;;) {
-    auto range = in.skipWhile([quoteChar, json5](char c) {
-      return c != quoteChar && c != '\\' &&
-          !(json5 && (c == '\n' || c == '\r'));
-    });
+  for (auto range = firstRun;; range = scanBody()) {
     ret.append(range.begin(), range.end());
 
     if (json5 && (*in == '\n' || *in == '\r')) {
@@ -1024,6 +1155,39 @@ std::string parseString(Input<T>& in, char quoteChar) {
   }
 
   return ret;
+}
+
+template <class T>
+std::string parseString(Input<T>& in, char quoteChar) {
+  DCHECK_EQ(*in, quoteChar);
+  const char* const bytes = in.begin();
+  const auto n = in.size();
+  const auto plain = [quoteChar](char c) {
+    return static_cast<uint8_t>(c) >= 0x20 && c != quoteChar && c != '\\';
+  };
+  if (n >= 2 && bytes[1] == quoteChar) {
+    in.advance(2);
+    return {};
+  }
+  if (n >= 3 && bytes[2] == quoteChar && plain(bytes[1])) {
+    std::string ret(1, bytes[1]);
+    in.advance(3);
+    return ret;
+  }
+  if (n >= 4 && bytes[3] == quoteChar && plain(bytes[1]) && plain(bytes[2])) {
+    std::string ret(bytes + 1, 2);
+    in.advance(4);
+    return ret;
+  }
+  ++in;
+  auto range = in.skipStringBody(quoteChar);
+  if (LIKELY(*in == quoteChar)) {
+    auto ret = range.str();
+    ++in;
+    return ret;
+  }
+
+  return parseStringEscapedTail(in, quoteChar, {range.data(), range.size()});
 }
 
 template <class T>

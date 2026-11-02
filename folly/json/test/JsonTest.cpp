@@ -16,9 +16,15 @@
 
 #include <folly/json/json.h>
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <limits>
+#include <memory>
+#include <string>
+#include <string_view>
 
 #include <folly/portability/GTest.h>
 
@@ -51,6 +57,201 @@ TEST(Json, Unicode) {
   EXPECT_EQ(
       reinterpret_cast<const char*>(u8"I \U0001D11E playing in G-clef"),
       val.asString());
+}
+
+TEST(Json, StringBodyBoundariesAndAlignment) {
+  for (size_t length = 0; length <= 65; ++length) {
+    const std::string body(length, 'a');
+    for (size_t padding = 0; padding < 8; ++padding) {
+      SCOPED_TRACE(length);
+      SCOPED_TRACE(padding);
+      std::string input = std::string(padding, ' ') + '"' + body + '"';
+      auto bytes = std::make_unique<char[]>(input.size());
+      std::copy(input.begin(), input.end(), bytes.get());
+      const folly::StringPiece exact(bytes.get(), input.size());
+      EXPECT_EQ(body, parseJson(exact).asString());
+      folly::json::serialization_opts opts;
+      EXPECT_EQ(body, parseJson(exact, opts).asString());
+      EXPECT_EQ(
+          dynamic::array(body, "suffix"),
+          parseJson("[" + input + ",\"suffix\"]"));
+
+      input[padding] = '\'';
+      input.back() = '\'';
+      std::copy(input.begin(), input.end(), bytes.get());
+      opts.allow_json5_experimental = true;
+      EXPECT_EQ(body, parseJson(exact, opts).asString());
+    }
+  }
+}
+
+TEST(Json, StringBodyEscapeBoundaries) {
+  for (size_t length : {0, 1, 2, 7, 8, 9, 15, 16, 17, 31, 32}) {
+    SCOPED_TRACE(length);
+    const std::string prefix(length, 'a');
+    std::string body = prefix;
+    body.append("\n\"\\").append(prefix);
+    std::string encoded = prefix;
+    encoded.append(R"(\n\"\\)").append(prefix);
+    EXPECT_EQ(body, parseJson('"' + encoded + '"').asString());
+    EXPECT_EQ(
+        dynamic::array(body, "suffix"),
+        parseJson("[\"" + encoded + "\",\"suffix\"]"));
+    folly::json::serialization_opts opts;
+    opts.allow_json5_experimental = true;
+    EXPECT_EQ(body, parseJson('\'' + encoded + '\'', opts).asString());
+    EXPECT_THROW(parseJson('"' + prefix), parse_error);
+    EXPECT_THROW(parseJson('"' + prefix + '\\'), parse_error);
+    EXPECT_THROW(parseJson('"' + prefix + R"(\q")"), parse_error);
+  }
+}
+
+TEST(Json, StringBodyBorrowChainsAndEventOrder) {
+  struct Case {
+    std::string encoded;
+    std::string decoded;
+  };
+  const std::array<Case, 7> cases{{
+      {"\x1f   value", "\x1f   value"},
+      {R"(\"###value)", "\"###value"},
+      {R"(\\]]]value)", "\\]]]value"},
+      {"\x80\x1f \xff"
+       R"(\"#\\])",
+       "\x80\x1f \xff\"#\\]"},
+      {"\x1f "
+       R"(\"#\\])",
+       "\x1f \"#\\]"},
+      {R"(\\])"
+       "\x1f "
+       R"(\"#)",
+       "\\]\x1f \"#"},
+      {R"(\"#)"
+       "\x1f "
+       R"(\\])",
+       "\"#\x1f \\]"},
+  }};
+  for (size_t length = 0; length < 17; ++length) {
+    for (auto const& item : cases) {
+      SCOPED_TRACE(length);
+      std::string encoded(length, 'a');
+      encoded.append(item.encoded).append(16, 'b');
+      std::string decoded(length, 'a');
+      decoded.append(item.decoded).append(16, 'b');
+      std::string input = "[\"";
+      input.append(encoded).append("\",\"suffix\"]");
+      const dynamic expected = dynamic::array(decoded, "suffix");
+      EXPECT_EQ(expected, parseJson(input));
+      folly::json::serialization_opts opts;
+      EXPECT_EQ(expected, parseJson(input, opts));
+    }
+  }
+
+  folly::json::serialization_opts opts;
+  opts.allow_json5_experimental = true;
+  for (size_t length = 0; length < 17; ++length) {
+    const std::string prefix(length, 'a');
+    std::string input = "'";
+    input.append(prefix).append(R"(\'&&&value')");
+    std::string expected = prefix;
+    expected.append("'&&&value");
+    EXPECT_EQ(expected, parseJson(input, opts).asString());
+  }
+}
+
+TEST(Json, StringBodyExactBufferEscapesAndMalformedEnd) {
+  const std::array<std::string_view, 9> endings{{
+      "",
+      "\\",
+      "\\u",
+      "\\u0",
+      "\\u00",
+      "\\u000",
+      "\\uD834",
+      "\\uD834\\u",
+      "\\q",
+  }};
+  for (size_t length : {0, 1, 2, 3, 6, 7, 8, 9, 14, 15, 16, 17, 31, 32}) {
+    for (size_t padding = 0; padding < 8; ++padding) {
+      for (char quote : {'"', '\''}) {
+        SCOPED_TRACE(length);
+        SCOPED_TRACE(padding);
+        SCOPED_TRACE(quote);
+        folly::json::serialization_opts opts;
+        opts.allow_json5_experimental = quote == '\'';
+        std::string prefix(padding, ' ');
+        prefix.push_back(quote);
+        prefix.append(length, 'a');
+        for (bool resumed : {false, true}) {
+          SCOPED_TRACE(resumed);
+          for (auto ending : endings) {
+            SCOPED_TRACE(ending);
+            std::string input = prefix;
+            if (resumed) {
+              input.append(R"(\n)").append(length, 'b');
+            }
+            input.append(ending);
+            auto bytes = std::make_unique<char[]>(input.size());
+            std::copy(input.begin(), input.end(), bytes.get());
+            const std::string_view exact(bytes.get(), input.size());
+            EXPECT_THROW(parseJson(exact, opts), parse_error);
+            if (quote == '"') {
+              EXPECT_THROW(parseJson(exact), parse_error);
+            }
+          }
+        }
+        std::string input = prefix;
+        input.append(R"(\n\"\\\u0041)").push_back(quote);
+        auto bytes = std::make_unique<char[]>(input.size());
+        std::copy(input.begin(), input.end(), bytes.get());
+        const std::string_view exact(bytes.get(), input.size());
+        std::string expected(length, 'a');
+        expected.append("\n\"\\A");
+        EXPECT_EQ(expected, parseJson(exact, opts).asString());
+        if (quote == '"') {
+          EXPECT_EQ(expected, parseJson(exact).asString());
+        }
+      }
+    }
+  }
+}
+
+TEST(Json, StringBodyRawBytesPreserved) {
+  for (size_t length : {0, 1, 2, 7, 8, 9, 15, 16, 17}) {
+    for (unsigned byte : {0, 1, 9, 10, 13, 31, 0x80, 0xff}) {
+      SCOPED_TRACE(length);
+      SCOPED_TRACE(byte);
+      const std::string body =
+          std::string(length, 'a') + char(byte) + std::string(9, 'b');
+      const std::string input = '"' + body + '"';
+      EXPECT_EQ(body, parseJson(input).asString());
+      folly::json::serialization_opts opts;
+      EXPECT_EQ(body, parseJson(input, opts).asString());
+      opts.allow_json5_experimental = true;
+      if (byte == '\n' || byte == '\r') {
+        EXPECT_THROW(parseJson(input, opts), parse_error);
+      } else {
+        EXPECT_EQ(body, parseJson(input, opts).asString());
+      }
+    }
+  }
+}
+
+TEST(Json, StringBodyRawNewlineMetadata) {
+  for (size_t length : {0, 1, 2, 7, 8, 9, 15, 16, 17, 31, 32}) {
+    SCOPED_TRACE(length);
+    const std::string body = std::string(length, 'a') + "\n\nvalue";
+    const std::string input = "{\"value\":\"" + body + "\",\n\"after\":0}";
+    folly::json::metadata_map map;
+    auto value = parseJsonWithMetadata(input, &map);
+    const dynamic expected = dynamic::object("value", body)("after", 0);
+    EXPECT_EQ(expected, value);
+    const auto after = value.get_ptr("after");
+    ASSERT_NE(nullptr, after);
+    const auto it = map.find(after);
+    ASSERT_NE(map.end(), it);
+    EXPECT_EQ(3, it->second.key_range.begin.line);
+    EXPECT_EQ(3, it->second.value_range.begin.line);
+  }
 }
 
 TEST(Json, Parse) {
