@@ -1770,7 +1770,10 @@ class IOBuf {
    *
    * @param[out] other  An IOBuf to assign the clone to
    */
-  void cloneOneInto(IOBuf& other) const { other = cloneOneAsValue(); }
+  void cloneOneInto(IOBuf& other) const {
+    incrementRefcount();
+    other.assignBuffer(sharedInfo_, buf_, data_, capacity_, length_);
+  }
 
   /**
    * Returns a new IOBuf whose buffer is this buffer's tail. The latter is
