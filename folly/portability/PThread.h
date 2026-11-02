@@ -129,9 +129,8 @@ int pthread_cond_timedwait(
 int pthread_cond_signal(pthread_cond_t* cond);
 int pthread_cond_broadcast(pthread_cond_t* cond);
 
-// In reality, this is boost::thread_specific_ptr*, but we're attempting
-// to avoid introducing boost into a portability header.
-using pthread_key_t = void*;
+// A Windows TLS index.
+using pthread_key_t = DWORD;
 
 int pthread_key_create(pthread_key_t* key, void (*destructor)(void*));
 int pthread_key_delete(pthread_key_t key);

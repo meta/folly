@@ -636,7 +636,6 @@ fb_dirsync_cpp_unittest(
         "FOLLY_FILE_LOCK_TEST_HELPER": "$(exe_target :file_test_lock_helper)",
     },
     deps = [
-        "fbsource//third-party/boost:boost_thread",  # @manual
         "fbsource//third-party/glog:glog",
         "//folly:file",
         "//folly:string",
@@ -1305,7 +1304,6 @@ fb_dirsync_cpp_unittest(
     }),
     labels = [tpx_labels.heavyweight],
     deps = [
-        "fbsource//third-party/boost:boost_thread",  # @manual
         ":deterministic_schedule",
         ":test_utils",
         "//folly:benchmark",
@@ -1632,7 +1630,6 @@ fb_dirsync_cpp_benchmark(
     name = "thread_local_benchmark",
     srcs = ["ThreadLocalBenchmark.cpp"],
     deps = [
-        "fbsource//third-party/boost:boost_thread",  # @manual
         "fbsource//third-party/glog:glog",
         "//folly:benchmark",
         "//folly:thread_local",

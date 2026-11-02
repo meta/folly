@@ -59,13 +59,10 @@ set(FOLLY_LIBRARIES Folly::folly)
 find_dependency(fmt)
 
 set(Boost_USE_STATIC_LIBS "@FOLLY_BOOST_LINK_STATIC@")
+# The components folly-deps.cmake required, plus program_options if folly
+# built folly/cli's ProgramOptions.
 find_package(Boost 1.69.0 REQUIRED
-  COMPONENTS
-    context
-    @FOLLY_BOOST_PROGRAM_OPTIONS@
-    regex
-    thread
-)
+  COMPONENTS @FOLLY_BOOST_COMPONENTS@ @FOLLY_BOOST_PROGRAM_OPTIONS@)
 
 if (NOT folly_FIND_QUIETLY)
   message(STATUS "Found folly: ${FOLLY_PREFIX_DIR}")

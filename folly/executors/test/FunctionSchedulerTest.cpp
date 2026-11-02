@@ -16,16 +16,18 @@
 
 #include <algorithm>
 #include <atomic>
+#include <barrier>
 #include <cassert>
+#include <numeric>
 #include <random>
 #include <vector>
 
-#include <boost/thread.hpp>
 #include <glog/logging.h>
 
 #include <folly/Random.h>
 #include <folly/executors/FunctionScheduler.h>
 #include <folly/portability/GTest.h>
+#include <folly/portability/Unistd.h>
 #include <folly/synchronization/Baton.h>
 
 using namespace folly;
@@ -341,10 +343,10 @@ TEST(FunctionScheduler, ResetFunc2) {
 
 TEST(FunctionScheduler, ResetFuncWhileRunning) {
   struct State {
-    boost::barrier barrier_a{2};
-    boost::barrier barrier_b{2};
-    boost::barrier barrier_c{2};
-    boost::barrier barrier_d{2};
+    std::barrier<> barrier_a{2};
+    std::barrier<> barrier_b{2};
+    std::barrier<> barrier_c{2};
+    std::barrier<> barrier_d{2};
     atomic<bool> set = false;
     atomic<size_t> count = 0;
   };
@@ -356,14 +358,14 @@ TEST(FunctionScheduler, ResetFuncWhileRunning) {
   fs.addFunction(
       [&, mv /* ref + shared_ptr fit in in-situ storage */] {
         if (!state.set) { // first invocation
-          state.barrier_a.wait();
+          state.barrier_a.arrive_and_wait();
           // ensure that resetFunctionTimer is called in this critical section
-          state.barrier_b.wait();
+          state.barrier_b.arrive_and_wait();
           ++state.count;
           EXPECT_TRUE(bool(mv)) << "bug repro: mv was moved-out";
-          state.barrier_c.wait();
+          state.barrier_c.arrive_and_wait();
           // main thread checks count here
-          state.barrier_d.wait();
+          state.barrier_d.arrive_and_wait();
         } else { // subsequent invocations
           ++state.count;
         }
@@ -372,15 +374,15 @@ TEST(FunctionScheduler, ResetFuncWhileRunning) {
       "nada");
   fs.start();
 
-  state.barrier_a.wait();
+  state.barrier_a.arrive_and_wait();
   state.set = true;
   fs.resetFunctionTimer("nada");
   EXPECT_EQ(0, state.count) << "sanity check";
-  state.barrier_b.wait();
+  state.barrier_b.arrive_and_wait();
   // fn thread increments count and checks mv here
-  state.barrier_c.wait();
+  state.barrier_c.arrive_and_wait();
   EXPECT_EQ(1, state.count) << "sanity check";
-  state.barrier_d.wait();
+  state.barrier_d.arrive_and_wait();
   delay(1);
   EXPECT_EQ(2, state.count) << "sanity check";
 }

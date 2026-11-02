@@ -17,10 +17,6 @@
 #include <folly/portability/PThread.h>
 
 #if !FOLLY_HAVE_PTHREAD && defined(_WIN32)
-#include <boost/thread/exceptions.hpp>
-#include <boost/thread/tss.hpp>
-#include <boost/version.hpp>
-
 #include <errno.h>
 
 #include <atomic>
@@ -645,51 +641,31 @@ int pthread_cond_broadcast(pthread_cond_t* cond) {
   return 0;
 }
 
-int pthread_key_create(pthread_key_t* key, void (*destructor)(void*)) {
-  try {
-    auto newKey = new boost::thread_specific_ptr<void>(destructor);
-    *key = newKey;
-    return 0;
-  } catch (boost::thread_resource_error) {
-    return -1;
+// Key destructors are never run, same as the Boost.Thread-based emulation this
+// replaces.
+int pthread_key_create(pthread_key_t* key, void (* /* destructor */)(void*)) {
+  DWORD index = TlsAlloc();
+  if (index == TLS_OUT_OF_INDEXES) {
+    return EAGAIN;
   }
+  *key = index;
+  return 0;
 }
 
 int pthread_key_delete(pthread_key_t key) {
-  try {
-    auto realKey = reinterpret_cast<boost::thread_specific_ptr<void>*>(key);
-    delete realKey;
-    return 0;
-  } catch (boost::thread_resource_error) {
-    return -1;
-  }
+  return TlsFree(key) ? 0 : EINVAL;
 }
 
 void* pthread_getspecific(pthread_key_t key) {
-  auto realKey = reinterpret_cast<boost::thread_specific_ptr<void>*>(key);
-  // This can't throw as-per the documentation.
-  return realKey->get();
+  // TlsGetValue clears the last error on success.
+  DWORD lastError = GetLastError();
+  void* value = TlsGetValue(key);
+  SetLastError(lastError);
+  return value;
 }
 
 int pthread_setspecific(pthread_key_t key, const void* value) {
-  try {
-    auto realKey = reinterpret_cast<boost::thread_specific_ptr<void>*>(key);
-    // We can't just call reset here because that would invoke the cleanup
-    // function, which we don't want to do.
-    boost::detail::set_tss_data(
-        realKey,
-#if BOOST_VERSION >= 107000
-        boost::detail::thread::cleanup_caller_t(),
-        boost::detail::thread::cleanup_func_t(),
-#else
-        boost::shared_ptr<boost::detail::tss_cleanup_function>(),
-#endif
-        const_cast<void*>(value),
-        false);
-    return 0;
-  } catch (boost::thread_resource_error) {
-    return -1;
-  }
+  return TlsSetValue(key, const_cast<void*>(value)) ? 0 : EINVAL;
 }
 } // namespace pthread
 } // namespace portability

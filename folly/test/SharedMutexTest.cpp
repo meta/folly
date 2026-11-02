@@ -31,8 +31,6 @@
 #include <thread>
 #include <vector>
 
-#include <boost/thread/shared_mutex.hpp>
-
 #include <folly/Benchmark.h>
 #include <folly/MPMCQueue.h>
 #include <folly/fibers/Baton.h>
@@ -1337,9 +1335,9 @@ static void shmtx_r_bare_reads(
       numOps, numThreads, useSeparateLocks);
 }
 
-static void boost_shared_reads(
+static void std_shared_reads(
     uint32_t numOps, size_t numThreads, bool useSeparateLocks) {
-  runContendedReaders<atomic, boost::shared_mutex, Locker>(
+  runContendedReaders<atomic, std::shared_mutex, Locker>(
       numOps, numThreads, useSeparateLocks);
 }
 
@@ -1465,12 +1463,12 @@ static void shmtx_r_bare(
       numOps, numThreads, writeFraction, useSeparateLocks);
 }
 
-static void boost_shared(
+static void std_shared(
     size_t numOps,
     size_t numThreads,
     double writeFraction,
     bool useSeparateLocks) {
-  runMixed<atomic, boost::shared_mutex, Locker>(
+  runMixed<atomic, std::shared_mutex, Locker>(
       numOps, numThreads, writeFraction, useSeparateLocks);
 }
 
@@ -2132,8 +2130,8 @@ static void shmtx_r_bare_ping_pong(size_t n, size_t scale, size_t burnCount) {
   runPingPong<SharedMutexReadPriority>(n / scale, burnCount);
 }
 
-static void boost_shared_ping_pong(size_t n, size_t scale, size_t burnCount) {
-  runPingPong<boost::shared_mutex>(n / scale, burnCount);
+static void std_shared_ping_pong(size_t n, size_t scale, size_t burnCount) {
+  runPingPong<std::shared_mutex>(n / scale, burnCount);
 }
 
 static void pthrd_rwlock_ping_pong(size_t n, size_t scale, size_t burnCount) {
@@ -2425,7 +2423,7 @@ BENCH_REL(shmtx_wr_pri_reads, 1thread, 1, false)
 BENCH_REL(shmtx_w_bare_reads, 1thread, 1, false)
 BENCH_REL(shmtx_rd_pri_reads, 1thread, 1, false)
 BENCH_REL(shmtx_r_bare_reads, 1thread, 1, false)
-BENCH_REL(boost_shared_reads, 1thread, 1, false)
+BENCH_REL(std_shared_reads, 1thread, 1, false)
 BENCH_REL(pthrd_rwlock_reads, 1thread, 1, false)
 BENCH_REL(timed_wr_pri_reads, 1thread, 1, false)
 BENCH_REL(timed_rd_pri_reads, 1thread, 1, false)
@@ -2435,7 +2433,7 @@ BENCH_REL(shmtx_wr_pri_reads, 2thread, 2, false)
 BENCH_REL(shmtx_w_bare_reads, 2thread, 2, false)
 BENCH_REL(shmtx_rd_pri_reads, 2thread, 2, false)
 BENCH_REL(shmtx_r_bare_reads, 2thread, 2, false)
-BENCH_REL(boost_shared_reads, 2thread, 2, false)
+BENCH_REL(std_shared_reads, 2thread, 2, false)
 BENCH_REL(pthrd_rwlock_reads, 2thread, 2, false)
 BENCH_REL(timed_wr_pri_reads, 2thread, 2, false)
 BENCH_REL(timed_rd_pri_reads, 2thread, 2, false)
@@ -2445,7 +2443,7 @@ BENCH_REL(shmtx_wr_pri_reads, 4thread, 4, false)
 BENCH_REL(shmtx_w_bare_reads, 4thread, 4, false)
 BENCH_REL(shmtx_rd_pri_reads, 4thread, 4, false)
 BENCH_REL(shmtx_r_bare_reads, 4thread, 4, false)
-BENCH_REL(boost_shared_reads, 4thread, 4, false)
+BENCH_REL(std_shared_reads, 4thread, 4, false)
 BENCH_REL(pthrd_rwlock_reads, 4thread, 4, false)
 BENCH_REL(timed_wr_pri_reads, 4thread, 4, false)
 BENCH_REL(timed_rd_pri_reads, 4thread, 4, false)
@@ -2455,7 +2453,7 @@ BENCH_REL(shmtx_wr_pri_reads, 8thread, 8, false)
 BENCH_REL(shmtx_w_bare_reads, 8thread, 8, false)
 BENCH_REL(shmtx_rd_pri_reads, 8thread, 8, false)
 BENCH_REL(shmtx_r_bare_reads, 8thread, 8, false)
-BENCH_REL(boost_shared_reads, 8thread, 8, false)
+BENCH_REL(std_shared_reads, 8thread, 8, false)
 BENCH_REL(pthrd_rwlock_reads, 8thread, 8, false)
 BENCH_REL(timed_wr_pri_reads, 8thread, 8, false)
 BENCH_REL(timed_rd_pri_reads, 8thread, 8, false)
@@ -2465,7 +2463,7 @@ BENCH_REL(shmtx_wr_pri_reads, 16thread, 16, false)
 BENCH_REL(shmtx_w_bare_reads, 16thread, 16, false)
 BENCH_REL(shmtx_rd_pri_reads, 16thread, 16, false)
 BENCH_REL(shmtx_r_bare_reads, 16thread, 16, false)
-BENCH_REL(boost_shared_reads, 16thread, 16, false)
+BENCH_REL(std_shared_reads, 16thread, 16, false)
 BENCH_REL(pthrd_rwlock_reads, 16thread, 16, false)
 BENCH_REL(timed_wr_pri_reads, 16thread, 16, false)
 BENCH_REL(timed_rd_pri_reads, 16thread, 16, false)
@@ -2475,7 +2473,7 @@ BENCH_REL(shmtx_wr_pri_reads, 32thread, 32, false)
 BENCH_REL(shmtx_w_bare_reads, 32thread, 32, false)
 BENCH_REL(shmtx_rd_pri_reads, 32thread, 32, false)
 BENCH_REL(shmtx_r_bare_reads, 32thread, 32, false)
-BENCH_REL(boost_shared_reads, 32thread, 32, false)
+BENCH_REL(std_shared_reads, 32thread, 32, false)
 BENCH_REL(pthrd_rwlock_reads, 32thread, 32, false)
 BENCH_REL(timed_wr_pri_reads, 32thread, 32, false)
 BENCH_REL(timed_rd_pri_reads, 32thread, 32, false)
@@ -2485,7 +2483,7 @@ BENCH_REL(shmtx_wr_pri_reads, 64thread, 64, false)
 BENCH_REL(shmtx_w_bare_reads, 64thread, 64, false)
 BENCH_REL(shmtx_rd_pri_reads, 64thread, 64, false)
 BENCH_REL(shmtx_r_bare_reads, 64thread, 64, false)
-BENCH_REL(boost_shared_reads, 64thread, 64, false)
+BENCH_REL(std_shared_reads, 64thread, 64, false)
 BENCH_REL(pthrd_rwlock_reads, 64thread, 64, false)
 BENCH_REL(timed_wr_pri_reads, 64thread, 64, false)
 BENCH_REL(timed_rd_pri_reads, 64thread, 64, false)
@@ -2500,7 +2498,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 1thread_all_write, 1, 1.0, false)
 BENCH_REL(shmtx_wr_pri, 1thread_all_write, 1, 1.0, false)
 BENCH_REL(shmtx_rd_pri, 1thread_all_write, 1, 1.0, false)
-BENCH_REL(boost_shared, 1thread_all_write, 1, 1.0, false)
+BENCH_REL(std_shared, 1thread_all_write, 1, 1.0, false)
 BENCH_REL(pthrd_rwlock, 1thread_all_write, 1, 1.0, false)
 BENCH_REL(pthrd_mutex_, 1thread_all_write, 1, 1.0, false)
 BENCH_REL(timed_wr_pri, 1thread_all_write, 1, 1.0, false)
@@ -2509,7 +2507,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 2thread_all_write, 2, 1.0, false)
 BENCH_REL(shmtx_wr_pri, 2thread_all_write, 2, 1.0, false)
 BENCH_REL(shmtx_rd_pri, 2thread_all_write, 2, 1.0, false)
-BENCH_REL(boost_shared, 2thread_all_write, 2, 1.0, false)
+BENCH_REL(std_shared, 2thread_all_write, 2, 1.0, false)
 BENCH_REL(pthrd_rwlock, 2thread_all_write, 2, 1.0, false)
 BENCH_REL(pthrd_mutex_, 2thread_all_write, 2, 1.0, false)
 BENCH_REL(timed_wr_pri, 2thread_all_write, 2, 1.0, false)
@@ -2518,7 +2516,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 4thread_all_write, 4, 1.0, false)
 BENCH_REL(shmtx_wr_pri, 4thread_all_write, 4, 1.0, false)
 BENCH_REL(shmtx_rd_pri, 4thread_all_write, 4, 1.0, false)
-BENCH_REL(boost_shared, 4thread_all_write, 4, 1.0, false)
+BENCH_REL(std_shared, 4thread_all_write, 4, 1.0, false)
 BENCH_REL(pthrd_rwlock, 4thread_all_write, 4, 1.0, false)
 BENCH_REL(pthrd_mutex_, 4thread_all_write, 4, 1.0, false)
 BENCH_REL(timed_wr_pri, 4thread_all_write, 4, 1.0, false)
@@ -2527,7 +2525,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 8thread_all_write, 8, 1.0, false)
 BENCH_REL(shmtx_wr_pri, 8thread_all_write, 8, 1.0, false)
 BENCH_REL(shmtx_rd_pri, 8thread_all_write, 8, 1.0, false)
-BENCH_REL(boost_shared, 8thread_all_write, 8, 1.0, false)
+BENCH_REL(std_shared, 8thread_all_write, 8, 1.0, false)
 BENCH_REL(pthrd_rwlock, 8thread_all_write, 8, 1.0, false)
 BENCH_REL(pthrd_mutex_, 8thread_all_write, 8, 1.0, false)
 BENCH_REL(timed_wr_pri, 8thread_all_write, 8, 1.0, false)
@@ -2536,7 +2534,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 16thread_all_write, 16, 1.0, false)
 BENCH_REL(shmtx_wr_pri, 16thread_all_write, 16, 1.0, false)
 BENCH_REL(shmtx_rd_pri, 16thread_all_write, 16, 1.0, false)
-BENCH_REL(boost_shared, 16thread_all_write, 16, 1.0, false)
+BENCH_REL(std_shared, 16thread_all_write, 16, 1.0, false)
 BENCH_REL(pthrd_rwlock, 16thread_all_write, 16, 1.0, false)
 BENCH_REL(pthrd_mutex_, 16thread_all_write, 16, 1.0, false)
 BENCH_REL(timed_wr_pri, 16thread_all_write, 16, 1.0, false)
@@ -2545,7 +2543,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 32thread_all_write, 32, 1.0, false)
 BENCH_REL(shmtx_wr_pri, 32thread_all_write, 32, 1.0, false)
 BENCH_REL(shmtx_rd_pri, 32thread_all_write, 32, 1.0, false)
-BENCH_REL(boost_shared, 32thread_all_write, 32, 1.0, false)
+BENCH_REL(std_shared, 32thread_all_write, 32, 1.0, false)
 BENCH_REL(pthrd_rwlock, 32thread_all_write, 32, 1.0, false)
 BENCH_REL(pthrd_mutex_, 32thread_all_write, 32, 1.0, false)
 BENCH_REL(timed_wr_pri, 32thread_all_write, 32, 1.0, false)
@@ -2554,7 +2552,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 64thread_all_write, 64, 1.0, false)
 BENCH_REL(shmtx_wr_pri, 64thread_all_write, 64, 1.0, false)
 BENCH_REL(shmtx_rd_pri, 64thread_all_write, 64, 1.0, false)
-BENCH_REL(boost_shared, 64thread_all_write, 64, 1.0, false)
+BENCH_REL(std_shared, 64thread_all_write, 64, 1.0, false)
 BENCH_REL(pthrd_rwlock, 64thread_all_write, 64, 1.0, false)
 BENCH_REL(pthrd_mutex_, 64thread_all_write, 64, 1.0, false)
 BENCH_REL(timed_wr_pri, 64thread_all_write, 64, 1.0, false)
@@ -2567,7 +2565,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 1thread_10pct_write, 1, 0.10, false)
 BENCH_REL(shmtx_wr_pri, 1thread_10pct_write, 1, 0.10, false)
 BENCH_REL(shmtx_rd_pri, 1thread_10pct_write, 1, 0.10, false)
-BENCH_REL(boost_shared, 1thread_10pct_write, 1, 0.10, false)
+BENCH_REL(std_shared, 1thread_10pct_write, 1, 0.10, false)
 BENCH_REL(pthrd_rwlock, 1thread_10pct_write, 1, 0.10, false)
 BENCH_REL(timed_wr_pri, 1thread_10pct_write, 1, 0.10, false)
 BENCH_REL(timed_rd_pri, 1thread_10pct_write, 1, 0.10, false)
@@ -2575,7 +2573,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 2thread_10pct_write, 2, 0.10, false)
 BENCH_REL(shmtx_wr_pri, 2thread_10pct_write, 2, 0.10, false)
 BENCH_REL(shmtx_rd_pri, 2thread_10pct_write, 2, 0.10, false)
-BENCH_REL(boost_shared, 2thread_10pct_write, 2, 0.10, false)
+BENCH_REL(std_shared, 2thread_10pct_write, 2, 0.10, false)
 BENCH_REL(pthrd_rwlock, 2thread_10pct_write, 2, 0.10, false)
 BENCH_REL(timed_wr_pri, 2thread_10pct_write, 2, 0.10, false)
 BENCH_REL(timed_rd_pri, 2thread_10pct_write, 2, 0.10, false)
@@ -2583,7 +2581,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 4thread_10pct_write, 4, 0.10, false)
 BENCH_REL(shmtx_wr_pri, 4thread_10pct_write, 4, 0.10, false)
 BENCH_REL(shmtx_rd_pri, 4thread_10pct_write, 4, 0.10, false)
-BENCH_REL(boost_shared, 4thread_10pct_write, 4, 0.10, false)
+BENCH_REL(std_shared, 4thread_10pct_write, 4, 0.10, false)
 BENCH_REL(pthrd_rwlock, 4thread_10pct_write, 4, 0.10, false)
 BENCH_REL(timed_wr_pri, 4thread_10pct_write, 4, 0.10, false)
 BENCH_REL(timed_rd_pri, 4thread_10pct_write, 4, 0.10, false)
@@ -2591,7 +2589,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 8thread_10pct_write, 8, 0.10, false)
 BENCH_REL(shmtx_wr_pri, 8thread_10pct_write, 8, 0.10, false)
 BENCH_REL(shmtx_rd_pri, 8thread_10pct_write, 8, 0.10, false)
-BENCH_REL(boost_shared, 8thread_10pct_write, 8, 0.10, false)
+BENCH_REL(std_shared, 8thread_10pct_write, 8, 0.10, false)
 BENCH_REL(pthrd_rwlock, 8thread_10pct_write, 8, 0.10, false)
 BENCH_REL(timed_wr_pri, 8thread_10pct_write, 8, 0.10, false)
 BENCH_REL(timed_rd_pri, 8thread_10pct_write, 8, 0.10, false)
@@ -2599,7 +2597,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 16thread_10pct_write, 16, 0.10, false)
 BENCH_REL(shmtx_wr_pri, 16thread_10pct_write, 16, 0.10, false)
 BENCH_REL(shmtx_rd_pri, 16thread_10pct_write, 16, 0.10, false)
-BENCH_REL(boost_shared, 16thread_10pct_write, 16, 0.10, false)
+BENCH_REL(std_shared, 16thread_10pct_write, 16, 0.10, false)
 BENCH_REL(pthrd_rwlock, 16thread_10pct_write, 16, 0.10, false)
 BENCH_REL(timed_wr_pri, 16thread_10pct_write, 16, 0.10, false)
 BENCH_REL(timed_rd_pri, 16thread_10pct_write, 16, 0.10, false)
@@ -2607,7 +2605,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 32thread_10pct_write, 32, 0.10, false)
 BENCH_REL(shmtx_wr_pri, 32thread_10pct_write, 32, 0.10, false)
 BENCH_REL(shmtx_rd_pri, 32thread_10pct_write, 32, 0.10, false)
-BENCH_REL(boost_shared, 32thread_10pct_write, 32, 0.10, false)
+BENCH_REL(std_shared, 32thread_10pct_write, 32, 0.10, false)
 BENCH_REL(pthrd_rwlock, 32thread_10pct_write, 32, 0.10, false)
 BENCH_REL(timed_wr_pri, 32thread_10pct_write, 32, 0.10, false)
 BENCH_REL(timed_rd_pri, 32thread_10pct_write, 32, 0.10, false)
@@ -2615,7 +2613,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin, 64thread_10pct_write, 64, 0.10, false)
 BENCH_REL(shmtx_wr_pri, 64thread_10pct_write, 64, 0.10, false)
 BENCH_REL(shmtx_rd_pri, 64thread_10pct_write, 64, 0.10, false)
-BENCH_REL(boost_shared, 64thread_10pct_write, 64, 0.10, false)
+BENCH_REL(std_shared, 64thread_10pct_write, 64, 0.10, false)
 BENCH_REL(pthrd_rwlock, 64thread_10pct_write, 64, 0.10, false)
 BENCH_REL(timed_wr_pri, 64thread_10pct_write, 64, 0.10, false)
 BENCH_REL(timed_rd_pri, 64thread_10pct_write, 64, 0.10, false)
@@ -2630,7 +2628,7 @@ BENCH_REL(shmtx_wr_pri, 1thread_1pct_write, 1, 0.01, false)
 BENCH_REL(shmtx_w_bare, 1thread_1pct_write, 1, 0.01, false)
 BENCH_REL(shmtx_rd_pri, 1thread_1pct_write, 1, 0.01, false)
 BENCH_REL(shmtx_r_bare, 1thread_1pct_write, 1, 0.01, false)
-BENCH_REL(boost_shared, 1thread_1pct_write, 1, 0.01, false)
+BENCH_REL(std_shared, 1thread_1pct_write, 1, 0.01, false)
 BENCH_REL(pthrd_rwlock, 1thread_1pct_write, 1, 0.01, false)
 BENCH_REL(timed_wr_pri, 1thread_1pct_write, 1, 0.01, false)
 BENCH_REL(timed_rd_pri, 1thread_1pct_write, 1, 0.01, false)
@@ -2640,7 +2638,7 @@ BENCH_REL(shmtx_wr_pri, 2thread_1pct_write, 2, 0.01, false)
 BENCH_REL(shmtx_w_bare, 2thread_1pct_write, 2, 0.01, false)
 BENCH_REL(shmtx_rd_pri, 2thread_1pct_write, 2, 0.01, false)
 BENCH_REL(shmtx_r_bare, 2thread_1pct_write, 2, 0.01, false)
-BENCH_REL(boost_shared, 2thread_1pct_write, 2, 0.01, false)
+BENCH_REL(std_shared, 2thread_1pct_write, 2, 0.01, false)
 BENCH_REL(pthrd_rwlock, 2thread_1pct_write, 2, 0.01, false)
 BENCH_REL(timed_wr_pri, 2thread_1pct_write, 2, 0.01, false)
 BENCH_REL(timed_rd_pri, 2thread_1pct_write, 2, 0.01, false)
@@ -2650,7 +2648,7 @@ BENCH_REL(shmtx_wr_pri, 4thread_1pct_write, 4, 0.01, false)
 BENCH_REL(shmtx_w_bare, 4thread_1pct_write, 4, 0.01, false)
 BENCH_REL(shmtx_rd_pri, 4thread_1pct_write, 4, 0.01, false)
 BENCH_REL(shmtx_r_bare, 4thread_1pct_write, 4, 0.01, false)
-BENCH_REL(boost_shared, 4thread_1pct_write, 4, 0.01, false)
+BENCH_REL(std_shared, 4thread_1pct_write, 4, 0.01, false)
 BENCH_REL(pthrd_rwlock, 4thread_1pct_write, 4, 0.01, false)
 BENCH_REL(timed_wr_pri, 4thread_1pct_write, 4, 0.01, false)
 BENCH_REL(timed_rd_pri, 4thread_1pct_write, 4, 0.01, false)
@@ -2660,7 +2658,7 @@ BENCH_REL(shmtx_wr_pri, 8thread_1pct_write, 8, 0.01, false)
 BENCH_REL(shmtx_w_bare, 8thread_1pct_write, 8, 0.01, false)
 BENCH_REL(shmtx_rd_pri, 8thread_1pct_write, 8, 0.01, false)
 BENCH_REL(shmtx_r_bare, 8thread_1pct_write, 8, 0.01, false)
-BENCH_REL(boost_shared, 8thread_1pct_write, 8, 0.01, false)
+BENCH_REL(std_shared, 8thread_1pct_write, 8, 0.01, false)
 BENCH_REL(pthrd_rwlock, 8thread_1pct_write, 8, 0.01, false)
 BENCH_REL(timed_wr_pri, 8thread_1pct_write, 8, 0.01, false)
 BENCH_REL(timed_rd_pri, 8thread_1pct_write, 8, 0.01, false)
@@ -2670,7 +2668,7 @@ BENCH_REL(shmtx_wr_pri, 16thread_1pct_write, 16, 0.01, false)
 BENCH_REL(shmtx_w_bare, 16thread_1pct_write, 16, 0.01, false)
 BENCH_REL(shmtx_rd_pri, 16thread_1pct_write, 16, 0.01, false)
 BENCH_REL(shmtx_r_bare, 16thread_1pct_write, 16, 0.01, false)
-BENCH_REL(boost_shared, 16thread_1pct_write, 16, 0.01, false)
+BENCH_REL(std_shared, 16thread_1pct_write, 16, 0.01, false)
 BENCH_REL(pthrd_rwlock, 16thread_1pct_write, 16, 0.01, false)
 BENCH_REL(timed_wr_pri, 16thread_1pct_write, 16, 0.01, false)
 BENCH_REL(timed_rd_pri, 16thread_1pct_write, 16, 0.01, false)
@@ -2680,7 +2678,7 @@ BENCH_REL(shmtx_wr_pri, 32thread_1pct_write, 32, 0.01, false)
 BENCH_REL(shmtx_w_bare, 32thread_1pct_write, 32, 0.01, false)
 BENCH_REL(shmtx_rd_pri, 32thread_1pct_write, 32, 0.01, false)
 BENCH_REL(shmtx_r_bare, 32thread_1pct_write, 32, 0.01, false)
-BENCH_REL(boost_shared, 32thread_1pct_write, 32, 0.01, false)
+BENCH_REL(std_shared, 32thread_1pct_write, 32, 0.01, false)
 BENCH_REL(pthrd_rwlock, 32thread_1pct_write, 32, 0.01, false)
 BENCH_REL(timed_wr_pri, 32thread_1pct_write, 32, 0.01, false)
 BENCH_REL(timed_rd_pri, 32thread_1pct_write, 32, 0.01, false)
@@ -2690,7 +2688,7 @@ BENCH_REL(shmtx_wr_pri, 64thread_1pct_write, 64, 0.01, false)
 BENCH_REL(shmtx_w_bare, 64thread_1pct_write, 64, 0.01, false)
 BENCH_REL(shmtx_rd_pri, 64thread_1pct_write, 64, 0.01, false)
 BENCH_REL(shmtx_r_bare, 64thread_1pct_write, 64, 0.01, false)
-BENCH_REL(boost_shared, 64thread_1pct_write, 64, 0.01, false)
+BENCH_REL(std_shared, 64thread_1pct_write, 64, 0.01, false)
 BENCH_REL(pthrd_rwlock, 64thread_1pct_write, 64, 0.01, false)
 BENCH_REL(timed_wr_pri, 64thread_1pct_write, 64, 0.01, false)
 BENCH_REL(timed_rd_pri, 64thread_1pct_write, 64, 0.01, false)
@@ -2767,7 +2765,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin_ping_pong, burn0, 1, 0)
 BENCH_REL(shmtx_w_bare_ping_pong, burn0, 1, 0)
 BENCH_REL(shmtx_r_bare_ping_pong, burn0, 1, 0)
-BENCH_REL(boost_shared_ping_pong, burn0, 1, 0)
+BENCH_REL(std_shared_ping_pong, burn0, 1, 0)
 BENCH_REL(pthrd_rwlock_ping_pong, burn0, 1, 0)
 BENCH_REL(timed_wr_pri_ping_pong, burn0, 1, 0)
 BENCH_REL(timed_rd_pri_ping_pong, burn0, 1, 0)
@@ -2775,7 +2773,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin_ping_pong, burn100k, 100, 100000)
 BENCH_REL(shmtx_w_bare_ping_pong, burn100k, 100, 100000)
 BENCH_REL(shmtx_r_bare_ping_pong, burn100k, 100, 100000)
-BENCH_REL(boost_shared_ping_pong, burn100k, 100, 100000)
+BENCH_REL(std_shared_ping_pong, burn100k, 100, 100000)
 BENCH_REL(pthrd_rwlock_ping_pong, burn100k, 100, 100000)
 BENCH_REL(timed_wr_pri_ping_pong, burn100k, 100, 100000)
 BENCH_REL(timed_rd_pri_ping_pong, burn100k, 100, 100000)
@@ -2783,7 +2781,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin_ping_pong, burn300k, 100, 300000)
 BENCH_REL(shmtx_w_bare_ping_pong, burn300k, 100, 300000)
 BENCH_REL(shmtx_r_bare_ping_pong, burn300k, 100, 300000)
-BENCH_REL(boost_shared_ping_pong, burn300k, 100, 300000)
+BENCH_REL(std_shared_ping_pong, burn300k, 100, 300000)
 BENCH_REL(pthrd_rwlock_ping_pong, burn300k, 100, 300000)
 BENCH_REL(timed_wr_pri_ping_pong, burn300k, 100, 300000)
 BENCH_REL(timed_rd_pri_ping_pong, burn300k, 100, 300000)
@@ -2791,7 +2789,7 @@ BENCHMARK_DRAW_LINE();
 BENCH_BASE(folly_rwspin_ping_pong, burn1M, 1000, 1000000)
 BENCH_REL(shmtx_w_bare_ping_pong, burn1M, 1000, 1000000)
 BENCH_REL(shmtx_r_bare_ping_pong, burn1M, 1000, 1000000)
-BENCH_REL(boost_shared_ping_pong, burn1M, 1000, 1000000)
+BENCH_REL(std_shared_ping_pong, burn1M, 1000, 1000000)
 BENCH_REL(pthrd_rwlock_ping_pong, burn1M, 1000, 1000000)
 BENCH_REL(timed_wr_pri_ping_pong, burn1M, 1000, 1000000)
 BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
@@ -2818,7 +2816,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare_reads(1thread)                       56.07%    27.04ns   36.98M
 // shmtx_rd_pri_reads(1thread)                       69.06%    21.95ns   45.55M
 // shmtx_r_bare_reads(1thread)                       56.36%    26.90ns   37.17M
-// boost_shared_reads(1thread)                       10.55%   143.72ns    6.96M
 // pthrd_rwlock_reads(1thread)                       39.61%    38.28ns   26.12M
 // ----------------------------------------------------------------------------
 // folly_rwspin_reads(2thread)                                 45.05ns   22.20M
@@ -2826,7 +2823,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare_reads(2thread)                      319.27%    14.11ns   70.87M
 // shmtx_rd_pri_reads(2thread)                      385.59%    11.68ns   85.59M
 // shmtx_r_bare_reads(2thread)                      306.56%    14.70ns   68.04M
-// boost_shared_reads(2thread)                       13.54%   332.66ns    3.01M
 // pthrd_rwlock_reads(2thread)                       34.22%   131.65ns    7.60M
 // ----------------------------------------------------------------------------
 // folly_rwspin_reads(4thread)                                 62.19ns   16.08M
@@ -2834,7 +2830,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare_reads(4thread)                      875.37%     7.10ns  140.76M
 // shmtx_rd_pri_reads(4thread)                     1060.46%     5.86ns  170.53M
 // shmtx_r_bare_reads(4thread)                      879.88%     7.07ns  141.49M
-// boost_shared_reads(4thread)                       14.86%   418.49ns    2.39M
 // pthrd_rwlock_reads(4thread)                       25.01%   248.65ns    4.02M
 // ----------------------------------------------------------------------------
 // folly_rwspin_reads(8thread)                                 64.09ns   15.60M
@@ -2842,7 +2837,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare_reads(8thread)                     1804.92%     3.55ns  281.63M
 // shmtx_rd_pri_reads(8thread)                     2194.60%     2.92ns  342.44M
 // shmtx_r_bare_reads(8thread)                     1800.53%     3.56ns  280.95M
-// boost_shared_reads(8thread)                       18.25%   351.24ns    2.85M
 // pthrd_rwlock_reads(8thread)                       28.19%   227.31ns    4.40M
 // ----------------------------------------------------------------------------
 // folly_rwspin_reads(16thread)                                70.06ns   14.27M
@@ -2850,7 +2844,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare_reads(16thread)                    4143.75%     1.69ns  591.44M
 // shmtx_rd_pri_reads(16thread)                    5009.31%     1.40ns  714.98M
 // shmtx_r_bare_reads(16thread)                    4067.36%     1.72ns  580.54M
-// boost_shared_reads(16thread)                      21.67%   323.37ns    3.09M
 // pthrd_rwlock_reads(16thread)                      35.05%   199.90ns    5.00M
 // ----------------------------------------------------------------------------
 // folly_rwspin_reads(32thread)                                58.83ns   17.00M
@@ -2858,7 +2851,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare_reads(32thread)                    4246.03%     1.39ns  721.72M
 // shmtx_rd_pri_reads(32thread)                    4845.97%     1.21ns  823.69M
 // shmtx_r_bare_reads(32thread)                    4721.44%     1.25ns  802.52M
-// boost_shared_reads(32thread)                      17.08%   344.54ns    2.90M
 // pthrd_rwlock_reads(32thread)                      30.01%   196.02ns    5.10M
 // ----------------------------------------------------------------------------
 // folly_rwspin_reads(64thread)                                59.19ns   16.89M
@@ -2866,56 +2858,48 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare_reads(64thread)                    3625.06%     1.63ns  612.43M
 // shmtx_rd_pri_reads(64thread)                    3418.19%     1.73ns  577.48M
 // shmtx_r_bare_reads(64thread)                    3416.98%     1.73ns  577.28M
-// boost_shared_reads(64thread)                      18.59%   318.47ns    3.14M
 // pthrd_rwlock_reads(64thread)                      31.35%   188.81ns    5.30M
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // folly_rwspin(1thread_all_write)                             23.77ns   42.06M
 // shmtx_wr_pri(1thread_all_write)                   85.09%    27.94ns   35.79M
 // shmtx_rd_pri(1thread_all_write)                   85.32%    27.87ns   35.89M
-// boost_shared(1thread_all_write)                   16.49%   144.14ns    6.94M
 // pthrd_rwlock(1thread_all_write)                   53.99%    44.04ns   22.71M
 // pthrd_mutex_(1thread_all_write)                   86.05%    27.63ns   36.20M
 // ----------------------------------------------------------------------------
 // folly_rwspin(2thread_all_write)                             76.05ns   13.15M
 // shmtx_wr_pri(2thread_all_write)                   60.67%   125.35ns    7.98M
 // shmtx_rd_pri(2thread_all_write)                   60.36%   125.99ns    7.94M
-// boost_shared(2thread_all_write)                   18.65%   407.74ns    2.45M
 // pthrd_rwlock(2thread_all_write)                   40.90%   185.92ns    5.38M
 // pthrd_mutex_(2thread_all_write)                  127.37%    59.71ns   16.75M
 // ----------------------------------------------------------------------------
 // folly_rwspin(4thread_all_write)                            207.17ns    4.83M
 // shmtx_wr_pri(4thread_all_write)                  119.42%   173.49ns    5.76M
 // shmtx_rd_pri(4thread_all_write)                  117.68%   176.05ns    5.68M
-// boost_shared(4thread_all_write)                   11.98%     1.73us  578.46K
 // pthrd_rwlock(4thread_all_write)                   27.50%   753.25ns    1.33M
 // pthrd_mutex_(4thread_all_write)                  117.75%   175.95ns    5.68M
 // ----------------------------------------------------------------------------
 // folly_rwspin(8thread_all_write)                            326.50ns    3.06M
 // shmtx_wr_pri(8thread_all_write)                  125.47%   260.22ns    3.84M
 // shmtx_rd_pri(8thread_all_write)                  124.73%   261.76ns    3.82M
-// boost_shared(8thread_all_write)                    6.36%     5.13us  194.87K
 // pthrd_rwlock(8thread_all_write)                   38.54%   847.09ns    1.18M
 // pthrd_mutex_(8thread_all_write)                  166.31%   196.32ns    5.09M
 // ----------------------------------------------------------------------------
 // folly_rwspin(16thread_all_write)                           729.89ns    1.37M
 // shmtx_wr_pri(16thread_all_write)                 219.91%   331.91ns    3.01M
 // shmtx_rd_pri(16thread_all_write)                 220.09%   331.62ns    3.02M
-// boost_shared(16thread_all_write)                  10.27%     7.11us  140.72K
 // pthrd_rwlock(16thread_all_write)                 113.90%   640.84ns    1.56M
 // pthrd_mutex_(16thread_all_write)                 401.97%   181.58ns    5.51M
 // ----------------------------------------------------------------------------
 // folly_rwspin(32thread_all_write)                             1.55us  645.01K
 // shmtx_wr_pri(32thread_all_write)                 415.05%   373.54ns    2.68M
 // shmtx_rd_pri(32thread_all_write)                 258.45%   599.88ns    1.67M
-// boost_shared(32thread_all_write)                  20.84%     7.44us  134.45K
 // pthrd_rwlock(32thread_all_write)                 254.16%   610.00ns    1.64M
 // pthrd_mutex_(32thread_all_write)                 852.51%   181.86ns    5.50M
 // ----------------------------------------------------------------------------
 // folly_rwspin(64thread_all_write)                             2.03us  492.00K
 // shmtx_wr_pri(64thread_all_write)                 517.65%   392.64ns    2.55M
 // shmtx_rd_pri(64thread_all_write)                 288.20%   705.24ns    1.42M
-// boost_shared(64thread_all_write)                  27.56%     7.37us  135.61K
 // pthrd_rwlock(64thread_all_write)                 326.75%   622.04ns    1.61M
 // pthrd_mutex_(64thread_all_write)                1231.57%   165.04ns    6.06M
 // ----------------------------------------------------------------------------
@@ -2923,43 +2907,36 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // folly_rwspin(1thread_10pct_write)                           19.39ns   51.58M
 // shmtx_wr_pri(1thread_10pct_write)                 93.87%    20.65ns   48.42M
 // shmtx_rd_pri(1thread_10pct_write)                 93.60%    20.71ns   48.28M
-// boost_shared(1thread_10pct_write)                 12.97%   149.53ns    6.69M
 // pthrd_rwlock(1thread_10pct_write)                 44.15%    43.92ns   22.77M
 // ----------------------------------------------------------------------------
 // folly_rwspin(2thread_10pct_write)                          227.88ns    4.39M
 // shmtx_wr_pri(2thread_10pct_write)                321.08%    70.98ns   14.09M
 // shmtx_rd_pri(2thread_10pct_write)                280.65%    81.20ns   12.32M
-// boost_shared(2thread_10pct_write)                 58.78%   387.71ns    2.58M
 // pthrd_rwlock(2thread_10pct_write)                112.68%   202.23ns    4.94M
 // ----------------------------------------------------------------------------
 // folly_rwspin(4thread_10pct_write)                          444.94ns    2.25M
 // shmtx_wr_pri(4thread_10pct_write)                470.35%    94.60ns   10.57M
 // shmtx_rd_pri(4thread_10pct_write)                349.08%   127.46ns    7.85M
-// boost_shared(4thread_10pct_write)                 44.43%     1.00us  998.57K
 // pthrd_rwlock(4thread_10pct_write)                100.59%   442.31ns    2.26M
 // ----------------------------------------------------------------------------
 // folly_rwspin(8thread_10pct_write)                          424.67ns    2.35M
 // shmtx_wr_pri(8thread_10pct_write)                337.53%   125.82ns    7.95M
 // shmtx_rd_pri(8thread_10pct_write)                232.32%   182.79ns    5.47M
-// boost_shared(8thread_10pct_write)                 19.45%     2.18us  457.90K
 // pthrd_rwlock(8thread_10pct_write)                 78.58%   540.42ns    1.85M
 // ----------------------------------------------------------------------------
 // folly_rwspin(16thread_10pct_write)                         727.04ns    1.38M
 // shmtx_wr_pri(16thread_10pct_write)               400.60%   181.49ns    5.51M
 // shmtx_rd_pri(16thread_10pct_write)               312.94%   232.33ns    4.30M
-// boost_shared(16thread_10pct_write)                15.87%     4.58us  218.32K
 // pthrd_rwlock(16thread_10pct_write)               131.28%   553.82ns    1.81M
 // ----------------------------------------------------------------------------
 // folly_rwspin(32thread_10pct_write)                         810.61ns    1.23M
 // shmtx_wr_pri(32thread_10pct_write)               429.61%   188.68ns    5.30M
 // shmtx_rd_pri(32thread_10pct_write)               321.13%   252.42ns    3.96M
-// boost_shared(32thread_10pct_write)                 8.34%     9.71us  102.94K
 // pthrd_rwlock(32thread_10pct_write)               144.28%   561.85ns    1.78M
 // ----------------------------------------------------------------------------
 // folly_rwspin(64thread_10pct_write)                           1.10us  912.30K
 // shmtx_wr_pri(64thread_10pct_write)               486.68%   225.22ns    4.44M
 // shmtx_rd_pri(64thread_10pct_write)               412.96%   265.43ns    3.77M
-// boost_shared(64thread_10pct_write)                 6.16%    17.79us   56.22K
 // pthrd_rwlock(64thread_10pct_write)               198.81%   551.34ns    1.81M
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -2968,7 +2945,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare(1thread_1pct_write)                  76.60%    24.83ns   40.27M
 // shmtx_rd_pri(1thread_1pct_write)                  93.83%    20.27ns   49.33M
 // shmtx_r_bare(1thread_1pct_write)                  77.04%    24.69ns   40.50M
-// boost_shared(1thread_1pct_write)                  12.48%   152.44ns    6.56M
 // pthrd_rwlock(1thread_1pct_write)                  42.85%    44.39ns   22.53M
 // ----------------------------------------------------------------------------
 // folly_rwspin(2thread_1pct_write)                           110.63ns    9.04M
@@ -2976,7 +2952,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare(2thread_1pct_write)                 374.65%    29.53ns   33.86M
 // shmtx_rd_pri(2thread_1pct_write)                 371.08%    29.81ns   33.54M
 // shmtx_r_bare(2thread_1pct_write)                 138.02%    80.15ns   12.48M
-// boost_shared(2thread_1pct_write)                  30.35%   364.58ns    2.74M
 // pthrd_rwlock(2thread_1pct_write)                  95.48%   115.87ns    8.63M
 // ----------------------------------------------------------------------------
 // folly_rwspin(4thread_1pct_write)                           140.62ns    7.11M
@@ -2984,7 +2959,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare(4thread_1pct_write)                 552.94%    25.43ns   39.32M
 // shmtx_rd_pri(4thread_1pct_write)                 226.06%    62.21ns   16.08M
 // shmtx_r_bare(4thread_1pct_write)                  77.61%   181.19ns    5.52M
-// boost_shared(4thread_1pct_write)                  25.36%   554.54ns    1.80M
 // pthrd_rwlock(4thread_1pct_write)                  45.55%   308.72ns    3.24M
 // ----------------------------------------------------------------------------
 // folly_rwspin(8thread_1pct_write)                           166.23ns    6.02M
@@ -2992,7 +2966,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare(8thread_1pct_write)                 611.80%    27.17ns   36.80M
 // shmtx_rd_pri(8thread_1pct_write)                 140.37%   118.43ns    8.44M
 // shmtx_r_bare(8thread_1pct_write)                  80.32%   206.97ns    4.83M
-// boost_shared(8thread_1pct_write)                  22.29%   745.67ns    1.34M
 // pthrd_rwlock(8thread_1pct_write)                  49.84%   333.55ns    3.00M
 // ----------------------------------------------------------------------------
 // folly_rwspin(16thread_1pct_write)                          419.79ns    2.38M
@@ -3000,7 +2973,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare(16thread_1pct_write)               1324.60%    31.69ns   31.55M
 // shmtx_rd_pri(16thread_1pct_write)                278.12%   150.94ns    6.63M
 // shmtx_r_bare(16thread_1pct_write)                194.25%   216.11ns    4.63M
-// boost_shared(16thread_1pct_write)                 33.71%     1.25us  803.01K
 // pthrd_rwlock(16thread_1pct_write)                131.96%   318.12ns    3.14M
 // ----------------------------------------------------------------------------
 // folly_rwspin(32thread_1pct_write)                          395.99ns    2.53M
@@ -3008,7 +2980,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare(32thread_1pct_write)               1208.86%    32.76ns   30.53M
 // shmtx_rd_pri(32thread_1pct_write)                252.97%   156.54ns    6.39M
 // shmtx_r_bare(32thread_1pct_write)                193.79%   204.35ns    4.89M
-// boost_shared(32thread_1pct_write)                 17.00%     2.33us  429.40K
 // pthrd_rwlock(32thread_1pct_write)                129.88%   304.89ns    3.28M
 // ----------------------------------------------------------------------------
 // folly_rwspin(64thread_1pct_write)                          424.07ns    2.36M
@@ -3016,7 +2987,6 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // shmtx_w_bare(64thread_1pct_write)               1228.88%    34.51ns   28.98M
 // shmtx_rd_pri(64thread_1pct_write)                270.40%   156.83ns    6.38M
 // shmtx_r_bare(64thread_1pct_write)                218.05%   194.48ns    5.14M
-// boost_shared(64thread_1pct_write)                 10.60%     4.00us  249.95K
 // pthrd_rwlock(64thread_1pct_write)                143.80%   294.91ns    3.39M
 // ----------------------------------------------------------------------------
 // folly_rwspin(2thr_2lock_50pct_write)                        10.87ns   91.99M
@@ -3080,25 +3050,21 @@ BENCH_REL(timed_rd_pri_ping_pong, burn1M, 1000, 1000000)
 // folly_rwspin_ping_pong(burn0)                              605.63ns    1.65M
 // shmtx_w_bare_ping_pong(burn0)                    102.17%   592.76ns    1.69M
 // shmtx_r_bare_ping_pong(burn0)                     88.75%   682.44ns    1.47M
-// boost_shared_ping_pong(burn0)                      8.52%     7.11us  140.73K
 // pthrd_rwlock_ping_pong(burn0)                      7.88%     7.68us  130.15K
 // ----------------------------------------------------------------------------
 // folly_rwspin_ping_pong(burn100k)                           727.76ns    1.37M
 // shmtx_w_bare_ping_pong(burn100k)                 100.79%   722.09ns    1.38M
 // shmtx_r_bare_ping_pong(burn100k)                 101.98%   713.61ns    1.40M
-// boost_shared_ping_pong(burn100k)                  81.49%   893.02ns    1.12M
 // pthrd_rwlock_ping_pong(burn100k)                  71.05%     1.02us  976.30K
 // ----------------------------------------------------------------------------
 // folly_rwspin_ping_pong(burn300k)                             2.11us  473.46K
 // shmtx_w_bare_ping_pong(burn300k)                 100.06%     2.11us  473.72K
 // shmtx_r_bare_ping_pong(burn300k)                  98.93%     2.13us  468.39K
-// boost_shared_ping_pong(burn300k)                  84.72%     2.49us  401.13K
 // pthrd_rwlock_ping_pong(burn300k)                  84.62%     2.50us  400.66K
 // ----------------------------------------------------------------------------
 // folly_rwspin_ping_pong(burn1M)                             709.70ns    1.41M
 // shmtx_w_bare_ping_pong(burn1M)                   100.28%   707.73ns    1.41M
 // shmtx_r_bare_ping_pong(burn1M)                    99.63%   712.37ns    1.40M
-// boost_shared_ping_pong(burn1M)                    94.09%   754.29ns    1.33M
 // pthrd_rwlock_ping_pong(burn1M)                    96.32%   736.82ns    1.36M
 // ============================================================================
 
@@ -3108,7 +3074,7 @@ int main(int argc, char** argv) {
   (void)shmtx_w_bare_reads;
   (void)shmtx_rd_pri_reads;
   (void)shmtx_r_bare_reads;
-  (void)boost_shared_reads;
+  (void)std_shared_reads;
   (void)pthrd_rwlock_reads;
   (void)timed_wr_pri_reads;
   (void)timed_rd_pri_reads;
@@ -3117,7 +3083,7 @@ int main(int argc, char** argv) {
   (void)shmtx_w_bare;
   (void)shmtx_rd_pri;
   (void)shmtx_r_bare;
-  (void)boost_shared;
+  (void)std_shared;
   (void)pthrd_rwlock;
   (void)pthrd_mutex_;
   (void)timed_wr_pri;
@@ -3125,7 +3091,7 @@ int main(int argc, char** argv) {
   (void)folly_rwspin_ping_pong;
   (void)shmtx_w_bare_ping_pong;
   (void)shmtx_r_bare_ping_pong;
-  (void)boost_shared_ping_pong;
+  (void)std_shared_ping_pong;
   (void)pthrd_rwlock_ping_pong;
   (void)timed_wr_pri_ping_pong;
   (void)timed_rd_pri_ping_pong;

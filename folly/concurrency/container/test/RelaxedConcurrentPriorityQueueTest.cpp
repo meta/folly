@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
+#include <barrier>
 #include <iomanip>
 #include <thread>
-
-#include <boost/thread.hpp>
 
 #include <folly/Random.h>
 #include <folly/SpinLock.h>
@@ -97,16 +96,16 @@ TEST(CPQ, BasicOpsTest) {
 /// execute the function for nthreads
 template <typename Func>
 static uint64_t run_once(const Func& fn) {
-  boost::barrier barrier_start{nthreads + 1};
+  std::barrier<> barrier_start(nthreads + 1);
   std::vector<std::thread> threads(nthreads);
   for (uint32_t tid = 0; tid < nthreads; ++tid) {
     threads[tid] = std::thread([&, tid] {
-      barrier_start.wait();
+      barrier_start.arrive_and_wait();
       fn(tid);
     });
   }
 
-  barrier_start.wait(); // start the execution
+  barrier_start.arrive_and_wait(); // start the execution
   auto tbegin = std::chrono::steady_clock::now();
   for (auto& t : threads) {
     t.join();
@@ -300,9 +299,9 @@ void concurrentOps(int ops) {
     std::atomic<uint64_t> counter_pop(0);
     nthreads = t;
 
-    boost::barrier rb0{nthreads};
-    boost::barrier rb1{nthreads};
-    boost::barrier rb2{nthreads};
+    std::barrier<> rb0(nthreads);
+    std::barrier<> rb1(nthreads);
+    std::barrier<> rb2(nthreads);
     std::atomic<int> to_end(0);
 
     auto fn = [&](uint32_t tid) {
@@ -318,7 +317,7 @@ void concurrentOps(int ops) {
         local_push++;
         pq.push(val);
       }
-      rb0.wait();
+      rb0.arrive_and_wait();
 
       /// operations
       for (int i = 0; i < ops; i++) {
@@ -331,11 +330,11 @@ void concurrentOps(int ops) {
           local_pop++;
         }
       }
-      rb1.wait();
+      rb1.arrive_and_wait();
       // collecting the ops info for checking purpose
       counter_push.fetch_add(local_push, std::memory_order_seq_cst);
       counter_pop.fetch_add(local_pop, std::memory_order_seq_cst);
-      rb2.wait();
+      rb2.arrive_and_wait();
       /// clean up work
       uint64_t r = counter_push.load(std::memory_order_seq_cst) -
           counter_pop.load(std::memory_order_seq_cst);
@@ -453,24 +452,24 @@ void multiPusherPopper(int PushThr, int PopThr) {
       sum_push.fetch_add(val, std::memory_order_acq_rel);
     }
   };
-  boost::barrier barrier_start{total_threads + 1};
+  std::barrier<> barrier_start(total_threads + 1);
 
   std::vector<std::thread> threads_push(PushThr);
   for (int tid = 0; tid < PushThr; ++tid) {
     threads_push[tid] = std::thread([&, tid] {
-      barrier_start.wait();
+      barrier_start.arrive_and_wait();
       fn_pushthr(tid);
     });
   }
   std::vector<std::thread> threads_pop(PopThr);
   for (int tid = 0; tid < PopThr; ++tid) {
     threads_pop[tid] = std::thread([&, tid] {
-      barrier_start.wait();
+      barrier_start.arrive_and_wait();
       fn_popthr(tid);
     });
   }
 
-  barrier_start.wait(); // start the execution
+  barrier_start.arrive_and_wait(); // start the execution
   // begin time measurement
   for (auto& t : threads_push) {
     t.join();
@@ -527,20 +526,20 @@ void blockingFirst() {
   PriorityQueue pq;
   int nPop = 16;
 
-  boost::barrier b{static_cast<unsigned int>(nPop + 1)};
+  std::barrier<> b(nPop + 1);
   std::atomic<int> finished{0};
 
   std::vector<std::thread> threads_pop(nPop);
   for (int tid = 0; tid < nPop; ++tid) {
     threads_pop[tid] = std::thread([&] {
       int val;
-      b.wait();
+      b.arrive_and_wait();
       pq.pop(val);
       finished.fetch_add(1, std::memory_order_acq_rel);
     });
   }
 
-  b.wait();
+  b.arrive_and_wait();
   int c = 0;
   // push to Mound one by one
   // the popping threads should wake up one by one
@@ -564,12 +563,12 @@ void concurrentBlocking() {
 
   for (int iter = 0; iter < FLAGS_reps * 10; iter++) {
     PriorityQueue pq;
-    boost::barrier b{static_cast<unsigned int>(nThrs + nThrs + 1)};
+    std::barrier<> b(nThrs + nThrs + 1);
     std::atomic<uint32_t> finished{0};
     std::vector<std::thread> threads_pop(nThrs);
     for (uint32_t tid = 0; tid < nThrs; ++tid) {
       threads_pop[tid] = std::thread([&] {
-        b.wait();
+        b.arrive_and_wait();
         int val;
         pq.pop(val);
         if (finished.fetch_add(1, std::memory_order_acq_rel) == nThrs - 1) {
@@ -581,7 +580,7 @@ void concurrentBlocking() {
     std::vector<std::thread> threads_push(nThrs);
     for (uint32_t tid = 0; tid < nThrs; ++tid) {
       threads_push[tid] = std::thread([&, tid] {
-        b.wait();
+        b.arrive_and_wait();
         pq.push(tid);
         auto count = finished.load(std::memory_order_acquire);
         while (count != nThrs) {
@@ -592,7 +591,7 @@ void concurrentBlocking() {
       });
     }
 
-    b.wait();
+    b.arrive_and_wait();
     for (auto& t : threads_pop) {
       t.join();
     }
@@ -914,22 +913,22 @@ static uint64_t producer_consumer_test(
         pq.push(val);
       }
     };
-    boost::barrier barrier_start{total_threads + 1};
+    std::barrier<> barrier_start(total_threads + 1);
     std::vector<std::thread> threads_push(PushThr);
     for (uint32_t tid = 0; tid < PushThr; ++tid) {
       threads_push[tid] = std::thread([&, tid] {
-        barrier_start.wait();
+        barrier_start.arrive_and_wait();
         fn_pushthr(tid);
       });
     }
     std::vector<std::thread> threads_pop(PopThr);
     for (uint32_t tid = 0; tid < PopThr; ++tid) {
       threads_pop[tid] = std::thread([&, tid] {
-        barrier_start.wait();
+        barrier_start.arrive_and_wait();
         fn_popthr(tid);
       });
     }
-    barrier_start.wait(); // start the execution
+    barrier_start.arrive_and_wait(); // start the execution
     // begin time measurement
     auto tbegin = std::chrono::steady_clock::now();
     for (auto& t : threads_push) {

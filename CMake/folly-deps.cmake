@@ -56,11 +56,7 @@ set(Boost_USE_STATIC_LIBS "${FOLLY_BOOST_LINK_STATIC}")
 # Note: We find these components so the CMake targets exist, but we don't
 # link them globally. Targets that need specific Boost libraries should
 # add them to their EXTERNAL_DEPS (e.g., Boost::regex, Boost::context).
-# Boost::thread is needed by Windows pthread compatibility layer.
 set(FOLLY_BOOST_COMPONENTS context regex)
-if (WIN32)
-  list(APPEND FOLLY_BOOST_COMPONENTS thread)
-endif ()
 
 # CMake 4 dropped FindBoost, so this config-only probe warns without QUIET.
 # folly/cli's ProgramOptions is built only if Boost.ProgramOptions is found.

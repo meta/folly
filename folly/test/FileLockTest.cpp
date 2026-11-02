@@ -16,8 +16,8 @@
 
 #include <cstdlib>
 #include <mutex>
+#include <shared_mutex>
 
-#include <boost/thread/locks.hpp>
 #include <glog/logging.h>
 
 #include <folly/File.h>
@@ -36,7 +36,7 @@ DEFINE_bool(x, false, "get exclusive lock");
 
 TEST(File, Locks) {
   using Lock = std::unique_lock<File>;
-  using SharedLock = boost::shared_lock<File>;
+  using SharedLock = std::shared_lock<File>;
 
   // Find out where we are.
   static constexpr size_t pathLength = 2048;
@@ -90,7 +90,7 @@ TEST(File, Locks) {
   }
 
   {
-    SharedLock lock(f, boost::defer_lock);
+    SharedLock lock(f, std::defer_lock);
     EXPECT_TRUE(lock.try_lock());
   }
 

@@ -18,7 +18,6 @@ fb_dirsync_cpp_unittest(
     srcs = ["RelaxedConcurrentPriorityQueueTest.cpp"],
     headers = [],
     deps = [
-        "fbsource//third-party/boost:boost_thread",  # @manual
         "fbsource//third-party/glog:glog",
         "//folly:random",
         "//folly:spin_lock",

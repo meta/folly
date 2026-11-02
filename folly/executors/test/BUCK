@@ -158,7 +158,6 @@ fb_dirsync_cpp_unittest(
     labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
-        "fbsource//third-party/boost:boost_thread",
         "//folly:c_portability",
         "//folly:default_keep_alive_executor",
         "//folly:exception",
@@ -302,11 +301,11 @@ fb_dirsync_cpp_unittest(
     srcs = ["FunctionSchedulerTest.cpp"],
     labels = ["slow"],
     deps = [
-        "fbsource//third-party/boost:boost_thread",
         "fbsource//third-party/glog:glog",
         "//folly:random",
         "//folly/executors:function_scheduler",
         "//folly/portability:gtest",
+        "//folly/portability:unistd",
         "//folly/synchronization:baton",
     ],
 )

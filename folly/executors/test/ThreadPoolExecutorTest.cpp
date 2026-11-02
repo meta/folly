@@ -15,11 +15,11 @@
  */
 
 #include <atomic>
+#include <barrier>
 #include <memory>
 #include <stdexcept>
 #include <thread>
 
-#include <boost/thread.hpp>
 #include <folly/CPortability.h>
 #include <folly/DefaultKeepAliveExecutor.h>
 #include <folly/Exception.h>
@@ -1135,18 +1135,20 @@ TYPED_TEST(ThreadPoolExecutorTypedTest, UsesNameFromNamedThreadFactory) {
 }
 
 TEST(ThreadPoolExecutorTest, DynamicThreadsTest) {
-  boost::barrier barrier{3};
-  auto twice_waiting_task = [&] { barrier.wait(), barrier.wait(); };
+  std::barrier<> barrier{3};
+  auto twice_waiting_task = [&] {
+    barrier.arrive_and_wait(), barrier.arrive_and_wait();
+  };
   CPUThreadPoolExecutor e(2);
   e.setThreadDeathTimeout(std::chrono::milliseconds(100));
   e.add(twice_waiting_task);
   e.add(twice_waiting_task);
-  barrier.wait(); // ensure both tasks are mid-flight
+  barrier.arrive_and_wait(); // ensure both tasks are mid-flight
   EXPECT_EQ(2, e.getPoolStats().activeThreadCount) << "sanity check";
 
   auto pred = [&] { return e.getPoolStats().activeThreadCount == 0; };
   EXPECT_FALSE(pred()) << "sanity check";
-  barrier.wait(); // let both mid-flight tasks complete
+  barrier.arrive_and_wait(); // let both mid-flight tasks complete
   EXPECT_EQ(
       folly::detail::spin_result::success,
       folly::detail::spin_yield_until(
@@ -1228,17 +1230,17 @@ TEST_F(ExecutorWorkerProviderTest, ThreadCollectorBasicTest) {
   // Start 4 threads and have all of them work on a task.
   // Then invoke the ThreadIdCollector::collectThreadIds()
   // method to capture the set of active thread ids.
-  boost::barrier barrier{5};
+  std::barrier<> barrier{5};
   Synchronized<std::vector<pid_t>> expectedTids;
   auto task = [&]() {
     expectedTids.wlock()->push_back(folly::getOSThreadID());
-    barrier.wait();
+    barrier.arrive_and_wait();
   };
   CPUThreadPoolExecutor e(4);
   for (int i = 0; i < 4; ++i) {
     e.add(task);
   }
-  barrier.wait();
+  barrier.arrive_and_wait();
   {
     const auto threadIdsWithKA = kWorkerProviderGlobal->collectThreadIds();
     const auto& ids = threadIdsWithKA.threadIds;

@@ -21,7 +21,6 @@
 #include <numeric>
 #include <thread>
 
-#include <boost/thread/tss.hpp>
 #include <glog/logging.h>
 
 #include <folly/Benchmark.h>
@@ -91,8 +90,6 @@ ThreadLocalPtr<int> tlp;
 REG(tlp)
 PThreadGetSpecific<int> pthread_get_specific;
 REG(pthread_get_specific)
-boost::thread_specific_ptr<int> boost_tsp;
-REG(boost_tsp)
 BENCHMARK_DRAW_LINE();
 
 struct foo {
@@ -126,9 +123,6 @@ BENCHMARK(BM_mt_tlp_multi, iters) {
 }
 BENCHMARK(BM_mt_pthread_get_specific_multi, iters) {
   run_multi<PThreadGetSpecific<foo>>(iters);
-}
-BENCHMARK(BM_mt_boost_tsp_multi, iters) {
-  run_multi<boost::thread_specific_ptr<foo>>(iters);
 }
 BENCHMARK_DRAW_LINE();
 
@@ -179,11 +173,9 @@ folly/test/ThreadLocalBenchmark.cpp             relative  time/iter  iters/s
 ============================================================================
 BM_mt_tlp                                                   2.10ns   476.69M
 BM_mt_pthread_get_specific                                  1.81ns   553.11M
-BM_mt_boost_tsp                                             6.88ns   145.42M
 ----------------------------------------------------------------------------
 BM_mt_tlp_multi                                            11.91ns    83.94M
 BM_mt_pthread_get_specific_multi                           13.34ns    74.96M
-BM_mt_boost_tsp_multi                                      43.52ns    22.98M
 ----------------------------------------------------------------------------
 BM_tlp_access_all_threads_iterate                          22.82ns    43.82M
 ----------------------------------------------------------------------------
