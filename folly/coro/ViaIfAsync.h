@@ -694,6 +694,9 @@ class CommutativeWrapperAwaitable {
   explicit CommutativeWrapperAwaitable(T2&& awaitable) noexcept(
       std::is_nothrow_constructible_v<T, T2>)
       : inner_(static_cast<T2&&>(awaitable)) {}
+  // MSVC moves the by-value argument of an inherited constructor, which an
+  // immovable `T2` can't do, so the wrapper factories construct their derived
+  // awaitables with the `std::in_place` constructor below instead.
   template <typename T2>
     requires folly::ext::must_use_immediately_v<T2>
   explicit CommutativeWrapperAwaitable(T2 awaitable) noexcept(noexcept(T{
@@ -922,7 +925,10 @@ template <typename Awaitable>
 detail::TryAwaitable<Awaitable> co_awaitTry(
     [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE_ARGUMENT]] Awaitable awaitable) {
   return detail::TryAwaitable<Awaitable>{
-      folly::ext::must_use_immediately_unsafe_mover(std::move(awaitable))()};
+      std::in_place, [&] {
+        return folly::ext::must_use_immediately_unsafe_mover(
+            std::move(awaitable))();
+      }};
 }
 
 template <typename T>

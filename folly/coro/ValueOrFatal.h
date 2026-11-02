@@ -243,8 +243,10 @@ struct value_or_fatal_with_executor_cfg {
   static inline auto wrapAwaitable(Awaitable&& awaitable) noexcept {
     static_assert(!value_only_awaitable_v<Awaitable>); // Don't double-wrap
     return detail::ValueOrFatalAwaitable<Awaitable, Policy>{
-        folly::ext::must_use_immediately_unsafe_mover(
-            static_cast<Awaitable&&>(awaitable))()};
+        std::in_place, [&] {
+          return folly::ext::must_use_immediately_unsafe_mover(
+              static_cast<Awaitable&&>(awaitable))();
+        }};
   }
 };
 

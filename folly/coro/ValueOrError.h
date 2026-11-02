@@ -218,7 +218,10 @@ template <typename Awaitable>
 detail::ValueOrError<Awaitable> value_or_error(
     [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE_ARGUMENT]] Awaitable awaitable) {
   return detail::ValueOrError<Awaitable>{
-      folly::ext::must_use_immediately_unsafe_mover(std::move(awaitable))()};
+      std::in_place, [&] {
+        return folly::ext::must_use_immediately_unsafe_mover(
+            std::move(awaitable))();
+      }};
 }
 
 /// When awaited, returns `result<T>` just like `value_or_error()`, but also
@@ -227,7 +230,10 @@ template <typename Awaitable>
 detail::ValueOrErrorOrStopped<Awaitable> value_or_error_or_stopped(
     [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE_ARGUMENT]] Awaitable awaitable) {
   return detail::ValueOrErrorOrStopped<Awaitable>{
-      folly::ext::must_use_immediately_unsafe_mover(std::move(awaitable))()};
+      std::in_place, [&] {
+        return folly::ext::must_use_immediately_unsafe_mover(
+            std::move(awaitable))();
+      }};
 }
 
 } // namespace folly::coro

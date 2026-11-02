@@ -190,7 +190,10 @@ template <
 detail::NothrowAwaitable<std::remove_cvref_t<Awaitable>> co_nothrow(
     [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE_ARGUMENT]] Awaitable awaitable) {
   return detail::NothrowAwaitable<std::remove_cvref_t<Awaitable>>{
-      folly::ext::must_use_immediately_unsafe_mover(std::move(awaitable))()};
+      std::in_place, [&] {
+        return folly::ext::must_use_immediately_unsafe_mover(
+            std::move(awaitable))();
+      }};
 }
 
 } // namespace folly::coro
