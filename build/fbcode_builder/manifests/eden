@@ -7,61 +7,8 @@ shipit_fbcode_builder = true
 [git]
 repo_url = https://github.com/facebook/sapling.git
 
-[github.actions]
-run_tests = off
-
-[sandcastle]
-run_tests = off
-
 [build]
-builder = cmake
-
-[dependencies]
-blake3
-boost
-googletest
-folly
-fbthrift
-fb303
-cpptoml
-re2
-libgit2
-pexpect
-python-psutil
-python-parameterized
-python-toml
-python-filelock
-edencommon
-rust-shed
-
-[dependencies.fbsource=on]
-rust
-
-[dependencies.os=darwin]
-osxfuse
-
-[dependencies.not(os=windows)]
-# TODO: teach getdeps to compile curl on Windows.
-# Enabling curl on Windows requires us to find a way to compile libcurl with
-# msvc.
-libcurl
-# Added so that OSS doesn't see system "python" which is python 2 on darwin and some linux
-python
-
-[dependencies.test=on]
-# sapling CLI is needed to run the tests
-sapling
-
-[shipit.pathmap.fb=on]
-# for internal builds that use getdeps
-fbcode/fb303 = fb303
-fbcode/common/rust/shed = common/rust/shed
-fbcode/thrift/lib/cpp = thrift/lib/cpp
-fbcode/thrift/lib/cpp2 = thrift/lib/cpp2
-fbcode/thrift/lib/java = thrift/lib/java
-fbcode/thrift/lib/py = thrift/lib/py
-fbcode/thrift/lib/python = thrift/lib/python
-fbcode/thrift/lib/rust = thrift/lib/rust
+builder = nop
 
 [shipit.pathmap]
 # Map hostcaps for now as eden C++ includes its .h. Rust-shed should install it
@@ -100,22 +47,3 @@ fbcode/configerator/structs/scm/hg/public_autocargo = configerator/structs/scm/h
 ^fbcode/eden/scm(?!/public_autocargo).*/Cargo\.toml$
 ^.*/facebook/.*$
 ^.*/fb/.*$
-
-[cmake.defines.all(fb=on,os=windows)]
-ENABLE_GIT=OFF
-INSTALL_PYTHON_LIB=ON
-
-[cmake.defines.all(not(fb=on),os=windows)]
-ENABLE_GIT=OFF
-
-[cmake.defines.fbsource=on]
-USE_CARGO_VENDOR=ON
-
-[cmake.defines.fb=on]
-IS_FB_BUILD=ON
-
-[cmake.defines.test=on]
-BUILD_TESTS=ON
-
-[depends.environment]
-EDEN_VERSION_OVERRIDE

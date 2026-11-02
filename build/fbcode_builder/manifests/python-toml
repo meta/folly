@@ -1,9 +1,0 @@
-[manifest]
-name = python-toml
-
-[download]
-url = https://files.pythonhosted.org/packages/a2/12/ced7105d2de62fa7c8fb5fce92cc4ce66b57c95fb875e9318dba7f8c5db0/toml-0.10.0-py2.py3-none-any.whl
-sha256 = 235682dd292d5899d361a811df37e04a8828a5b1da3115886b73cf81ebc9100e
-
-[build]
-builder = python-wheel

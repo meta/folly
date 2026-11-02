@@ -1,9 +1,0 @@
-[manifest]
-name = python-filelock
-
-[download]
-url = https://files.pythonhosted.org/packages/31/24/ee722b92f23b9ebd87783e893a75352c048bbbc1f67dce0d63b58b46cb48/filelock-3.3.2-py3-none-any.whl
-sha256 = bb2a1c717df74c48a2d00ed625e5a66f8572a3a30baacb7657add1d7bac4097b
-
-[build]
-builder = python-wheel

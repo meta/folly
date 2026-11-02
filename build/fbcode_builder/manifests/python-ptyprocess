@@ -1,9 +1,0 @@
-[manifest]
-name = python-ptyprocess
-
-[download]
-url = https://files.pythonhosted.org/packages/d1/29/605c2cc68a9992d18dada28206eeada56ea4bd07a239669da41674648b6f/ptyprocess-0.6.0-py2.py3-none-any.whl
-sha256 = d7cc528d76e76342423ca640335bd3633420dc1366f258cb31d05e865ef5ca1f
-
-[build]
-builder = python-wheel
