@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -6,6 +7,7 @@ fb_dirsync_cpp_library(
     name = "net_ops",
     srcs = ["NetOps.cpp"],
     headers = ["NetOps.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
         "//folly:c_portability",
@@ -25,6 +27,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "network_socket",
     headers = ["NetworkSocket.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/net/detail:socket_file_descriptor_map",

@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//xplat/pfh/triage_InfrastructureSupermoduleOptou:DEFS.bzl", "triage_InfrastructureSupermoduleOptou")
 
@@ -7,6 +8,7 @@ fb_dirsync_cpp_library(
     name = "x86",
     srcs = [],
     headers = ["x86.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     feature = triage_InfrastructureSupermoduleOptou,
     use_raw_headers = True,
     exported_deps = [

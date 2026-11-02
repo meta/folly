@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -5,6 +6,7 @@ oncall("fbcode_entropy_wardens_folly")
 fb_dirsync_cpp_library(
     name = "simd_any_of",
     headers = ["SimdAnyOf.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":simd_for_each",
@@ -16,6 +18,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "simd_platform",
     headers = ["SimdPlatform.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:portability",
@@ -41,6 +44,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "simd_for_each",
     headers = ["SimdForEach.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":unroll_utils",
@@ -66,6 +70,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "unroll_utils",
     headers = ["UnrollUtils.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:portability",

@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -5,6 +6,7 @@ oncall("fbcode_entropy_wardens_folly")
 fb_dirsync_cpp_library(
     name = "atomic_utils",
     headers = ["AtomicUtils.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/lang:assume",
@@ -16,6 +18,7 @@ fb_dirsync_cpp_library(
     headers = [
         "HazptrUtils.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "fbsource//third-party/glog:glog",
@@ -60,6 +63,7 @@ fb_dirsync_cpp_library(
     name = "sleeper",
     srcs = ["Sleeper.cpp"],
     headers = ["Sleeper.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/portability:asm",
@@ -69,6 +73,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "spin",
     headers = ["Spin.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/portability:asm",

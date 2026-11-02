@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
 
@@ -7,6 +8,7 @@ fb_dirsync_cpp_library(
     name = "sanitize_leak",
     srcs = ["SanitizeLeak.cpp"],
     headers = ["SanitizeLeak.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
         "//folly/lang:extern",
@@ -69,6 +71,7 @@ fb_dirsync_cpp_library(
     name = "reentrant_allocator",
     srcs = ["ReentrantAllocator.cpp"],
     headers = ["ReentrantAllocator.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
         "//folly/lang:bits",
@@ -97,6 +100,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "memory_resource",
     headers = ["MemoryResource.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:portability",
@@ -106,6 +110,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "uninitialized_memory_hacks",
     headers = ["UninitializedMemoryHacks.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:traits",
@@ -116,6 +121,7 @@ fb_dirsync_cpp_library(
     name = "mallctl_helper",
     srcs = ["MallctlHelper.cpp"],
     headers = ["MallctlHelper.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
         "//folly:format",
@@ -131,6 +137,7 @@ fb_dirsync_cpp_library(
     name = "sanitize_address",
     srcs = ["SanitizeAddress.cpp"],
     headers = ["SanitizeAddress.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
         "//folly/lang:extern",
@@ -144,6 +151,7 @@ fb_dirsync_cpp_library(
     name = "malloc",
     srcs = ["Malloc.cpp"],
     headers = ["Malloc.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = ["-fno-omit-frame-pointer"],
     use_raw_headers = True,
     deps = select({
@@ -165,6 +173,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "allocator",
     headers = ["Allocator.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":malloc",

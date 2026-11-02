@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -17,6 +18,7 @@ fb_dirsync_cpp_library(
         "IOBufIovecBuilder.h",
         "IOBufQueue.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     deps = [
         "//folly:conv",
         "//folly/hash:spooky_hash_v2",

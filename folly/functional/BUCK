@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -5,6 +6,7 @@ oncall("fbcode_entropy_wardens_folly")
 fb_dirsync_cpp_library(
     name = "apply_tuple",
     headers = ["ApplyTuple.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":invoke",
@@ -16,6 +18,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "invoke",
     headers = ["Invoke.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:cpp_attributes",

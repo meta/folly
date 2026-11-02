@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//xplat/pfh/triage_InfrastructureSupermoduleOptou:DEFS.bzl", "triage_InfrastructureSupermoduleOptou")
 
@@ -7,6 +8,7 @@ fb_dirsync_cpp_library(
     name = "at_fork",
     srcs = ["AtFork.cpp"],
     headers = ["AtFork.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     feature = triage_InfrastructureSupermoduleOptou,
     use_raw_headers = True,
     deps = [
@@ -104,6 +106,7 @@ fb_dirsync_cpp_library(
     name = "pid",
     srcs = ["Pid.cpp"],
     headers = ["Pid.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     feature = triage_InfrastructureSupermoduleOptou,
     use_raw_headers = True,
     deps = [
@@ -133,6 +136,7 @@ fb_dirsync_cpp_library(
     name = "thread_id",
     srcs = ["ThreadId.cpp"],
     headers = ["ThreadId.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     feature = triage_InfrastructureSupermoduleOptou,
     use_raw_headers = True,
     deps = [
@@ -150,6 +154,7 @@ fb_dirsync_cpp_library(
     name = "thread_name",
     srcs = ["ThreadName.cpp"],
     headers = ["ThreadName.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     feature = triage_InfrastructureSupermoduleOptou,
     use_raw_headers = True,
     deps = [

@@ -3,17 +3,7 @@ load("@fbcode_macros//build_defs:build_file_migration.bzl", "non_fbcode_target")
 load("@fbsource//tools/build_defs:fb_native_wrapper.bzl", "fb_native")
 load("@fbsource//tools/build_defs:fb_xplat_cxx_library.bzl", "fb_xplat_cxx_library")
 load("@fbsource//tools/build_defs:fb_xplat_cxx_test.bzl", "fb_xplat_cxx_test")
-load(
-    "@fbsource//tools/build_defs:platform_defs.bzl",
-    "ALL_APPLE_SDKS",
-    "ANDROID",
-    "APPLE",
-    "CXX",
-    "FBCODE",
-    "IOS",
-    "MACOSX",
-    "WINDOWS",
-)
+load("@fbsource//tools/build_defs:platform_defs.bzl", "ALL_APPLE_SDKS", "ANDROID", "APPLE", "APPLETVOS", "CXX", "FBCODE", "IOS", "MACOSX", "WATCHOS", "WINDOWS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@prelude//configurations:constraint_alias.bzl", "constraint_with_aliases")
 load(
@@ -35,6 +25,7 @@ CPPFLAGS = cpp_flags()
 fb_dirsync_cpp_library(
     name = "memory",
     headers = ["Memory.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     fbobjc_complete_nullability = True,
     exported_deps = [
         ":constexpr_math",
@@ -78,6 +69,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "optional",
     headers = ["Optional.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     # Without modules, the `-Wextra` flag added in BUILD_MODE.bzl only affected
     # the cpp files under `folly`, but with modules it also ends up getting
     # baked into the PCM files of header units.
@@ -163,6 +155,7 @@ fb_dirsync_cpp_library(
     name = "scope_guard",
     srcs = ["ScopeGuard.cpp"],
     headers = ["ScopeGuard.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":portability",
@@ -176,6 +169,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "synchronized",
     headers = ["Synchronized.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "fbsource//third-party/glog:glog",
@@ -194,6 +188,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "thread_local",
     headers = ["ThreadLocal.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":likely",
@@ -208,6 +203,7 @@ fb_dirsync_cpp_library(
     name = "singleton_thread_local",
     srcs = ["SingletonThreadLocal.cpp"],
     headers = ["SingletonThreadLocal.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":scope_guard",
@@ -229,6 +225,7 @@ fb_dirsync_cpp_library(
         "Random.h",
         "Random-inl.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
         "fbsource//third-party/glog:glog",
@@ -311,6 +308,7 @@ fb_dirsync_cpp_library(
     headers = [
         "Executor.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     force_static = select({
         "DEFAULT": False,
         # @fb-only[end= ]: "ovr_config//build_mode:arvr_mode[enabled]": select({
@@ -411,6 +409,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "range",
     headers = ["Range.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -436,6 +435,7 @@ fb_dirsync_cpp_library(
     headers = [
         "FBVector.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/container:fbvector",
@@ -460,6 +460,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "fbstring",
     headers = ["FBString.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -488,6 +489,7 @@ fb_dirsync_cpp_library(
         "Format-inl.h",
         "FormatArg.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -522,6 +524,7 @@ fb_dirsync_cpp_library(
         "String.h",
         "String-inl.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -549,6 +552,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "bits",
     headers = ["Bits.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = ["//folly/lang:bits"],
 )
@@ -556,6 +560,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "hash",
     headers = ["Hash.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/hash:hash",
@@ -570,7 +575,7 @@ fb_dirsync_cpp_library(
         "dynamic-inl.h",
         "json.h",
     ],
-    apple_sdks = DEFAULT_APPLE_SDKS,
+    apple_sdks = DEFAULT_APPLE_SDKS + (WATCHOS,),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -613,6 +618,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "indestructible",
     headers = ["Indestructible.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -662,6 +668,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "cpu_id",
     headers = ["CpuId.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         ":portability",
         "//folly/system/arch:x86",
@@ -702,6 +709,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "constexpr_math",
     headers = ["ConstexprMath.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":portability",
@@ -743,6 +751,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "likely",
     headers = ["Likely.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly/lang:builtin",
     ],
@@ -751,6 +760,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "unit",
     headers = ["Unit.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
 )
 
 fb_dirsync_cpp_library(
@@ -765,6 +775,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "preprocessor",
     headers = ["Preprocessor.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":c_portability",
@@ -786,6 +797,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "traits",
     headers = ["Traits.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [":portability"],
 )
 
@@ -794,6 +806,7 @@ fb_dirsync_cpp_library(
     headers = [
         "Utility.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         ":c_portability",
         ":portability",
@@ -804,6 +817,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "function",
     headers = ["Function.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     fbobjc_complete_nullability = True,
     use_raw_headers = True,
     exported_deps = [
@@ -889,6 +903,7 @@ fb_dirsync_cpp_library(
     name = "demangle",
     srcs = ["Demangle.cpp"],
     headers = ["Demangle.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = selects.with_or({
         "DEFAULT": ["-fno-omit-frame-pointer"],
         "ovr_config//os:android": [
@@ -925,6 +940,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "exception",
     headers = ["Exception.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -942,6 +958,7 @@ fb_dirsync_cpp_library(
     name = "exception_string",
     srcs = ["ExceptionString.cpp"],
     headers = ["ExceptionString.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -983,6 +1000,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "expected",
     headers = ["Expected.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -1029,6 +1047,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "format_traits",
     headers = ["FormatTraits.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -1038,6 +1057,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "glog",
     headers = ["GLog.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -1091,6 +1111,7 @@ fb_dirsync_cpp_library(
     headers = [
         "MapUtil.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/container:map_util",
@@ -1191,6 +1212,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "overload",
     headers = ["Overload.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -1206,6 +1228,7 @@ fb_dirsync_cpp_library(
     name = "shared_mutex",
     srcs = ["SharedMutex.cpp"],
     headers = ["SharedMutex.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
@@ -1239,6 +1262,7 @@ fb_dirsync_cpp_library(
     headers = [
         "small_vector.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/container:small_vector",
@@ -2218,6 +2242,7 @@ fb_dirsync_cpp_library(
     name = "unicode",
     srcs = ["Unicode.cpp"],
     headers = ["Unicode.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
         ":conv",
@@ -2427,6 +2452,7 @@ fb_dirsync_cpp_library(
         "Conv.cpp",
     ],
     headers = ["Conv.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     export_header_unit = "include",
     export_header_unit_filter = ["Conv.h"],
     fbobjc_complete_nullability = True,
@@ -2470,6 +2496,7 @@ fb_dirsync_cpp_library(
     headers = [
         "json_pointer.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly/json:json_pointer",
     ],

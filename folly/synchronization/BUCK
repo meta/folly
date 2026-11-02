@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -6,6 +7,7 @@ fb_dirsync_cpp_library(
     name = "asymmetric_thread_fence",
     srcs = ["AsymmetricThreadFence.cpp"],
     headers = ["AsymmetricThreadFence.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     deps = [
         ":relaxed_atomic",
         "//folly:exception",
@@ -21,6 +23,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "atomic_ref",
     headers = ["AtomicRef.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly:traits",
         "//folly/lang:safe_assert",
@@ -30,6 +33,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "atomic_traits",
     headers = ["AtomicTraits.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly:portability",
         "//folly:traits",
@@ -42,6 +46,7 @@ fb_dirsync_cpp_library(
         "AtomicUtil.h",
         "AtomicUtil-inl.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         ":atomic_traits",
         "//folly:constexpr_math",
@@ -60,6 +65,7 @@ fb_dirsync_cpp_library(
         "AtomicNotification.h",
         "AtomicNotification-inl.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         ":parking_lot",
         "//folly:portability",
@@ -70,6 +76,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "atomic_struct",
     headers = ["AtomicStruct.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly:constexpr_math",
         "//folly:traits",
@@ -96,6 +103,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "call_once",
     headers = ["CallOnce.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly:likely",
         "//folly:portability",
@@ -153,6 +161,7 @@ fb_dirsync_cpp_library(
         "HazptrRec.h",
         "HazptrThrLocal.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     deps = [
         "//folly:exception_string",
         "//folly:scope_guard",
@@ -228,6 +237,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "lock",
     headers = ["Lock.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly:portability",
         "//folly:traits",
@@ -240,6 +250,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "micro_spin_lock",
     headers = ["MicroSpinLock.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         ":sanitize_thread",
         "//folly:portability",
@@ -277,6 +288,7 @@ fb_dirsync_cpp_library(
         "ParkingLot.cpp",
     ],
     headers = ["ParkingLot.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly:hash",
         "//folly:indestructible",
@@ -321,6 +333,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "relaxed_atomic",
     headers = ["RelaxedAtomic.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = ["//folly:traits"],
 )
 
@@ -330,6 +343,7 @@ fb_dirsync_cpp_library(
         "SanitizeThread.cpp",
     ],
     headers = ["SanitizeThread.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     deps = [
         "//folly/lang:extern",
     ],
@@ -341,6 +355,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "saturating_semaphore",
     headers = ["SaturatingSemaphore.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "fbsource//third-party/glog:glog",
         ":atomic_util",
@@ -368,6 +383,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "wait_options",
     headers = ["WaitOptions.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     exported_deps = [
         "//folly:c_portability",
     ],

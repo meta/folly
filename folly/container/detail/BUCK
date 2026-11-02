@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load(
     "@fbsource//xplat/folly:defs.bzl",
@@ -21,6 +22,7 @@ fb_dirsync_cpp_library(
     headers = [
         "F14IntrinsicsAvailability.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     propagated_pp_flags = select({
         "DEFAULT": [],
         "fbsource//xplat/folly/buck_config:folly-f14-fallback-disabled": [
@@ -44,6 +46,7 @@ fb_dirsync_cpp_library(
         "F14SetFallback.h",
         "F14Table.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":f14_defaults",
@@ -78,6 +81,7 @@ fb_dirsync_cpp_library(
     headers = [
         "Util.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:traits",
@@ -91,6 +95,7 @@ fb_dirsync_cpp_library(
     headers = [
         "F14Mask.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     fbandroid_exported_preprocessor_flags = FBANDROID_CPPFLAGS,
     use_raw_headers = True,
     exported_deps = [
@@ -109,6 +114,7 @@ fb_dirsync_cpp_library(
     headers = [
         "F14Defaults.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/container:heterogeneous_access_fwd",

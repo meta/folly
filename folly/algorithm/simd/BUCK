@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -19,6 +20,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "find_first_of",
     headers = ["find_first_of.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":movemask",
@@ -59,6 +61,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "ignore",
     headers = ["Ignore.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/lang:bits",
@@ -68,6 +71,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "movemask",
     headers = ["Movemask.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":ignore",

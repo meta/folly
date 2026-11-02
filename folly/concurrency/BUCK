@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -35,6 +36,7 @@ fb_dirsync_cpp_library(
     headers = [
         "UnboundedQueue.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "fbsource//third-party/glog:glog",
@@ -85,6 +87,7 @@ fb_dirsync_cpp_library(
     name = "cache_locality",
     srcs = ["CacheLocality.cpp"],
     headers = ["CacheLocality.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = ["-fno-omit-frame-pointer"],
     cxx_deps = [
         "//xplat/third-party/linker_lib:dl",

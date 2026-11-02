@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:platform_defs.bzl", "APPLETVOS", "IOS", "MACOSX", "WATCHOS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -39,6 +40,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "hash",
     headers = ["Hash.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         ":fnv_hash",
@@ -58,6 +60,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "murmur_hash",
     headers = ["MurmurHash.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:c_portability",
@@ -69,6 +72,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "rapidhash",
     headers = ["rapidhash.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/external/rapidhash:rapidhash",
@@ -79,6 +83,7 @@ fb_dirsync_cpp_library(
     name = "spooky_hash_v1",
     srcs = ["SpookyHashV1.cpp"],
     headers = ["SpookyHashV1.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
 )
 
@@ -86,6 +91,7 @@ fb_dirsync_cpp_library(
     name = "spooky_hash_v2",
     srcs = ["SpookyHashV2.cpp"],
     headers = ["SpookyHashV2.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:c_portability",
@@ -97,6 +103,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "traits",
     headers = ["traits.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly:traits",
@@ -108,6 +115,7 @@ fb_dirsync_cpp_library(
     headers = [
         "FnvHash.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
 )
 
@@ -116,6 +124,7 @@ fb_dirsync_cpp_library(
     headers = [
         "HsiehHash.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "//folly/lang:bits",
