@@ -18,6 +18,8 @@
 #include <folly/portability/SysResource.h>
 
 #include <cerrno>
+#include <chrono>
+#include <thread>
 
 #include <folly/Demangle.h>
 #include <folly/FileUtil.h>
@@ -666,12 +668,24 @@ bool IoUringBackend::isAvailable() {
 
   static folly::once_flag initFlag;
   folly::call_once(initFlag, [&]() {
-    try {
-      Options options;
-      options.setCapacity(1024);
-      IoUringBackend backend(std::move(options));
-    } catch (const NotAvailable&) {
-      sAvailable = false;
+    static constexpr auto kRetryDelay = std::chrono::milliseconds(20);
+    static constexpr int kMaxAttempts = 5;
+    for (int attempt = 0;; ++attempt) {
+      try {
+        Options options;
+        options.setCapacity(16).setMaxSubmit(8);
+        IoUringBackend backend(std::move(options));
+        return;
+      } catch (const NotAvailable&) {
+        sAvailable = false;
+        return;
+      } catch (const OutOfMemory&) {
+        if (attempt + 1 >= kMaxAttempts) {
+          sAvailable = false;
+          return;
+        }
+        /* sleep override */ std::this_thread::sleep_for(kRetryDelay);
+      }
     }
   });
 
