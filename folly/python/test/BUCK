@@ -6,7 +6,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirs
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 load("@fbsource//tools/target_determinator/macros:ci.bzl", "ci")
 load("@fbsource//tools/target_determinator/macros:fbcode_ci_helpers.bzl", "fbcode_ci")
-load("../../defs.bzl", "folly_xplat_cxx_library", "folly_xplat_cxx_test")
+load("../../defs.bzl", "fbcode_ci_default_labels", "folly_xplat_cxx_library", "folly_xplat_cxx_test")
 
 oncall("fbcode_entropy_wardens_folly")
 
@@ -319,6 +319,7 @@ fb_dirsync_rule(
     name = "test_set_executor_3_14",
     srcs = ["test_set_executor.py"],
     fbcode_rule = python_unittest,
+    labels = fbcode_ci_default_labels(python = True),
     py_version = "3.14.free-threading",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [

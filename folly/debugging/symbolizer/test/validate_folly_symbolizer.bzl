@@ -4,6 +4,7 @@ load("@fbsource//tools/build_defs:cell_defs.bzl", "get_fbsource_cell")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
 load("@fbsource//tools/target_determinator/macros:ci.bzl", "ci")
+load("../../../defs.bzl", "fbcode_ci_default_labels")
 
 SPLIT_DWARF_FLAGS = {
     "none": ["-gno-split-dwarf"],
@@ -49,6 +50,7 @@ def customized_unittest(available_dwarf_versions = [], avilable_split_dwarf_keys
                             + ("_aaranges" if use_aaranges else "_noaaranges")
                             + custom_suffix,
                             srcs = ["SymbolizerTestUtils.cpp"],
+                            labels = fbcode_ci_default_labels(),
                             headers = [
                                 "SymbolizerTestUtils.h",
                                 "SymbolizerTestUtils-inl.h",
@@ -88,7 +90,7 @@ def customized_unittest(available_dwarf_versions = [], avilable_split_dwarf_keys
                             + SPLIT_DWARF_FLAGS[split_dwarf_option]
                             + (["-gdwarf-aranges"] if use_aaranges else [])
                             + extra_compiler_flags,
-                            labels = ["dwp"] if split_dwarf_option == "single_inlining" and use_aaranges else [],
+                            labels = (["dwp"] if split_dwarf_option == "single_inlining" and use_aaranges else []) + fbcode_ci_default_labels(),
                             linker_flags = [
                                 "--emit-relocs",  # makes linker ignore `--strip-debug-*` flags
                             ],
@@ -132,6 +134,7 @@ def validate_folly_symbolizer(name, binary):
             "$(location {})".format(binary),
         ],
         type = "simple",
+        labels = fbcode_ci_default_labels(),
         target_compatible_with = ["ovr_config//runtime:fbcode"],
     )
 
@@ -153,7 +156,7 @@ def validate_symbolizer_dwp(name, binary, mode = "fbcode//mode/opt", modifiers =
             "$(location {}[dwp])".format(binary),
         ],
         type = "simple",
-        labels = ci.labels(*ci_labels),
+        labels = fbcode_ci_default_labels(*ci_labels),
         modifiers = modifiers,
         # Only test in opt mode.
         # In dev mode, the test still depends on the shared libraries except

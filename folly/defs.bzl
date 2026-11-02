@@ -3,6 +3,7 @@
     have_libgflags_override = {True|[False]}
 """
 
+load("@fbsource//tools/build_defs:cell_defs.bzl", "get_fbsource_cell")
 load(
     "@fbsource//tools/build_defs:default_platform_defs.bzl",
     "ANDROID",
@@ -20,6 +21,8 @@ load("@fbsource//tools/build_defs:fb_xplat_cxx_test.bzl", "fb_xplat_cxx_test")
 load("@fbsource//tools/build_defs:sanitizers.bzl", "sanitizers")
 load("@fbsource//tools/build_defs:selects.bzl", "selects")
 load("@fbsource//tools/build_defs/dirsync:dirsync_redirect.bzl", "dirsync_redirect")
+load("@fbsource//tools/target_determinator/macros:ci.bzl", "ci")
+load("@fbsource//tools/target_determinator/macros:fbcode_ci_helpers.bzl", "fbcode_ci")
 load("@prelude//utils:buckconfig.bzl", "read_bool")
 
 def should_enable_gflags():
@@ -253,6 +256,27 @@ def folly_xplat_library(
             enable_static_variant = enable_static_variant,
         )
 
+def fbcode_ci_default_labels(*extra, python = False):
+    """CI labels giving an xplat/folly target fbcode's default CI modes.
+
+    fbcode//folly inherits `fbcode_ci.defaults()` from fbcode/PACKAGE, but
+    xplat/folly does not. Returns `[]` in the fbcode cell, where the defaults
+    already apply.
+
+    Pass a target's own `ci.labels` arguments as `extra` rather than
+    concatenating a separate `ci.labels(...)`: modifiers such as `ci.remove`
+    must apply to the defaults too.
+
+    Set `python` for python tests: fbcode's python macros switch their diff jobs
+    to opt, but only in the fbcode cell.
+    """
+    if get_fbsource_cell() == "fbcode":
+        return ci.labels(*extra) if extra else []
+    defaults = [fbcode_ci.defaults()]
+    if python:
+        defaults.append(fbcode_ci.use_python_defaults())
+    return ci.labels(*(defaults + list(extra)))
+
 def folly_xplat_cxx_library(name, **kwargs):
     folly_xplat_library(name = name, **kwargs)
 
@@ -323,7 +347,7 @@ def folly_xplat_cxx_binary(
         fail("cxx_sanitizer_runtime_provider = 'host' requires dlopen_enabled")
 
     extra_kwargs = {"oncall": oncall} if oncall != None else {}
-    for key in ("compiler_flags", "linker_flags", "target_compatible_with"):
+    for key in ("compiler_flags", "labels", "linker_flags", "target_compatible_with"):
         if key in kwargs:
             extra_kwargs[key] = kwargs[key]
     clang_flags = kwargs.get("compiler_specific_flags", {}).get("clang")

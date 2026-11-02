@@ -1,6 +1,7 @@
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dirsync_cpp_benchmark")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("../../defs.bzl", "fbcode_ci_default_labels")
 
 oncall("fbcode_entropy_wardens_folly")
 
@@ -154,6 +155,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "ThreadPoolExecutorTest",
     srcs = ["ThreadPoolExecutorTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "fbsource//third-party/boost:boost_thread",
@@ -232,6 +234,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "MeteredExecutorTest",
     srcs = ["MeteredExecutorTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [

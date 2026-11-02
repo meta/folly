@@ -3,6 +3,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dir
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("../../../defs.bzl", "fbcode_ci_default_labels")
 
 oncall("fbcode_entropy_wardens_folly")
 
@@ -52,6 +53,7 @@ fb_dirsync_cpp_library(
 
 fb_dirsync_cpp_binary(
     name = "exception_tracer_base_test",
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         ":exception_tracer_test_main",  # @manual
@@ -60,6 +62,7 @@ fb_dirsync_cpp_binary(
 
 fb_dirsync_cpp_binary(
     name = "exception_tracer_test",
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         ":exception_tracer_test_main",  # @manual
@@ -70,6 +73,7 @@ fb_dirsync_cpp_binary(
 fb_dirsync_cpp_unittest(
     name = "smart_exception_tracer_test",
     srcs = ["SmartExceptionTracerTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/coro:blocking_wait",
@@ -95,6 +99,7 @@ fb_dirsync_cpp_benchmark(
 fb_dirsync_cpp_binary(
     name = "exception_tracer_uncaught_test_bin",
     srcs = ["ExceptionTracerUncaughtTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/debugging/exception_tracer:exception_tracer",  # @manual
@@ -107,5 +112,6 @@ python_unittest(
     env = {
         "EXCEPTION_TRACER_TEST_BIN": "$(location :exception_tracer_uncaught_test_bin)",
     },
+    labels = fbcode_ci_default_labels(python = True),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
 )

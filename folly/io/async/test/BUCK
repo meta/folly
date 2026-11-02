@@ -3,6 +3,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dir
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("../../../defs.bzl", "fbcode_ci_default_labels")
 load("../../../io/async/test/certs/defs.bzl", "alias_pem")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -771,6 +772,7 @@ fb_dirsync_cpp_library(
     headers = [
         "TestSSLServer.h",
     ],
+    labels = fbcode_ci_default_labels(),
     resources = {
         "certs/ca-cert.pem": ":ca-cert.pem",
         "certs/client_ca_cert.pem": ":client_ca_cert.pem",
@@ -806,7 +808,7 @@ fb_dirsync_cpp_unittest(
         "AsyncSSLSocketTest2.cpp",
     ],
     extract_helper_lib = False,
-    labels = ["oss-broken"],
+    labels = ["oss-broken"] + fbcode_ci_default_labels(),
     oncall = "secure_pipes",
     resources = {
         "certs/ca-cert.pem": ":ca-cert.pem",
@@ -865,6 +867,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "decorated_async_transport_wrapper_test",
     srcs = ["DecoratedAsyncTransportWrapperTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:async_socket",
@@ -881,7 +884,8 @@ fb_dirsync_cpp_unittest(
     labels = [
         tpx_labels.extended,
         "load-sensitive-timing-test",
-    ],
+    ]
+    + fbcode_ci_default_labels(),
     oncall = "thrift",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -896,6 +900,7 @@ fb_dirsync_cpp_benchmark(
     name = "request_context_benchmark",
     srcs = ["RequestContextBenchmark.cpp"],
     headers = ["RequestContextHelper.h"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:conv",
@@ -910,6 +915,7 @@ fb_dirsync_cpp_benchmark(
 fb_dirsync_cpp_unittest(
     name = "terminate_cancellation_token_test",
     srcs = ["TerminateCancellationTokenTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:terminate_cancellation_token",
@@ -922,6 +928,7 @@ fb_dirsync_cpp_unittest(
     name = "ssl_session_test",
     srcs = ["SSLSessionTest.cpp"],
     headers = [],
+    labels = fbcode_ci_default_labels(),
     oncall = "secure_pipes",
     resources = {
         "certs/ca-cert.pem": ":ca-cert.pem",
@@ -945,6 +952,7 @@ fb_dirsync_cpp_unittest(
     name = "ssl_context_test",
     srcs = ["SSLContextTest.cpp"],
     headers = [],
+    labels = fbcode_ci_default_labels(),
     oncall = "secure_pipes",
     resources = {
         "certs/client_chain.pem": ":client_chain.pem",
@@ -970,6 +978,7 @@ fb_dirsync_cpp_unittest(
     name = "ssl_context_regression_test",
     srcs = ["SSLContextRegressionTest.cpp"],
     headers = [],
+    labels = fbcode_ci_default_labels(),
     oncall = "secure_pipes",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -984,7 +993,7 @@ fb_dirsync_cpp_unittest(
     name = "timerfd_timeout_manager_test",
     srcs = ["TimerFDTimeoutManagerTest.cpp"],
     headers = [],
-    labels = ["load-sensitive-timing-test"],
+    labels = ["load-sensitive-timing-test"] + fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:timerfd",
@@ -997,7 +1006,7 @@ fb_dirsync_cpp_unittest(
     name = "hhwheel_timer_high_res_test",
     srcs = ["HHWheelTimerHighResTest.cpp"],
     headers = [],
-    labels = ["load-sensitive-timing-test"],
+    labels = ["load-sensitive-timing-test"] + fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:async_base",
@@ -1011,6 +1020,7 @@ fb_dirsync_cpp_binary(
     name = "hhwheel_timer_high_res_benchmark",
     srcs = ["HHWheelTimerHighResBenchmark.cpp"],
     headers = [],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:benchmark",
@@ -1022,6 +1032,7 @@ fb_dirsync_cpp_binary(
 fb_dirsync_cpp_unittest(
     name = "async_io_test",
     srcs = ["AsyncIOTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1033,7 +1044,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "async_io_uring_socket_test",
     srcs = ["AsyncIoUringSocketTest.cpp"],
-    labels = [tpx_labels.heavyweight],
+    labels = [tpx_labels.heavyweight] + fbcode_ci_default_labels(),
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1062,7 +1073,8 @@ fb_dirsync_cpp_unittest(
     labels = [
         tpx_labels.heavyweight,
         "load-sensitive-timing-test",
-    ],
+    ]
+    + fbcode_ci_default_labels(),
     owner = "dmm@xmail.facebook.com",
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
@@ -1076,6 +1088,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "poll_loop_hooks_test",
     srcs = ["PollLoopHooksTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     owner = "dmm@xmail.facebook.com",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1089,6 +1102,7 @@ fb_dirsync_cpp_binary(
     name = "io_benchmark",
     srcs = ["IOBenchmark.cpp"],
     headers = [],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:benchmark",
@@ -1105,6 +1119,7 @@ fb_dirsync_cpp_binary(
     name = "io_uring_backend_bench",
     srcs = ["IoUringBackendBench.cpp"],
     headers = [],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:benchmark",
@@ -1122,6 +1137,7 @@ fb_dirsync_cpp_binary(
     name = "io_uring_provided_buffer_ring_benchmark",
     srcs = ["IoUringProvidedBufferRingBenchmark.cpp"],
     headers = [],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:benchmark",
@@ -1133,6 +1149,7 @@ fb_dirsync_cpp_binary(
 fb_dirsync_cpp_unittest(
     name = "io_uring_backend_setup_test",
     srcs = ["IoUringBackendSetupTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     owner = "kvigor@xmail.facebook.com",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1151,7 +1168,8 @@ fb_dirsync_cpp_unittest(
         tpx_labels.heavyweight,
         "load-sensitive-timing-test",
         "slow",
-    ],
+    ]
+    + fbcode_ci_default_labels(),
     owner = "dmm@xmail.facebook.com",
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
@@ -1175,6 +1193,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "io_uring_event_base_local_test",
     srcs = ["IoUringEventBaseLocalTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     owner = "dylany@xmail.facebook.com",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1188,6 +1207,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "io_uring_event_test",
     srcs = ["IoUringEventTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     owner = "dylany@xmail.facebook.com",
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
@@ -1203,7 +1223,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "io_uring_test",
     srcs = ["IoUringTest.cpp"],
-    labels = ["oss-broken"],
+    labels = ["oss-broken"] + fbcode_ci_default_labels(),
     owner = "dmm@xmail.facebook.com",
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
@@ -1217,6 +1237,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "io_uring_zero_copy_buffer_pool_test",
     srcs = ["IoUringZeroCopyBufferPoolTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1228,6 +1249,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "io_uring_provided_buffer_ring_test",
     srcs = ["IoUringProvidedBufferRingTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:io_uring_provided_buffer_ring",
@@ -1240,7 +1262,8 @@ fb_dirsync_cpp_unittest(
     labels = [
         tpx_labels.heavyweight8,
         tpx_labels.serialize_test_cases,
-    ],
+    ]
+    + fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:io_uring_provided_buffer_ring",
@@ -1250,6 +1273,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "io_uring_dynamic_provided_buffer_ring_test",
     srcs = ["IoUringDynamicProvidedBufferRingTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:io_uring_dynamic_provided_buffer_ring",
@@ -1260,6 +1284,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "io_uring_dynamic_provided_buffer_ring_max_capacity_test",
     srcs = ["IoUringDynamicProvidedBufferRingMaxCapacityTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:io_uring_dynamic_provided_buffer_ring",
@@ -1270,6 +1295,7 @@ fb_dirsync_cpp_binary(
     name = "registered_fd_benchmark",
     srcs = ["RegisteredFdBenchmark.cpp"],
     headers = [],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:benchmark",
@@ -1283,6 +1309,7 @@ fb_dirsync_cpp_binary(
 fb_dirsync_cpp_unittest(
     name = "simple_async_io_test",
     srcs = ["SimpleAsyncIOTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1305,6 +1332,7 @@ fb_dirsync_cpp_library(
     name = "io_test_temp_file_util_lib",
     srcs = ["IoTestTempFileUtil.cpp"],
     headers = ["IoTestTempFileUtil.h"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:file_util",
@@ -1321,6 +1349,7 @@ fb_dirsync_cpp_library(
     name = "async_base_test_lib",
     srcs = ["AsyncBaseTestLib.cpp"],
     headers = ["AsyncBaseTestLib.h"],
+    labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     exported_deps = [
         "fbsource//third-party/glog:glog",
@@ -1339,6 +1368,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "mux_io_thread_pool_executor_test_lib",
     srcs = ["MuxIOThreadPoolExecutorTest.cpp"],
+    labels = fbcode_ci_default_labels(),
     # @lint-ignore BUCKLINT
     link_whole = True,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
@@ -1359,6 +1389,7 @@ fb_dirsync_cpp_unittest(
         "--folly_mux_io_thread_pool_executor_poller_backend=epoll",
         "--folly_mux_io_thread_pool_executor_poller_epoll_rearm_inline=false",
     ],
+    labels = fbcode_ci_default_labels(),
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1372,6 +1403,7 @@ fb_dirsync_cpp_unittest(
         "--folly_mux_io_thread_pool_executor_poller_backend=epoll",
         "--folly_mux_io_thread_pool_executor_poller_epoll_rearm_inline=true",
     ],
+    labels = fbcode_ci_default_labels(),
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
@@ -1384,6 +1416,7 @@ fb_dirsync_cpp_unittest(
     args = [
         "--folly_mux_io_thread_pool_executor_poller_backend=io_uring",
     ],
+    labels = fbcode_ci_default_labels(),
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
