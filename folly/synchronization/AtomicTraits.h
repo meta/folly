@@ -23,6 +23,21 @@
 #include <folly/Traits.h>
 
 namespace folly {
+
+//  atomic_arch_mm_is_tso_v
+//
+//  Whether the target architecture guarantees total store order (TSO)
+//  for ordinary accesses to coherent write-back memory; currently
+//  recognized here for x86 and x86-64. TSO supplies the hardware
+//  ordering needed by C++ release stores, acquire loads, and thread
+//  fences through acq-rel. Compiler ordering constraints still apply;
+//  atomicity and implementation choices can require other instructions.
+//
+//  Use it to select between multiple correct implementations based on
+//  which is expected to perform better on TSO, never between
+//  implementations only one of which is correct for the hardware.
+inline constexpr bool atomic_arch_mm_is_tso_v = kIsArchX86 || kIsArchAmd64;
+
 namespace detail {
 
 struct atomic_value_type_alias_ {

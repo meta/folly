@@ -21,6 +21,7 @@
 
 #include <folly/Portability.h>
 #include <folly/portability/Config.h>
+#include <folly/synchronization/AtomicTraits.h>
 
 ///
 /// Forward declatations and implicit documentation of all hazptr
@@ -43,9 +44,12 @@ namespace detail {
 /// For select cases of load-acquire and store-release internal to the hazptr
 /// implementation, but occurring within hot paths, whether to prefer relaxed
 /// load and store operations combined with lightweight fences - at the cost of
-/// heavyweight fences in the reclamation path.
+/// heavyweight fences in the reclamation path. Both strategies are correct
+/// on every architecture; this only selects the more optimal one per arch:
+/// plain acquire/release operations where they lower to plain loads and
+/// stores (TSO), asymmetric fences elsewhere.
 constexpr inline bool hazptr_prefer_fence_light =
-    kIsArchAArch64 && kIsLinux && !kIsSanitizeThread;
+    !atomic_arch_mm_is_tso_v && kIsLinux && !kIsSanitizeThread;
 
 } // namespace detail
 

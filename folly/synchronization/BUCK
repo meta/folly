@@ -171,6 +171,7 @@ fb_dirsync_cpp_library(
     exported_deps = [
         "fbsource//third-party/glog:glog",
         ":asymmetric_thread_fence",
+        ":atomic_traits",
         "//folly:c_portability",
         "//folly:function",
         "//folly:portability",

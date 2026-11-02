@@ -198,6 +198,7 @@ folly_add_library(
     folly_portability_config
     folly_singleton_thread_local
     folly_synchronization_asymmetric_thread_fence
+    folly_synchronization_atomic_traits
     folly_synchronization_atomic_util
     folly_synchronization_detail_hazptr_utils
     folly_synchronization_detail_sleeper
