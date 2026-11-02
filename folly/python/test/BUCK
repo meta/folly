@@ -74,7 +74,7 @@ fb_dirsync_rule(
     ],
     header_namespace = "folly/python/test",
     cpp_deps = [
-        "//folly/executors:global_executor",
+        "//folly/executors:cpu_thread_pool_executor",
         "//folly/python:iobuf_ext",
     ],
     fbcode_rule = cython_library,

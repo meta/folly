@@ -53,9 +53,15 @@ std::unique_ptr<folly::IOBuf> iobuf_from_memoryview(
             // if we have the GIL, we can just decref the object.
             Py_DECREF(pyObject);
           } else if (py_data->executor) {
-            // we have an executor, we can schedule the decref on it.
+            // We have an executor, so we can schedule the decref on it.
+            // The task must take the GIL itself: deallocating without it
+            // is undefined behavior (faults on Windows).
             py_data->executor->add([pyObject]() mutable {
-              Py_DECREF(pyObject);
+              if (!Py_IsFinalizing()) {
+                PyGILState_STATE gil_state = PyGILState_Ensure();
+                Py_DECREF(pyObject);
+                PyGILState_Release(gil_state);
+              }
             });
           } else {
             /*

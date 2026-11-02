@@ -19,7 +19,7 @@
 #include <algorithm>
 #include <cctype>
 
-#include <folly/executors/GlobalExecutor.h>
+#include <folly/executors/CPUThreadPoolExecutor.h>
 #include <folly/python/iobuf.h>
 #include <folly/python/iobuf_ext.h>
 
@@ -47,11 +47,23 @@ std::string to_uppercase_string_cpp_heap(PyObject* o_iobuf) {
 
 void wrap_and_delayed_free_cpp(
     PyObject* memoryview, void* buf, uint64_t length, int32_t delayMs) {
-  auto executor = folly::getGlobalCPUExecutor();
+  // Use a dedicated pool (not the global one) so the delayed work can be
+  // fully drained before returning: nothing is left pending across Python
+  // interpreter teardown, where the free callback could otherwise race
+  // finalization and hang process exit.
+  auto executor = std::make_shared<folly::CPUThreadPoolExecutor>(1);
   auto iobuf = iobuf_from_memoryview(executor.get(), memoryview, buf, length);
-  executor->add([delayMs, iobuf = std::move(iobuf)]() {
+  executor->add([delayMs, iobuf = std::move(iobuf)]() mutable {
     std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+    // Destroying the IOBuf here runs the free callback on this worker;
+    // the resulting decref is scheduled back onto this same pool.
+    iobuf.reset();
   });
+  // The worker needs the GIL for the decref, so release it while joining.
+  // join() drains the queued decref before returning.
+  Py_BEGIN_ALLOW_THREADS void();
+  executor->join();
+  Py_END_ALLOW_THREADS
 }
 
 } // namespace folly::python
