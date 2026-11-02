@@ -18,5 +18,7 @@ folly_add_library(
   NAME farmhash
   SRCS farmhash.cpp
   HEADERS farmhash.h
-  EXPORTED_DEPS folly_portability_config
+  EXPORTED_DEPS
+    folly_c_portability
+    folly_portability_config
 )

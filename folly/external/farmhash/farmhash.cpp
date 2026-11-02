@@ -24,7 +24,11 @@
 
 #include <folly/external/farmhash/farmhash.h>
 
+#include <folly/CPortability.h>
+
 #include <exception>
+
+FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
 
 // FARMHASH ASSUMPTIONS: Modify as needed, or use -DFARMHASH_ASSUME_SSE42 etc.
 // Note that if you use -DFARMHASH_ASSUME_SSE42 you likely need -msse42
@@ -1986,3 +1990,5 @@ uint128_t Fingerprint128(const char* s, size_t len) {
 } // namespace farmhash
 } // namespace external
 } // namespace folly
+
+FOLLY_UNSAFE_BUFFER_USAGE_END

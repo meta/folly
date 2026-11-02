@@ -18,6 +18,8 @@ folly_add_library(
   NAME range_sve2
   SRCS RangeSve2.cpp
   HEADERS RangeSve2.h
-  DEPS folly_portability
+  DEPS
+    folly_c_portability
+    folly_portability
   EXPORTED_DEPS folly_detail_range_common
 )

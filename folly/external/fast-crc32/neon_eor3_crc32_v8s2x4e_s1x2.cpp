@@ -3,11 +3,14 @@
 /* MIT licensed */
 
 #include "folly/external/fast-crc32/neon_eor3_crc32_v8s2x4e_s1x2.h"
+#include <folly/CPortability.h>
 #include <folly/system/AuxVector.h>
 #include <folly/Portability.h>
 
 #include <stddef.h>
 #include <stdint.h>
+
+FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
 
 #define CRC_EXPORT extern
 
@@ -275,3 +278,5 @@ CRC_EXPORT uint32_t neon_eor3_crc32_v8s2x4e_s1x2(const uint8_t* buf, size_t len,
 }
 } // namespace folly::detail
 #endif
+
+FOLLY_UNSAFE_BUFFER_USAGE_END

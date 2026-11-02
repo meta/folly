@@ -6,6 +6,7 @@ fb_dirsync_cpp_library(
     name = "checksum",
     srcs = ["Checksum.cpp"],
     deps = [
+        "//folly:c_portability",
         "//folly:portability",
     ],
 )

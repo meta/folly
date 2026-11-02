@@ -7,6 +7,7 @@ fb_dirsync_cpp_unittest(
     srcs = ["farmhash_test.cpp"],
     headers = [],
     deps = [
+        "//folly:c_portability",
         "//folly/external/farmhash:farmhash",
         "//folly/portability:gtest",
     ],

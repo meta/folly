@@ -26,7 +26,10 @@
 
 #include <folly/external/farmhash/farmhash.h>
 
+#include <folly/CPortability.h>
 #include <folly/portability/GTest.h>
+
+FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
 
 // Some primes between 2^63 and 2^64 for various uses.
 static const uint64_t k0 = 0xc3a5c85c97cb3127ULL;
@@ -9936,3 +9939,5 @@ int main(int argc, char** argv) {
   cout << "};\n";
 }
 #endif
+
+FOLLY_UNSAFE_BUFFER_USAGE_END

@@ -17,7 +17,9 @@
 folly_add_library(
   NAME checksum
   SRCS Checksum.cpp
-  DEPS folly_portability
+  DEPS
+    folly_c_portability
+    folly_portability
 )
 
 add_subdirectory(detail)

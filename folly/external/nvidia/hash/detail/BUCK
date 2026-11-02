@@ -8,6 +8,7 @@ fb_dirsync_cpp_library(
     headers = ["Crc32cCombineDetail.h"],
     use_raw_headers = True,
     exported_deps = [
+        "//folly:c_portability",
         "//folly:portability",
     ],
 )

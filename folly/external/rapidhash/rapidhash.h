@@ -47,6 +47,8 @@ all
 #include <folly/lang/Bits.h>
 #include <folly/portability/Constexpr.h>
 
+FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace folly {
 namespace external {
 namespace rapidhash_detail {
@@ -543,3 +545,5 @@ rapidhashNano(const char* key, size_t len) noexcept {
 
 } // namespace hash
 } // namespace folly
+
+FOLLY_UNSAFE_BUFFER_USAGE_END

@@ -19,11 +19,14 @@
 #include <cstring>
 #include <cstddef>
 
+#include <folly/CPortability.h>
 #include <folly/Portability.h>
 
 #if FOLLY_ARM_FEATURE_CRC32
 
 #include <arm_acle.h>
+
+FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace folly::detail {
 
@@ -64,6 +67,8 @@ uint32_t crc32_hw(const uint8_t* buf, size_t len, uint32_t crc) {
 }
 
 } // namespace folly::detail
+
+FOLLY_UNSAFE_BUFFER_USAGE_END
 
 #endif // FOLLY_ARM_FEATURE_CRC32
 

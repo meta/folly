@@ -3,8 +3,11 @@
 /* MIT licensed */
 
 #include "folly/external/fast-crc32/sse_crc32c_v8s3x3.h"
+#include <folly/CPortability.h>
 
 #include <stdint.h>
+
+FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
 
 #define CRC_EXPORT extern
 #if !defined(FOLLY_ENABLE_SSE42_CRC32C_V8S3X3)
@@ -173,3 +176,5 @@ CRC_EXPORT uint32_t sse_crc32c_v8s3x3(const uint8_t* buf, size_t len, uint32_t c
 }
 } // namespace folly::detail
 #endif
+
+FOLLY_UNSAFE_BUFFER_USAGE_END

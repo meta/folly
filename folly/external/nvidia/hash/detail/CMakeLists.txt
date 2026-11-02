@@ -18,5 +18,7 @@ folly_add_library(
   NAME crc32c_detail
   SRCS Crc32cDetail.cpp
   HEADERS Crc32cCombineDetail.h
-  EXPORTED_DEPS folly_portability
+  EXPORTED_DEPS
+    folly_c_portability
+    folly_portability
 )

@@ -3,8 +3,11 @@
 /* MIT licensed */
 
 #include "folly/external/fast-crc32/avx512_crc32c_v8s3x4.h"
+#include <folly/CPortability.h>
 
 #include <stdint.h>
+
+FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
 
 #define CRC_EXPORT extern
 #if !defined(FOLLY_ENABLE_AVX512_CRC32C_V8S3X4)
@@ -182,3 +185,5 @@ CRC_EXPORT uint32_t avx512_crc32c_v8s3x4(const uint8_t* buf, size_t len, uint32_
 }
 } // namespace folly::detail
 #endif
+
+FOLLY_UNSAFE_BUFFER_USAGE_END

@@ -16,6 +16,7 @@
 
 #include <folly/external/nvidia/detail/RangeSve2.h>
 
+#include <folly/CPortability.h>
 #include <folly/Portability.h>
 
 #if !FOLLY_ARM_FEATURE_SVE2
@@ -31,6 +32,8 @@ size_t qfind_first_byte_of_sve2(
 #include <cassert>
 
 #include <arm_sve.h>
+
+FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace folly {
 namespace detail {
@@ -143,4 +146,6 @@ size_t qfind_first_byte_of_sve2(
 }
 } // namespace detail
 } // namespace folly
+
+FOLLY_UNSAFE_BUFFER_USAGE_END
 #endif
