@@ -721,6 +721,39 @@ struct conditional_<true> {
 template <bool V, typename T, typename F>
 using conditional_t = typename detail::conditional_<V>::template apply<T, F>;
 
+namespace detail {
+template <bool>
+struct conditional_apply_;
+template <>
+struct conditional_apply_<false> {
+  template <
+      template <typename...> class,
+      template <typename...> class F,
+      typename... A>
+  using apply = F<A...>;
+};
+template <>
+struct conditional_apply_<true> {
+  template <
+      template <typename...> class T,
+      template <typename...> class,
+      typename... A>
+  using apply = T<A...>;
+};
+} // namespace detail
+
+/// conditional_apply_t
+///
+/// Like conditional_t, but selects between templates T and F and instantiates
+/// only the selected one with A..., so the other may be ill-formed for A....
+template <
+    bool V,
+    template <typename...> class T,
+    template <typename...> class F,
+    typename... A>
+using conditional_apply_t =
+    typename detail::conditional_apply_<V>::template apply<T, F, A...>;
+
 //  Lighter-weight than std::conjunction, but evaluates all sub-conditions
 //  eagerly.
 template <class... Ts>

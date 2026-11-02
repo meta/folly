@@ -17,8 +17,10 @@
 #include <folly/Traits.h>
 
 #include <cstring>
+#include <list>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -175,6 +177,33 @@ TEST(Traits, conditional) {
   EXPECT_TRUE(Cond<true>::fun_std("hello"));
   EXPECT_TRUE(Cond<false>::fun_folly("hello"));
   EXPECT_FALSE(Cond<true>::fun_folly("hello"));
+}
+
+template <typename T>
+using value_type_t = typename T::value_type;
+
+template <typename T>
+using value_type_or_self_t = folly::conditional_apply_t<requires {
+  typename T::value_type;
+}, value_type_t, std::type_identity_t, T>;
+
+TEST(Traits, conditionalApply) {
+  using folly::conditional_apply_t;
+  EXPECT_TRUE((std::is_same_v<
+               conditional_apply_t<true, std::vector, std::list, int>,
+               std::vector<int>>));
+  EXPECT_TRUE((std::is_same_v<
+               conditional_apply_t<false, std::vector, std::list, int>,
+               std::list<int>>));
+  EXPECT_TRUE((std::is_same_v<
+               conditional_apply_t<true, std::pair, std::tuple, int, char>,
+               std::pair<int, char>>));
+  EXPECT_TRUE((std::is_same_v<
+               conditional_apply_t<false, std::pair, std::tuple>,
+               std::tuple<>>));
+
+  EXPECT_TRUE((std::is_same_v<value_type_or_self_t<std::vector<char>>, char>));
+  EXPECT_TRUE((std::is_same_v<value_type_or_self_t<int>, int>));
 }
 
 TEST(Traits, isNegative) {
