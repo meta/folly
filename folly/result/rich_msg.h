@@ -17,6 +17,7 @@
 #pragma once
 
 #include <source_location>
+#include <string_view>
 
 #include <fmt/format.h>
 
@@ -58,14 +59,22 @@ class format_string_and_location {
   friend class ::folly::rich_msg;
 
   std::source_location loc_;
-  fmt::format_string<Args...> fmt_str_;
+  std::string_view fmt_str_;
   literal_c_str lit_str_;
 
  public:
   /* implicit */ consteval format_string_and_location(
       const char* str,
       std::source_location loc = std::source_location::current())
-      : loc_{std::move(loc)}, fmt_str_{str}, lit_str_{str} {}
+      : loc_{std::move(loc)}, fmt_str_{str}, lit_str_{str} {
+    // fmt 12 makes `fmt::format_string` non-`constexpr` where it lacks
+    // `consteval` (e.g. MSVC < 19.40); there, fmt itself checks at runtime.
+    // TODO(T294126399): Drop `FMT_HAS_CONSTEVAL` (fmt 9) after the migration.
+#if defined(FMT_HAS_CONSTEVAL) || \
+    (defined(FMT_USE_CONSTEVAL) && FMT_USE_CONSTEVAL)
+    [[maybe_unused]] fmt::format_string<Args...> check{str};
+#endif
+  }
 
   constexpr std::source_location location() const { return loc_; }
 
