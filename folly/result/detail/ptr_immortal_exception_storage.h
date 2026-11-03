@@ -18,6 +18,7 @@
 
 #include <exception>
 
+#include <folly/CppAttributes.h>
 #include <folly/Portability.h> // FOLLY_HAS_RESULT
 #include <folly/Traits.h>
 #include <folly/lang/SafeAssert.h>
@@ -100,8 +101,18 @@ class ptr_immortal_exception_storage : immortal_exception_storage {
       return eptr_.load(std::memory_order_acquire);
     }
   };
-  constexpr static mutable_std_exception_leaf_rich_error_singleton
+  // Other statics may compare an immortal error in their initializers, or first
+  // convert it to `std::exception_ptr` in their destructors. The holder must be
+  // ready for the comparison and keep its creation mutex usable through
+  // shutdown. Without `no_destroy`, the holder needs a trivial destructor:
+  // otherwise, a later static destructor could try to create the exception by
+  // locking a mutex that has already been destroyed.
+  [[FOLLY_ATTR_CLANG_NO_DESTROY]] constinit inline static const mutable_std_exception_leaf_rich_error_singleton
       mutable_eptr_singleton_{};
+  static_assert(
+      FOLLY_HAS_CPP_ATTRIBUTE(clang::no_destroy) ||
+      std::is_trivially_destructible_v<
+          mutable_std_exception_leaf_rich_error_singleton>);
 
   template <typename Ex>
   Ex* get_mutable_exception_impl() const {

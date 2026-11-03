@@ -26,6 +26,7 @@ folly_add_library(
   NAME ptr_immortal_exception_storage
   HEADERS ptr_immortal_exception_storage.h
   EXPORTED_DEPS
+    folly_cpp_attributes
     folly_lang_safe_assert
     folly_result_rich_error_base
 )

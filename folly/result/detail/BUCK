@@ -17,6 +17,7 @@ fb_dirsync_cpp_library(
     headers = ["ptr_immortal_exception_storage.h"],
     use_raw_headers = True,
     exported_deps = [
+        "//folly:cpp_attributes",
         "//folly/lang:safe_assert",
         "//folly/result:rich_error_base",
     ],
