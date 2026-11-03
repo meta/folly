@@ -22,27 +22,51 @@
 #include <folly/init/Init.h>
 
 namespace {
-template <size_t Size, unsigned Method>
+struct GeneratedString {
+  std::string_view value;
+};
+} // namespace
+
+template <>
+struct fmt::formatter<GeneratedString>
+    : folly::fmt_sized_formatter_base<fmt::formatter<GeneratedString>> {
+  static size_t size_hint(GeneratedString const& arg) {
+    return arg.value.size();
+  }
+
+  template <typename Sink>
+  static void append(GeneratedString const& arg, Sink& sink) {
+    sink.append(arg.value);
+  }
+};
+
+namespace {
+template <size_t Size, unsigned Method, bool Generated = false>
 void formatStrings(unsigned iters) {
   std::string value;
   BENCHMARK_SUSPEND {
     value.assign(Size, 'x');
   }
+  decltype(auto) arg = [&]() -> decltype(auto) {
+    if constexpr (Generated) {
+      return GeneratedString{value};
+    } else {
+      return (value);
+    }
+  }();
   while (iters--) {
     if constexpr (Method == 0) {
-      folly::doNotOptimizeAway(
-          fmt::format("{}!{}!{}!{}!", value, value, value, value));
+      folly::doNotOptimizeAway(fmt::format("{}!{}!{}!{}!", arg, arg, arg, arg));
     } else if constexpr (Method == 1) {
       folly::doNotOptimizeAway(
-          fmt::format(
-              FOLLY_FMT_COMPILE("{}!{}!{}!{}!"), value, value, value, value));
+          fmt::format(FOLLY_FMT_COMPILE("{}!{}!{}!{}!"), arg, arg, arg, arg));
     } else if constexpr (Method == 2) {
       folly::doNotOptimizeAway(
-          folly::fmt_sized_format("{}!{}!{}!{}!", value, value, value, value));
+          folly::fmt_sized_format("{}!{}!{}!{}!", arg, arg, arg, arg));
     } else {
       folly::doNotOptimizeAway(
           folly::fmt_sized_format(
-              FOLLY_FMT_COMPILE("{}!{}!{}!{}!"), value, value, value, value));
+              FOLLY_FMT_COMPILE("{}!{}!{}!{}!"), arg, arg, arg, arg));
     }
   }
 }
@@ -66,7 +90,25 @@ void formatStrings(unsigned iters) {
 FOLLY_FMT_BENCHMARKS(1);
 FOLLY_FMT_BENCHMARKS(20);
 FOLLY_FMT_BENCHMARKS(150);
+#define FOLLY_FMT_GENERATED_BENCHMARKS(size)                   \
+  BENCHMARK(generated_fmt_##size, iters) {                     \
+    formatStrings<size, 0, true>(iters);                       \
+  }                                                            \
+  BENCHMARK_RELATIVE(generated_compiled_##size, iters) {       \
+    formatStrings<size, 1, true>(iters);                       \
+  }                                                            \
+  BENCHMARK_RELATIVE(generated_sized_##size, iters) {          \
+    formatStrings<size, 2, true>(iters);                       \
+  }                                                            \
+  BENCHMARK_RELATIVE(generated_sized_compiled_##size, iters) { \
+    formatStrings<size, 3, true>(iters);                       \
+  }                                                            \
+  BENCHMARK_DRAW_LINE()
+
 FOLLY_FMT_BENCHMARKS(1024);
+FOLLY_FMT_GENERATED_BENCHMARKS(20);
+FOLLY_FMT_GENERATED_BENCHMARKS(150);
+FOLLY_FMT_GENERATED_BENCHMARKS(1024);
 
 int main(int argc, char** argv) {
   folly::Init init(&argc, &argv);

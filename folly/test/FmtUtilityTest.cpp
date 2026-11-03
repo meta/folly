@@ -18,6 +18,7 @@
 
 #include <array>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -34,6 +35,33 @@ struct CustomValue {
   explicit CustomValue(std::string_view v) : value(v) {}
   CustomValue(CustomValue const&) = delete;
   CustomValue& operator=(CustomValue const&) = delete;
+};
+
+struct GeneratedText {
+  std::string_view text;
+  size_t hint;
+  unsigned& sizeCalls;
+  unsigned& appendCalls;
+
+  GeneratedText(std::string_view t, size_t h, unsigned& s, unsigned& a)
+      : text(t), hint(h), sizeCalls(s), appendCalls(a) {}
+  GeneratedText(GeneratedText const&) = delete;
+  GeneratedText& operator=(GeneratedText const&) = delete;
+};
+
+struct FinalText {
+  GeneratedText const& value;
+};
+
+struct ForwardedText {
+  GeneratedText const& value;
+};
+
+struct StringLikeText {
+  GeneratedText const& value;
+  operator fmt::string_view() const {
+    return {value.text.data(), value.text.size()};
+  }
 };
 
 struct ChangingSize {
@@ -60,7 +88,231 @@ struct fmt::formatter<ChangingSize> : fmt::formatter<std::string_view> {
   }
 };
 
+template <>
+struct fmt::formatter<GeneratedText>
+    : folly::fmt_sized_formatter_base<fmt::formatter<GeneratedText>> {
+  static size_t size_hint(GeneratedText const& value) {
+    ++value.sizeCalls;
+    return value.hint;
+  }
+
+  template <typename Sink>
+  static void append(GeneratedText const& value, Sink& sink) {
+    ++value.appendCalls;
+    sink.push_back('[');
+    sink.append(value.text);
+    sink.push_back(']');
+  }
+};
+
+template <>
+struct fmt::formatter<FinalText> final
+    : folly::fmt_sized_formatter_base<fmt::formatter<FinalText>> {
+  static size_t size_hint(FinalText const& value) {
+    return fmt::formatter<GeneratedText>::size_hint(value.value);
+  }
+
+  template <typename Sink>
+  static void append(FinalText const& value, Sink& sink) {
+    fmt::formatter<GeneratedText>::append(value.value, sink);
+  }
+};
+
+template <>
+struct fmt::formatter<ForwardedText> : fmt::formatter<GeneratedText> {
+  template <typename Context>
+  auto format(ForwardedText const& value, Context& ctx) const {
+    return fmt::formatter<GeneratedText>::format(value.value, ctx);
+  }
+};
+
+template <>
+struct fmt::formatter<StringLikeText>
+    : folly::fmt_sized_formatter_base<fmt::formatter<StringLikeText>> {
+  static size_t size_hint(StringLikeText const& value) {
+    return fmt::formatter<GeneratedText>::size_hint(value.value);
+  }
+
+  template <typename Sink>
+  static void append(StringLikeText const& value, Sink& sink) {
+    fmt::formatter<GeneratedText>::append(value.value, sink);
+  }
+};
+
 struct FmtUtilityTest : testing::Test {};
+
+TEST_F(FmtUtilityTest, formatter_base_size_and_append) {
+  for (auto const length : {0, 1, 23, 500, 4096}) {
+    std::string const text(length, 'x');
+    auto const expected = "[" + text + "]";
+    for (auto const hint : {0, 1, 32, 8192}) {
+      unsigned sized = 0;
+      unsigned appended = 0;
+      GeneratedText const value(text, hint, sized, appended);
+      EXPECT_EQ(expected, folly::fmt_sized_format("{}", value));
+      EXPECT_EQ(1, sized);
+      EXPECT_EQ(1, appended);
+      sized = appended = 0;
+      EXPECT_EQ(expected, folly::fmt_sized_format(fmt::runtime("{}"), value));
+      EXPECT_EQ(1, sized);
+      EXPECT_EQ(1, appended);
+      sized = appended = 0;
+      EXPECT_EQ(
+          expected, folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), value));
+      EXPECT_EQ(1, sized);
+      EXPECT_EQ(1, appended);
+    }
+  }
+}
+
+TEST_F(FmtUtilityTest, formatter_base_native_calls_append_only) {
+  unsigned sized = 0;
+  unsigned appended = 0;
+  GeneratedText const value("a\0b"sv, 0, sized, appended);
+  EXPECT_EQ("[a\0b]"s, fmt::format("{}", value));
+  EXPECT_EQ("[a\0b]"s, fmt::format(fmt::runtime("{}"), value));
+  EXPECT_EQ("[a\0b]"s, fmt::format(FOLLY_FMT_COMPILE("{}"), value));
+  std::string out;
+  fmt::format_to(std::back_inserter(out), "{}", value);
+  EXPECT_EQ("[a\0b]"s, out);
+  std::array<char, 5> raw{};
+  auto end = fmt::format_to(raw.data(), FOLLY_FMT_COMPILE("{}"), value);
+  EXPECT_EQ(raw.data() + raw.size(), end);
+  EXPECT_EQ("[a\0b]"s, std::string(raw.data(), raw.size()));
+  EXPECT_EQ(0, sized);
+  EXPECT_EQ(5, appended);
+}
+
+TEST_F(FmtUtilityTest, formatter_base_mixed_and_named_arguments) {
+  unsigned sized = 0;
+  unsigned appended = 0;
+  GeneratedText const value("text", 4, sized, appended);
+  EXPECT_EQ(
+      "001f [text] x    ",
+      folly::fmt_sized_format("{:04x} {} {:<{}}", 31, value, "x", 5));
+  EXPECT_EQ(
+      "001f [text] x    ",
+      folly::fmt_sized_format(
+          FOLLY_FMT_COMPILE("{:04x} {} {:<{}}"), 31, value, "x", 5));
+  EXPECT_EQ(
+      "[text] 31",
+      folly::fmt_sized_format(
+          "{text} {num}", fmt::arg("text", value), fmt::arg("num", 31)));
+  EXPECT_EQ(
+      "[text] 31",
+      folly::fmt_sized_format(
+          fmt::runtime("{text} {num}"),
+          fmt::arg("text", value),
+          fmt::arg("num", 31)));
+  EXPECT_EQ(
+      "[text] 31",
+      folly::fmt_sized_format(
+          FOLLY_FMT_COMPILE("{text} {num}"),
+          fmt::arg("text", value),
+          fmt::arg("num", 31)));
+  EXPECT_EQ("[text] [text]", folly::fmt_sized_format("{0} {0}", value));
+  EXPECT_EQ(7, sized);
+  EXPECT_EQ(7, appended);
+}
+
+TEST_F(FmtUtilityTest, formatter_base_static_named_arguments) {
+  using namespace fmt::literals;
+  unsigned sized = 0;
+  unsigned appended = 0;
+  GeneratedText const value("text", 4, sized, appended);
+#if FMT_USE_NONTYPE_TEMPLATE_ARGS && !defined(_MSC_VER) && \
+    !(defined(__GNUC__) && !defined(__clang__) && __GNUC__ <= 8)
+  EXPECT_EQ(
+      "[text] 001f",
+      folly::fmt_sized_format(
+          FOLLY_FMT_COMPILE("{text} {:04x}"), "text"_a = value, 31));
+  EXPECT_EQ(
+      "[text] 001f",
+      folly::fmt_sized_format(
+          FOLLY_FMT_COMPILE("{text:} {:04x}"), "text"_a = value, 31));
+#else
+  EXPECT_EQ(
+      "[text] 001f",
+      folly::fmt_sized_format(
+          FOLLY_FMT_COMPILE("{text} {1:04x}"), "text"_a = value, 31));
+  EXPECT_EQ(
+      "[text] 001f",
+      folly::fmt_sized_format(
+          FOLLY_FMT_COMPILE("{0:} {1:04x}"), "text"_a = value, 31));
+#endif
+  EXPECT_EQ(
+      "[text] 31",
+      folly::fmt_sized_format("{text} {num}", "text"_a = value, "num"_a = 31));
+  EXPECT_EQ(
+      "[text] 31",
+      folly::fmt_sized_format(
+          fmt::runtime("{text} {num}"), "text"_a = value, "num"_a = 31));
+  EXPECT_EQ(4, sized);
+  EXPECT_EQ(4, appended);
+}
+
+TEST_F(FmtUtilityTest, formatter_base_final_and_forwarding_formatters) {
+  unsigned sized = 0;
+  unsigned appended = 0;
+  GeneratedText const value("text", 4, sized, appended);
+  FinalText const final{value};
+  EXPECT_EQ("[text]", folly::fmt_sized_format("{}", final));
+  EXPECT_EQ("[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), final));
+  EXPECT_EQ(2, sized);
+  EXPECT_EQ(2, appended);
+  sized = appended = 0;
+  ForwardedText const forwarded{value};
+  EXPECT_EQ("[text]", folly::fmt_sized_format("{}", forwarded));
+  EXPECT_EQ(
+      "[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), forwarded));
+  EXPECT_EQ(0, sized);
+  EXPECT_EQ(4, appended);
+}
+
+TEST_F(
+    FmtUtilityTest,
+    formatter_base_string_conversion_preserves_native_dispatch) {
+  unsigned sized = 0;
+  unsigned appended = 0;
+  GeneratedText const value("text", 0, sized, appended);
+  StringLikeText const stringLike{value};
+  EXPECT_EQ(
+      fmt::format("x{}", stringLike),
+      folly::fmt_sized_format("x{}", stringLike));
+  EXPECT_EQ(
+      fmt::format(fmt::runtime("x{}"), stringLike),
+      folly::fmt_sized_format(fmt::runtime("x{}"), stringLike));
+  EXPECT_EQ(
+      fmt::format(FOLLY_FMT_COMPILE("x{}"), stringLike),
+      folly::fmt_sized_format(FOLLY_FMT_COMPILE("x{}"), stringLike));
+  EXPECT_EQ(0, sized);
+}
+
+TEST_F(FmtUtilityTest, formatter_base_size_overflow) {
+  unsigned sized = 0;
+  unsigned appended = 0;
+  GeneratedText const value("text", std::string{}.max_size(), sized, appended);
+  EXPECT_THROW(folly::fmt_sized_format("x{}", value), std::length_error);
+  EXPECT_THROW(
+      folly::fmt_sized_format(FOLLY_FMT_COMPILE("x{}"), value),
+      std::length_error);
+  EXPECT_EQ(2, sized);
+  EXPECT_EQ(0, appended);
+  EXPECT_EQ("[text]", fmt::format("{}", value));
+}
+
+TEST_F(FmtUtilityTest, formatter_base_invalid_specifiers) {
+  unsigned sized = 0;
+  unsigned appended = 0;
+  GeneratedText const value("text", 4, sized, appended);
+  EXPECT_THROW(
+      folly::fmt_sized_format(fmt::runtime("{:x}"), value), fmt::format_error);
+  EXPECT_THROW(
+      (void)fmt::format(fmt::runtime("{:x}"), value), fmt::format_error);
+  EXPECT_EQ("[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{:}"), value));
+  EXPECT_EQ(1, sized);
+  EXPECT_EQ(1, appended);
+}
 
 TEST_F(FmtUtilityTest, fmt_sized_format_checked) {
   EXPECT_EQ("", folly::fmt_sized_format(""));

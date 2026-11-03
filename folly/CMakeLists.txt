@@ -549,6 +549,7 @@ if (FOLLY_HAVE_OPENSSL)
     EXPORTED_DEPS
       fmt::fmt
       folly_cpp_attributes
+      folly_lang_exception
       folly_portability_fmt_compile
   )
 else ()

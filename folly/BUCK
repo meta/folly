@@ -1040,6 +1040,7 @@ fb_dirsync_cpp_library(
     exported_deps = [
         "fbsource//third-party/fmt:fmt",
         ":cpp_attributes",
+        "//folly/lang:exception",
         "//folly/portability:fmt_compile",
     ],
 )
