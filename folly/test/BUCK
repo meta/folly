@@ -715,7 +715,10 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//third-party/fmt:fmt",
         "fbsource//third-party/googletest:gtest",
+        "//folly:fbstring",
         "//folly:fmt_utility",
+        "//folly:range",
+        "//folly/lang:cstring_view",
     ],
 )
 

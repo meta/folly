@@ -17,6 +17,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 #include <iterator>
 #include <stdexcept>
 #include <string>
@@ -51,16 +52,6 @@ inline constexpr bool fmt_has_size_hint =
       { formatter.size_hint(value) } -> std::convertible_to<size_t>;
     };
 
-template <typename T>
-inline constexpr bool fmt_needs_sizing_arg = [] {
-  if constexpr (fmt::detail::is_named_arg<T>::value) {
-    using value_type = std::remove_cvref_t<decltype(std::declval<T>().value)>;
-    return fmt_has_size_hint<value_type>;
-  } else {
-    return fmt_has_size_hint<T>;
-  }
-}();
-
 struct fmt_sizing_state {
   size_t offset = 0;
 
@@ -87,44 +78,50 @@ template <typename T>
 using fmt_format_arg_t = std::conditional_t<fmt_arg_by_value<T>, T, T const&>;
 
 template <typename T>
-using fmt_sizing_arg_t = std::
-    conditional_t<fmt_has_size_hint<T>, fmt_sizing_arg<T>, fmt_format_arg_t<T>>;
+struct fmt_legacy_sizing_projection {
+  using type = std::conditional_t<
+      fmt_has_size_hint<T>,
+      fmt_sizing_arg<T>,
+      fmt_format_arg_t<T>>;
 
-template <typename T>
-decltype(auto) fmt_make_sizing_arg(T const& arg, fmt_sizing_state& state) {
-  if constexpr (fmt_has_size_hint<T>) {
-    return fmt_sizing_arg<T>{arg, state};
-  } else {
-    return fmt_format_arg_t<T>(arg);
+  static decltype(auto) make(T const& arg, fmt_sizing_state& state) {
+    if constexpr (fmt_has_size_hint<T>) {
+      return fmt_sizing_arg<T>{arg, state};
+    } else {
+      return fmt_format_arg_t<T>(arg);
+    }
   }
-}
+};
 
-template <typename T, bool = fmt::detail::is_named_arg<T>::value>
-struct fmt_sizing_arg_store {
-  fmt_sizing_arg_t<T> value;
+template <
+    typename T,
+    template <typename> class Projection,
+    bool = fmt::detail::is_named_arg<T>::value>
+struct fmt_arg_store {
+  typename Projection<T>::type value;
 
-  fmt_sizing_arg_store(T const& arg, fmt_sizing_state& state)
-      : value(fmt_make_sizing_arg(arg, state)) {}
+  fmt_arg_store(T const& arg, fmt_sizing_state& state)
+      : value(Projection<T>::make(arg, state)) {}
 
   decltype(auto) get() const {
     return fmt_format_arg_t<std::remove_cvref_t<decltype(value)>>(value);
   }
 };
 
-template <typename T>
-struct fmt_sizing_arg_store<T, true> {
+template <typename T, template <typename> class Projection>
+struct fmt_arg_store<T, Projection, true> {
   using value_type = std::remove_cvref_t<decltype(std::declval<T>().value)>;
-  fmt_sizing_arg_t<value_type> value;
+  typename Projection<value_type>::type value;
   char const* name;
 
-  fmt_sizing_arg_store(T const& arg, fmt_sizing_state& state)
-      : value(fmt_make_sizing_arg(arg.value, state)), name(arg.name) {}
+  fmt_arg_store(T const& arg, fmt_sizing_state& state)
+      : value(Projection<value_type>::make(arg.value, state)), name(arg.name) {}
 
   auto get() const { return fmt::arg(name, value); }
 };
 
 #if FMT_USE_NONTYPE_TEMPLATE_ARGS
-#if FMT_VERSION >= 120000
+#if FMT_VERSION >= 110100
 template <typename Char, size_t N>
 using fmt_fixed_string = fmt::detail::fixed_string<Char, N>;
 template <typename T, typename Char, size_t N, fmt_fixed_string<Char, N> Name>
@@ -137,15 +134,20 @@ using fmt_static_named_arg =
     fmt::detail::statically_named_arg<T, Char, N, Name>;
 #endif
 
-template <typename T, typename Char, size_t N, fmt_fixed_string<Char, N> Name>
-struct fmt_sizing_arg_store<fmt_static_named_arg<T, Char, N, Name>, true> {
+template <
+    typename T,
+    typename Char,
+    size_t N,
+    fmt_fixed_string<Char, N> Name,
+    template <typename> class Projection>
+struct fmt_arg_store<fmt_static_named_arg<T, Char, N, Name>, Projection, true> {
   using value_type = std::remove_cvref_t<T>;
-  fmt_sizing_arg_t<value_type> value;
+  typename Projection<value_type>::type value;
 
-  fmt_sizing_arg_store(
+  fmt_arg_store(
       fmt_static_named_arg<T, Char, N, Name> const& arg,
       fmt_sizing_state& state)
-      : value(fmt_make_sizing_arg(arg.value, state)) {}
+      : value(Projection<value_type>::make(arg.value, state)) {}
 
   auto get() const {
     using stored_type = std::remove_cvref_t<decltype(value)>;
@@ -154,6 +156,276 @@ struct fmt_sizing_arg_store<fmt_static_named_arg<T, Char, N, Name>, true> {
   }
 };
 #endif
+
+namespace fmt_output {
+
+template <typename Storage>
+class fmt_format_output {
+ public:
+  using iterator_category = std::output_iterator_tag;
+  using value_type = void;
+  using difference_type = std::ptrdiff_t;
+  using pointer = void;
+  using reference = void;
+
+  explicit fmt_format_output(Storage& out) : out_(&out) {}
+
+  fmt_format_output& operator*() { return *this; }
+  fmt_format_output& operator++() { return *this; }
+  fmt_format_output operator++(int) { return *this; }
+  fmt_format_output& operator=(char c) {
+    if constexpr (std::is_same_v<Storage, fmt_sizing_state>) {
+      out_->add(1);
+    } else {
+      out_->push_back(c);
+    }
+    return *this;
+  }
+
+  void add_size_hint(size_t size) const
+    requires std::is_same_v<Storage, fmt_sizing_state>
+  {
+    out_->add(size);
+  }
+
+  void append(std::string_view str) const {
+    if constexpr (std::is_same_v<Storage, fmt_sizing_state>) {
+      out_->add(str.size());
+    } else {
+      out_->append(str);
+    }
+  }
+  void append(char const* begin, char const* end) const {
+    if (begin != end) {
+      append(std::string_view(begin, static_cast<size_t>(end - begin)));
+    }
+  }
+
+ private:
+  Storage* out_;
+};
+
+// Bulk-copy hooks found by ADL in fmt's iterator-writing paths.
+template <typename Char, typename InputChar, typename Storage>
+  requires(
+      std::is_same_v<Char, char> &&
+      std::is_same_v<std::remove_const_t<InputChar>, char>)
+auto copy(InputChar* begin, InputChar* end, fmt_format_output<Storage> out)
+    -> fmt_format_output<Storage> {
+  static_assert(std::is_same_v<Char, char>);
+  out.append(begin, end);
+  return out;
+}
+
+template <typename Char, typename InputChar, typename Storage>
+  requires(
+      std::is_same_v<Char, char> &&
+      std::is_same_v<std::remove_const_t<InputChar>, char>)
+auto copy_str(InputChar* begin, InputChar* end, fmt_format_output<Storage> out)
+    -> fmt_format_output<Storage> {
+  return copy<Char>(begin, end, out);
+}
+
+template <typename Char, typename InputChar, typename Storage>
+  requires(
+      std::is_same_v<Char, char> &&
+      std::is_same_v<std::remove_const_t<InputChar>, char>)
+auto copy_str_noinline(
+    InputChar* begin, InputChar* end, fmt_format_output<Storage> out)
+    -> fmt_format_output<Storage> {
+  return copy<Char>(begin, end, out);
+}
+
+template <typename Char, typename UInt>
+  requires std::is_same_v<Char, char>
+auto format_base2e(
+    int,
+    fmt_format_output<fmt_sizing_state> out,
+    UInt,
+    int digits,
+    bool = false) -> fmt_format_output<fmt_sizing_state> {
+  out.add_size_hint(static_cast<size_t>(digits));
+  return out;
+}
+
+#if FMT_VERSION >= 110100
+template <typename Char, typename UInt>
+  requires std::is_same_v<Char, char>
+auto format_base2e(
+    int base_bits,
+    fmt_format_output<std::string> out,
+    UInt value,
+    int digits,
+    bool upper = false) -> fmt_format_output<std::string> {
+  char buffer[sizeof(UInt) * 8];
+  auto const end =
+      fmt::detail::format_base2e<Char>(base_bits, buffer, value, digits, upper);
+  out.append(buffer, end);
+  return out;
+}
+#endif
+
+} // namespace fmt_output
+
+using fmt_output::fmt_format_output;
+using fmt_counting_context =
+    fmt::basic_format_context<fmt_format_output<fmt_sizing_state>, char>;
+
+template <typename Context>
+concept fmt_counting_format_context =
+    std::is_same_v<Context, fmt_counting_context>;
+
+struct fmt_sizing_handler {
+  using argument = fmt::basic_format_arg<fmt_counting_context>;
+  using custom_handle = argument::handle;
+
+  fmt::format_parse_context parse_context;
+  fmt_counting_context context;
+
+  fmt_sizing_handler(
+      fmt::string_view spec,
+      fmt::basic_format_args<fmt_counting_context> args,
+      fmt_sizing_state& state)
+      : parse_context(spec), context(fmt_format_output(state), args) {}
+
+  void on_text(char const* begin, char const* end) {
+    context.out().append(begin, end);
+  }
+
+  auto on_arg_id() -> int { return parse_context.next_arg_id(); }
+  auto on_arg_id(int id) -> int {
+    parse_context.check_arg_id(id);
+    return id;
+  }
+  auto on_arg_id(fmt::string_view name) -> int {
+    parse_context.check_arg_id(name);
+    auto const id = context.arg_id(name);
+    if (id < 0) {
+      on_error("argument not found");
+    }
+    return id;
+  }
+
+  void on_replacement_field(int id, char const*) {
+    fmt::format_parse_context empty(fmt::string_view{});
+    format_field(id, empty);
+  }
+
+  auto on_format_specs(int id, char const* begin, char const*) -> char const* {
+    parse_context.advance_to(begin);
+    return format_field(id, parse_context);
+  }
+
+  auto format_field(int id, fmt::format_parse_context& parse) -> char const* {
+    auto const arg = context.arg(id);
+    if (!arg) {
+      on_error("argument not found");
+    }
+    auto const format = [&](auto const& value) -> char const* {
+      using value_type = std::remove_cvref_t<decltype(value)>;
+      if constexpr (std::is_same_v<value_type, fmt::monostate>) {
+        on_error("argument not found");
+      } else if constexpr (std::is_same_v<value_type, custom_handle>) {
+        value.format(parse, context);
+        return parse.begin();
+      } else {
+        fmt::formatter<value_type> formatter;
+        auto const end = formatter.parse(parse);
+        context.advance_to(formatter.format(value, context));
+        return end;
+      }
+    };
+#if FMT_VERSION >= 110000
+    return arg.visit(format);
+#else
+    return fmt::visit_format_arg(format, arg);
+#endif
+  }
+
+  [[noreturn]] void on_error(char const* message) const {
+    throw_exception<fmt::format_error>(message);
+  }
+};
+
+template <typename Handler>
+void fmt_parse_format_string(fmt::string_view spec, Handler& handler) {
+  if constexpr (requires { fmt::detail::parse_format_string(spec, handler); }) {
+    fmt::detail::parse_format_string(spec, handler); // NOLINT
+  } else {
+    fmt::detail::parse_format_string<false>(spec, handler); // NOLINT
+  }
+}
+
+template <typename... Args>
+auto fmt_generic_formatted_size(fmt::string_view spec, Args const&... args)
+    -> size_t {
+  auto const measure = [&](fmt_format_arg_t<Args>... values) {
+    auto const format_args =
+        fmt::make_format_args<fmt_counting_context>(values...);
+    fmt_sizing_state state;
+    fmt_sizing_handler handler(spec, format_args, state);
+    fmt_parse_format_string(spec, handler);
+    return state.offset;
+  };
+  return measure(args...);
+}
+
+template <typename Storage>
+class fmt_output_buffer final : public fmt::detail::buffer<char> {
+ public:
+  // NOLINTNEXTLINE
+  explicit fmt_output_buffer(Storage& out)
+      : fmt::detail::buffer<char>(
+#if FMT_VERSION >= 110000
+            grow,
+#endif
+            buffer_,
+            0,
+            sizeof(buffer_)),
+        out_(out) {
+  }
+
+  ~fmt_output_buffer() = default;
+  fmt_output_buffer(fmt_output_buffer const&) = delete;
+  fmt_output_buffer& operator=(fmt_output_buffer const&) = delete;
+  fmt_output_buffer(fmt_output_buffer&&) = delete;
+  fmt_output_buffer& operator=(fmt_output_buffer&&) = delete;
+
+  void flush() {
+    auto const size = this->size(); // NOLINT
+    if (size != 0) {
+      out_.append(std::string_view(this->data(), size));
+      this->clear(); // NOLINT
+    }
+  }
+
+ private:
+#if FMT_VERSION >= 110000
+  static void grow(fmt::detail::buffer<char>& buffer, size_t) {
+    static_cast<fmt_output_buffer&>(buffer).flush();
+  }
+#else
+  void grow(size_t) override { flush(); }
+#endif
+
+  char buffer_[256];
+  Storage& out_;
+};
+
+template <typename Storage, typename... Args>
+void fmt_format_to(
+    Storage& out,
+    fmt::format_string<fmt_format_arg_t<Args>...> spec,
+    Args const&... args) {
+  fmt_output_buffer buffer(out);
+  fmt::format_to(fmt::appender(buffer), spec, fmt_format_arg_t<Args>(args)...);
+  buffer.flush();
+}
+
+template <typename Storage, fmt_compiled_string Format, typename... Args>
+void fmt_format_to(Storage& out, Format const& spec, Args const&... args) {
+  fmt::format_to(fmt_format_output(out), spec, fmt_format_arg_t<Args>(args)...);
+}
 
 template <typename OutputIt>
 class fmt_output_sink {
@@ -166,7 +438,9 @@ class fmt_output_sink {
     if (str.empty()) {
       return;
     }
-    if constexpr (can_append_view) {
+    if constexpr (can_append_direct) {
+      out_.append(str);
+    } else if constexpr (can_append_view) {
       fmt::detail::get_container(out_).append(str);
     } else if constexpr (can_append_range) {
       fmt::detail::get_container(out_).append(str.begin(), str.end());
@@ -178,6 +452,8 @@ class fmt_output_sink {
   OutputIt out() const { return out_; }
 
  private:
+  static constexpr bool can_append_direct =
+      requires(OutputIt out, std::string_view str) { out.append(str); };
   static constexpr bool can_append_view = requires(
       OutputIt out, std::string_view str) {
     fmt::detail::get_container(out).append(str);
@@ -226,9 +502,17 @@ struct fmt_sized_formatter_base : detail::fmt_sized_formatter_base_tag {
 
   template <typename T, typename Context>
   auto format(T const& value, Context& ctx) const {
-    detail::fmt_output_sink sink(ctx.out());
-    static_cast<Derived const&>(*this).append(value, sink);
-    return sink.out();
+    if constexpr (
+        detail::fmt_counting_format_context<Context> &&
+        detail::fmt_has_size_hint<T>) {
+      auto const size = static_cast<Derived const&>(*this).size_hint(value);
+      ctx.out().add_size_hint(size);
+      return ctx.out();
+    } else {
+      detail::fmt_output_sink sink(ctx.out());
+      static_cast<Derived const&>(*this).append(value, sink);
+      return sink.out();
+    }
   }
 };
 } // namespace folly
@@ -242,7 +526,8 @@ struct fmt::formatter<folly::detail::fmt_sizing_arg<T>> {
   }
 
   template <typename Context>
-  auto format(folly::detail::fmt_sizing_arg<T> const& arg, Context& ctx) const {
+  FOLLY_ALWAYS_INLINE auto format(
+      folly::detail::fmt_sizing_arg<T> const& arg, Context& ctx) const {
     arg.state.add(impl.size_hint(arg.value));
     return ctx.out();
   }
@@ -261,6 +546,13 @@ namespace folly {
 /// grows as needed if a custom formatter underestimates the output size.
 /// Values are passed by const reference, without moves.
 /// Fmt view wrappers are copied for fmt's argument bookkeeping.
+///
+/// Checked/runtime sizing uses fmt's parser and a generic counting context,
+/// preserving original argument types and native formatter dispatch. Character
+/// and range writes only advance the count; no scratch output is generated.
+/// Custom formatters must accept a generic format context. There is no buffered
+/// fallback for formatters requiring exactly fmt::format_context.
+/// Compiled formats retain their compiled counting path.
 ///
 /// Prefer compiled formats to reduce the cost of the sizing pass. Two-pass
 /// formatting is not necessarily faster than fmt::format for every workload.
@@ -290,23 +582,21 @@ struct fmt_sized_format_fn {
  private:
   template <typename Format, typename... Args>
   static size_t size(Format const& spec, Args const&... args) {
-    if constexpr ((detail::fmt_needs_sizing_arg<Args> || ...)) {
+    if constexpr (detail::fmt_compiled_string<Format>) {
       detail::fmt_sizing_state state;
       auto const measure = [&](auto const&... stored) {
-        if constexpr (detail::fmt_compiled_string<Format>) {
-          return fmt::formatted_size(spec, stored.get()...);
-        } else if constexpr (requires { spec.get(); }) {
-          return fmt::formatted_size(fmt::runtime(spec.get()), stored.get()...);
-        } else {
-          return fmt::formatted_size(fmt::runtime(spec), stored.get()...);
-        }
+        fmt::format_to(detail::fmt_format_output(state), spec, stored.get()...);
       };
-      auto const written =
-          measure(detail::fmt_sizing_arg_store<Args>(args, state)...);
-      state.add(written);
+      measure(
+          detail::fmt_arg_store<Args, detail::fmt_legacy_sizing_projection>(
+              args, state)...);
       return state.offset;
     } else {
-      return fmt::formatted_size(spec, format_arg_t<Args>(args)...);
+      if constexpr (requires { spec.get(); }) {
+        return detail::fmt_generic_formatted_size(spec.get(), args...);
+      } else {
+        return detail::fmt_generic_formatted_size(spec, args...);
+      }
     }
   }
 
@@ -314,7 +604,7 @@ struct fmt_sized_format_fn {
   static std::string format(Format const& spec, Args const&... args) {
     std::string out;
     out.reserve(size(spec, args...));
-    fmt::format_to(std::back_inserter(out), spec, format_arg_t<Args>(args)...);
+    detail::fmt_format_to(out, spec, args...);
     return out;
   }
 };
