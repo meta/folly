@@ -340,8 +340,8 @@ TEST(PCQ, MinimumSize) {
 }
 
 TEST(PCQ, OverAlignedStorage) {
-  // 32 is the first alignment malloc() doesn't guarantee, and 256 exceeds the
-  // cache-line-sized alignment an implementation might hardcode.
+  // 32 bytes is the first alignment malloc() does not guarantee, and 256
+  // exceeds the cache-line-sized alignment an implementation may hardcode.
   checkOverAlignedStorage<OverAligned<32>>();
   checkOverAlignedStorage<OverAligned<256>>();
 }
