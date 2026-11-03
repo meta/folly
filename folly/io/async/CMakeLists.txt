@@ -97,8 +97,8 @@ folly_add_library(
   HEADERS AsyncBase.h
   DEPS
     ${GLOG_LIBRARIES}
+    folly_conv
     folly_exception
-    folly_format
     folly_portability_filesystem
     folly_portability_unistd
   EXPORTED_DEPS
@@ -823,7 +823,7 @@ if (FOLLY_HAVE_OPENSSL)
     HEADERS SSLOptions.h
     DEPS
       ${GLOG_LIBRARIES}
-      folly_format
+      folly_exception_string
     EXPORTED_DEPS
       folly_container_array
       folly_io_async_ssl_context

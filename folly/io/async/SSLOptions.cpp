@@ -18,7 +18,7 @@
 
 #include <glog/logging.h>
 
-#include <folly/Format.h>
+#include <folly/ExceptionString.h>
 
 namespace folly {
 namespace ssl {

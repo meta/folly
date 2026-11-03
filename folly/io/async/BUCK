@@ -559,7 +559,7 @@ fb_dirsync_cpp_library(
     use_raw_headers = True,
     deps = [
         "fbsource//third-party/glog:glog",
-        "//folly:format",
+        "//folly:exception_string",
     ],
     exported_deps = [
         ":ssl_context",
@@ -617,8 +617,8 @@ fb_dirsync_cpp_library(
     use_raw_headers = True,
     deps = [
         "fbsource//third-party/glog:glog",
+        "//folly:conv",
         "//folly:exception",
-        "//folly:format",
         "//folly/portability:filesystem",
         "//folly/portability:unistd",
     ],
