@@ -58,6 +58,26 @@ namespace test {
 using AuxAct = std::function<void(bool)>;
 using AuxChk = std::function<void(uint64_t)>;
 
+struct DeterministicFutexEvent {
+  enum class Kind : uint8_t {
+    WaitQueued,
+    Wake,
+  };
+
+  Kind kind;
+  const void* futex;
+  uint32_t mask;
+  int count;
+  int result;
+};
+
+// Called synchronously after the futex queue lock is released, while the
+// caller still owns the deterministic scheduler turn.  Observers must not
+// block or invoke schedule-aware operations such as DeterministicAtomic or
+// deterministic futex functions; doing so deadlocks waiting for that turn to
+// finish.  Use std::atomic for state shared with scheduler callbacks.
+using FutexObserver = std::function<void(const DeterministicFutexEvent& event)>;
+
 struct DSchedThreadId {
   unsigned val;
   explicit constexpr DSchedThreadId() : val(0) {}
@@ -150,6 +170,9 @@ class DeterministicSchedule {
    * schedule) to participate in a deterministic schedule.
    */
   explicit DeterministicSchedule(std::function<size_t(size_t)> scheduler);
+
+  DeterministicSchedule(
+      std::function<size_t(size_t)> scheduler, FutexObserver futexObserver);
 
   DeterministicSchedule(const DeterministicSchedule&) = delete;
   DeterministicSchedule& operator=(const DeterministicSchedule&) = delete;
@@ -286,12 +309,16 @@ class DeterministicSchedule {
 
   static void atomic_thread_fence(std::memory_order mo);
 
+  /** Reports a deterministic futex queue transition to the observer. */
+  static void notifyFutexEvent(const DeterministicFutexEvent& event);
+
  private:
   static DeterministicSchedule* getCurrentSchedule();
 
   static AuxChk aux_chk;
 
   std::function<size_t(size_t)> scheduler_;
+  FutexObserver futexObserver_;
   std::vector<Sem*> sems_;
   std::unordered_set<std::thread::id> active_;
   std::unordered_map<std::thread::id, Sem*> joins_;
@@ -636,6 +663,8 @@ int deterministicFutexWakeImpl(
     }
   }
   futexLock.unlock();
+  DeterministicSchedule::notifyFutexEvent(
+      {DeterministicFutexEvent::Kind::Wake, futex, wakeMask, count, rv});
   FOLLY_TEST_DSCHED_VLOG(
       "futexWake(" << futex << ", " << count << ", " << std::hex << wakeMask
                    << ") -> " << rv);
@@ -673,8 +702,14 @@ folly::detail::FutexResult deterministicFutexWaitImpl(
     queue.emplace_back(waitMask, &awoken);
     auto ours = queue.end();
     ours--;
+    bool notifyQueued = true;
     while (!awoken) {
       futexLock.unlock();
+      if (notifyQueued) {
+        notifyQueued = false;
+        DeterministicSchedule::notifyFutexEvent(
+            {DeterministicFutexEvent::Kind::WaitQueued, futex, waitMask, 0, 0});
+      }
       DeterministicSchedule::afterSharedAccess();
       DeterministicSchedule::beforeSharedAccess();
       futexLock.lock();

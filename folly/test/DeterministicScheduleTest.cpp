@@ -16,6 +16,8 @@
 
 #include <folly/test/DeterministicSchedule.h>
 
+#include <algorithm>
+
 #include <folly/portability/GFlags.h>
 #include <folly/portability/GTest.h>
 
@@ -52,6 +54,44 @@ TEST(DeterministicSchedule, uniformSubset) {
   for (int i = 0; i < 10; ++i) {
     EXPECT_TRUE(buckets[i] > 9000);
   }
+}
+
+TEST(DeterministicSchedule, observesFutexQueueTransitions) {
+  constexpr uint32_t kWaitMask = 0x4;
+  using Futex = folly::detail::Futex<DeterministicAtomic>;
+
+  std::vector<DeterministicFutexEvent> events;
+  DeterministicSchedule sched(
+      DeterministicSchedule::uniform(0),
+      [&](const DeterministicFutexEvent& event) { events.push_back(event); });
+  Futex futex{0};
+
+  auto waiter = DeterministicSchedule::thread([&] {
+    EXPECT_EQ(
+        folly::detail::FutexResult::AWOKEN,
+        folly::detail::futexWait(&futex, 0, kWaitMask));
+  });
+  while (folly::detail::futexWake(&futex, 1, kWaitMask) == 0) {
+  }
+  DeterministicSchedule::join(waiter);
+
+  const auto waitQueued = std::find_if(
+      events.begin(), events.end(), [](const DeterministicFutexEvent& event) {
+        return event.kind == DeterministicFutexEvent::Kind::WaitQueued;
+      });
+  ASSERT_NE(events.end(), waitQueued);
+  EXPECT_EQ(&futex, waitQueued->futex);
+  EXPECT_EQ(kWaitMask, waitQueued->mask);
+
+  const auto successfulWake = std::find_if(
+      waitQueued, events.end(), [](const DeterministicFutexEvent& event) {
+        return event.kind == DeterministicFutexEvent::Kind::Wake &&
+            event.result == 1;
+      });
+  ASSERT_NE(events.end(), successfulWake);
+  EXPECT_EQ(&futex, successfulWake->futex);
+  EXPECT_EQ(kWaitMask, successfulWake->mask);
+  EXPECT_EQ(1, successfulWake->count);
 }
 
 TEST(DeterministicSchedule, buggyAdd) {

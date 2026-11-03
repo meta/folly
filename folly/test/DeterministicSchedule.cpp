@@ -142,7 +142,14 @@ using TLState = SingletonThreadLocal<PerThreadState>;
 
 DeterministicSchedule::DeterministicSchedule(
     std::function<size_t(size_t)> scheduler)
-    : scheduler_(std::move(scheduler)), nextThreadId_(0), step_(0) {
+    : DeterministicSchedule(std::move(scheduler), FutexObserver{}) {}
+
+DeterministicSchedule::DeterministicSchedule(
+    std::function<size_t(size_t)> scheduler, FutexObserver futexObserver)
+    : scheduler_(std::move(scheduler)),
+      futexObserver_(std::move(futexObserver)),
+      nextThreadId_(0),
+      step_(0) {
   auto& tls = TLState::get();
   assert(tls.sem == nullptr);
   assert(tls.sched == nullptr);
@@ -232,6 +239,14 @@ bool DeterministicSchedule::isCurrentThreadExiting() {
 bool DeterministicSchedule::isActive() {
   auto& tls = TLState::get();
   return tls.sched != nullptr;
+}
+
+void DeterministicSchedule::notifyFutexEvent(
+    const DeterministicFutexEvent& event) {
+  auto& tls = TLState::get();
+  if (tls.sched && tls.sched->futexObserver_) {
+    tls.sched->futexObserver_(event);
+  }
 }
 
 DSchedThreadId DeterministicSchedule::getThreadId() {
