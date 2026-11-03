@@ -210,8 +210,11 @@ AttributeSpec readAttributeSpec(folly::StringPiece& sp);
 bool readAbbreviation(folly::StringPiece& section, DIEAbbreviation& abbr);
 
 // Read a null-terminated string
+folly::StringPiece readNullTerminated(std::span<const uint8_t>& bytes);
 folly::StringPiece readNullTerminated(folly::StringPiece& sp);
 
+folly::StringPiece getStringFromStringSection(
+    std::span<const uint8_t> bytes, uint64_t offset);
 folly::StringPiece getStringFromStringSection(
     folly::StringPiece str, uint64_t offset);
 

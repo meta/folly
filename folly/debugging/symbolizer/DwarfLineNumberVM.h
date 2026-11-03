@@ -42,14 +42,14 @@ class DwarfLineNumberVM {
   void reset();
 
   /** Execute until we commit one new row to the line number matrix */
-  bool next(folly::StringPiece& program);
+  bool next(std::span<const uint8_t>& program);
   enum StepResult {
     CONTINUE, // Continue feeding opcodes
     COMMIT, // Commit new <address, file, line> tuple
     END, // End of sequence
   };
   /** Execute one opcode */
-  StepResult step(folly::StringPiece& program);
+  StepResult step(std::span<const uint8_t>& program);
 
   struct FileName {
     folly::StringPiece relativeName;
@@ -59,7 +59,7 @@ class DwarfLineNumberVM {
   };
 
   /** Read one FileName object, advance sp */
-  static bool readFileName(folly::StringPiece& program, FileName& fn);
+  static bool readFileName(std::span<const uint8_t>& program, FileName& fn);
 
   /**
    * Get file name at given index; may be in the initial table
@@ -75,12 +75,12 @@ class DwarfLineNumberVM {
    * Execute opcodes until finding a DW_LNE_define_file and return true;
    * return file at the end.
    */
-  bool nextDefineFile(folly::StringPiece& program, FileName& fn) const;
+  bool nextDefineFile(std::span<const uint8_t>& program, FileName& fn) const;
 
   // Initialization
   bool initializationSuccess_ = false;
   bool is64Bit_;
-  folly::StringPiece data_;
+  std::span<const uint8_t> data_;
   folly::StringPiece compilationDirectory_;
   const DebugSections& debugSections_;
 
@@ -96,21 +96,21 @@ class DwarfLineNumberVM {
   // 6.2.4 The Line Number Program Header.
   struct {
     size_t includeDirectoryCount;
-    folly::StringPiece includeDirectories;
+    std::span<const uint8_t> includeDirectories;
     size_t fileNameCount;
-    folly::StringPiece fileNames;
+    std::span<const uint8_t> fileNames;
   } v4_;
 
   struct {
     uint8_t directoryEntryFormatCount;
-    folly::StringPiece directoryEntryFormat;
+    std::span<const uint8_t> directoryEntryFormat;
     uint64_t directoriesCount;
-    folly::StringPiece directories;
+    std::span<const uint8_t> directories;
 
     uint8_t fileNameEntryFormatCount;
-    folly::StringPiece fileNameEntryFormat;
+    std::span<const uint8_t> fileNameEntryFormat;
     uint64_t fileNamesCount;
-    folly::StringPiece fileNames;
+    std::span<const uint8_t> fileNames;
   } v5_;
 
   // State machine registers

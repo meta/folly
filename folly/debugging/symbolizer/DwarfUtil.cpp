@@ -154,12 +154,29 @@ folly::StringPiece readBytes(folly::StringPiece& sp, uint64_t len) {
 }
 
 // Read a null-terminated string
+folly::StringPiece readNullTerminated(std::span<const uint8_t>& bytes) {
+  const auto* p =
+      static_cast<const uint8_t*>(memchr(bytes.data(), 0, bytes.size()));
+  FOLLY_SAFE_CHECK(p, "invalid null-terminated string");
+  folly::StringPiece ret(
+      reinterpret_cast<const char*>(bytes.data()), p - bytes.data());
+  bytes = bytes.subspan(p - bytes.data() + 1);
+  return ret;
+}
+
 folly::StringPiece readNullTerminated(folly::StringPiece& sp) {
   const char* p = static_cast<const char*>(memchr(sp.data(), 0, sp.size()));
   FOLLY_SAFE_CHECK(p, "invalid null-terminated string");
   folly::StringPiece ret(sp.data(), p);
   sp.assign(p + 1, sp.end());
   return ret;
+}
+
+folly::StringPiece getStringFromStringSection(
+    std::span<const uint8_t> bytes, uint64_t offset) {
+  FOLLY_SAFE_CHECK(offset < bytes.size(), "invalid string offset");
+  bytes = bytes.subspan(offset);
+  return readNullTerminated(bytes);
 }
 
 folly::StringPiece getStringFromStringSection(

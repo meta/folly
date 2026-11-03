@@ -38,7 +38,7 @@ DwarfLineNumberVM::DwarfLineNumberVM(
     reset();
     return;
   }
-  data_ = asStringPiece(chunk);
+  data_ = chunk;
   is64Bit_ = section.is64Bit();
   initializationSuccess_ = init();
 }
@@ -185,6 +185,21 @@ folly::Optional<LineNumberAttribute> readLineNumberAttribute(
   };
 }
 
+folly::Optional<LineNumberAttribute> readLineNumberAttribute(
+    bool is64Bit,
+    std::span<const uint8_t>& format,
+    std::span<const uint8_t>& entries,
+    std::span<const uint8_t> debugStr,
+    std::span<const uint8_t> debugLineStr) {
+  auto formatString = asStringPiece(format);
+  auto entriesString = asStringPiece(entries);
+  auto result = readLineNumberAttribute(
+      is64Bit, formatString, entriesString, debugStr, debugLineStr);
+  format = format.subspan(format.size() - formatString.size());
+  entries = entries.subspan(entries.size() - entriesString.size());
+  return result;
+}
+
 } // namespace
 
 bool DwarfLineNumberVM::init() {
@@ -216,8 +231,8 @@ bool DwarfLineNumberVM::init() {
     return false;
   }
 
-  folly::StringPiece header(data_.data(), headerLength);
-  data_.assign(header.end(), data_.end());
+  auto header = data_.first(headerLength);
+  data_ = data_.subspan(headerLength);
 
   minLength_ = read<uint8_t>(header);
   if (version_ >= 4) { // Version 2 and 3 records don't have this
@@ -231,24 +246,26 @@ bool DwarfLineNumberVM::init() {
   lineBase_ = read<int8_t>(header); // yes, signed
   lineRange_ = read<uint8_t>(header);
   opcodeBase_ = read<uint8_t>(header);
-  if (opcodeBase_ == 0) {
+  // The standard opcode lengths table occupies opcodeBase_ - 1 bytes, which
+  // must be present in the header.
+  if (opcodeBase_ == 0 || opcodeBase_ - 1 > header.size()) {
     FOLLY_SAFE_DFATAL("invalid opcode base");
     return false;
   }
-  standardOpcodeLengths_ = reinterpret_cast<const uint8_t*>(header.data());
-  header.advance(opcodeBase_ - 1);
+  standardOpcodeLengths_ = header.data();
+  header = header.subspan(opcodeBase_ - 1);
 
   if (version_ <= 4) {
     // We don't want to use heap, so we don't keep an unbounded amount of state.
     // We'll just skip over include directories and file names here, and
     // we'll loop again when we actually need to retrieve one.
     folly::StringPiece sp;
-    const char* tmp = header.data();
+    const uint8_t* tmp = header.data();
     v4_.includeDirectoryCount = 0;
     while (!(sp = readNullTerminated(header)).empty()) {
       ++v4_.includeDirectoryCount;
     }
-    v4_.includeDirectories.assign(tmp, header.data());
+    v4_.includeDirectories = {tmp, header.data()};
 
     tmp = header.data();
     FileName fn;
@@ -256,21 +273,21 @@ bool DwarfLineNumberVM::init() {
     while (readFileName(header, fn)) {
       ++v4_.fileNameCount;
     }
-    v4_.fileNames.assign(tmp, header.data());
+    v4_.fileNames = {tmp, header.data()};
   } else if (version_ == 5) {
     v5_.directoryEntryFormatCount = read<uint8_t>(header);
-    const char* tmp = header.data();
+    const uint8_t* tmp = header.data();
     for (uint8_t i = 0; i < v5_.directoryEntryFormatCount; i++) {
       // A sequence of directory entry format descriptions. Each description
       // consists of a pair of ULEB128 values:
       readULEB(header); // A content type code
       readULEB(header); // A form code using the attribute form codes
     }
-    v5_.directoryEntryFormat.assign(tmp, header.data());
+    v5_.directoryEntryFormat = {tmp, header.data()};
     v5_.directoriesCount = readULEB(header);
     tmp = header.data();
     for (uint64_t i = 0; i < v5_.directoriesCount; i++) {
-      folly::StringPiece format = v5_.directoryEntryFormat;
+      auto format = v5_.directoryEntryFormat;
       for (uint8_t f = 0; f < v5_.directoryEntryFormatCount; f++) {
         if (!readLineNumberAttribute(
                 is64Bit_,
@@ -282,7 +299,7 @@ bool DwarfLineNumberVM::init() {
         }
       }
     }
-    v5_.directories.assign(tmp, header.data());
+    v5_.directories = {tmp, header.data()};
 
     v5_.fileNameEntryFormatCount = read<uint8_t>(header);
     tmp = header.data();
@@ -292,11 +309,11 @@ bool DwarfLineNumberVM::init() {
       readULEB(header); // A content type code
       readULEB(header); // A form code using the attribute form codes
     }
-    v5_.fileNameEntryFormat.assign(tmp, header.data());
+    v5_.fileNameEntryFormat = {tmp, header.data()};
     v5_.fileNamesCount = readULEB(header);
     tmp = header.data();
     for (uint64_t i = 0; i < v5_.fileNamesCount; i++) {
-      folly::StringPiece format = v5_.fileNameEntryFormat;
+      auto format = v5_.fileNameEntryFormat;
       for (uint8_t f = 0; f < v5_.fileNameEntryFormatCount; f++) {
         if (!readLineNumberAttribute(
                 is64Bit_,
@@ -308,12 +325,12 @@ bool DwarfLineNumberVM::init() {
         }
       }
     }
-    v5_.fileNames.assign(tmp, header.data());
+    v5_.fileNames = {tmp, header.data()};
   }
   return true;
 }
 
-bool DwarfLineNumberVM::next(folly::StringPiece& program) {
+bool DwarfLineNumberVM::next(std::span<const uint8_t>& program) {
   DwarfLineNumberVM::StepResult ret;
   do {
     ret = step(program);
@@ -334,7 +351,7 @@ DwarfLineNumberVM::FileName DwarfLineNumberVM::getFileName(
       return fn;
     }
     if (index <= v4_.fileNameCount) {
-      folly::StringPiece fileNames = v4_.fileNames;
+      auto fileNames = v4_.fileNames;
       for (; index; --index) {
         if (!readFileName(fileNames, fn)) {
           abort();
@@ -345,7 +362,7 @@ DwarfLineNumberVM::FileName DwarfLineNumberVM::getFileName(
 
     index -= v4_.fileNameCount;
 
-    folly::StringPiece program = data_;
+    auto program = data_;
     for (; index; --index) {
       if (!nextDefineFile(program, fn)) {
         FOLLY_SAFE_DFATAL("invalid file index: ", index);
@@ -364,9 +381,9 @@ DwarfLineNumberVM::FileName DwarfLineNumberVM::getFileName(
       return fn;
     }
 
-    folly::StringPiece fileNames = v5_.fileNames;
+    auto fileNames = v5_.fileNames;
     for (uint64_t i = 0; i < v5_.fileNamesCount; i++) {
-      folly::StringPiece format = v5_.fileNameEntryFormat;
+      auto format = v5_.fileNameEntryFormat;
       for (uint8_t f = 0; f < v5_.fileNameEntryFormatCount; f++) {
         auto attr = readLineNumberAttribute(
             is64Bit_,
@@ -413,7 +430,7 @@ folly::StringPiece DwarfLineNumberVM::getIncludeDirectory(
       return {};
     }
 
-    folly::StringPiece includeDirectories = v4_.includeDirectories;
+    auto includeDirectories = v4_.includeDirectories;
     folly::StringPiece dir;
     for (; index; --index) {
       dir = readNullTerminated(includeDirectories);
@@ -434,9 +451,9 @@ folly::StringPiece DwarfLineNumberVM::getIncludeDirectory(
           v5_.directoriesCount);
       return {};
     }
-    folly::StringPiece directories = v5_.directories;
+    auto directories = v5_.directories;
     for (uint64_t i = 0; i < v5_.directoriesCount; i++) {
-      folly::StringPiece format = v5_.directoryEntryFormat;
+      auto format = v5_.directoryEntryFormat;
       for (uint8_t f = 0; f < v5_.directoryEntryFormatCount; f++) {
         auto attr = readLineNumberAttribute(
             is64Bit_,
@@ -459,7 +476,7 @@ folly::StringPiece DwarfLineNumberVM::getIncludeDirectory(
 }
 
 bool DwarfLineNumberVM::readFileName(
-    folly::StringPiece& program, FileName& fn) {
+    std::span<const uint8_t>& program, FileName& fn) {
   fn.relativeName = readNullTerminated(program);
   if (fn.relativeName.empty()) {
     return false;
@@ -472,7 +489,7 @@ bool DwarfLineNumberVM::readFileName(
 }
 
 bool DwarfLineNumberVM::nextDefineFile(
-    folly::StringPiece& program, FileName& fn) const {
+    std::span<const uint8_t>& program, FileName& fn) const {
   while (!program.empty()) {
     auto opcode = read<uint8_t>(program);
 
@@ -511,7 +528,7 @@ bool DwarfLineNumberVM::nextDefineFile(
       return true;
     }
 
-    program.advance(length);
+    program = program.subspan(length);
     continue;
   }
 
@@ -519,7 +536,7 @@ bool DwarfLineNumberVM::nextDefineFile(
 }
 
 DwarfLineNumberVM::StepResult DwarfLineNumberVM::step(
-    folly::StringPiece& program) {
+    std::span<const uint8_t>& program) {
   auto opcode = read<uint8_t>(program);
 
   if (opcode >= opcodeBase_) { // special opcode
@@ -632,7 +649,7 @@ DwarfLineNumberVM::StepResult DwarfLineNumberVM::step(
   }
 
   // Unrecognized extended opcode
-  program.advance(length);
+  program = program.subspan(length);
   return CONTINUE;
 }
 
@@ -652,7 +669,7 @@ bool DwarfLineNumberVM::findAddress(
   if (!initializationSuccess_) {
     return false;
   }
-  folly::StringPiece program = data_;
+  auto program = data_;
 
   // Within each sequence of instructions, the address may only increase.
   // Unfortunately, within the same compilation unit, sequences may appear
