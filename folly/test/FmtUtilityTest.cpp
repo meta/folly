@@ -688,16 +688,24 @@ TEST_F(FmtUtilityTest, fmt_sized_format_decorated_string_like) {
 }
 
 TEST_F(FmtUtilityTest, fmt_sized_format_conversion_only_string) {
-  auto const check = []<typename T>(T const& value) {
+  ConversionOnlyText const value{"text"};
+  auto const view = std::string_view(value);
+  EXPECT_EQ("[text]", folly::fmt_sized_format("[{}]", view));
+  EXPECT_EQ("[text]", folly::fmt_sized_format(fmt::runtime("[{}]"), view));
+  EXPECT_EQ("[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("[{}]"), view));
+
+  auto const check = []<typename T>(T const& arg) {
     if constexpr (fmt::is_formattable<T>::value) {
-      EXPECT_EQ("[text]", folly::fmt_sized_format("[{}]", value));
-      EXPECT_EQ("[text]", folly::fmt_sized_format(fmt::runtime("[{}]"), value));
+      EXPECT_EQ("[text]", folly::fmt_sized_format("[{}]", arg));
+      EXPECT_EQ("[text]", folly::fmt_sized_format(fmt::runtime("[{}]"), arg));
       EXPECT_EQ(
-          fmt::format("[{:>12.1}]", value),
-          folly::fmt_sized_format("[{:>12.1}]", value));
+          fmt::format("[{:>12.1}]", arg),
+          folly::fmt_sized_format("[{:>12.1}]", arg));
+    } else {
+      EXPECT_FALSE((fmt::is_formattable<T>::value));
     }
   };
-  check(ConversionOnlyText{"text"});
+  check(value);
 }
 
 TEST_F(FmtUtilityTest, fmt_sized_format_native_string_mapping) {
