@@ -1018,73 +1018,18 @@ TEST(IndexIterator, NoOperatorIntegration) {
   ASSERT_EQ((std::pair{2, 5}), cit[1]);
   ASSERT_EQ((std::pair{3, 6}), cit[2]);
 }
-// reverse_iterator -------------
+// iterator adaptor test utilities -------------
 
-namespace reverse_iterator_type_tests {
+namespace iterator_test_utils {
 namespace {
 
-template <typename Iter>
-concept has_arrow = requires(const Iter i) { i.operator->(); };
-
-template <typename Iter>
-void validate_traits_against_std_type() {
-  using folly_rev = folly::reverse_iterator<Iter>;
-  using std_rev = std::reverse_iterator<Iter>;
-
-  static_assert(
-      std::same_as<
-          typename folly_rev::iterator_type,
-          typename std_rev::iterator_type>);
-  static_assert(
-      std::same_as<
-          typename folly_rev::iterator_category,
-          typename std_rev::iterator_category>);
-  static_assert(
-      std::same_as<
-          typename folly_rev::iterator_concept,
-          typename std_rev::iterator_concept>);
-  static_assert(
-      std::same_as<
-          typename folly_rev::value_type,
-          typename std_rev::value_type>);
-  static_assert(
-      std::same_as<
-          typename folly_rev::difference_type,
-          typename std_rev::difference_type>);
-  static_assert(
-      std::same_as<typename folly_rev::pointer, typename std_rev::pointer>);
-  static_assert(
-      std::same_as<typename folly_rev::reference, typename std_rev::reference>);
-  static_assert(has_arrow<folly_rev> == has_arrow<std_rev>);
-  static_assert(
-      std::sized_sentinel_for<folly_rev, folly_rev> ==
-      std::sized_sentinel_for<std_rev, std_rev>);
-  static_assert(
-      std::three_way_comparable<folly_rev> ==
-      std::three_way_comparable<std_rev>);
-  static_assert(
-      std::totally_ordered<folly_rev> == std::totally_ordered<std_rev>);
-  static_assert(
-      std::same_as<
-          std::iter_rvalue_reference_t<folly_rev>,
-          std::iter_rvalue_reference_t<std_rev>>);
-  static_assert(
-      std::bidirectional_iterator<folly_rev> ==
-      std::bidirectional_iterator<std_rev>);
-  static_assert(
-      std::random_access_iterator<folly_rev> ==
-      std::random_access_iterator<std_rev>);
-  static_assert(
-      std::contiguous_iterator<folly_rev> == std::contiguous_iterator<std_rev>);
-}
-
-struct recursive_node {
-  using reverse_iterator = folly::reverse_iterator<recursive_node*>;
+template <typename It>
+concept has_arrow = std::is_pointer_v<It> || requires(const It i) {
+  i.operator->();
 };
 
-} // namespace
-
-TEST(ReverseIterator, Types) {
+template <typename F>
+void for_each_interesting_iterator_type(F f) {
   std::vector<int> ints;
   std::list<int> ints_list;
 
@@ -1093,24 +1038,223 @@ TEST(ReverseIterator, Types) {
   auto ints_filtered =
       ints_list | std::views::filter([](int i) { return i > 0; });
 
-  validate_traits_against_std_type<int*>();
-  validate_traits_against_std_type<const int*>();
-  validate_traits_against_std_type<std::array<int, 4>::iterator>();
-  validate_traits_against_std_type<std::vector<int>::iterator>();
-  validate_traits_against_std_type<std::vector<int>::const_iterator>();
-  validate_traits_against_std_type<std::vector<bool>::iterator>();
-  validate_traits_against_std_type<std::deque<int>::iterator>();
-  validate_traits_against_std_type<std::list<int>::iterator>();
-  validate_traits_against_std_type<std::set<int>::iterator>();
-  validate_traits_against_std_type<std::map<int, int>::iterator>();
-  validate_traits_against_std_type<std::string::iterator>();
-  validate_traits_against_std_type<std::string_view::iterator>();
-  validate_traits_against_std_type<std::span<int>::iterator>();
-  validate_traits_against_std_type<std::reverse_iterator<int*>>();
-  validate_traits_against_std_type<folly::index_iterator<std::vector<int>>>();
-  validate_traits_against_std_type<decltype(ints_iota.begin())>();
-  validate_traits_against_std_type<decltype(ints_transformed.begin())>();
-  validate_traits_against_std_type<decltype(ints_filtered.begin())>();
+  f(folly::tag<int*>);
+  f(folly::tag<const int*>);
+  f(folly::tag<std::array<int, 4>::iterator>);
+  f(folly::tag<std::vector<int>::iterator>);
+  f(folly::tag<std::vector<int>::const_iterator>);
+  f(folly::tag<std::vector<bool>::iterator>);
+  f(folly::tag<std::deque<int>::iterator>);
+  f(folly::tag<std::list<int>::iterator>);
+  f(folly::tag<std::set<int>::iterator>);
+  f(folly::tag<std::map<int, int>::iterator>);
+  f(folly::tag<std::string::iterator>);
+  f(folly::tag<std::string_view::iterator>);
+  f(folly::tag<std::span<int>::iterator>);
+  f(folly::tag<std::reverse_iterator<int*>>);
+  f(folly::tag<folly::reverse_iterator<int*>>);
+  f(folly::tag<folly::index_iterator<std::vector<int>>>);
+  f(folly::tag<decltype(ints_iota.begin())>);
+  f(folly::tag<decltype(ints_transformed.begin())>);
+  f(folly::tag<decltype(ints_filtered.begin())>);
+}
+
+template <typename It, typename Reference>
+constexpr void check_traits_match() {
+  static_assert(
+      std::same_as<
+          folly::iterator_concept_t<It>,
+          folly::iterator_concept_t<Reference>>);
+  static_assert(
+      std::same_as<
+          folly::iterator_category_t<It>,
+          folly::iterator_category_t<Reference>>);
+  static_assert(
+      std::same_as<std::iter_value_t<It>, std::iter_value_t<Reference>>);
+  static_assert(
+      std::same_as<
+          std::iter_difference_t<It>,
+          std::iter_difference_t<Reference>>);
+  static_assert(
+      std::same_as<
+          typename std::iterator_traits<It>::pointer,
+          typename std::iterator_traits<Reference>::pointer>);
+  static_assert(
+      std::
+          same_as<std::iter_reference_t<It>, std::iter_reference_t<Reference>>);
+  static_assert(
+      std::same_as<
+          std::iter_rvalue_reference_t<It>,
+          std::iter_rvalue_reference_t<Reference>>);
+  static_assert(has_arrow<It> == has_arrow<Reference>);
+  static_assert(
+      std::sized_sentinel_for<It, It> ==
+      std::sized_sentinel_for<Reference, Reference>);
+  static_assert(
+      std::three_way_comparable<It> == std::three_way_comparable<Reference>);
+  static_assert(std::totally_ordered<It> == std::totally_ordered<Reference>);
+  static_assert(std::forward_iterator<It> == std::forward_iterator<Reference>);
+  static_assert(
+      std::bidirectional_iterator<It> ==
+      std::bidirectional_iterator<Reference>);
+  static_assert(
+      std::random_access_iterator<It> ==
+      std::random_access_iterator<Reference>);
+  static_assert(
+      std::contiguous_iterator<It> == std::contiguous_iterator<Reference>);
+}
+
+template <typename A, typename B>
+constexpr bool same_referent(A&& a, B&& b) {
+  if constexpr (
+      std::is_lvalue_reference_v<A> && std::is_lvalue_reference_v<B>) {
+    return std::addressof(a) == std::addressof(b);
+  } else {
+    return a == b;
+  }
+}
+
+// NOLINTBEGIN(performance-unnecessary-value-param)
+
+// *, -> and std::to_address of it, and it[k] for random access
+template <typename It, typename Ref>
+constexpr bool same_access(It it, Ref ref, Ref ref_last) {
+  if (!same_referent(*it, *ref)) {
+    return false;
+  }
+  if constexpr (
+      has_arrow<Ref> &&
+      std::is_lvalue_reference_v<std::iter_reference_t<Ref>>) {
+    if (it.operator->() != std::addressof(*ref)) {
+      return false;
+    }
+  }
+  if constexpr (std::contiguous_iterator<Ref>) {
+    if (std::to_address(it) != std::to_address(ref)) {
+      return false;
+    }
+  }
+  if constexpr (std::random_access_iterator<Ref>) {
+    for (std::iter_difference_t<Ref> k = 0; k != ref_last - ref; ++k) {
+      if (!same_referent(it[k], ref[k])) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// ++, it++, --, it--, then + n, n +, += n, - n, -= n, where n is the size
+template <typename It, typename Ref>
+constexpr bool same_arithmetic(It first, Ref ref_first, Ref ref_last) {
+  const auto same = [&](It it, Ref ref) {
+    return std::ranges::distance(first, it) ==
+        std::ranges::distance(ref_first, ref) &&
+        (ref == ref_last || *it == *ref);
+  };
+
+  It it = first;
+  Ref ref = ref_first;
+
+  // each step checks what the operator returned and where it left `it`
+  if (!same(++it, ++ref) || !same(it, ref)) {
+    return false;
+  }
+  if (!same(it++, ref++) || !same(it, ref)) {
+    return false;
+  }
+  if constexpr (std::bidirectional_iterator<Ref>) {
+    if (!same(--it, --ref) || !same(it, ref)) {
+      return false;
+    }
+    if (!same(it--, ref--) || !same(it, ref)) {
+      return false;
+    }
+  }
+  if constexpr (std::random_access_iterator<Ref>) {
+    const auto n = ref_last - ref_first;
+    if (!same(it + n, ref + n) || !same(it, ref)) {
+      return false;
+    }
+    if (!same(n + it, n + ref) || !same(it, ref)) {
+      return false;
+    }
+    if (!same(it += n, ref += n) || !same(it, ref)) {
+      return false;
+    }
+    if (!same(it - n, ref - n) || !same(it, ref)) {
+      return false;
+    }
+    if (!same(it -= n, ref -= n) || !same(it, ref)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// last - first, and between It and It2 (e.g. const): last - first2 and back
+template <typename It, typename It2, typename Ref>
+constexpr bool same_differences(
+    It first, It last, It2 first2, Ref ref_first, Ref ref_last) {
+  return last - first == ref_last - ref_first &&
+      first - last == ref_first - ref_last &&
+      last - first2 == ref_last - ref_first &&
+      first2 - last == ref_first - ref_last;
+}
+
+// every comparison between lo and hi, which may be different types
+template <typename It, typename It2, typename Ref>
+constexpr bool same_comparisons(It lo, It2 hi, Ref ref_lo, Ref ref_hi) {
+  if ((lo == lo) != (ref_lo == ref_lo) || (lo == hi) != (ref_lo == ref_hi) ||
+      (lo != hi) != (ref_lo != ref_hi)) {
+    return false;
+  }
+  if constexpr (std::totally_ordered<Ref>) {
+    if ((lo < hi) != (ref_lo < ref_hi) || (hi < lo) != (ref_hi < ref_lo) ||
+        (hi > lo) != (ref_hi > ref_lo) || (lo > hi) != (ref_lo > ref_hi) ||
+        (lo <= hi) != (ref_lo <= ref_hi) || (hi <= lo) != (ref_hi <= ref_lo) ||
+        (hi >= lo) != (ref_hi >= ref_lo) || (lo >= hi) != (ref_lo >= ref_hi)) {
+      return false;
+    }
+  }
+  if constexpr (std::three_way_comparable<Ref>) {
+    if ((lo <=> hi) != (ref_lo <=> ref_hi) ||
+        (hi <=> lo) != (ref_hi <=> ref_lo) ||
+        (lo <=> lo) != (ref_lo <=> ref_lo)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// NOLINTEND(performance-unnecessary-value-param)
+
+} // namespace
+} // namespace iterator_test_utils
+
+// reverse_iterator -------------
+
+namespace reverse_iterator_type_tests {
+namespace {
+
+using namespace iterator_test_utils;
+
+struct recursive_node {
+  using reverse_iterator = folly::reverse_iterator<recursive_node*>;
+};
+
+} // namespace
+
+TEST(ReverseIterator, Types) {
+  for_each_interesting_iterator_type([]<typename Iter>(folly::tag_t<Iter>) {
+    check_traits_match<
+        folly::reverse_iterator<Iter>,
+        std::reverse_iterator<Iter>>();
+    static_assert(
+        std::same_as<
+            typename folly::reverse_iterator<Iter>::iterator_type,
+            Iter>);
+  });
 }
 
 TEST(ReverseIterator, ConstructionAndAssignment) {
@@ -1180,39 +1324,14 @@ TEST(ReverseIterator, ConstructionAndAssignment) {
 
 TEST(ReverseIterator, Access) {
   constexpr auto checks = [] {
+    using rev = folly::reverse_iterator<int*>;
+    using std_rev = std::reverse_iterator<int*>;
+
     int ints[] = {1, 2, 3};
-    const folly::reverse_iterator<int*> it{std::end(ints)};
-
-    static_assert(std::same_as<decltype(*it), int&>);
-    static_assert(std::same_as<decltype(it[0]), int&>);
-
-    if (&*it != &ints[2]) {
-      return false;
-    }
-    if (std::to_address(it) != &ints[2]) {
-      return false;
-    }
-    if (*it != ints[2]) {
-      return false;
-    }
-    if (&it[0] != &ints[2]) {
-      return false;
-    }
-    if (&it[2] != &ints[0]) {
-      return false;
-    }
-
-    *it = 7;
-    if (ints[2] != 7) {
-      return false;
-    }
-
-    it[2] = 8;
-    if (ints[0] != 8) {
-      return false;
-    }
-
-    return true;
+    return same_access(
+        rev{std::end(ints)},
+        std_rev{std::end(ints)},
+        std_rev{std::begin(ints)});
   };
   static_assert(checks());
   EXPECT_TRUE(checks());
@@ -1221,109 +1340,52 @@ TEST(ReverseIterator, Access) {
     std::list<std::string> strs = {"a", "bc"};
     const folly::reverse_iterator<std::list<std::string>::iterator> it{
         strs.end()};
-
-    static_assert(std::same_as<decltype(*it), std::string&>);
-    EXPECT_EQ(&strs.back(), std::to_address(it));
-    EXPECT_EQ(&strs.back(), it.operator->());
-    EXPECT_EQ(2u, it->size());
-
-    it->push_back('z');
-    EXPECT_EQ("bcz", strs.back());
+    EXPECT_TRUE(same_access(it, strs.rbegin(), strs.rend()));
   }
 
   {
     std::vector<bool> bits = {false, true};
     const folly::reverse_iterator<std::vector<bool>::iterator> it{bits.end()};
-
-    static_assert(std::same_as<decltype(*it), std::vector<bool>::reference>);
-    static_assert(std::same_as<decltype(it[0]), std::vector<bool>::reference>);
-    EXPECT_EQ(bits[1], *it);
-    EXPECT_EQ(bits[0], it[1]);
-
-    *it = false;
-    EXPECT_FALSE(bits[1]);
-
-    it[1] = true;
-    EXPECT_TRUE(bits[0]);
+    EXPECT_TRUE(same_access(it, bits.rbegin(), bits.rend()));
   }
 }
 
 TEST(ReverseIterator, Arithmetic) {
   constexpr auto checks = [] {
     using rev = folly::reverse_iterator<int*>;
+    using crev = folly::reverse_iterator<const int*>;
+    using std_rev = std::reverse_iterator<int*>;
 
     int ints[] = {1, 2, 3};
-    int* const first = std::begin(ints);
-    int* const last = std::end(ints);
-
-    rev it{last};
-
-    // each step checks what the operator returned and where it left `it`
-    if ((++it).base() != last - 1 || it.base() != last - 1) {
-      return false;
-    }
-    if ((it++).base() != last - 1 || it.base() != last - 2) {
-      return false;
-    }
-    if ((--it).base() != last - 1 || it.base() != last - 1) {
-      return false;
-    }
-    if ((it--).base() != last - 1 || it.base() != last) {
-      return false;
-    }
-
-    if ((it + 3).base() != first || it.base() != last) {
-      return false;
-    }
-    if ((3 + it).base() != first || it.base() != last) {
-      return false;
-    }
-    if ((it += 3).base() != first || it.base() != first) {
-      return false;
-    }
-    if ((it - 3).base() != last || it.base() != first) {
-      return false;
-    }
-    if ((it -= 3).base() != last || it.base() != last) {
-      return false;
-    }
-
-    if (rev{first} - rev{last} != 3) {
-      return false;
-    }
-
-    const folly::reverse_iterator<const int*> const_rbegin{last};
-    if (rev{first} - const_rbegin != 3) {
-      return false;
-    }
-    if (const_rbegin - rev{first} != -3) {
-      return false;
-    }
+    const rev rbegin{std::end(ints)};
+    const rev rend{std::begin(ints)};
+    const std_rev ref_rbegin{std::end(ints)};
+    const std_rev ref_rend{std::begin(ints)};
 
     auto ints_iota = std::views::iota(0, 3);
-    folly::reverse_iterator<decltype(ints_iota.begin())> iota_it{
-        ints_iota.end()};
-    if (*iota_it != 2 || *++iota_it != 1 || iota_it[1] != 0) {
-      return false;
-    }
+    using iota_it = decltype(ints_iota.begin());
 
-    return true;
+    return same_arithmetic(rbegin, ref_rbegin, ref_rend) &&
+        same_differences(rbegin, rend, crev{rbegin}, ref_rbegin, ref_rend) &&
+        same_arithmetic(
+               folly::reverse_iterator<iota_it>{ints_iota.end()},
+               std::reverse_iterator<iota_it>{ints_iota.end()},
+               std::reverse_iterator<iota_it>{ints_iota.begin()});
   };
   static_assert(checks());
   EXPECT_TRUE(checks());
 
   {
+    using rev = folly::reverse_iterator<std::vector<int>::iterator>;
+    using crev = folly::reverse_iterator<std::vector<int>::const_iterator>;
+
     std::vector<int> vec = {1, 2, 3};
-    const folly::reverse_iterator<std::vector<int>::iterator> vec_rend{
-        vec.begin()};
-    const folly::reverse_iterator<std::vector<int>::const_iterator> vec_rbegin{
-        vec.cend()};
-
-    EXPECT_EQ(3, vec_rend - vec_rbegin);
-
-    using rev_list = folly::reverse_iterator<std::list<int>::iterator>;
-    static_assert(std::sentinel_for<rev_list, rev_list>);
-    static_assert(!std::sized_sentinel_for<rev_list, rev_list>);
+    EXPECT_TRUE(same_differences(
+        rev{vec.end()},
+        rev{vec.begin()},
+        crev{vec.cend()},
+        vec.rbegin(),
+        vec.rend()));
   }
 }
 
@@ -1333,29 +1395,21 @@ TEST(ReverseIterator, Comparisons) {
 
   static_assert(std::totally_ordered_with<rev, crev>);
 
-  static constexpr auto validate = [](const auto& lo, const auto& hi) {
-    return lo == lo && !(lo == hi) && lo != hi && //
-        lo < hi && !(hi < lo) && hi > lo && !(lo > hi) && //
-        lo <= hi && !(hi <= lo) && hi >= lo && !(lo >= hi) && //
-        (lo <=> hi) == std::strong_ordering::less &&
-        (hi <=> lo) == std::strong_ordering::greater &&
-        (lo <=> lo) == std::strong_ordering::equal;
-  };
-
-  // reverse iteration runs rbegin -> rend, so rbegin has to order first even
-  // though its base is the larger pointer
   static constexpr int ints[] = {1, 2, 3};
-  constexpr crev rbegin{std::end(ints)};
-  constexpr crev rend{std::begin(ints)};
-
-  static_assert(rbegin < rend);
-  static_assert(validate(rbegin, rend));
-  EXPECT_TRUE(validate(rbegin, rend));
+  static_assert(same_comparisons(
+      crev{std::end(ints)},
+      crev{std::begin(ints)},
+      std::reverse_iterator{std::end(ints)},
+      std::reverse_iterator{std::begin(ints)}));
 
   // mismatched types need a mutable array, so they need their own scope
   constexpr auto mixed = [] {
     int mut[] = {1, 2, 3};
-    return validate(rev{std::end(mut)}, crev{std::begin(mut)});
+    return same_comparisons(
+        rev{std::end(mut)},
+        crev{std::begin(mut)},
+        std::reverse_iterator{std::end(mut)},
+        std::reverse_iterator{std::begin(mut)});
   };
   static_assert(mixed());
   EXPECT_TRUE(mixed());
