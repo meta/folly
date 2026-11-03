@@ -589,7 +589,7 @@ constexpr bool decodingErrorDetectionTest(Decoder decoder) {
   };
 
   for (const auto& test : kDecodingErrorDetection) {
-    if (!folly::is_constant_evaluated_or(true)) {
+    if (!std::is_constant_evaluated()) {
       triggerASANOnBadDecode<decoderType>(test.input, decoder);
     }
     auto r = decoder(
@@ -606,7 +606,7 @@ constexpr bool decodingErrorDetectionTest(Decoder decoder) {
   }
 
   for (std::string_view URLOnly : kDecodingOnlyURLValid) {
-    if (!folly::is_constant_evaluated_or(true)) {
+    if (!std::is_constant_evaluated()) {
       triggerASANOnBadDecode<decoderType>(URLOnly, decoder);
     }
     auto r =
@@ -625,7 +625,7 @@ constexpr bool decodingErrorDetectionTest(Decoder decoder) {
   }
 
   for (std::string_view PHPStrictOnly : kDecodingOnlyStrictPHPValid) {
-    if (!folly::is_constant_evaluated_or(true)) {
+    if (!std::is_constant_evaluated()) {
       triggerASANOnBadDecode<decoderType>(PHPStrictOnly, decoder);
     }
     auto r = decoder(

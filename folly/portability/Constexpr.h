@@ -112,27 +112,4 @@ constexpr int constexpr_strcmp(const Char* s1, const Char* s2) noexcept {
   return detail::constexpr_strcmp_internal(s1, s2, 0);
 }
 
-namespace detail {
-
-template <typename V>
-struct is_constant_evaluated_or_constinit_ {
-  V value;
-  FOLLY_ERASE consteval /* implicit */
-      is_constant_evaluated_or_constinit_(V const v) noexcept(noexcept(V(v)))
-      : value{v} {}
-};
-
-} // namespace detail
-
-//  is_constant_evaluated_or
-//
-//  Similar in spirit to std::is_constant_evaluated (c++20), with differences:
-//  * Takes an argument to be used as the default return value, if the code is
-//    unable to tell whether it is in a constant context.
-constexpr bool is_constant_evaluated_or(
-    detail::is_constant_evaluated_or_constinit_<bool> const def) noexcept {
-  (void)def; // silence unused variable warning
-  return std::is_constant_evaluated();
-}
-
 } // namespace folly

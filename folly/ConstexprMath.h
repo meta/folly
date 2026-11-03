@@ -768,7 +768,7 @@ constexpr T constexpr_add_overflow_clamped(T a, T b) {
   static_assert(
       !std::is_integral<T>::value || sizeof(T) <= sizeof(M),
       "Integral type too large!");
-  if (!folly::is_constant_evaluated_or(true)) {
+  if (!std::is_constant_evaluated()) {
     if constexpr (std::is_integral_v<T>) {
       T ret{};
       if (FOLLY_UNLIKELY(!checked_add(&ret, a, b))) {

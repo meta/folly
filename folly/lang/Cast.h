@@ -89,7 +89,7 @@ struct span_cast_impl_fn {
         static_cast<void const*>(castData));
 
     // check alignment
-    if (!folly::is_constant_evaluated_or(true)) {
+    if (!std::is_constant_evaluated()) {
       assert(reinterpret_cast<std::uintptr_t>(in.data()) % sizeof(U) == 0);
     }
 

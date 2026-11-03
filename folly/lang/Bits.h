@@ -212,7 +212,7 @@ struct n_least_significant_bits_fn {
   static_assert(detail::supported_in_bits_operations_v<T>);
 
   [[nodiscard]] constexpr T operator()(std::uint32_t n) const {
-    if (!folly::is_constant_evaluated_or(true)) {
+    if (!std::is_constant_evaluated()) {
       compiler_may_unsafely_assume(n <= sizeof(T) * 8);
 
 #ifdef __BMI2__
@@ -243,7 +243,7 @@ struct n_most_significant_bits_fn {
   static_assert(detail::supported_in_bits_operations_v<T>);
 
   [[nodiscard]] constexpr T operator()(std::uint32_t n) const {
-    if (!folly::is_constant_evaluated_or(true)) {
+    if (!std::is_constant_evaluated()) {
       compiler_may_unsafely_assume(n <= sizeof(T) * 8);
 
 #ifdef __BMI2__
@@ -311,7 +311,7 @@ struct clear_n_most_significant_bits_fn {
   [[nodiscard]] constexpr T operator()(T x, std::uint32_t n) const {
     static_assert(detail::supported_in_bits_operations_v<T>);
 
-    if (!folly::is_constant_evaluated_or(true)) {
+    if (!std::is_constant_evaluated()) {
       compiler_may_unsafely_assume(n <= sizeof(T) * 8);
 
 #ifdef __BMI2__
@@ -570,7 +570,7 @@ constexpr T constexprLoadUnaligned(const S* s) {
   static_assert(!std::is_same_v<S, bool>);
   static_assert(sizeof(S) == 1);
 
-  return is_constant_evaluated_or(false)
+  return std::is_constant_evaluated()
       ? detail::constexprLoadUnalignedImpl<T>(s)
       : loadUnaligned<T>(s);
 }
@@ -606,7 +606,7 @@ constexpr T constexprPartialLoadUnaligned(const S* s, std::size_t l) {
     assume_unreachable();
   }
 
-  return is_constant_evaluated_or(false)
+  return std::is_constant_evaluated()
       ? detail::constexprPartialLoadUnalignedImpl<T>(s, l)
       : partialLoadUnaligned<T>(s, l);
 }
