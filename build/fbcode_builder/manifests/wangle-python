@@ -1,6 +1,6 @@
 [manifest]
 name = wangle-python
-fbsource_path = fbcode/wangle
+fbsource_path = xplat/wangle
 shipit_project = wangle
 shipit_fbcode_builder = true
 
@@ -30,5 +30,5 @@ googletest
 fizz-python
 
 [shipit.pathmap]
-fbcode/wangle/public_tld = .
-fbcode/wangle = wangle
+xplat/wangle/public_tld = .
+xplat/wangle = wangle
