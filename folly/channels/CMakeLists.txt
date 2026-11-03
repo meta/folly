@@ -65,7 +65,6 @@ folly_add_library(
     folly_coro_task
     folly_executor
     folly_executors_sequenced_executor
-    folly_format
     folly_intrusive_list
     folly_scope_guard
 )

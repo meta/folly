@@ -19,7 +19,6 @@
 #include <concepts>
 #include <fmt/format.h>
 #include <folly/Executor.h>
-#include <folly/Format.h>
 #include <folly/IntrusiveList.h>
 #include <folly/ScopeGuard.h>
 #include <folly/channels/Channel.h>

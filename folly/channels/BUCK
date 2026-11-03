@@ -58,7 +58,6 @@ fb_dirsync_cpp_library(
         ":channel",
         ":channel_callback_handle",
         "//folly:executor",
-        "//folly:format",
         "//folly:intrusive_list",
         "//folly:scope_guard",
         "//folly/channels/detail:utility",
