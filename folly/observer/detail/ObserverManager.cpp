@@ -20,7 +20,6 @@
 #include <future>
 
 #include <folly/ExceptionString.h>
-#include <folly/Format.h>
 #include <folly/Range.h>
 #include <folly/Singleton.h>
 #include <folly/concurrency/UnboundedQueue.h>

@@ -32,7 +32,6 @@ folly_add_library(
     fmt::fmt
     folly_concurrency_unbounded_queue
     folly_exception_string
-    folly_format
     folly_portability_gflags
     folly_range
     folly_singleton

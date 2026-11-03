@@ -17,7 +17,6 @@ fb_dirsync_cpp_library(
     deps = [
         "fbsource//third-party/fmt:fmt",
         "//folly:exception_string",
-        "//folly:format",
         "//folly:range",
         "//folly:singleton",
         "//folly/concurrency:unbounded_queue",
