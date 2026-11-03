@@ -927,7 +927,6 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/glog:glog",
         "//folly:math",
         "//folly:portability",
-        "//folly/functional:invoke",
         "//folly/portability:gtest",
     ],
 )
