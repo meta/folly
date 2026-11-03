@@ -22,7 +22,7 @@ flags.
   - `switch-default`: error
   - `covered-switch-default`: ignored
 
-User code can explicitely opt-in to exhaustive switch behavior with
+User code can explicitly opt-in to exhaustive switch behavior with
 `FOLLY_EXHAUSTIVE_SWITCH()`.
 
 **Non-exhaustive**:
@@ -30,7 +30,7 @@ User code can explicitely opt-in to exhaustive switch behavior with
   - `switch-default`: error
   - `covered-switch-default`: error
 
-User code can explicitely opt-in to non-exhaustive switch behavior with
+User code can explicitly opt-in to non-exhaustive switch behavior with
 `FOLLY_NON_EXHAUSTIVE_SWITCH()`.
 
 Examples:
@@ -263,10 +263,10 @@ For the exhaustive `switch` use case, we want to enable `switch-enum` and
 you can use the `FOLLY_EXHAUSTIVE_SWITCH()` macro.
 
 NOTE: having the `switch` diagnostics configured for exhaustive switches OUGHT
-to be the default for all C++ codebases. However, due to the copious usage
+to be the default for all C++ codebases. However, due to the copious usage of
 `switch` statements in our codebase without these improved diagnostics, it will
 take time to get there. In the meantime, we can use the
-`FOLLY_EXHAUSTIVE_SWITCH()` macro to explicitely opt-in to the exhaustive switch
+`FOLLY_EXHAUSTIVE_SWITCH()` macro to explicitly opt-in to the exhaustive switch
 behavior.
 
 ## Non-exhaustive switches
