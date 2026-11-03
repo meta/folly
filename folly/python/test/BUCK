@@ -290,9 +290,6 @@ fb_dirsync_cpp_library(
 fb_dirsync_rule(
     name = "request_context",
     srcs = ["request_context.py"],
-    compatible_with = [
-        "ovr_config//os:linux",
-    ],
     fbcode_rule = python_unittest,
     deps = [
         ":request_context_helper",
