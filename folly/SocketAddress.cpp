@@ -20,8 +20,10 @@
 
 #include <folly/SocketAddress.h>
 
+#include <bit>
 #include <cassert>
 #include <cerrno>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <sstream>
@@ -29,8 +31,6 @@
 #include <system_error>
 #include <type_traits>
 #include <utility>
-
-#include <boost/functional/hash.hpp>
 
 #include <fmt/core.h>
 
@@ -40,6 +40,41 @@
 #include <folly/net/NetworkSocket.h>
 
 namespace {
+
+/**
+ * Mixes an unsigned integer into seed exactly as boost::hash_combine does in
+ * Boost 1.77 (a MurmurHash2 or MurmurHash3 step), since callers may rely on
+ * the values of SocketAddress::hash().
+ */
+template <typename T>
+void hashCombine(size_t& seed, T value) {
+  static_assert(std::is_unsigned_v<T>);
+  size_t k = static_cast<size_t>(value);
+  if constexpr (sizeof(T) > sizeof(size_t)) {
+    k = 0;
+    for (auto shift = sizeof(T) * 8 - sizeof(size_t) * 8; shift > 0;
+         shift -= sizeof(size_t) * 8) {
+      k ^= static_cast<size_t>(value >> shift) + (k << 6) + (k >> 2);
+    }
+    k ^= static_cast<size_t>(value) + (k << 6) + (k >> 2);
+  }
+  if constexpr (sizeof(size_t) == 8) {
+    constexpr uint64_t m = 0xc6a4a7935bd1e995;
+    k *= m;
+    k ^= k >> 47;
+    k *= m;
+    seed ^= k;
+    seed *= m;
+    seed += 0xe6546b64;
+  } else {
+    k *= 0xcc9e2d51;
+    k = std::rotl(k, 15);
+    k *= 0x1b873593;
+    seed ^= k;
+    seed = std::rotl(seed, 13);
+    seed = seed * 5 + 0xe6546b64;
+  }
+}
 
 /**
  * A structure to free a struct addrinfo when it goes out of scope.
@@ -691,21 +726,21 @@ size_t SocketAddress::hash() const {
     auto pathLength = unixAddr.pathLength();
     // TODO: this probably could be made more efficient
     for (off_t n = 0; n < pathLength; ++n) {
-      boost::hash_combine(seed, folly::hash::twang_mix64(uint64_t(path[n])));
+      hashCombine(seed, folly::hash::twang_mix64(uint64_t(path[n])));
     }
   }
 
   switch ((int)getFamily()) {
     case AF_INET:
     case AF_INET6: {
-      boost::hash_combine(seed, std::get<IPAddr>(storage_).port);
-      boost::hash_combine(seed, std::get<IPAddr>(storage_).ip.hash());
+      hashCombine(seed, std::get<IPAddr>(storage_).port);
+      hashCombine(seed, std::get<IPAddr>(storage_).ip.hash());
       break;
     }
 #if FOLLY_HAVE_VSOCK
     case AF_VSOCK: {
-      boost::hash_combine(seed, std::get<VsockAddr>(storage_).port);
-      boost::hash_combine(seed, std::get<VsockAddr>(storage_).cid);
+      hashCombine(seed, std::get<VsockAddr>(storage_).port);
+      hashCombine(seed, std::get<VsockAddr>(storage_).cid);
       break;
     }
 #endif
@@ -713,7 +748,7 @@ size_t SocketAddress::hash() const {
       // Already handled above
       break;
     case AF_UNSPEC:
-      boost::hash_combine(seed, std::get<IPAddr>(storage_).ip.hash());
+      hashCombine(seed, std::get<IPAddr>(storage_).ip.hash());
       break;
     default:
       throw_exception<std::invalid_argument>(

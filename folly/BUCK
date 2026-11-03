@@ -346,7 +346,6 @@ fb_dirsync_cpp_library(
     platforms = (CXX, ANDROID, APPLE),
     use_raw_headers = True,
     deps = [
-        "fbsource//third-party/boost:boost_range",
         "fbsource//third-party/glibc:dl",
         ":conv",
         ":scope_guard",
@@ -366,8 +365,6 @@ fb_dirsync_cpp_library(
         "//folly/system:shell",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
-        "fbsource//third-party/boost:boost_container",  # @manual
         ":exception",
         ":file",
         ":file_util",
@@ -376,6 +373,7 @@ fb_dirsync_cpp_library(
         ":optional",
         ":portability",
         ":range",
+        "//folly/container:sorted_vector_types",
         "//folly/gen:string",
         "//folly/io:iobuf",
         "//folly/portability:sys_resource",
@@ -1179,7 +1177,6 @@ fb_dirsync_cpp_library(
     ],
     xplat_impl = folly_xplat_library,
     deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         "fbsource//third-party/fmt:fmt",
         ":exception",
         ":format",
@@ -2326,7 +2323,6 @@ fb_dirsync_cpp_library(
         "//folly/memory:allocator",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost_random",  # @manual
         "fbsource//third-party/glog:glog",
         ":constexpr_math",
         ":likely",

@@ -49,7 +49,6 @@ folly_add_library(
     folly_portability_windows
     folly_string
   EXPORTED_DEPS
-    Boost::headers
     folly_io_fs_util
     folly_portability_unistd
     folly_range

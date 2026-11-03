@@ -146,7 +146,6 @@ fb_dirsync_cpp_library(
     headers = ["AsyncSocket.h"],
     use_raw_headers = True,
     deps = [
-        "fbsource//third-party/boost:boost_preprocessor",  # @manual
         "fbsource//third-party/fmt:fmt",
         ":io_uring_backend",
         "//folly:exception",
@@ -345,7 +344,6 @@ fb_dirsync_cpp_library(
     headers = ["AsyncUDPSocket.h"],
     use_raw_headers = True,
     deps = [
-        "fbsource//third-party/boost:boost_preprocessor",  # @manual
         "//folly:likely",
         "//folly:small_vector",
         "//folly:utility",

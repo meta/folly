@@ -22,8 +22,6 @@
 #include <cerrno>
 #include <sstream>
 
-#include <boost/preprocessor/control/if.hpp>
-
 #include <folly/Exception.h>
 #include <folly/Overload.h>
 #include <folly/Portability.h>
@@ -161,9 +159,9 @@ bool checkIoUringBackend(folly::EventBase*) {
 } // namespace
 
 #if FOLLY_HAVE_VLA
-#define FOLLY_HAVE_VLA_01 1
+#define FOLLY_DETAIL_VLA_SIZE(size, maxSize) size
 #else
-#define FOLLY_HAVE_VLA_01 0
+#define FOLLY_DETAIL_VLA_SIZE(size, maxSize) maxSize
 #endif
 
 using std::string;
@@ -2068,7 +2066,7 @@ void AsyncSocket::writeChain(
     // suppress "warning: variable length array 'vec' is used [-Wvla]"
     FOLLY_PUSH_WARNING
     FOLLY_GNU_DISABLE_WARNING("-Wvla")
-    iovec vec[BOOST_PP_IF(FOLLY_HAVE_VLA_01, count, kSmallIoVecSize)];
+    iovec vec[FOLLY_DETAIL_VLA_SIZE(count, kSmallIoVecSize)];
     FOLLY_POP_WARNING
 
     writeChainImpl(callback, vec, count, std::move(buf), flags);
@@ -4194,7 +4192,7 @@ AsyncSocket::WriteResult AsyncSocket::sendSocketMessage(
     // suppress "warning: variable length array 'vec' is used [-Wvla]"
     FOLLY_PUSH_WARNING
     FOLLY_GNU_DISABLE_WARNING("-Wvla")
-    iovec tmpVec[BOOST_PP_IF(FOLLY_HAVE_VLA_01, count, kSmallIoVecSize)];
+    iovec tmpVec[FOLLY_DETAIL_VLA_SIZE(count, kSmallIoVecSize)];
     FOLLY_POP_WARNING
 
     size_t tmpVecCount = count;

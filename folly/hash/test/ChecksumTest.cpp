@@ -152,6 +152,24 @@ TEST(Checksum, crc32cHardwareEq) {
   }
 }
 
+// crc32c_hw dispatches on the number of 24-byte triplets in the first block
+// (1 to 128) and on the number of trailing 8-byte words (0 to 27), each
+// through a switch with one case per count. Cover every case at every
+// alignment.
+TEST(Checksum, crc32cHardwareEqAllResidues) {
+  if (!folly::detail::crc32c_hw_supported()) {
+    return;
+  }
+  constexpr size_t kMaxLength = 216 + 24 * 128 + 8 * 28 + 8;
+  for (size_t offset = 0; offset < 8; ++offset) {
+    for (size_t len = 0; len <= kMaxLength; ++len) {
+      auto sw = folly::detail::crc32c_sw(buffer + offset, len, 0);
+      auto hw = folly::detail::crc32c_hw(buffer + offset, len, 0);
+      ASSERT_EQ(sw, hw) << "offset " << offset << ", length " << len;
+    }
+  }
+}
+
 TEST(Checksum, crc32cContinuationHardware) {
   if (folly::detail::crc32c_hw_supported()) {
     testCRC32CContinuation(folly::detail::crc32c_hw);

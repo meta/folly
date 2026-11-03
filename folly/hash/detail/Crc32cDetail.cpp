@@ -31,10 +31,6 @@
 
 #include <stdexcept>
 
-#include <boost/preprocessor/arithmetic/add.hpp>
-#include <boost/preprocessor/arithmetic/sub.hpp>
-#include <boost/preprocessor/repetition/repeat_from_to.hpp>
-
 #include <folly/CppAttributes.h>
 #include <folly/hash/detail/ChecksumDetail.h>
 
@@ -60,13 +56,35 @@ namespace crc32_detail {
   crc = _mm_crc32_u64(crc, *(uint64_t*)(buf + offset)); \
   [[fallthrough]]
 
-#define CASEREPEAT_TRIPLET(unused, count, total)    \
-  case BOOST_PP_ADD(1, BOOST_PP_SUB(total, count)): \
-    CRCtriplet(crc, next, -BOOST_PP_ADD(1, BOOST_PP_SUB(total, count)));
+#define CASE_TRIPLET(n) \
+  case (n):             \
+    CRCtriplet(crc, next, -(n));
 
-#define CASEREPEAT_SINGLET(unused, count, total) \
-  case BOOST_PP_SUB(total, count):               \
-    CRCsinglet(crc0, next, -BOOST_PP_SUB(total, count) * 8);
+// Generates the cases n down to n - 7.
+#define CASE_TRIPLET_8(n) \
+  CASE_TRIPLET(n)         \
+  CASE_TRIPLET((n) - 1)   \
+  CASE_TRIPLET((n) - 2)   \
+  CASE_TRIPLET((n) - 3)   \
+  CASE_TRIPLET((n) - 4)   \
+  CASE_TRIPLET((n) - 5)   \
+  CASE_TRIPLET((n) - 6)   \
+  CASE_TRIPLET((n) - 7)
+
+#define CASE_SINGLET(n) \
+  case (n):             \
+    CRCsinglet(crc0, next, -(n) * 8);
+
+// Generates the cases n down to n - 7.
+#define CASE_SINGLET_8(n) \
+  CASE_SINGLET(n)         \
+  CASE_SINGLET((n) - 1)   \
+  CASE_SINGLET((n) - 2)   \
+  CASE_SINGLET((n) - 3)   \
+  CASE_SINGLET((n) - 4)   \
+  CASE_SINGLET((n) - 5)   \
+  CASE_SINGLET((n) - 6)   \
+  CASE_SINGLET((n) - 7)
 
 // Numbers taken directly from intel whitepaper.
 // clang-format off
@@ -208,11 +226,27 @@ void triplet_loop(
         // Generates case statements from 127 to 2 of form:
         // case 127:
         //    CRCtriplet(crc, next, -127);
-        //
-        // MSVC has a max preprocessor expansion depth of 255, which is
-        // exceeded if this is a single statement.
-        BOOST_PP_REPEAT_FROM_TO(0, 64, CASEREPEAT_TRIPLET, 126);
-        BOOST_PP_REPEAT_FROM_TO(0, 62, CASEREPEAT_TRIPLET, 62);
+        CASE_TRIPLET_8(127)
+        CASE_TRIPLET_8(119)
+        CASE_TRIPLET_8(111)
+        CASE_TRIPLET_8(103)
+        CASE_TRIPLET_8(95)
+        CASE_TRIPLET_8(87)
+        CASE_TRIPLET_8(79)
+        CASE_TRIPLET_8(71)
+        CASE_TRIPLET_8(63)
+        CASE_TRIPLET_8(55)
+        CASE_TRIPLET_8(47)
+        CASE_TRIPLET_8(39)
+        CASE_TRIPLET_8(31)
+        CASE_TRIPLET_8(23)
+        CASE_TRIPLET_8(15)
+        CASE_TRIPLET(7)
+        CASE_TRIPLET(6)
+        CASE_TRIPLET(5)
+        CASE_TRIPLET(4)
+        CASE_TRIPLET(3)
+        CASE_TRIPLET(2)
 
         // For the last byte, the three crc32c streams must be combined
         // using carry-less multiplication.
@@ -273,10 +307,15 @@ uint32_t crc32c_hw(const uint8_t* buf, size_t len, uint32_t crc) {
 
     // Generates a duff device for the last 128 bytes of aligned data.
     switch (count2) {
-      // Generates case statements of the form:
+      // Generates case statements from 27 to 1 of the form:
       // case 27:
       //   CRCsinglet(crc0, next, -27 * 8);
-      BOOST_PP_REPEAT_FROM_TO(0, 27, CASEREPEAT_SINGLET, 27);
+      CASE_SINGLET_8(27)
+      CASE_SINGLET_8(19)
+      CASE_SINGLET_8(11)
+      CASE_SINGLET(3)
+      CASE_SINGLET(2)
+      CASE_SINGLET(1)
       case 0:;
     }
   }

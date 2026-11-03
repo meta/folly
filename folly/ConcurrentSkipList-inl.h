@@ -22,10 +22,10 @@
 #include <cmath>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <type_traits>
 #include <vector>
 
-#include <boost/random.hpp>
 #include <glog/logging.h>
 
 #include <folly/ConstexprMath.h>
@@ -224,8 +224,9 @@ class SkipListRandomHeight {
   }
 
   static double randomProb() {
-    static ThreadLocal<boost::lagged_fibonacci2281> rng_;
-    return (*rng_)();
+    static ThreadLocal<std::mt19937_64> rng_;
+    // The top 53 bits scaled by 2^-53 give a uniform double in [0, 1).
+    return static_cast<double>((*rng_)() >> 11) * 0x1.0p-53;
   }
 
   double lookupTable_[kMaxHeight];

@@ -148,7 +148,6 @@ fb_dirsync_cpp_library(
         "//folly/portability:windows",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         "//folly:range",
         "//folly/io:fs_util",
         "//folly/portability:unistd",

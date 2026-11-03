@@ -32,9 +32,6 @@
 #include <system_error>
 #include <thread>
 
-#include <boost/container/flat_set.hpp>
-#include <boost/range/adaptors.hpp>
-
 #include <folly/Conv.h>
 #include <folly/Exception.h>
 #include <folly/ScopeGuard.h>
@@ -1693,9 +1690,9 @@ void Subprocess::communicate(
       }
     }
 
-    // Close the fds in reverse order so the indexes hold after erase()
-    for (int idx : boost::adaptors::reverse(toClose)) {
-      auto pos = pipes_.begin() + idx;
+    // Close the fds from last to first so the indexes hold after erase()
+    for (auto it = toClose.rbegin(); it != toClose.rend(); ++it) {
+      auto pos = pipes_.begin() + *it;
       pos->pipe.close(); // Throws on error
       pipes_.erase(pos);
     }

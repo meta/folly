@@ -18,8 +18,6 @@
 
 #include <cerrno>
 
-#include <boost/preprocessor/control/if.hpp>
-
 #include <folly/Likely.h>
 #include <folly/Utility.h>
 #include <folly/io/SocketOptionMap.h>
@@ -36,9 +34,9 @@
 #endif
 
 #if FOLLY_HAVE_VLA
-#define FOLLY_HAVE_VLA_01 1
+#define FOLLY_DETAIL_VLA_SIZE(size, maxSize) size
 #else
-#define FOLLY_HAVE_VLA_01 0
+#define FOLLY_DETAIL_VLA_SIZE(size, maxSize) maxSize
 #endif
 
 // xplat UDP GSO socket options.
@@ -979,7 +977,7 @@ ssize_t AsyncUDPSocket::writevWithCmsgs(
     FOLLY_GNU_DISABLE_WARNING("-Wvla")
     // we will allocate this on the stack anyway even if we do not use it
     char control
-        [(BOOST_PP_IF(FOLLY_HAVE_VLA_01, controlBufSize, kSmallSizeMax)) *
+        [(FOLLY_DETAIL_VLA_SIZE(controlBufSize, kSmallSizeMax)) *
          (CMSG_SPACE(sizeof(uint16_t)))];
     memset(control, 0, sizeof(control));
     msg.setCmsgPtr(control);
@@ -1062,11 +1060,11 @@ int AsyncUDPSocket::writemGSO(
     // suppress "warning: variable length array 'vec' is used [-Wvla]"
     FOLLY_PUSH_WARNING
     FOLLY_GNU_DISABLE_WARNING("-Wvla")
-    mmsghdr vec[BOOST_PP_IF(FOLLY_HAVE_VLA_01, count, kSmallSizeMax)];
+    mmsghdr vec[FOLLY_DETAIL_VLA_SIZE(count, kSmallSizeMax)];
 #ifdef FOLLY_HAVE_MSG_ERRQUEUE
     // we will allocate this on the stack anyway even if we do not use it
     char control
-        [(BOOST_PP_IF(FOLLY_HAVE_VLA_01, controlBufSize, kSmallSizeMax)) *
+        [(FOLLY_DETAIL_VLA_SIZE(controlBufSize, kSmallSizeMax)) *
          (CMSG_SPACE(sizeof(uint16_t)))];
     memset(control, 0, sizeof(control));
     controlPtr = control;
@@ -1122,11 +1120,11 @@ int AsyncUDPSocket::writemGSOv(
     // suppress "warning: variable length array 'vec' is used [-Wvla]"
     FOLLY_PUSH_WARNING
     FOLLY_GNU_DISABLE_WARNING("-Wvla")
-    mmsghdr vec[BOOST_PP_IF(FOLLY_HAVE_VLA_01, count, kSmallSizeMax)];
+    mmsghdr vec[FOLLY_DETAIL_VLA_SIZE(count, kSmallSizeMax)];
 #ifdef FOLLY_HAVE_MSG_ERRQUEUE
     // we will allocate this on the stack anyway even if we do not use it
     char control
-        [(BOOST_PP_IF(FOLLY_HAVE_VLA_01, controlBufSize, kSmallSizeMax)) *
+        [(FOLLY_DETAIL_VLA_SIZE(controlBufSize, kSmallSizeMax)) *
          (CMSG_SPACE(sizeof(uint16_t)))];
     memset(control, 0, sizeof(control));
     controlPtr = control;
@@ -1292,8 +1290,8 @@ int AsyncUDPSocket::writeImplIOBufs(
     // suppress "warning: variable length array 'vec' is used [-Wvla]"
     FOLLY_PUSH_WARNING
     FOLLY_GNU_DISABLE_WARNING("-Wvla")
-    iovec iov[BOOST_PP_IF(FOLLY_HAVE_VLA_01, iov_count, kSmallSizeMax)];
-    size_t messageIovLens[BOOST_PP_IF(FOLLY_HAVE_VLA_01, count, kSmallSizeMax)];
+    iovec iov[FOLLY_DETAIL_VLA_SIZE(iov_count, kSmallSizeMax)];
+    size_t messageIovLens[FOLLY_DETAIL_VLA_SIZE(count, kSmallSizeMax)];
     FOLLY_POP_WARNING
     fillIoVec(bufs, iov, messageIovLens, count, iov_count);
     return writeImpl(

@@ -18,12 +18,11 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <compare>
 #include <cstddef>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include <boost/operators.hpp>
 
 #include <folly/Range.h>
 #include <folly/io/FsUtil.h>
@@ -31,7 +30,7 @@
 
 namespace folly {
 
-struct HugePageSize : private boost::totally_ordered<HugePageSize> {
+struct HugePageSize {
   explicit HugePageSize(size_t s) : size(s) {}
 
   fs::path filePath(const fs::path& relpath) const {
@@ -43,8 +42,9 @@ struct HugePageSize : private boost::totally_ordered<HugePageSize> {
   dev_t device = 0;
 };
 
-inline bool operator<(const HugePageSize& a, const HugePageSize& b) {
-  return a.size < b.size;
+inline std::strong_ordering operator<=>(
+    const HugePageSize& a, const HugePageSize& b) {
+  return a.size <=> b.size;
 }
 
 inline bool operator==(const HugePageSize& a, const HugePageSize& b) {

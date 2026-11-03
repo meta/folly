@@ -195,7 +195,6 @@ folly_add_library(
   SRCS AsyncSocket.cpp
   HEADERS AsyncSocket.h
   DEPS
-    Boost::headers
     fmt::fmt
     folly_exception
     folly_io_async_io_uring_backend
@@ -335,7 +334,6 @@ folly_add_library(
   SRCS AsyncUDPSocket.cpp
   HEADERS AsyncUDPSocket.h
   DEPS
-    Boost::headers
     folly_likely
     folly_portability_fcntl
     folly_portability_sockets

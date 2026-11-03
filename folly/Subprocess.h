@@ -103,14 +103,15 @@
 #include <sys/wait.h>
 
 #include <chrono>
+#include <compare>
 #include <exception>
+#include <memory>
 #include <span>
 #include <string>
 #include <tuple>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
-
-#include <boost/container/flat_map.hpp>
-#include <boost/operators.hpp>
 
 #include <folly/Exception.h>
 #include <folly/File.h>
@@ -120,6 +121,7 @@
 #include <folly/Optional.h>
 #include <folly/Portability.h>
 #include <folly/Range.h>
+#include <folly/container/sorted_vector_types.h>
 #include <folly/gen/String.h>
 #include <folly/io/IOBufQueue.h>
 #include <folly/portability/SysResource.h>
@@ -574,7 +576,7 @@ class Subprocess {
       int* errout{erroutLifetime_.get()};
     };
 
-    using FdMap = boost::container::flat_map<int, int>;
+    using FdMap = folly::sorted_vector_map<int, int>;
     FdMap fdActions_;
     bool closeOtherFds_{false};
     bool usePath_{false};
@@ -1139,13 +1141,15 @@ class Subprocess {
    * or use parentFd() and related methods, or separate them from the
    * Subprocess instance entirely via takeOwnershipOfPipes().
    */
-  struct Pipe : private boost::totally_ordered<Pipe> {
+  struct Pipe {
     folly::File pipe; // Our end of the pipe, wrapped in a File to auto-close.
     int childFd = -1; // Identifies the pipe: what FD is this in the child?
     int direction = PIPE_IN; // one of PIPE_IN / PIPE_OUT
     bool enabled = true; // Are notifications enabled in communicate()?
 
-    bool operator<(const Pipe& other) const { return childFd < other.childFd; }
+    std::strong_ordering operator<=>(const Pipe& other) const {
+      return childFd <=> other.childFd;
+    }
     bool operator==(const Pipe& other) const {
       return childFd == other.childFd;
     }

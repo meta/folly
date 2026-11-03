@@ -28,7 +28,6 @@
 #include <utility>
 
 #include <boost/intrusive/parent_from_member.hpp>
-#include <boost/noncopyable.hpp>
 #include <glog/logging.h>
 #include <folly/Portability.h>
 #include <folly/lang/Builtin.h>
@@ -40,8 +39,15 @@ namespace folly {
  * pointers for internal use.
  */
 template <class Tag = void>
-class IntrusiveHeapNode : private boost::noncopyable {
+class IntrusiveHeapNode {
  public:
+  IntrusiveHeapNode() = default;
+  IntrusiveHeapNode(const IntrusiveHeapNode&) = delete;
+  IntrusiveHeapNode(IntrusiveHeapNode&&) = delete;
+  IntrusiveHeapNode& operator=(const IntrusiveHeapNode&) = delete;
+  IntrusiveHeapNode& operator=(IntrusiveHeapNode&&) = delete;
+  ~IntrusiveHeapNode() = default;
+
   bool isLinked() const { return parent_ != kUnlinked; }
 
  private:

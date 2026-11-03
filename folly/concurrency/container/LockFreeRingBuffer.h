@@ -17,12 +17,12 @@
 #pragma once
 
 #include <atomic>
+#include <compare>
 #include <cstring>
 #include <memory>
 #include <type_traits>
 #include <utility>
 
-#include <boost/operators.hpp>
 #include <folly/Portability.h>
 #include <folly/Traits.h>
 #include <folly/detail/TurnSequencer.h>
@@ -75,7 +75,7 @@ class LockFreeRingBuffer {
  public:
   /// Opaque pointer to a past or future write.
   /// Can be moved relative to its current location but not in absolute terms.
-  struct Cursor : boost::totally_ordered<Cursor> {
+  struct Cursor {
     explicit Cursor(uint64_t initialTicket) noexcept : ticket(initialTicket) {}
 
     /// Returns true if this cursor now points to a different
@@ -98,13 +98,8 @@ class LockFreeRingBuffer {
       return prevTicket != ticket;
     }
 
-    bool operator==(const Cursor& that) const noexcept {
-      return ticket == that.ticket;
-    }
-
-    bool operator<(const Cursor& that) const noexcept {
-      return ticket < that.ticket;
-    }
+    std::strong_ordering operator<=>(const Cursor& that) const noexcept =
+        default;
 
    protected: // for test visibility reasons
     uint64_t ticket;

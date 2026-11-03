@@ -228,7 +228,6 @@ folly_add_library(
     folly_memory_allocator
   EXPORTED_DEPS
     ${GLOG_LIBRARIES}
-    Boost::headers
     folly_constexpr_math
     folly_detail_iterators
     folly_likely
@@ -903,7 +902,6 @@ folly_add_library(
     MacAddress.h
     SocketAddress.h
   DEPS
-    Boost::headers
     fmt::fmt
     folly_detail_ip_address_source
     folly_exception
@@ -1234,7 +1232,6 @@ if (NOT WIN32)
     SRCS Subprocess.cpp
     HEADERS Subprocess.h
     DEPS
-      Boost::headers
       folly_conv
       folly_lang_assume
       folly_logging_logging
@@ -1252,7 +1249,7 @@ if (NOT WIN32)
       folly_system_libc
       folly_system_shell
     EXPORTED_DEPS
-      Boost::headers
+      folly_container_sorted_vector_types
       folly_exception
       folly_file
       folly_file_util
