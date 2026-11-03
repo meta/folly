@@ -140,7 +140,7 @@ fb_dirsync_cpp_library(
         "fbsource//third-party/boost:boost",  # @manual
         "fbsource//third-party/boost:boost_regex",  # @manual
         "//folly:conv",
-        "//folly:format",
+        "//folly:exception",
         "//folly:string",
         "//folly/gen:base",
         "//folly/gen:file",

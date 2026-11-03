@@ -31,7 +31,7 @@
 #include <boost/regex.hpp>
 
 #include <folly/Conv.h>
-#include <folly/Format.h>
+#include <folly/Exception.h>
 #include <folly/Range.h>
 #include <folly/String.h>
 

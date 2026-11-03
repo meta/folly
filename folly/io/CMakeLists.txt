@@ -42,7 +42,7 @@ folly_add_library(
     Boost::headers
     Boost::regex
     folly_conv
-    folly_format
+    folly_exception
     folly_gen_base
     folly_gen_file
     folly_gen_string
