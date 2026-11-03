@@ -20,7 +20,6 @@ fb_dirsync_cpp_library(
     use_raw_headers = True,
     deps = [
         "fbsource//third-party/fmt:fmt",
-        "//folly:format",
     ],
     exported_deps = [
         ":openssl_ptr_types",

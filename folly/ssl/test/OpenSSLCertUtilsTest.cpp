@@ -17,7 +17,8 @@
 #include <fmt/format.h>
 #include <folly/ssl/OpenSSLCertUtils.h>
 
-#include <folly/Format.h>
+#include <map>
+
 #include <folly/Range.h>
 #include <folly/String.h>
 #include <folly/container/Enumerate.h>

@@ -17,7 +17,7 @@
 #include <fmt/format.h>
 #include <folly/ssl/OpenSSLHash.h>
 
-#include <folly/Format.h>
+#include <stdexcept>
 
 namespace folly {
 namespace ssl {

@@ -39,9 +39,7 @@ if (FOLLY_HAVE_OPENSSL)
     NAME openssl_hash
     SRCS OpenSSLHash.cpp
     HEADERS OpenSSLHash.h
-    DEPS
-      fmt::fmt
-      folly_format
+    DEPS fmt::fmt
     EXPORTED_DEPS
       folly_exception
       folly_io_iobuf
