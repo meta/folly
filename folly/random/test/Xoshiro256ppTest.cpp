@@ -135,7 +135,7 @@ TEST(Xoshiro256ppTest, ReseedingChangesSequence) {
     }
 
     // Reseed and generate a new sequence
-    rng.seed(kNewSeed);
+    rng.seed(folly::to_narrow(kNewSeed));
     std::vector<uint32_t> newSequence;
     initialSequence.reserve(10);
     newSequence.reserve(10);
@@ -149,7 +149,7 @@ TEST(Xoshiro256ppTest, ReseedingChangesSequence) {
 
     // Verify that reseeding with the initial seed reproduces the initial
     // sequence
-    rng.seed(kInitialSeed);
+    rng.seed(folly::to_narrow(kInitialSeed));
     for (int i = 0; i < 10; ++i) {
       EXPECT_EQ(rng(), initialSequence[i])
           << "Reseeding with initial seed should reproduce initial sequence";
