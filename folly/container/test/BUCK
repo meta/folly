@@ -859,7 +859,6 @@ fb_dirsync_cpp_benchmark(
     deps = [
         "fbsource//third-party/fmt:fmt",
         "//folly:benchmark",
-        "//folly:format",
         "//folly/container:sparse_byte_set",
         "//folly/portability:gflags",
     ],
@@ -951,7 +950,6 @@ fb_dirsync_cpp_binary(
         "//folly:benchmark",
         "//folly:benchmark_util",
         "//folly:conv",
-        "//folly:format",
         "//folly:function",
         "//folly:random",
         "//folly/container:f14_hash",

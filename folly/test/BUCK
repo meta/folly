@@ -1075,7 +1075,7 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/boost:boost",  # @manual
         "fbsource//third-party/fmt:fmt",
         ":deterministic_schedule",
-        "//folly:format",
+        "//folly:conv",
         "//folly:mpmc_queue",
         "//folly:stop_watch",
         "//folly/portability:gtest",

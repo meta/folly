@@ -26,7 +26,6 @@
 
 #include <fmt/core.h>
 #include <folly/Benchmark.h>
-#include <folly/Format.h>
 #include <folly/portability/GFlags.h>
 
 using namespace std;

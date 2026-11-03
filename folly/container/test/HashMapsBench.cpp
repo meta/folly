@@ -28,7 +28,6 @@
 #include <folly/Benchmark.h>
 #include <folly/BenchmarkUtil.h>
 #include <folly/Conv.h>
-#include <folly/Format.h>
 #include <folly/Function.h>
 #include <folly/Random.h>
 #include <folly/hash/Hash.h>

@@ -26,7 +26,7 @@
 #include <fmt/format.h>
 #include <folly/synchronization/test/Barrier.h>
 
-#include <folly/Format.h>
+#include <folly/Conv.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/SysResource.h>
 #include <folly/portability/SysTime.h>
