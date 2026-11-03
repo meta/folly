@@ -91,9 +91,9 @@ folly_add_library(
   DEPS folly_math
   EXPORTED_DEPS
     ${GLOG_LIBRARIES}
+    fmt::fmt
     folly_compression_instructions
     folly_compression_select64
-    folly_format
     folly_io_iobuf
     folly_lang_bits
     folly_lang_bits_class

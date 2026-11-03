@@ -16,7 +16,13 @@
 
 #include <folly/compression/QuotientMultiSet.h>
 
-#include <folly/Format.h>
+#include <algorithm>
+#include <cstdlib>
+#include <limits>
+#include <string>
+#include <utility>
+
+#include <fmt/format.h>
 #include <folly/Portability.h>
 #include <folly/compression/Select64.h>
 #include <folly/lang/Bits.h>

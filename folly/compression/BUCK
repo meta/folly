@@ -107,8 +107,8 @@ fb_dirsync_cpp_library(
         "//folly:math",
     ],
     exported_deps = [
+        "fbsource//third-party/fmt:fmt",
         "fbsource//third-party/glog:glog",
-        "//folly:format",
         "//folly:portability",
         "//folly:range",
         "//folly/compression:instructions",
