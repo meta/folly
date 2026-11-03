@@ -296,6 +296,7 @@ opt-level = "{}"
 [package]
 name = "fake_manifest_of_{self.manifest.name}"
 version = "0.0.0"
+edition = "2021"
 
 [lib]
 path = "{null_file}"
