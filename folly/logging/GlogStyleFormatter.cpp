@@ -17,7 +17,6 @@
 #include <fmt/format.h>
 #include <folly/logging/GlogStyleFormatter.h>
 
-#include <folly/Format.h>
 #include <folly/logging/LogLevel.h>
 #include <folly/logging/LogMessage.h>
 #include <folly/portability/Time.h>

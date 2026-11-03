@@ -17,10 +17,10 @@
 #include <folly/logging/CustomLogFormatter.h>
 
 #include <cstdlib>
+#include <map>
 
 #include <fmt/format.h>
 
-#include <folly/Format.h>
 #include <folly/init/Init.h>
 #include <folly/logging/LogMessage.h>
 #include <folly/logging/Logger.h>

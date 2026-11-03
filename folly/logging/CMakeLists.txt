@@ -152,7 +152,6 @@ folly_add_library(
     folly_demangle
     folly_exception
     folly_file_util
-    folly_format
     folly_map_util
     folly_portability_fcntl
     folly_portability_pthread

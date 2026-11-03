@@ -140,7 +140,6 @@ fb_dirsync_cpp_library(
         "//folly:demangle",
         "//folly:exception",
         "//folly:file_util",
-        "//folly:format",
         "//folly:map_util",
         "//folly:string",
         "//folly/container:reserve",
