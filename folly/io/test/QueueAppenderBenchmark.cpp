@@ -15,7 +15,6 @@
  */
 
 #include <folly/Benchmark.h>
-#include <folly/Format.h>
 #include <folly/io/Cursor.h>
 #include <folly/io/IOBufQueue.h>
 

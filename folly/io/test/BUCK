@@ -45,7 +45,6 @@ fb_dirsync_cpp_binary(
     headers = [],
     deps = [
         "//folly:benchmark",
-        "//folly:format",
         "//folly:range",
         "//folly/io:iobuf",
         "//folly/lang:keep",
@@ -57,7 +56,6 @@ fb_dirsync_cpp_unittest(
     srcs = ["IOBufCursorTest.cpp"],
     headers = [],
     deps = [
-        "//folly:format",
         "//folly:range",
         "//folly/io:iobuf",
         "//folly/portability:gtest",
@@ -105,7 +103,6 @@ fb_dirsync_cpp_binary(
     headers = [],
     deps = [
         "//folly:benchmark",
-        "//folly:format",
         "//folly/io:iobuf",
     ],
 )

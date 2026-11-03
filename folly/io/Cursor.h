@@ -1696,13 +1696,13 @@ class Appender : public Writable<Appender> {
    *
    * @methodset Appending
    *
-   * Note that folly/Format.h provides nicer and more type-safe mechanisms
-   * for formatting strings, which should generally be preferred over
-   * printf-style formatting.  Appender objects can be used directly as an
-   * output argument for Formatter objects.  For example:
+   * Note that {fmt} (fmt::format) provides nicer and more type-safe
+   * mechanisms for formatting strings, which should generally be preferred
+   * over printf-style formatting.  Appender objects accept the formatted
+   * result directly.  For example:
    *
    *   Appender app(&iobuf);
-   *   format("{} {}", "hello", "world")(app);
+   *   app(fmt::format("{} {}", "hello", "world"));
    *
    * However, printf-style strings are still needed when dealing with existing
    * third-party code in some cases.

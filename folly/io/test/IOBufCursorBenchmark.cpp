@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include <array>
 #include <vector>
 
 #include <folly/Benchmark.h>
-#include <folly/Format.h>
 #include <folly/Range.h>
 #include <folly/io/Cursor.h>
 #include <folly/io/IOBuf.h>
