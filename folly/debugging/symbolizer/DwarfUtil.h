@@ -63,7 +63,7 @@ struct DIEAbbreviation {
   uint64_t code = 0;
   uint64_t tag = 0;
   bool hasChildren = false;
-  folly::StringPiece attributes;
+  std::span<const uint8_t> attributes;
 };
 
 // A struct that contains the metadata of a compilation unit.
@@ -148,7 +148,8 @@ struct AttributeSpec {
 struct Attribute {
   AttributeSpec spec;
   const Die& die;
-  std::variant<uint64_t, folly::StringPiece> attrValue;
+  std::variant<uint64_t, folly::StringPiece, std::span<const uint8_t>>
+      attrValue;
 };
 
 folly::StringPiece asStringPiece(std::span<const uint8_t> bytes) noexcept;
@@ -202,11 +203,15 @@ uint64_t readOffset(std::span<const uint8_t>& bytes, bool is64Bit);
 uint64_t readOffset(folly::StringPiece& sp, bool is64Bit);
 
 // Read "len" bytes
+std::span<const uint8_t> readBytes(
+    std::span<const uint8_t>& bytes, uint64_t len);
 folly::StringPiece readBytes(folly::StringPiece& sp, uint64_t len);
 
+AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes);
 AttributeSpec readAttributeSpec(folly::StringPiece& sp);
 
 // Reads an abbreviation from a StringPiece, return true if at end; advance sp
+bool readAbbreviation(std::span<const uint8_t>& section, DIEAbbreviation& abbr);
 bool readAbbreviation(folly::StringPiece& section, DIEAbbreviation& abbr);
 
 // Read a null-terminated string
@@ -232,7 +237,7 @@ Attribute readAttribute(
     const CompilationUnit& cu,
     const Die& die,
     AttributeSpec spec,
-    folly::StringPiece& info);
+    std::span<const uint8_t>& info);
 
 /*
  * Iterate over all attributes of the given DIE, calling the given callable

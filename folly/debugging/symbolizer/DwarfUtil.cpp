@@ -146,6 +146,14 @@ uint64_t readOffset(std::span<const uint8_t>& bytes, bool is64Bit) {
 }
 
 // Read "len" bytes
+std::span<const uint8_t> readBytes(
+    std::span<const uint8_t>& bytes, uint64_t len) {
+  FOLLY_SAFE_CHECK(len <= bytes.size(), "invalid byte length");
+  auto ret = bytes.first(len);
+  bytes = bytes.subspan(len);
+  return ret;
+}
+
 folly::StringPiece readBytes(folly::StringPiece& sp, uint64_t len) {
   FOLLY_SAFE_CHECK(len <= sp.size(), "invalid string length");
   folly::StringPiece ret(sp.data(), len);
@@ -196,22 +204,34 @@ AttributeSpec readAttributeSpec(folly::StringPiece& sp) {
   return spec;
 }
 
-// Reads an abbreviation from a StringPiece, return true if at end; advance sp
+AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes) {
+  AttributeSpec spec;
+  spec.name = readULEB(bytes);
+  spec.form = readULEB(bytes);
+  if (spec.form == DW_FORM_implicit_const) {
+    spec.implicitConst = readSLEB(bytes);
+  }
+  return spec;
+}
+
 bool readAbbreviation(folly::StringPiece& section, DIEAbbreviation& abbr) {
-  // Abbreviation code
+  auto bytes = std::span(
+      reinterpret_cast<const uint8_t*>(section.data()), section.size());
+  auto result = readAbbreviation(bytes, abbr);
+  section.advance(section.size() - bytes.size());
+  return result;
+}
+
+bool readAbbreviation(
+    std::span<const uint8_t>& section, DIEAbbreviation& abbr) {
   abbr.code = readULEB(section);
   if (abbr.code == 0) {
     return false;
   }
-
-  // Abbreviation tag
   abbr.tag = readULEB(section);
-
-  // does this entry have children?
   abbr.hasChildren = (read<uint8_t>(section) != DW_CHILDREN_no);
 
-  // attributes
-  const char* attributeBegin = section.data();
+  const uint8_t* attributeBegin = section.data();
   for (;;) {
     if (section.empty()) {
       FOLLY_SAFE_DFATAL("invalid attribute section");
@@ -222,16 +242,18 @@ bool readAbbreviation(folly::StringPiece& section, DIEAbbreviation& abbr) {
       break;
     }
   }
-  abbr.attributes.assign(attributeBegin, section.data());
+  abbr.attributes = {
+      attributeBegin, static_cast<size_t>(section.data() - attributeBegin)};
   return true;
 }
 
 namespace {
 
 DIEAbbreviation getAbbreviation(
-    folly::StringPiece debugAbbrev, uint64_t code, uint64_t offset) {
+    std::span<const uint8_t> debugAbbrev, uint64_t code, uint64_t offset) {
   // Linear search in the .debug_abbrev section, starting at offset
-  debugAbbrev.advance(offset);
+  FOLLY_SAFE_CHECK(offset <= debugAbbrev.size(), "invalid abbrev offset");
+  debugAbbrev = debugAbbrev.subspan(offset);
 
   DIEAbbreviation abbr;
   while (readAbbreviation(debugAbbrev, abbr)) {
@@ -618,13 +640,41 @@ CompilationUnits getCompilationUnits(
   return cu;
 }
 
+namespace {
+
+std::span<const uint8_t> getCompilationUnitBytes(
+    const CompilationUnit& cu, uint64_t offset) {
+  const auto debugInfo = cu.debugSections.debugInfo;
+  FOLLY_SAFE_CHECK(cu.offset <= debugInfo.size(), "invalid CU offset");
+  FOLLY_SAFE_CHECK(cu.size <= debugInfo.size() - cu.offset, "invalid CU size");
+  const auto end = cu.offset + cu.size;
+  FOLLY_SAFE_CHECK(offset <= end, "offset outside CU");
+  return debugInfo.subspan(offset, end - offset);
+}
+
+std::span<const uint8_t> getIndexedSectionBytes(
+    std::span<const uint8_t> section,
+    uint64_t base,
+    uint64_t index,
+    uint64_t entrySize) {
+  // Entry sizes come from address and offset widths, which are nonzero, but
+  // check anyway: the index bound below divides by entrySize.
+  FOLLY_SAFE_CHECK(entrySize != 0, "zero section entry size");
+  FOLLY_SAFE_CHECK(base <= section.size(), "invalid section base");
+  const auto remaining = section.size() - base;
+  FOLLY_SAFE_CHECK(entrySize <= remaining, "section entry out of bounds");
+  FOLLY_SAFE_CHECK(
+      index <= (remaining - entrySize) / entrySize,
+      "section index out of bounds");
+  return section.subspan(base + index * entrySize);
+}
+
+} // namespace
+
 Die getDieAtOffset(const CompilationUnit& cu, uint64_t offset) {
-  const folly::StringPiece debugInfo =
-      asStringPiece(cu.debugSections.debugInfo);
-  FOLLY_SAFE_DCHECK(offset < debugInfo.size(), "unexpected offset");
+  const auto debugInfo = cu.debugSections.debugInfo;
   Die die;
-  folly::StringPiece sp = folly::StringPiece{
-      debugInfo.data() + offset, debugInfo.data() + cu.offset + cu.size};
+  auto sp = getCompilationUnitBytes(cu, offset);
   die.offset = offset;
   die.is64Bit = cu.is64Bit;
   auto code = readULEB(sp);
@@ -636,7 +686,7 @@ Die getDieAtOffset(const CompilationUnit& cu, uint64_t offset) {
   die.abbr = !cu.abbrCache.empty() && die.code < kMaxAbbreviationEntries
       ? cu.abbrCache[die.code - 1]
       : getAbbreviation(
-            asStringPiece(cu.debugSections.debugAbbrev),
+            cu.debugSections.debugAbbrev,
             die.code,
             cu.abbrevOffset.value_or(0));
 
@@ -647,7 +697,7 @@ Attribute readAttribute(
     const CompilationUnit& cu,
     const Die& die,
     AttributeSpec spec,
-    folly::StringPiece& info) {
+    std::span<const uint8_t>& info) {
   // DWARF 5 introduces new FORMs whose values are relative to some base
   // attrs: DW_AT_str_offsets_base, DW_AT_rnglists_base, DW_AT_addr_base.
   // Debug Fission DWARF 4 uses GNU DW_AT_GNU_ranges_base &
@@ -668,13 +718,14 @@ Attribute readAttribute(
     // following the header. The entries are indexed sequentially from
     // this base entry, starting from 0. For DWARF 4 version DWO files,
     // the value of DW_AT_str_offsets_base is implicitly zero.
-    auto strOffsetsOffset = cu.strOffsetsBase.value_or(0) +
-        index * (cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t));
-    auto sp = asStringPiece(cu.debugSections.debugStrOffsets)
-                  .subpiece(strOffsetsOffset);
+    const auto entrySize = cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
+    auto sp = getIndexedSectionBytes(
+        cu.debugSections.debugStrOffsets,
+        cu.strOffsetsBase.value_or(0),
+        index,
+        entrySize);
     uint64_t strOffset = readOffset(sp, cu.is64Bit);
-    return getStringFromStringSection(
-        asStringPiece(cu.debugSections.debugStr), strOffset);
+    return getStringFromStringSection(cu.debugSections.debugStr, strOffset);
   };
 
   auto readDebugAddr = [&](uint64_t index) {
@@ -685,8 +736,8 @@ Attribute readAttribute(
     // The DW_AT_addr_base attribute points to the first entry following
     // the header. The entries are indexed sequentially from this base
     // entry, starting from 0.
-    auto sp = asStringPiece(cu.debugSections.debugAddr)
-                  .subpiece(*cu.addrBase + index * sizeof(uint64_t));
+    auto sp = getIndexedSectionBytes(
+        cu.debugSections.debugAddr, *cu.addrBase, index, sizeof(uint64_t));
     return read<uint64_t>(sp);
   };
 
@@ -742,8 +793,7 @@ Attribute readAttribute(
           spec,
           die,
           getStringFromStringSection(
-              asStringPiece(cu.debugSections.debugStr),
-              readOffset(info, die.is64Bit))};
+              cu.debugSections.debugStr, readOffset(info, die.is64Bit))};
     case DW_FORM_indirect: // form is explicitly specified
       // Update spec with the actual FORM.
       spec.form = readULEB(info);
@@ -774,8 +824,7 @@ Attribute readAttribute(
           spec,
           die,
           getStringFromStringSection(
-              asStringPiece(cu.debugSections.debugLineStr),
-              readOffset(info, die.is64Bit))};
+              cu.debugSections.debugLineStr, readOffset(info, die.is64Bit))};
 
     case DW_FORM_strx:
       return {spec, die, getStringUsingOffsetTable(readULEB(info))};
@@ -798,8 +847,8 @@ Attribute readAttribute(
       }
       const uint64_t offsetSize =
           cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
-      auto sp = asStringPiece(cu.debugSections.debugRnglists)
-                    .subpiece(*cu.rnglistsBase + index * offsetSize);
+      auto sp = getIndexedSectionBytes(
+          cu.debugSections.debugRnglists, *cu.rnglistsBase, index, offsetSize);
       auto offset = readOffset(sp, cu.is64Bit);
       return {spec, die, *cu.rnglistsBase + offset};
     }
@@ -811,8 +860,8 @@ Attribute readAttribute(
       }
       const uint64_t offsetSize =
           cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
-      auto sp = asStringPiece(cu.debugSections.debugLoclists)
-                    .subpiece(*cu.loclistsBase + index * offsetSize);
+      auto sp = getIndexedSectionBytes(
+          cu.debugSections.debugLoclists, *cu.loclistsBase, index, offsetSize);
       auto offset = readOffset(sp, cu.is64Bit);
       return {spec, die, *cu.loclistsBase + offset};
     }
@@ -843,10 +892,10 @@ size_t forEachAttribute(
     const Die& die,
     folly::FunctionRef<bool(const Attribute&)> f) {
   auto attrs = die.abbr.attributes;
-  const auto debugInfo = asStringPiece(cu.debugSections.debugInfo);
-  auto values = folly::StringPiece{
-      debugInfo.data() + die.offset + die.attrOffset,
-      debugInfo.data() + cu.offset + cu.size};
+  const auto debugInfo = cu.debugSections.debugInfo;
+  auto values = getCompilationUnitBytes(cu, die.offset);
+  FOLLY_SAFE_CHECK(die.attrOffset <= values.size(), "attributes outside CU");
+  values = values.subspan(die.attrOffset);
   while (auto spec = readAttributeSpec(attrs)) {
     auto attr = readAttribute(cu, die, spec, values);
     if (!f(attr)) {

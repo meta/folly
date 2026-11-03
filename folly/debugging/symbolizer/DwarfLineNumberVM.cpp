@@ -62,18 +62,20 @@ namespace {
 struct LineNumberAttribute {
   uint64_t contentTypeCode;
   uint64_t formCode;
-  std::variant<uint64_t, folly::StringPiece> attrValue;
+  std::variant<uint64_t, folly::StringPiece, std::span<const uint8_t>>
+      attrValue;
 };
 
 folly::Optional<LineNumberAttribute> readLineNumberAttribute(
     bool is64Bit,
-    folly::StringPiece& format,
-    folly::StringPiece& entries,
+    std::span<const uint8_t>& format,
+    std::span<const uint8_t>& entries,
     std::span<const uint8_t> debugStr,
     std::span<const uint8_t> debugLineStr) {
   uint64_t contentTypeCode = readULEB(format);
   uint64_t formCode = readULEB(format);
-  std::variant<uint64_t, folly::StringPiece> attrValue;
+  std::variant<uint64_t, folly::StringPiece, std::span<const uint8_t>>
+      attrValue;
 
   switch (contentTypeCode) {
     case DW_LNCT_path: {
@@ -83,12 +85,11 @@ folly::Optional<LineNumberAttribute> readLineNumberAttribute(
           break;
         case DW_FORM_line_strp: {
           auto off = readOffset(entries, is64Bit);
-          attrValue =
-              getStringFromStringSection(asStringPiece(debugLineStr), off);
+          attrValue = getStringFromStringSection(debugLineStr, off);
         } break;
         case DW_FORM_strp:
           attrValue = getStringFromStringSection(
-              asStringPiece(debugStr), readOffset(entries, is64Bit));
+              debugStr, readOffset(entries, is64Bit));
           break;
         case DW_FORM_strp_sup:
           FOLLY_SAFE_DFATAL("Unexpected DW_FORM_strp_sup");
@@ -183,21 +184,6 @@ folly::Optional<LineNumberAttribute> readLineNumberAttribute(
       .formCode = formCode,
       .attrValue = attrValue,
   };
-}
-
-folly::Optional<LineNumberAttribute> readLineNumberAttribute(
-    bool is64Bit,
-    std::span<const uint8_t>& format,
-    std::span<const uint8_t>& entries,
-    std::span<const uint8_t> debugStr,
-    std::span<const uint8_t> debugLineStr) {
-  auto formatString = asStringPiece(format);
-  auto entriesString = asStringPiece(entries);
-  auto result = readLineNumberAttribute(
-      is64Bit, formatString, entriesString, debugStr, debugLineStr);
-  format = format.subspan(format.size() - formatString.size());
-  entries = entries.subspan(entries.size() - entriesString.size());
-  return result;
 }
 
 } // namespace

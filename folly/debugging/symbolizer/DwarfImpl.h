@@ -59,7 +59,8 @@ class DwarfImpl {
       bool checkAddress = true) const;
 
  private:
-  using AttributeValue = std::variant<uint64_t, folly::StringPiece>;
+  using AttributeValue =
+      std::variant<uint64_t, folly::StringPiece, std::span<const uint8_t>>;
 
   /**
    * Finds a subprogram debugging info entry that contains a given address among
