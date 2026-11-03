@@ -19,6 +19,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -28,6 +29,8 @@
 #include <folly/concurrency/ProcessLocalUniqueId.h>
 #include <folly/container/F14Map.h>
 #include <folly/detail/Iterators.h>
+#include <folly/io/async/DelayedDestruction.h>
+#include <folly/lang/New.h>
 #include <folly/synchronization/Hazptr.h>
 
 namespace folly {
@@ -168,6 +171,39 @@ class ImmutableRequestData : public folly::RequestData {
 };
 
 using RequestDataItem = std::pair<RequestToken, std::unique_ptr<RequestData>>;
+
+class RequestContext;
+class BorrowedRequestContextScopeGuard;
+class LocalRequestContextScopeGuard;
+
+// Thread-confined lifetime pin for an ambient-owned context. Pin access,
+// borrowed activation, and release stay on the creating thread. Capture shared
+// ownership before offload; CPU work uses the captured shared context instead.
+class RequestContextHandle {
+ public:
+  RequestContextHandle() noexcept;
+  ~RequestContextHandle();
+
+  RequestContextHandle(const RequestContextHandle&) = delete;
+  RequestContextHandle& operator=(const RequestContextHandle&) = delete;
+  RequestContextHandle(RequestContextHandle&& other) noexcept;
+  RequestContextHandle& operator=(RequestContextHandle&& other) noexcept;
+
+  RequestContext* get() const noexcept;
+  RequestContext* operator->() const noexcept { return get(); }
+  explicit operator bool() const noexcept { return get() != nullptr; }
+  void reset() noexcept;
+
+  // Called on the creating thread before offload. Acquires a shared lifetime
+  // without changing identity; subsequent captures reuse that ownership.
+  std::shared_ptr<RequestContext> capture() const noexcept(new_is_infallible_v);
+
+ private:
+  friend class RequestContext;
+  friend class LocalRequestContextScopeGuard;
+  struct Control;
+  DelayedDestructionBase::IntrusivePtr<Control> control_;
+};
 
 class RequestContext {
  public:
@@ -326,8 +362,8 @@ class RequestContext {
   static std::shared_ptr<RequestContext> setContext(
       std::shared_ptr<RequestContext>&& newCtx_);
 
-  // Theses Watcher functions will be called after a setContext with the prev
-  // and current context
+  // Watchers receive owning pointers to the previous and current contexts
+  // after a context switch.
   using SetContextWatcherSig = void(
       const std::shared_ptr<RequestContext>& prev,
       const std::shared_ptr<RequestContext>& ctx);
@@ -361,7 +397,13 @@ class RequestContext {
     void invokeWatchers(
         const std::shared_ptr<RequestContext>& prev,
         const std::shared_ptr<RequestContext>& ctx) {
-      auto* watcher = watchers_.load(std::memory_order_acquire);
+      invokeWatchers(watchers_.load(std::memory_order_acquire), prev, ctx);
+    }
+
+    void invokeWatchers(
+        Watcher* watcher,
+        const std::shared_ptr<RequestContext>& prev,
+        const std::shared_ptr<RequestContext>& ctx) {
       while (watcher != nullptr) {
         watcher->func_(prev, ctx);
         watcher = watcher->next_;
@@ -381,6 +423,10 @@ class RequestContext {
  public:
   static std::shared_ptr<RequestContext> saveContext();
 
+  // Pins a local ambient context without requesting shared ownership. The
+  // binding must be local or empty; use saveContext() for shared bindings.
+  static RequestContextHandle saveContextLocal();
+
  private:
   struct Tag {};
   RequestContext(const RequestContext& ctx) = default;
@@ -390,6 +436,53 @@ class RequestContext {
   RequestContext(const RequestContext& ctx, Tag tag);
   explicit RequestContext(intptr_t rootId);
 
+ private:
+  friend class BorrowedRequestContextScopeGuard;
+  friend class LocalRequestContextScopeGuard;
+  struct ThreadLocalContext;
+
+  struct ContextState {
+    ContextState();
+    explicit ContextState(std::shared_ptr<RequestContext> context);
+    explicit ContextState(RequestContextHandle::Control& control);
+    explicit ContextState(const RequestContextHandle& handle);
+    ~ContextState();
+    ContextState(const ContextState&) = delete;
+    ContextState& operator=(const ContextState&) = delete;
+    ContextState(ContextState&& other) noexcept;
+    ContextState& operator=(ContextState&& other) noexcept;
+    void swap(ContextState& other) noexcept;
+    void swap(ThreadLocalContext& other) noexcept;
+
+    RequestContext* get() const noexcept;
+    RequestContextHandle::Control* localControl() const noexcept;
+    std::shared_ptr<RequestContext> capture() const
+        noexcept(new_is_infallible_v);
+    void ensureShared() noexcept(new_is_infallible_v);
+
+    std::shared_ptr<RequestContext> requestContext;
+    DelayedDestructionBase::IntrusivePtr<RequestContextHandle::Control>
+        borrowedContext;
+  };
+
+  static ContextState setContextState(ContextState&& context);
+  static void restoreContextState(ContextState&& context);
+  static std::shared_ptr<RequestContext> setContextFromLocal(
+      std::shared_ptr<RequestContext>&& context);
+  static std::shared_ptr<RequestContext> saveContextFromLocal(
+      ThreadLocalContext& context) noexcept(new_is_infallible_v);
+  static ContextState setContextImpl(
+      ContextState&& context,
+      ThreadLocalContext& current,
+      std::atomic<intptr_t>& rootId,
+      bool notifyWatchers);
+  static void restoreContextAfterPromotionFailure(
+      ContextState&& context,
+      ThreadLocalContext& current,
+      std::atomic<intptr_t>& rootId);
+  static ContextState setShallowCopyContextState();
+
+ public:
   struct StaticContext {
     StaticContext() = default;
     ~StaticContext();
@@ -404,13 +497,30 @@ class RequestContext {
   };
 
  private:
-  static StaticContext& getStaticContext();
-  static StaticContext* tryGetStaticContext();
-  static std::shared_ptr<RequestContext> setContextHelper(
-      std::shared_ptr<RequestContext>& newCtx, StaticContext& staticCtx);
+  struct ThreadLocalContext : StaticContext {
+    ThreadLocalContext();
+    ~ThreadLocalContext();
+
+    ThreadLocalContext(const ThreadLocalContext&) = delete;
+    ThreadLocalContext(ThreadLocalContext&&) = delete;
+    ThreadLocalContext& operator=(const ThreadLocalContext&) = delete;
+    ThreadLocalContext& operator=(ThreadLocalContext&&) = delete;
+
+    RequestContextHandle::Control* localControl() const noexcept;
+    RequestContext* get() const noexcept;
+    std::shared_ptr<RequestContext> capture() const
+        noexcept(new_is_infallible_v);
+    void ensureShared() noexcept(new_is_infallible_v);
+
+    DelayedDestructionBase::IntrusivePtr<RequestContextHandle::Control>
+        borrowedContext;
+  };
+
+  static ThreadLocalContext& getStaticContext();
+  static ThreadLocalContext* tryGetStaticContext();
 
   using StaticContextThreadLocal = SingletonThreadLocal<
-      RequestContext::StaticContext,
+      RequestContext::ThreadLocalContext,
       RequestContext /* Tag */>;
 
  public:
@@ -442,6 +552,10 @@ class RequestContext {
 
       StaticContext& dereference() const { return *base(); }
 
+      // Does not acquire ownership. Coordinate with the owning thread to keep
+      // its binding unchanged and context alive while inspecting the result.
+      RequestContext* getContext() const noexcept { return base()->get(); }
+
       RootIdInfo getRootIdInfo() const {
         RootIdInfo info;
         info.id = base()->rootId.load(std::memory_order_relaxed);
@@ -462,7 +576,9 @@ class RequestContext {
   // Returns an accessor object that blocks the construction and destruction of
   // StaticContext objects on all threads. This is useful to quickly introspect
   // the context from all threads while ensuring that their thread-local
-  // StaticContext object is not destroyed.
+  // StaticContext object is not destroyed. Local bindings may have an empty
+  // requestContext field; Iterator::getContext() also exposes local contexts.
+  // The accessor does not prevent context switches on the owning threads.
   static StaticContextAccessor accessAllThreads();
 
   // Start shallow copy guard implementation details:
@@ -584,6 +700,50 @@ class RequestContext {
   intptr_t rootId_;
 };
 static_assert(sizeof(RequestContext) <= 64, "unexpected size");
+
+// Creates an ambient-owned context and restores the previous binding on exit.
+// Leaving the scope requests destruction; local handles delay destruction
+// without atomic ownership operations. This scope stays on its creating thread.
+class LocalRequestContextScopeGuard {
+ public:
+  [[nodiscard]] LocalRequestContextScopeGuard();
+  [[nodiscard]] explicit LocalRequestContextScopeGuard(intptr_t rootId);
+  ~LocalRequestContextScopeGuard();
+
+  LocalRequestContextScopeGuard(const LocalRequestContextScopeGuard&) = delete;
+  LocalRequestContextScopeGuard& operator=(
+      const LocalRequestContextScopeGuard&) = delete;
+  LocalRequestContextScopeGuard(LocalRequestContextScopeGuard&&) = delete;
+  LocalRequestContextScopeGuard& operator=(LocalRequestContextScopeGuard&&) =
+      delete;
+
+ private:
+  DelayedDestructionUniquePtr<RequestContextHandle::Control> owner_;
+  RequestContext::ContextState prev_;
+};
+
+// Activates a pinned context and restores the previous binding on exit.
+// The caller may release its handle while this thread-confined scope is active.
+class BorrowedRequestContextScopeGuard {
+ public:
+  [[nodiscard]] explicit BorrowedRequestContextScopeGuard(
+      const RequestContextHandle& handle);
+  ~BorrowedRequestContextScopeGuard();
+
+  BorrowedRequestContextScopeGuard(const BorrowedRequestContextScopeGuard&) =
+      delete;
+  BorrowedRequestContextScopeGuard& operator=(
+      const BorrowedRequestContextScopeGuard&) = delete;
+  BorrowedRequestContextScopeGuard(BorrowedRequestContextScopeGuard&&) = delete;
+  BorrowedRequestContextScopeGuard& operator=(
+      BorrowedRequestContextScopeGuard&&) = delete;
+
+ private:
+#ifndef NDEBUG
+  const std::thread::id thread_ = std::this_thread::get_id();
+#endif
+  RequestContext::ContextState prev_;
+};
 
 /**
  * RequestContextSaverScopeGuard allows to replace the current context

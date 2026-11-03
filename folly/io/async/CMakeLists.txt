@@ -711,11 +711,15 @@ folly_add_library(
     folly_concurrency_container_single_writer_fixed_hash_map
     folly_demangle
     folly_glog
+    folly_scope_guard
     folly_tracing_static_tracepoint
+    folly_utility
   EXPORTED_DEPS
     folly_concurrency_process_local_unique_id
     folly_container_f14_hash
     folly_detail_iterators
+    folly_io_async_delayed_destruction
+    folly_lang_new
     folly_shared_mutex
     folly_singleton_thread_local
     folly_synchronization_hazptr

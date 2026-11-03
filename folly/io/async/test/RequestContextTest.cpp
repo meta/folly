@@ -15,16 +15,25 @@
  */
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <new>
 #include <thread>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 #include <folly/Memory.h>
+#include <folly/ScopeGuard.h>
 #include <folly/Singleton.h>
 #include <folly/container/Enumerate.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/Request.h>
 #include <folly/io/async/test/RequestContextHelper.h>
+#include <folly/lang/New.h>
 #include <folly/portability/GTest.h>
+#include <folly/synchronization/CallOnce.h>
 #include <folly/synchronization/RelaxedAtomic.h>
 #include <folly/system/ThreadName.h>
 
@@ -32,6 +41,15 @@
 #include <folly/synchronization/test/Barrier.h>
 
 using namespace folly;
+
+namespace folly {
+RequestContext* getCachedRequestContext();
+}
+
+static_assert(
+    noexcept(std::declval<const RequestContextHandle&>().capture()) ==
+    new_is_infallible_v);
+static_assert(!noexcept(RequestContext::setContext(nullptr)));
 
 RequestToken testtoken("test");
 
@@ -175,6 +193,7 @@ TEST_F(RequestContextTest, defaultContext) {
 }
 
 TEST_F(RequestContextTest, setIfAbsentTest) {
+  RequestContextScopeGuard guard;
   EXPECT_TRUE(RequestContext::get() != nullptr);
 
   RequestContext::get()->setContextData("test", std::make_unique<TestData>(10));
@@ -840,6 +859,7 @@ TEST_F(RequestContextTest, ContextDataVersion) {
 }
 
 TEST(RequestContextTryGetTest, TryGetTest) {
+  RequestContextScopeGuard guard(std::shared_ptr<RequestContext>{});
   // try_get() should not create a default RequestContext object if none exists.
   EXPECT_EQ(RequestContext::try_get(), nullptr);
   // Explicitly create a new instance so that subsequent calls to try_get()
@@ -890,71 +910,707 @@ TEST(ImmutableRequestTest, typeTraits) {
   EXPECT_FALSE(c2);
 }
 
-// Static variables for test watchers
 namespace {
-int g_callCount = 0;
-std::shared_ptr<RequestContext> g_lastPrev;
-std::shared_ptr<RequestContext> g_lastCurrent;
+
+class LocalLifetimeData : public RequestData {
+ public:
+  explicit LocalLifetimeData(std::atomic<int>& destroyed)
+      : destroyed_(destroyed) {}
+  ~LocalLifetimeData() override { ++destroyed_; }
+  bool hasCallback() override { return false; }
+
+ private:
+  std::atomic<int>& destroyed_;
+};
+
+RequestContextHandle makeLocalHandle() {
+  LocalRequestContextScopeGuard guard;
+  return RequestContext::saveContextLocal();
+}
+
+RequestContextHandle makeLocalHandle(intptr_t rootId) {
+  LocalRequestContextScopeGuard guard(rootId);
+  return RequestContext::saveContextLocal();
+}
+
+static_assert(sizeof(RequestContextHandle) == sizeof(void*));
+static_assert(!std::is_copy_constructible_v<RequestContextHandle>);
+static_assert(!std::is_copy_assignable_v<RequestContextHandle>);
+static_assert(std::is_nothrow_move_constructible_v<RequestContextHandle>);
+static_assert(std::is_nothrow_move_assignable_v<RequestContextHandle>);
+
+} // namespace
+
+TEST_F(RequestContextTest, AmbientOwnerSurvivesLastPinRelease) {
+  std::atomic<int> destroyed{0};
+  std::weak_ptr<RequestContext> weak;
+  {
+    LocalRequestContextScopeGuard guard;
+    auto* raw = RequestContext::try_get();
+    raw->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    auto handle = RequestContext::saveContextLocal();
+    EXPECT_EQ(handle.get(), raw);
+    handle.reset();
+    EXPECT_EQ(destroyed, 0);
+    EXPECT_EQ(RequestContext::try_get(), raw);
+    EXPECT_TRUE(raw->hasContextData(testtoken));
+    {
+      auto captured = RequestContext::saveContext();
+      EXPECT_EQ(captured.get(), raw);
+      weak = captured;
+    }
+    EXPECT_FALSE(weak.expired());
+    handle = RequestContext::saveContextLocal();
+    handle.reset();
+    EXPECT_EQ(destroyed, 0);
+  }
+  EXPECT_EQ(destroyed, 1);
+  EXPECT_TRUE(weak.expired());
+  EXPECT_EQ(RequestContext::try_get(), nullptr);
+}
+
+TEST_F(RequestContextTest, LocalHandleNestedActivation) {
+  auto first = makeLocalHandle();
+  auto second = makeLocalHandle(123);
+  first->setContextData(testtoken, std::make_unique<TestData>(10));
+  second->setContextData(testtoken, std::make_unique<TestData>(20));
+  EXPECT_EQ(first->getRootId(), reinterpret_cast<intptr_t>(first.get()));
+  EXPECT_EQ(second->getRootId(), 123);
+  {
+    BorrowedRequestContextScopeGuard outer(first);
+    EXPECT_EQ(RequestContext::try_get(), first.get());
+    EXPECT_EQ(10, getData().data_);
+    EXPECT_EQ(2, getData().set_);
+    {
+      BorrowedRequestContextScopeGuard inner(second);
+      EXPECT_EQ(RequestContext::try_get(), second.get());
+      EXPECT_EQ(20, getData().data_);
+      EXPECT_EQ(2, getData().set_);
+      EXPECT_EQ(0, getData().unset_);
+      const auto ids = getRootIdsFromAllThreads();
+      EXPECT_NE(std::find(ids.begin(), ids.end(), 123), ids.end());
+    }
+    EXPECT_EQ(RequestContext::try_get(), first.get());
+    EXPECT_EQ(3, getData().set_);
+    EXPECT_EQ(1, getData().unset_);
+  }
+  EXPECT_EQ(RequestContext::try_get(), nullptr);
+  auto* data = static_cast<TestData*>(first->getContextData(testtoken));
+  EXPECT_EQ(2, data->unset_);
+}
+
+TEST_F(RequestContextTest, LocalHandleSameContextDoesNotNotify) {
+  auto owner = makeLocalHandle();
+  owner->setContextData(testtoken, std::make_unique<TestData>(10));
+  BorrowedRequestContextScopeGuard outer(owner);
+  {
+    BorrowedRequestContextScopeGuard inner(owner);
+    EXPECT_EQ(2, getData().set_);
+    EXPECT_EQ(0, getData().unset_);
+  }
+  EXPECT_EQ(2, getData().set_);
+  EXPECT_EQ(0, getData().unset_);
+}
+
+TEST_F(RequestContextTest, BorrowedSameContextRestoresSharedBinding) {
+  auto handle = makeLocalHandle();
+  handle->setContextData(testtoken, std::make_unique<TestData>(10));
+  RequestContextScopeGuard shared(handle.capture());
+  auto* data = static_cast<TestData*>(handle->getContextData(testtoken));
+  const auto sets = data->set_.load();
+  const auto unsets = data->unset_.load();
+  EXPECT_THROW(RequestContext::saveContextLocal(), std::logic_error);
+  {
+    BorrowedRequestContextScopeGuard borrowed(handle);
+    EXPECT_EQ(data->set_, sets);
+    EXPECT_EQ(data->unset_, unsets);
+    EXPECT_THROW(RequestContext::saveContextLocal(), std::logic_error);
+    RequestContext::setContext(nullptr);
+    EXPECT_EQ(RequestContext::try_get(), nullptr);
+  }
+  EXPECT_EQ(RequestContext::try_get(), handle.get());
+  EXPECT_THROW(RequestContext::saveContextLocal(), std::logic_error);
+  EXPECT_EQ(data->set_, sets + 1);
+  EXPECT_EQ(data->unset_, unsets + 1);
+}
+
+TEST_F(RequestContextTest, LocalHandleMoveAndResetDuringActivation) {
+  std::atomic<int> destroyed{0};
+  std::atomic<int> replacedDestroyed{0};
+  auto owner = makeLocalHandle();
+  owner->setContextData(
+      testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+  auto* raw = owner.get();
+  {
+    BorrowedRequestContextScopeGuard guard(owner);
+    RequestContextHandle moved(std::move(owner));
+    EXPECT_EQ(moved.get(), raw);
+    auto assigned = makeLocalHandle();
+    assigned->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(replacedDestroyed));
+    assigned = std::move(moved);
+    EXPECT_EQ(replacedDestroyed, 1);
+    assigned.reset();
+    EXPECT_FALSE(assigned);
+    EXPECT_EQ(destroyed, 0);
+    EXPECT_EQ(RequestContext::try_get(), raw);
+    EXPECT_TRUE(raw->hasContextData(testtoken));
+  }
+  EXPECT_EQ(destroyed, 1);
+  EXPECT_EQ(RequestContext::try_get(), nullptr);
+}
+
+TEST_F(RequestContextTest, AccessAllThreadsReadsSharedAndLocalBindings) {
+  for (bool local : {false, true}) {
+    std::atomic<int> destroyed{0};
+    RequestContext* expected = nullptr;
+    folly::test::Barrier ready(2);
+    folly::test::Barrier inspected(2);
+    std::thread thread([&] {
+      auto inspect = [&] {
+        expected = RequestContext::try_get();
+        expected->setContextData(
+            testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+        ready.wait();
+        inspected.wait();
+      };
+      if (local) {
+        LocalRequestContextScopeGuard scope(123);
+        inspect();
+      } else {
+        RequestContextScopeGuard scope(std::make_shared<RequestContext>(123));
+        inspect();
+      }
+    });
+    ready.wait();
+    bool found = false;
+    {
+      auto accessor = RequestContext::accessAllThreads();
+      for (auto it = accessor.begin(); it != accessor.end(); ++it) {
+        if (it.getRootIdInfo().tid == thread.get_id()) {
+          found = true;
+          auto* context = it.getContext();
+          EXPECT_EQ(context, expected);
+          if (context) {
+            EXPECT_EQ(context->getRootId(), 123);
+            EXPECT_TRUE(context->hasContextData(testtoken));
+          }
+          EXPECT_EQ(destroyed, 0);
+        }
+      }
+    }
+    EXPECT_TRUE(found);
+    inspected.wait();
+    thread.join();
+    EXPECT_EQ(destroyed, 1);
+  }
+}
+
+TEST_F(RequestContextTest, LocalHandleCaptureOutlivesOwnerAndActivation) {
+  std::atomic<int> destroyed{0};
+  std::shared_ptr<RequestContext> captured;
+  std::weak_ptr<RequestContext> weak;
+  {
+    auto owner = makeLocalHandle();
+    owner->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    BorrowedRequestContextScopeGuard guard(owner);
+    captured = RequestContext::saveContext();
+    auto again = owner.capture();
+    EXPECT_EQ(captured.get(), owner.get());
+    EXPECT_FALSE(captured.owner_before(again));
+    EXPECT_FALSE(again.owner_before(captured));
+    weak = captured;
+    owner.reset();
+  }
+  EXPECT_EQ(destroyed, 0);
+  EXPECT_EQ(RequestContext::try_get(), nullptr);
+  {
+    RequestContextScopeGuard guard(captured);
+    EXPECT_EQ(RequestContext::try_get(), captured.get());
+    EXPECT_TRUE(RequestContext::get()->hasContextData(testtoken));
+  }
+  captured.reset();
+  EXPECT_TRUE(weak.expired());
+  EXPECT_EQ(destroyed, 1);
+}
+
+TEST_F(RequestContextTest, LocalHandleReusesPromotionAfterCpuCaptureRelease) {
+  auto owner = makeLocalHandle();
+  auto* raw = owner.get();
+  std::weak_ptr<RequestContext> weak;
+  {
+    auto captured = owner.capture();
+    weak = captured;
+  }
+  EXPECT_FALSE(weak.expired());
+  {
+    BorrowedRequestContextScopeGuard guard(owner);
+    auto captured = RequestContext::saveContext();
+    EXPECT_EQ(captured.get(), raw);
+    auto original = weak.lock();
+    EXPECT_FALSE(captured.owner_before(original));
+    EXPECT_FALSE(original.owner_before(captured));
+    owner.reset();
+    EXPECT_EQ(RequestContext::try_get(), raw);
+  }
+  EXPECT_TRUE(weak.expired());
+}
+
+TEST_F(RequestContextTest, LocalHandleSetContextReturnsOwnedPrevious) {
+  std::atomic<int> destroyed{0};
+  std::shared_ptr<RequestContext> previous;
+  {
+    auto owner = makeLocalHandle();
+    owner->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    BorrowedRequestContextScopeGuard guard(owner);
+    previous = RequestContext::setContext(nullptr);
+    EXPECT_EQ(previous.get(), owner.get());
+    EXPECT_EQ(RequestContext::try_get(), nullptr);
+    owner.reset();
+  }
+  EXPECT_EQ(destroyed, 0);
+  EXPECT_TRUE(previous->hasContextData(testtoken));
+  previous.reset();
+  EXPECT_EQ(destroyed, 1);
+}
+
+static_assert(
+    sizeof(RequestContext::StaticContext) ==
+    sizeof(std::shared_ptr<RequestContext>) + sizeof(std::atomic<intptr_t>));
+static_assert(
+    offsetof(RequestContext::StaticContext, rootId) ==
+    sizeof(std::shared_ptr<RequestContext>));
+static_assert(
+    sizeof(RequestContextSaverScopeGuard) ==
+    sizeof(std::shared_ptr<RequestContext>));
+static_assert(
+    alignof(RequestContextSaverScopeGuard) ==
+    alignof(std::shared_ptr<RequestContext>));
+static_assert(
+    sizeof(RequestContextScopeGuard) ==
+    sizeof(std::shared_ptr<RequestContext>));
+static_assert(
+    alignof(RequestContextScopeGuard) ==
+    alignof(std::shared_ptr<RequestContext>));
+static_assert(
+    sizeof(ShallowCopyRequestContextScopeGuard) ==
+    sizeof(std::shared_ptr<RequestContext>));
+static_assert(
+    alignof(ShallowCopyRequestContextScopeGuard) ==
+    alignof(std::shared_ptr<RequestContext>));
+
+TEST_F(RequestContextTest, LocalHandleRestoredAfterSharedAndShallowScopes) {
+  auto owner = makeLocalHandle();
+  owner->setContextData(testtoken, std::make_unique<TestData>(10));
+  BorrowedRequestContextScopeGuard outer(owner);
+  {
+    RequestContextScopeGuard shared;
+    EXPECT_NE(RequestContext::try_get(), owner.get());
+    EXPECT_THROW(RequestContext::saveContextLocal(), std::logic_error);
+  }
+  EXPECT_EQ(RequestContext::try_get(), owner.get());
+  EXPECT_EQ(RequestContext::saveContext().get(), owner.get());
+  EXPECT_THROW(RequestContext::saveContextLocal(), std::logic_error);
+  {
+    ShallowCopyRequestContextScopeGuard child(
+        testtoken, std::make_unique<TestData>(20));
+    EXPECT_NE(RequestContext::try_get(), owner.get());
+    EXPECT_EQ(20, getData().data_);
+    EXPECT_EQ(RequestContext::get()->getRootId(), owner->getRootId());
+  }
+  EXPECT_EQ(RequestContext::try_get(), owner.get());
+  EXPECT_EQ(RequestContext::saveContext().get(), owner.get());
+  EXPECT_THROW(RequestContext::saveContextLocal(), std::logic_error);
+  EXPECT_EQ(10, getData().data_);
+}
+
+TEST_F(RequestContextTest, LocalAmbientRestoredAfterSaverScope) {
+  std::atomic<int> destroyed{0};
+  {
+    LocalRequestContextScopeGuard ambient;
+    auto* raw = RequestContext::try_get();
+    raw->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    {
+      RequestContextSaverScopeGuard saver;
+      saver.setContext(std::make_shared<RequestContext>());
+      EXPECT_NE(RequestContext::try_get(), raw);
+      saver.restoreContext();
+      EXPECT_EQ(RequestContext::saveContext().get(), raw);
+      EXPECT_TRUE(RequestContext::try_get()->hasContextData(testtoken));
+      saver.setContext(std::make_shared<RequestContext>());
+      EXPECT_NE(RequestContext::try_get(), raw);
+      EXPECT_EQ(destroyed, 0);
+    }
+    EXPECT_EQ(RequestContext::saveContext().get(), raw);
+    EXPECT_TRUE(RequestContext::try_get()->hasContextData(testtoken));
+    EXPECT_EQ(destroyed, 0);
+  }
+  EXPECT_EQ(destroyed, 1);
+  EXPECT_EQ(RequestContext::try_get(), nullptr);
+}
+
+TEST_F(RequestContextTest, LocalOwnerOutlivesBindingAndCpuCapture) {
+  std::atomic<int> destroyed{0};
+  std::weak_ptr<RequestContext> weak;
+  {
+    LocalRequestContextScopeGuard owner;
+    RequestContext::get()->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    auto captured = RequestContext::setContext(nullptr);
+    weak = captured;
+    EXPECT_EQ(RequestContext::try_get(), nullptr);
+    std::thread cpu([context = std::move(captured)]() mutable {
+      context.reset();
+    });
+    cpu.join();
+    EXPECT_FALSE(weak.expired());
+    EXPECT_EQ(destroyed, 0);
+  }
+  EXPECT_TRUE(weak.expired());
+  EXPECT_EQ(destroyed, 1);
+}
+
+TEST_F(RequestContextTest, ConcurrentCpuCaptureAndLastLocalPinRelease) {
+  for (int i = 0; i < 64; ++i) {
+    std::atomic<int> destroyed{0};
+    auto owner = makeLocalHandle();
+    owner->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    auto captured = owner.capture();
+    std::weak_ptr<RequestContext> weak = captured;
+    folly::test::Barrier release(2);
+    std::thread cpu([&release, context = std::move(captured)]() mutable {
+      release.wait();
+      context.reset();
+    });
+    release.wait();
+    owner.reset();
+    cpu.join();
+    EXPECT_TRUE(weak.expired());
+    EXPECT_EQ(destroyed, 1);
+  }
+}
+
+TEST_F(RequestContextTest, LocalHandlePromotesBeforeCpuOffload) {
+  std::atomic<int> destroyed{0};
+  constexpr std::size_t numThreads = 8;
+  folly::test::Barrier activated(numThreads + 1);
+  folly::test::Barrier released(numThreads + 1);
+  std::vector<std::thread> threads;
+  {
+    auto owner = makeLocalHandle();
+    owner->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    auto* raw = owner.get();
+    BorrowedRequestContextScopeGuard guard(owner);
+    for (std::size_t i = 0; i < numThreads; ++i) {
+      auto capturedContext = RequestContext::saveContext();
+      threads.emplace_back([&, raw, context = std::move(capturedContext)] {
+        RequestContextScopeGuard cpuGuard(context);
+        activated.wait();
+        released.wait();
+        EXPECT_EQ(RequestContext::try_get(), raw);
+        EXPECT_TRUE(RequestContext::get()->hasContextData(testtoken));
+        auto captured = RequestContext::saveContext();
+        EXPECT_FALSE(captured.owner_before(context));
+        EXPECT_FALSE(context.owner_before(captured));
+      });
+    }
+    activated.wait();
+    owner.reset();
+    EXPECT_EQ(destroyed, 0);
+  }
+  EXPECT_EQ(destroyed, 0);
+  released.wait();
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  EXPECT_EQ(destroyed, 1);
+}
+
+TEST_F(RequestContextTest, LocalHandleCpuReleaseKeepsEvbScopeAlive) {
+  std::atomic<int> destroyed{0};
+  auto owner = makeLocalHandle();
+  owner->setContextData(
+      testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+  auto* raw = owner.get();
+  {
+    BorrowedRequestContextScopeGuard guard(owner);
+    std::thread cpu([context = RequestContext::saveContext()]() mutable {
+      RequestContextScopeGuard cpuGuard(std::move(context));
+      EXPECT_TRUE(RequestContext::get()->hasContextData(testtoken));
+    });
+    owner.reset();
+    cpu.join();
+    EXPECT_EQ(destroyed, 0);
+    EXPECT_EQ(RequestContext::try_get(), raw);
+    EXPECT_TRUE(raw->hasContextData(testtoken));
+  }
+  EXPECT_EQ(destroyed, 1);
+}
+
+#ifndef NDEBUG
+TEST_F(RequestContextTest, LocalOwnerRejectsCpuDestruction) {
+  EXPECT_DEATH(
+      {
+        auto owner = std::make_unique<LocalRequestContextScopeGuard>();
+        std::thread cpu([scope = std::move(owner)]() mutable {
+          scope.reset();
+        });
+        cpu.join();
+      },
+      "thread == std::this_thread::get_id");
+}
+
+TEST_F(RequestContextTest, LocalHandleRejectsCpuActivation) {
+  auto owner = makeLocalHandle();
+  EXPECT_DEATH(
+      {
+        std::thread cpu([&] { BorrowedRequestContextScopeGuard guard(owner); });
+        cpu.join();
+      },
+      "thread == std::this_thread::get_id");
+}
+
+TEST_F(RequestContextTest, BorrowedScopeRejectsCpuDestruction) {
+  auto owner = makeLocalHandle();
+  for (bool sharedPrevious : {false, true}) {
+    RequestContextScopeGuard previous(
+        sharedPrevious ? std::make_shared<RequestContext>() : nullptr);
+    EXPECT_DEATH(
+        {
+          auto scope =
+              std::make_unique<BorrowedRequestContextScopeGuard>(owner);
+          std::thread cpu([scope = std::move(scope)]() mutable {
+            scope.reset();
+          });
+          cpu.join();
+        },
+        "thread_ == std::this_thread::get_id");
+  }
+}
+#endif
+
+TEST_F(RequestContextTest, LocalHandleEventBaseCaptureOutlivesRequest) {
+  std::atomic<int> destroyed{0};
+  bool ran = false;
+  {
+    EventBase base;
+    auto owner = makeLocalHandle();
+    owner->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    auto* raw = owner.get();
+    {
+      BorrowedRequestContextScopeGuard guard(owner);
+      base.runInEventBaseThread([&] {
+        ran = true;
+        EXPECT_EQ(RequestContext::try_get(), raw);
+        EXPECT_TRUE(RequestContext::get()->hasContextData(testtoken));
+        base.terminateLoopSoon();
+      });
+    }
+    owner.reset();
+    EXPECT_EQ(destroyed, 0);
+    base.loopForever();
+    EXPECT_TRUE(ran);
+    EXPECT_EQ(RequestContext::try_get(), nullptr);
+  }
+  EXPECT_EQ(destroyed, 1);
+}
+
+TEST_F(RequestContextTest, LocalHandleSuspendedScopeSurvivesOwnerRelease) {
+  std::atomic<int> destroyed{0};
+  auto parent = makeLocalHandle();
+  auto child = makeLocalHandle();
+  parent->setContextData(
+      testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+  auto* raw = parent.get();
+  {
+    BorrowedRequestContextScopeGuard outer(parent);
+    {
+      BorrowedRequestContextScopeGuard inner(child);
+      parent.reset();
+      child.reset();
+      EXPECT_EQ(destroyed, 0);
+    }
+    EXPECT_EQ(RequestContext::try_get(), raw);
+    EXPECT_TRUE(raw->hasContextData(testtoken));
+    EXPECT_EQ(destroyed, 0);
+  }
+  EXPECT_EQ(destroyed, 1);
+  EXPECT_EQ(RequestContext::try_get(), nullptr);
+}
+
+namespace {
+struct WatcherState {
+  int callCount{0};
+  std::shared_ptr<RequestContext> lastPrev;
+  std::shared_ptr<RequestContext> lastCurrent;
+};
+
+thread_local WatcherState* g_watcherState = nullptr;
 
 void testWatcher(
     const std::shared_ptr<RequestContext>& prev,
     const std::shared_ptr<RequestContext>& ctx) {
-  g_callCount++;
-  g_lastPrev = prev;
-  g_lastCurrent = ctx;
+  if (g_watcherState) {
+    g_watcherState->callCount++;
+    g_watcherState->lastPrev = prev;
+    g_watcherState->lastCurrent = ctx;
+  }
 }
+
+thread_local WatcherState* g_registrationWatcherState = nullptr;
+std::atomic<int> g_callbackRegistrations{0};
+
+void registeredDuringCallbackWatcher(
+    const std::shared_ptr<RequestContext>& prev,
+    const std::shared_ptr<RequestContext>& ctx) {
+  if (g_registrationWatcherState) {
+    ++g_registrationWatcherState->callCount;
+    g_registrationWatcherState->lastPrev = prev;
+    g_registrationWatcherState->lastCurrent = ctx;
+  }
+}
+
+class WatcherRegistrationData : public RequestData {
+ public:
+  explicit WatcherRegistrationData(bool onSet) : registerOnSet_(onSet) {}
+  bool hasCallback() override { return true; }
+  void onSet() override { maybeRegister(true); }
+  void onUnset() override { maybeRegister(false); }
+  void arm() { armed_ = true; }
+
+ private:
+  void maybeRegister(bool onSet) {
+    if (armed_ && onSet == registerOnSet_) {
+      armed_ = false;
+      RequestContext::addSetContextWatcher(registeredDuringCallbackWatcher);
+      ++g_callbackRegistrations;
+    }
+  }
+  bool registerOnSet_;
+  bool armed_{false};
+};
 
 } // namespace
 
-TEST_F(RequestContextTest, AddSetContextWatcher) {
-  // Reset state for clean test
-  g_callCount = 0;
-  g_lastPrev.reset();
-  g_lastCurrent.reset();
+TEST_F(RequestContextTest, WatchersRegisteredDuringCallbacksSeeCurrentSwitch) {
+  WatcherState watcher;
+  g_registrationWatcherState = &watcher;
+  SCOPE_EXIT {
+    g_registrationWatcherState = nullptr;
+  };
+  for (bool sharedTarget : {false, true}) {
+    for (bool onSet : {true, false}) {
+      auto previous = makeLocalHandle();
+      auto nextLocal =
+          sharedTarget ? RequestContextHandle{} : makeLocalHandle();
+      auto nextShared =
+          sharedTarget ? std::make_shared<RequestContext>() : nullptr;
+      auto* next = sharedTarget ? nextShared.get() : nextLocal.get();
+      auto data = std::make_unique<WatcherRegistrationData>(onSet);
+      auto* registration = data.get();
+      (onSet ? next : previous.get())
+          ->setContextData(testtoken, std::move(data));
+      BorrowedRequestContextScopeGuard active(previous);
+      watcher.callCount = 0;
+      registration->arm();
+      auto verify = [&] {
+        EXPECT_EQ(watcher.callCount, g_callbackRegistrations.load());
+        EXPECT_EQ(watcher.lastPrev.get(), previous.get());
+        EXPECT_EQ(watcher.lastCurrent.get(), next);
+      };
+      if (sharedTarget) {
+        RequestContextScopeGuard target(nextShared);
+        verify();
+      } else {
+        BorrowedRequestContextScopeGuard target(nextLocal);
+        verify();
+      }
+    }
+  }
+}
 
-  // Add the watcher
-  RequestContext::addSetContextWatcher(testWatcher);
+TEST_F(RequestContextTest, AddSetContextWatcher) {
+  std::atomic<int> destroyed{0};
+  WatcherState watcher;
+  g_watcherState = &watcher;
+  SCOPE_EXIT {
+    g_watcherState = nullptr;
+  };
+  static folly::once_flag registered;
+  folly::call_once(registered, [] {
+    RequestContext::addSetContextWatcher(testWatcher);
+  });
 
   // Initially no calls
-  EXPECT_EQ(0, g_callCount);
+  EXPECT_EQ(0, watcher.callCount);
 
   // Create initial context
   RequestContext::create();
   auto ctx1 = RequestContext::saveContext();
-  EXPECT_EQ(1, g_callCount);
-  EXPECT_EQ(nullptr, g_lastPrev);
-  EXPECT_EQ(ctx1, g_lastCurrent);
+  EXPECT_EQ(1, watcher.callCount);
+  EXPECT_EQ(nullptr, watcher.lastPrev);
+  EXPECT_EQ(ctx1, watcher.lastCurrent);
 
   // Reset call count for next test
-  g_callCount = 0;
+  watcher.callCount = 0;
 
   // Create and set a new context
   auto ctx2 = std::make_shared<RequestContext>();
   RequestContext::setContext(ctx2);
 
-  EXPECT_EQ(1, g_callCount);
-  EXPECT_EQ(ctx1, g_lastPrev);
-  EXPECT_EQ(ctx2, g_lastCurrent);
+  EXPECT_EQ(1, watcher.callCount);
+  EXPECT_EQ(ctx1, watcher.lastPrev);
+  EXPECT_EQ(ctx2, watcher.lastCurrent);
 
   // Reset call count for next test
-  g_callCount = 0;
+  watcher.callCount = 0;
 
   // Set context to nullptr (should trigger watcher)
   RequestContext::setContext(nullptr);
 
-  EXPECT_EQ(1, g_callCount);
-  EXPECT_EQ(ctx2, g_lastPrev);
-  EXPECT_EQ(nullptr, g_lastCurrent);
+  EXPECT_EQ(1, watcher.callCount);
+  EXPECT_EQ(ctx2, watcher.lastPrev);
+  EXPECT_EQ(nullptr, watcher.lastCurrent);
 
   // Reset call count for next test
-  g_callCount = 0;
+  watcher.callCount = 0;
 
   // Setting the same context will not trigger the watcher
   RequestContext::setContext(nullptr);
 
-  EXPECT_EQ(0, g_callCount);
-  EXPECT_EQ(ctx2, g_lastPrev);
-  EXPECT_EQ(nullptr, g_lastCurrent);
+  EXPECT_EQ(0, watcher.callCount);
+  EXPECT_EQ(ctx2, watcher.lastPrev);
+  EXPECT_EQ(nullptr, watcher.lastCurrent);
+
+  RequestContext* raw;
+  {
+    auto owner = makeLocalHandle();
+    owner->setContextData(
+        testtoken, std::make_unique<LocalLifetimeData>(destroyed));
+    raw = owner.get();
+    {
+      BorrowedRequestContextScopeGuard guard(owner);
+      EXPECT_EQ(watcher.lastCurrent.get(), raw);
+      EXPECT_EQ(RequestContext::saveContextLocal().get(), raw);
+      auto captured = RequestContext::saveContext();
+      EXPECT_EQ(captured.get(), raw);
+      EXPECT_EQ(RequestContext::saveContextLocal().get(), raw);
+      owner.reset();
+      EXPECT_EQ(destroyed, 0);
+    }
+  }
+  EXPECT_EQ(watcher.lastPrev.get(), raw);
+  EXPECT_EQ(watcher.lastCurrent, nullptr);
+  EXPECT_EQ(destroyed, 0);
+  watcher.lastPrev.reset();
+  EXPECT_EQ(destroyed, 1);
 }
 
 namespace {
@@ -962,15 +1618,45 @@ namespace {
 // Records the current context when the RequestData is destroyed.
 class DestructionObserver : public RequestData {
  public:
-  explicit DestructionObserver(RequestContext** out) : out_(out) {}
-  ~DestructionObserver() override { *out_ = RequestContext::try_get(); }
+  explicit DestructionObserver(
+      RequestContext** out, RequestContext** cachedOut = nullptr)
+      : out_(out), cachedOut_(cachedOut) {}
+  ~DestructionObserver() override {
+    *out_ = RequestContext::try_get();
+    if (cachedOut_) {
+      *cachedOut_ = getCachedRequestContext();
+    }
+  }
   bool hasCallback() override { return false; }
 
  private:
   RequestContext** out_;
+  RequestContext** cachedOut_;
 };
 
 } // namespace
+
+TEST_F(RequestContextTest, LocalThreadTeardownClearsSignalSafeCache) {
+  RequestContext* destroyedUnder = nullptr;
+  RequestContext* cachedDuringDestruction = nullptr;
+  std::thread thread([&] {
+    auto handle = makeLocalHandle();
+    destroyedUnder = cachedDuringDestruction = handle.get();
+    handle->setContextData(
+        testtoken,
+        std::make_unique<DestructionObserver>(
+            &destroyedUnder, &cachedDuringDestruction));
+    // Leave the binding active for TLS cleanup without allocating a guard.
+    alignas(BorrowedRequestContextScopeGuard)
+        std::byte storage[sizeof(BorrowedRequestContextScopeGuard)];
+    new (storage) BorrowedRequestContextScopeGuard(handle);
+    EXPECT_EQ(getCachedRequestContext(), handle.get());
+    handle.reset();
+  });
+  thread.join();
+  EXPECT_EQ(destroyedUnder, nullptr);
+  EXPECT_EQ(cachedDuringDestruction, nullptr);
+}
 
 TEST_F(RequestContextTest, SaverScopeGuardSetContext) {
   auto prev = RequestContext::saveContext();

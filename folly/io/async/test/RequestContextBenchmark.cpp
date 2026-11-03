@@ -63,7 +63,7 @@ inline uint64_t run_once(int nthr, const Func& fn) {
 }
 
 template <typename Func>
-uint64_t runBench(int ops, int nthr, const Func& fn) {
+uint64_t runBench(uint64_t ops, int nthr, const Func& fn) {
   uint64_t reps = FLAGS_reps;
   uint64_t min = UINTMAX_MAX;
   uint64_t max = 0;
@@ -206,6 +206,27 @@ uint64_t bench_RequestContextScopeGuard(int nthr, uint64_t ops, bool nonempty) {
   return runBench(ops, nthr, fn);
 }
 
+uint64_t bench_BorrowedRequestContextScopeGuard(
+    int nthr, uint64_t ops, bool capture) {
+  auto fn = [&](int tid) {
+    LocalRequestContextScopeGuard ambientGuard;
+    RequestContextHandle handle;
+    {
+      LocalRequestContextScopeGuard requestGuard;
+      RequestContext::try_get()->setContextData(
+          token, std::make_unique<TestData>(tid));
+      handle = RequestContext::saveContextLocal();
+    }
+    for (uint64_t i = tid; i < ops; i += nthr) {
+      BorrowedRequestContextScopeGuard guard(handle);
+      if (capture) {
+        auto saved = RequestContext::saveContext();
+      }
+    }
+  };
+  return runBench(ops, nthr, fn);
+}
+
 uint64_t bench_ShallowCopyRequestContextScopeGuard(
     int nthr, uint64_t ops, int keep, bool replace) {
   auto fn = [&](int tid) {
@@ -270,6 +291,10 @@ void benches() {
     bench_setContext(i, ops, true);
     std::cout << "RequestContextScopeGuard        ";
     bench_RequestContextScopeGuard(i, ops, true);
+    std::cout << "BorrowedRequestContextScopeGuard";
+    bench_BorrowedRequestContextScopeGuard(i, ops, false);
+    std::cout << "BorrowedScopeGuard+saveContext   ";
+    bench_BorrowedRequestContextScopeGuard(i, ops, true);
     std::cout << "ShallowCopyRequestC...-replace  ";
     bench_ShallowCopyRequestContextScopeGuard(i, ops, 0, true);
     std::cout << "ShallowCopyReq...-keep&replace  ";

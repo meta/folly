@@ -151,7 +151,7 @@ fb_dirsync_cpp_unittest(
     source_headers = ["AsyncSocketTest.h", "AsyncSocketTest2.h"],
     supports_static_listing = False,
     deps = [
-        "fbsource//third-party/glibc:rt",
+        "fbsource//xplat/folly/io/async:io_uring_backend",
         ":async_socket_test_lib",  # @manual
         ":blocking_socket",
         ":callback_state_enum",
@@ -280,6 +280,8 @@ fb_dirsync_cpp_unittest(
     srcs = ["AsyncUDPSocketZeroCopyTest.cpp"],
     oncall = "thrift",
     deps = [
+        "fbsource//xplat/folly:scope_guard",
+        "fbsource//xplat/folly/io:iobuf",
         "//folly:network_address",
         "//folly/io/async:async_base",
         "//folly/io/async:async_udp_socket",
@@ -536,12 +538,15 @@ fb_dirsync_cpp_unittest(
     use_raw_headers = True,
     deps = [
         "fbsource//third-party/fmt:fmt",
+        "fbsource//xplat/folly:scope_guard",
         "//folly:memory",
         "//folly:singleton",
         "//folly/container:enumerate",
         "//folly/io/async:async_base",
         "//folly/io/async:request_context",
+        "//folly/lang:new",
         "//folly/portability:gtest",
+        "//folly/synchronization:call_once",
         "//folly/synchronization:relaxed_atomic",
         "//folly/synchronization/test:barrier",
         "//folly/system:thread_name",
@@ -732,6 +737,10 @@ fb_dirsync_cpp_unittest(
     srcs = ["ZeroCopyTest.cpp"],
     headers = [],
     deps = [
+        "fbsource//xplat/folly/io:iobuf",
+        "fbsource//xplat/folly/io/async:async_base",
+        "fbsource//xplat/folly/io/async:async_socket",
+        "fbsource//xplat/folly/portability:sockets",
         ":io_uring_test_util",
         ":zero_copy_lib",
         "//folly/portability:gtest",
@@ -823,7 +832,6 @@ fb_dirsync_cpp_unittest(
     ],
     supports_static_listing = False,
     deps = [
-        "fbsource//third-party/glibc:dl",
         ":async_ssl_socket_test_lib",  # @manual
         ":blocking_socket",
         ":mocks",
@@ -897,6 +905,16 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_benchmark(
+    name = "request_context_switch_benchmark",
+    srcs = ["RequestContextSwitchBenchmark.cpp"],
+    deps = [
+        "//folly:benchmark",
+        "//folly/io/async:request_context",
+        "//folly/portability:gflags",
+    ],
+)
+
+fb_dirsync_cpp_benchmark(
     name = "request_context_benchmark",
     srcs = ["RequestContextBenchmark.cpp"],
     headers = ["RequestContextHelper.h"],
@@ -962,6 +980,7 @@ fb_dirsync_cpp_unittest(
         "certs/tests-key.pem": ":tests-key.pem",
     },
     deps = [
+        "fbsource//xplat/folly/lang:cstring_view",
         ":ssl_util",
         "//folly:file_util",
         "//folly/io/async:ssl_context",
@@ -1080,8 +1099,8 @@ fb_dirsync_cpp_unittest(
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:epoll_backend",
-        "//folly/io/async/test:async_signal_handler_test_lib",
-        "//folly/io/async/test:event_base_test_lib",
+        "//folly/io/async/test:async_signal_handler_test_lib",  # @manual
+        "//folly/io/async/test:event_base_test_lib",  # @manual
     ],
 )
 
@@ -1092,6 +1111,7 @@ fb_dirsync_cpp_unittest(
     owner = "dmm@xmail.facebook.com",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
+        "fbsource//xplat/folly/portability:unistd",
         "//folly/io/async:async_base",
         "//folly/io/async:epoll_backend",
         "//folly/portability:gtest",
@@ -1140,6 +1160,8 @@ fb_dirsync_cpp_binary(
     labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
+        "fbsource//third-party/glog:glog",
+        "fbsource//xplat/folly/portability:asm",
         "//folly:benchmark",
         "//folly/init:init",
         "//folly/io/async:io_uring_provided_buffer_ring",
@@ -1174,13 +1196,14 @@ fb_dirsync_cpp_unittest(
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
+        "fbsource//xplat/folly:scope_guard",
+        "fbsource//xplat/folly/portability:sys_resource",
         "//folly:file_util",
         "//folly:function",
         "//folly:string",
         "//folly/init:init",
         "//folly/io/async:async_base",
         "//folly/io/async:async_udp_server_socket",
-        "//folly/io/async:async_udp_socket",
         "//folly/io/async:io_uring_backend",
         "//folly/io/async:io_uring_provided_buffer_ring",
         "//folly/io/async/test:async_signal_handler_test_lib",

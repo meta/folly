@@ -446,16 +446,20 @@ fb_dirsync_cpp_library(
     deps = [
         "//folly:demangle",
         "//folly:glog",
+        "//folly:scope_guard",
+        "//folly:utility",
         "//folly/concurrency/container:single_writer_fixed_hash_map",
         "//folly/tracing:static_tracepoint",
     ],
     exported_deps = [
+        ":delayed_destruction",
         "//folly:shared_mutex",
         "//folly:singleton_thread_local",
         "//folly:synchronized",
         "//folly/concurrency:process_local_unique_id",
         "//folly/container:f14_hash",
         "//folly/detail:iterators",
+        "//folly/lang:new",
         "//folly/synchronization:hazptr",
     ],
 )

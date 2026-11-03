@@ -18,8 +18,12 @@
 
 #include <stdexcept>
 
+#include <thread>
+
 #include <folly/Demangle.h>
 #include <folly/GLog.h>
+#include <folly/ScopeGuard.h>
+#include <folly/Utility.h>
 #include <folly/concurrency/container/SingleWriterFixedHashMap.h>
 #include <folly/tracing/StaticTracepoint.h>
 
@@ -591,6 +595,236 @@ RequestContext::State::Combined* RequestContext::State::expand(
   return new Combined(dataCapacity, callbackCapacity, *c);
 }
 
+struct RequestContextHandle::Control final : DelayedDestruction {
+  struct SharedState {
+    ~SharedState();
+    std::unique_ptr<Control> control;
+    std::shared_ptr<SharedState> evbKeepAlive;
+  };
+
+  Control() = default;
+  explicit Control(intptr_t rootId) : context(rootId) {}
+
+  void checkThread() const noexcept {
+#ifndef NDEBUG
+    DCHECK(thread == std::this_thread::get_id());
+#endif
+  }
+
+  IntrusivePtr<Control> pin() noexcept {
+    checkThread();
+    return IntrusivePtr<Control>(this);
+  }
+
+  void onDelayedDestroy(bool delayed) override {
+    checkThread();
+    if (delayed && !getDestroyPending()) {
+      return;
+    }
+    if (shared) {
+      // CPU references can release concurrently. Transfer the EVB's final
+      // pin before releasing it; the last shared reference deletes Control.
+      folly::copy(std::move(shared->evbKeepAlive)); // drop
+      return;
+    }
+    delete this;
+  }
+
+  std::shared_ptr<RequestContext> capture() noexcept(new_is_infallible_v) {
+    checkThread();
+    if (shared) {
+      return std::shared_ptr<RequestContext>(shared->evbKeepAlive, &context);
+    }
+    // Allocate before transferring ownership so failure leaves the EVB owner
+    // intact. The remaining operations cannot throw.
+    auto captured = std::make_shared<SharedState>();
+    captured->control.reset(this);
+    captured->evbKeepAlive = captured;
+    shared = captured.get();
+    return std::shared_ptr<RequestContext>(std::move(captured), &context);
+  }
+
+  RequestContext context;
+  SharedState* shared{nullptr};
+#ifndef NDEBUG
+  const std::thread::id thread = std::this_thread::get_id();
+#endif
+};
+
+RequestContextHandle::Control::SharedState::~SharedState() = default;
+
+RequestContextHandle::RequestContextHandle() noexcept : control_(nullptr) {}
+
+RequestContextHandle::~RequestContextHandle() {
+  reset();
+}
+
+RequestContextHandle::RequestContextHandle(
+    RequestContextHandle&& other) noexcept
+    : control_(std::move(other.control_)) {}
+
+RequestContextHandle& RequestContextHandle::operator=(
+    RequestContextHandle&& other) noexcept {
+  if (this != &other) {
+    reset();
+    control_ = std::move(other.control_);
+  }
+  return *this;
+}
+
+RequestContext* RequestContextHandle::get() const noexcept {
+  if (control_) {
+    control_->checkThread();
+    return &control_->context;
+  }
+  return nullptr;
+}
+
+void RequestContextHandle::reset() noexcept {
+  if (control_) {
+    control_->checkThread();
+    control_.reset();
+  }
+}
+
+std::shared_ptr<RequestContext> RequestContextHandle::capture() const
+    noexcept(new_is_infallible_v) {
+  return control_ ? control_->capture() : nullptr;
+}
+
+RequestContext::ContextState::ContextState() : borrowedContext(nullptr) {}
+
+RequestContext::ContextState::ContextState(
+    std::shared_ptr<RequestContext> context)
+    : requestContext(std::move(context)), borrowedContext(nullptr) {}
+
+RequestContext::ContextState::ContextState(
+    RequestContextHandle::Control& control)
+    : borrowedContext(control.pin()) {}
+
+RequestContext::ContextState::ContextState(const RequestContextHandle& handle)
+    : borrowedContext(
+          handle.control_
+              ? handle.control_->pin()
+              : DelayedDestructionBase::IntrusivePtr<
+                    RequestContextHandle::Control>(nullptr)) {}
+
+RequestContext::ContextState::~ContextState() {
+  if (auto* control = localControl()) {
+    control->checkThread();
+  }
+}
+
+RequestContext::ContextState::ContextState(ContextState&& other) noexcept
+    : requestContext(std::move(other.requestContext)),
+      borrowedContext(std::move(other.borrowedContext)) {}
+
+RequestContext::ContextState& RequestContext::ContextState::operator=(
+    ContextState&& other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
+  if (!localControl() && !other.localControl()) {
+    requestContext = std::move(other.requestContext);
+    return *this;
+  }
+  ContextState previous(std::move(*this));
+  requestContext = std::move(other.requestContext);
+  borrowedContext = std::move(other.borrowedContext);
+  return *this;
+}
+
+void RequestContext::ContextState::swap(ContextState& other) noexcept {
+  requestContext.swap(other.requestContext);
+  std::swap(borrowedContext, other.borrowedContext);
+}
+
+RequestContextHandle::Control* RequestContext::ContextState::localControl()
+    const noexcept {
+  return borrowedContext.get();
+}
+
+RequestContext* RequestContext::ContextState::get() const noexcept {
+  auto* control = localControl();
+  return control ? &control->context : requestContext.get();
+}
+
+std::shared_ptr<RequestContext> RequestContext::ContextState::capture() const
+    noexcept(new_is_infallible_v) {
+  auto* control = localControl();
+  return control ? control->capture() : requestContext;
+}
+
+void RequestContext::ContextState::ensureShared() noexcept(
+    new_is_infallible_v) {
+  if (localControl() && !requestContext) {
+    requestContext = capture();
+  }
+}
+
+void RequestContext::ContextState::swap(ThreadLocalContext& other) noexcept {
+  requestContext.swap(other.requestContext);
+  std::swap(borrowedContext, other.borrowedContext);
+}
+
+RequestContext::ThreadLocalContext::ThreadLocalContext()
+    : borrowedContext(nullptr) {}
+
+RequestContextHandle::Control*
+RequestContext::ThreadLocalContext::localControl() const noexcept {
+  return borrowedContext.get();
+}
+
+RequestContext* RequestContext::ThreadLocalContext::get() const noexcept {
+  auto* control = localControl();
+  return control ? &control->context : requestContext.get();
+}
+
+std::shared_ptr<RequestContext> RequestContext::ThreadLocalContext::capture()
+    const noexcept(new_is_infallible_v) {
+  auto* control = localControl();
+  return control ? control->capture() : requestContext;
+}
+
+void RequestContext::ThreadLocalContext::ensureShared() noexcept(
+    new_is_infallible_v) {
+  if (localControl() && !requestContext) {
+    requestContext = capture();
+  }
+}
+
+LocalRequestContextScopeGuard::LocalRequestContextScopeGuard()
+    : owner_(makeDelayedDestructionUniquePtr<RequestContextHandle::Control>()),
+      prev_(
+          RequestContext::setContextState(
+              RequestContext::ContextState(*owner_))) {}
+
+LocalRequestContextScopeGuard::LocalRequestContextScopeGuard(intptr_t rootId)
+    : owner_(
+          makeDelayedDestructionUniquePtr<RequestContextHandle::Control>(
+              rootId)),
+      prev_(
+          RequestContext::setContextState(
+              RequestContext::ContextState(*owner_))) {}
+
+LocalRequestContextScopeGuard::~LocalRequestContextScopeGuard() {
+  owner_->checkThread();
+  RequestContext::restoreContextState(std::move(prev_));
+}
+
+BorrowedRequestContextScopeGuard::BorrowedRequestContextScopeGuard(
+    const RequestContextHandle& handle)
+    : prev_(
+          RequestContext::setContextState(
+              RequestContext::ContextState(handle))) {}
+
+BorrowedRequestContextScopeGuard::~BorrowedRequestContextScopeGuard() {
+#ifndef NDEBUG
+  DCHECK(thread_ == std::this_thread::get_id());
+#endif
+  RequestContext::restoreContextState(std::move(prev_));
+}
+
 RequestContext::RequestContext() : rootId_(reinterpret_cast<intptr_t>(this)) {}
 
 RequestContext::RequestContext(intptr_t rootid) : rootId_(rootid) {}
@@ -665,6 +899,9 @@ void RequestContext::clearContextData(const RequestToken& val) {
   auto newCtx = std::move(newCtx_); // enforce that it is really moved-from
 
   auto& staticCtx = getStaticContext();
+  if (FOLLY_UNLIKELY(staticCtx.localControl() != nullptr)) {
+    return setContextFromLocal(std::move(newCtx));
+  }
   if (newCtx == staticCtx.requestContext) {
     return newCtx;
   }
@@ -725,6 +962,126 @@ void RequestContext::clearContextData(const RequestToken& val) {
   return prevCtx;
 }
 
+FOLLY_NOINLINE std::shared_ptr<RequestContext>
+RequestContext::setContextFromLocal(std::shared_ptr<RequestContext>&& context) {
+  ContextState state(std::move(context));
+  getStaticContext().ensureShared();
+  return std::move(setContextState(std::move(state)).requestContext);
+}
+
+/* static */ RequestContext::ContextState RequestContext::setContextState(
+    ContextState&& newCtx) {
+  auto& staticCtx = getStaticContext();
+  if (!newCtx.localControl() && !staticCtx.localControl()) {
+    return ContextState(setContext(std::move(newCtx.requestContext)));
+  }
+  return setContextImpl(std::move(newCtx), staticCtx, staticCtx.rootId, true);
+}
+
+/* static */ void RequestContext::restoreContextState(ContextState&& context) {
+  auto& staticCtx = getStaticContext();
+  if (!context.localControl() && !staticCtx.localControl()) {
+    setContext(std::move(context.requestContext));
+  } else {
+    setContextImpl(std::move(context), staticCtx, staticCtx.rootId, true);
+  }
+}
+
+RequestContext::ContextState RequestContext::setContextImpl(
+    ContextState&& newCtx,
+    ThreadLocalContext& current,
+    std::atomic<intptr_t>& rootId,
+    bool notifyWatchers) {
+  auto* newContext = newCtx.get();
+  auto* currentContext = current.get();
+  if (newContext == currentContext) {
+    if (newCtx.localControl() && !current.localControl()) {
+      return ContextState(current.requestContext);
+    }
+    return std::move(newCtx);
+  }
+
+  if (notifyWatchers &&
+      getWatcherRegistry().watchers_.load(std::memory_order_acquire)) {
+    newCtx.ensureShared();
+    current.ensureShared();
+  }
+
+  FOLLY_SDT(
+      folly,
+      request_context_switch_before,
+      currentContext,
+      newContext,
+      currentContext ? currentContext->getRootId() : 0,
+      newContext ? newContext->getRootId() : 0);
+
+  ContextState prevCtx;
+  RequestContext* curCtx = currentContext;
+  bool checkCur = curCtx && curCtx->state_.combined();
+  bool checkNew = newContext && newContext->state_.combined();
+  if (checkCur && checkNew) {
+    hazptr_array<2> h = make_hazard_pointer_array<2>();
+    auto curc = h[0].protect(curCtx->state_.combined_);
+    auto newc = h[1].protect(newContext->state_.combined_);
+    auto& curcb = curc->callbackData_;
+    auto& newcb = newc->callbackData_;
+    for (auto it = curcb.begin(); it != curcb.end(); ++it) {
+      DCHECK(it.key());
+      auto data = it.key();
+      if (!newcb.contains(data)) {
+        data->onUnset();
+      }
+    }
+    prevCtx.swap(current);
+    newCtx.swap(current);
+    rootId.store(current.get()->getRootId(), std::memory_order_relaxed);
+    for (auto it = newcb.begin(); it != newcb.end(); ++it) {
+      DCHECK(it.key());
+      auto data = it.key();
+      if (!curcb.contains(data)) {
+        data->onSet();
+      }
+    }
+  } else {
+    if (curCtx) {
+      curCtx->state_.onUnset();
+    }
+    prevCtx.swap(current);
+    newCtx.swap(current);
+    if (auto* activeContext = current.get()) {
+      rootId.store(activeContext->rootId_, std::memory_order_relaxed);
+      activeContext->state_.onSet();
+    } else {
+      rootId.store(0, std::memory_order_relaxed);
+    }
+  }
+  gAsyncSignalSafeRequestContextCache = current.get();
+  if (notifyWatchers) {
+    auto* watchers =
+        getWatcherRegistry().watchers_.load(std::memory_order_acquire);
+    if (watchers) {
+      auto rollback = makeGuard([&]() noexcept {
+        restoreContextAfterPromotionFailure(
+            std::move(prevCtx), current, rootId);
+      });
+      prevCtx.ensureShared();
+      current.ensureShared();
+      rollback.dismiss();
+    }
+    // Notify the Watchers via the registry
+    getWatcherRegistry().invokeWatchers(
+        watchers, prevCtx.requestContext, current.requestContext);
+  }
+  return prevCtx;
+}
+
+FOLLY_NOINLINE void RequestContext::restoreContextAfterPromotionFailure(
+    ContextState&& context,
+    ThreadLocalContext& current,
+    std::atomic<intptr_t>& rootId) {
+  setContextImpl(std::move(context), current, rootId, false);
+}
+
 /* static */ RequestContext::SetContextWatcherRegistry&
 RequestContext::getWatcherRegistry() {
   static SetContextWatcherRegistry registry;
@@ -739,7 +1096,30 @@ RequestContext::getWatcherRegistry() {
 
 /* static */ std::shared_ptr<RequestContext> RequestContext::saveContext() {
   auto* staticContext = tryGetStaticContext();
+  if (FOLLY_UNLIKELY(staticContext && staticContext->localControl())) {
+    return saveContextFromLocal(*staticContext);
+  }
   return staticContext ? staticContext->requestContext : nullptr;
+}
+
+FOLLY_NOINLINE std::shared_ptr<RequestContext>
+RequestContext::saveContextFromLocal(ThreadLocalContext& context) noexcept(
+    new_is_infallible_v) {
+  return context.capture();
+}
+
+/* static */ RequestContextHandle RequestContext::saveContextLocal() {
+  RequestContextHandle handle;
+  auto* state = tryGetStaticContext();
+  if (state == nullptr) {
+    return handle;
+  }
+  if (auto* control = state->localControl()) {
+    handle.control_ = control->pin();
+  } else if (state->requestContext) {
+    throw std::logic_error("saveContextLocal requires a local context");
+  }
+  return handle;
 }
 
 RequestContext::StaticContext::~StaticContext() {
@@ -750,11 +1130,20 @@ RequestContext::StaticContext::~StaticContext() {
   std::ignore = std::exchange(requestContext, {});
 }
 
-/* static */ RequestContext::StaticContext& RequestContext::getStaticContext() {
+RequestContext::ThreadLocalContext::~ThreadLocalContext() {
+  if (borrowedContext) {
+    gAsyncSignalSafeRequestContextCache = nullptr;
+    ContextState context;
+    context.swap(*this);
+  }
+}
+
+/* static */ RequestContext::ThreadLocalContext&
+RequestContext::getStaticContext() {
   return StaticContextThreadLocal::get();
 }
 
-/* static */ RequestContext::StaticContext*
+/* static */ RequestContext::ThreadLocalContext*
 RequestContext::tryGetStaticContext() {
   return StaticContextThreadLocal::try_get();
 }
@@ -776,6 +1165,10 @@ RequestContext::getRootIdsFromAllThreads() {
 
 /* static */ std::shared_ptr<RequestContext>
 RequestContext::setShallowCopyContext() {
+  if (getStaticContext().localControl()) {
+    getStaticContext().ensureShared();
+    return std::move(setShallowCopyContextState().requestContext);
+  }
   auto& parent = getStaticContext().requestContext;
   auto child = parent
       ? RequestContext::copyAsChild(*parent)
@@ -791,10 +1184,37 @@ RequestContext::setShallowCopyContext() {
   return child;
 }
 
+/* static */ RequestContext::ContextState
+RequestContext::setShallowCopyContextState() {
+  auto& staticCtx = getStaticContext();
+  auto* parent = staticCtx.get();
+  auto child = parent
+      ? RequestContext::copyAsChild(*parent)
+      : std::make_shared<RequestContext>();
+  if (!parent) {
+    child->rootId_ = 0;
+  }
+  // Do not use setContext to avoid global set/unset
+  // Also rootId does not change so do not bother setting it.
+  auto* watchers =
+      getWatcherRegistry().watchers_.load(std::memory_order_acquire);
+  if (watchers) {
+    staticCtx.ensureShared();
+  }
+  ContextState previous;
+  previous.swap(staticCtx);
+  ContextState current(std::move(child));
+  current.swap(staticCtx);
+  gAsyncSignalSafeRequestContextCache = staticCtx.get();
+  getWatcherRegistry().invokeWatchers(
+      watchers, previous.requestContext, staticCtx.requestContext);
+  return previous;
+}
+
 /* static */ RequestContext* RequestContext::get() {
   if (auto* staticContext = tryGetStaticContext()) {
-    if (auto& context = staticContext->requestContext) {
-      return context.get();
+    if (auto* context = staticContext->get()) {
+      return context;
     }
   }
 
@@ -804,7 +1224,7 @@ RequestContext::setShallowCopyContext() {
 
 /* static */ RequestContext* RequestContext::try_get() {
   if (auto* staticContext = tryGetStaticContext()) {
-    return staticContext->requestContext.get();
+    return staticContext->get();
   }
   return nullptr;
 }

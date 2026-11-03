@@ -1323,6 +1323,10 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     RequestContextBenchmark.cpp
     HEADERS
     RequestContextHelper.h
+    BENCHMARK
+    io_async_request_context_switch_benchmark
+    SOURCES
+    RequestContextSwitchBenchmark.cpp
     TEST
     io_async_request_context_test
     WINDOWS_DISABLED
