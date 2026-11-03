@@ -44,18 +44,18 @@ const uint32_t kMaxAbbreviationEntries = 1000;
 // A struct contains an Elf object and different debug sections.
 struct DebugSections {
   const ElfFile* elf;
-  folly::StringPiece debugCuIndex; // .debug_cu_index
-  folly::StringPiece debugAbbrev; // .debug_abbrev
-  folly::StringPiece debugAddr; // .debug_addr (DWARF 5)
-  folly::StringPiece debugAranges; // .debug_aranges
-  folly::StringPiece debugInfo; // .debug_info
-  folly::StringPiece debugLine; // .debug_line
-  folly::StringPiece debugLineStr; // .debug_line_str (DWARF 5)
-  folly::StringPiece debugLoclists; // .debug_loclists (DWARF 5)
-  folly::StringPiece debugRanges; // .debug_ranges
-  folly::StringPiece debugRnglists; // .debug_rnglists (DWARF 5)
-  folly::StringPiece debugStr; // .debug_str
-  folly::StringPiece debugStrOffsets; // .debug_str_offsets (DWARF 5)
+  std::span<const uint8_t> debugCuIndex; // .debug_cu_index
+  std::span<const uint8_t> debugAbbrev; // .debug_abbrev
+  std::span<const uint8_t> debugAddr; // .debug_addr (DWARF 5)
+  std::span<const uint8_t> debugAranges; // .debug_aranges
+  std::span<const uint8_t> debugInfo; // .debug_info
+  std::span<const uint8_t> debugLine; // .debug_line
+  std::span<const uint8_t> debugLineStr; // .debug_line_str (DWARF 5)
+  std::span<const uint8_t> debugLoclists; // .debug_loclists (DWARF 5)
+  std::span<const uint8_t> debugRanges; // .debug_ranges
+  std::span<const uint8_t> debugRnglists; // .debug_rnglists (DWARF 5)
+  std::span<const uint8_t> debugStr; // .debug_str
+  std::span<const uint8_t> debugStrOffsets; // .debug_str_offsets (DWARF 5)
 };
 
 // Abbreviation for a Debugging Information Entry.
@@ -151,8 +151,10 @@ struct Attribute {
   std::variant<uint64_t, folly::StringPiece> attrValue;
 };
 
+folly::StringPiece asStringPiece(std::span<const uint8_t> bytes) noexcept;
+
 // Get an ELF section by name.
-folly::StringPiece getElfSection(const ElfFile* elf, const char* name);
+std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name);
 
 // All following read* functions read from a StringPiece, advancing the
 // StringPiece, and aborting if there's not enough room.

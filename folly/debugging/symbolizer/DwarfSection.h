@@ -16,7 +16,10 @@
 
 #pragma once
 
-#include <folly/Range.h>
+#include <cstdint>
+#include <span>
+
+#include <folly/portability/Config.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
 
@@ -33,13 +36,13 @@ class DwarfSection {
  public:
   DwarfSection() : is64Bit_(false) {}
 
-  explicit DwarfSection(folly::StringPiece d);
+  explicit DwarfSection(std::span<const uint8_t> data);
 
   /**
    * Return next chunk, if any; the 4- or 12-byte length was already
    * parsed and isn't part of the chunk.
    */
-  bool next(folly::StringPiece& chunk);
+  bool next(std::span<const uint8_t>& chunk);
 
   /** Is the current chunk 64 bit? */
   bool is64Bit() const { return is64Bit_; }
@@ -47,7 +50,7 @@ class DwarfSection {
  private:
   // Yes, 32- and 64- bit sections may coexist.  Yikes!
   bool is64Bit_;
-  folly::StringPiece data_;
+  std::span<const uint8_t> data_;
 };
 
 } // namespace symbolizer

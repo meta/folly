@@ -23,31 +23,34 @@
 namespace folly {
 namespace symbolizer {
 
-DwarfSection::DwarfSection(folly::StringPiece d) : is64Bit_(false), data_(d) {}
+DwarfSection::DwarfSection(std::span<const uint8_t> data)
+    : is64Bit_(false), data_(data) {}
 
 // Next chunk in section
-bool DwarfSection::next(folly::StringPiece& chunk) {
-  chunk = data_;
-  if (chunk.empty()) {
+bool DwarfSection::next(std::span<const uint8_t>& chunk) {
+  auto cursor = asStringPiece(data_);
+  if (cursor.empty()) {
     return false;
   }
 
   // Initial length is a uint32_t value for a 32-bit section, and
   // a 96-bit value (0xffffffff followed by the 64-bit length) for a 64-bit
-  // section.
-  auto initialLength = read<uint32_t>(chunk);
-  is64Bit_ = (initialLength == uint32_t(-1));
-  auto length = is64Bit_ ? read<uint64_t>(chunk) : initialLength;
-  if (length > chunk.size()) {
-    FOLLY_SAFE_DFATAL(
-        "invalid DWARF section, length: ",
-        length,
-        " chunk.size(): ",
-        chunk.size());
+  // section. Either read below aborts on truncation, so check first.
+  if (data_.size() < sizeof(uint32_t)) {
     return false;
   }
-  chunk.reset(chunk.data(), length);
-  data_.assign(chunk.end(), data_.end());
+  auto initialLength = read<uint32_t>(cursor);
+  is64Bit_ = (initialLength == uint32_t(-1));
+  if (is64Bit_ && cursor.size() < sizeof(uint64_t)) {
+    return false;
+  }
+  auto length = is64Bit_ ? read<uint64_t>(cursor) : initialLength;
+  if (length > cursor.size()) {
+    return false;
+  }
+  auto headerSize = data_.size() - cursor.size();
+  chunk = data_.subspan(headerSize, length);
+  data_ = data_.subspan(headerSize + length);
   return true;
 }
 

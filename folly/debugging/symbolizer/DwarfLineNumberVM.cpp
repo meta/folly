@@ -26,17 +26,19 @@ namespace folly {
 namespace symbolizer {
 
 DwarfLineNumberVM::DwarfLineNumberVM(
-    folly::StringPiece data,
+    std::span<const uint8_t> data,
     folly::StringPiece compilationDirectory,
     const DebugSections& debugSections)
     : compilationDirectory_(compilationDirectory),
       debugSections_(debugSections) {
   DwarfSection section(data);
-  if (!section.next(data_)) {
+  std::span<const uint8_t> chunk;
+  if (!section.next(chunk)) {
     FOLLY_SAFE_DFATAL("invalid line number VM");
     reset();
     return;
   }
+  data_ = asStringPiece(chunk);
   is64Bit_ = section.is64Bit();
   initializationSuccess_ = init();
 }
@@ -67,8 +69,8 @@ folly::Optional<LineNumberAttribute> readLineNumberAttribute(
     bool is64Bit,
     folly::StringPiece& format,
     folly::StringPiece& entries,
-    folly::StringPiece debugStr,
-    folly::StringPiece debugLineStr) {
+    std::span<const uint8_t> debugStr,
+    std::span<const uint8_t> debugLineStr) {
   uint64_t contentTypeCode = readULEB(format);
   uint64_t formCode = readULEB(format);
   std::variant<uint64_t, folly::StringPiece> attrValue;
@@ -81,11 +83,12 @@ folly::Optional<LineNumberAttribute> readLineNumberAttribute(
           break;
         case DW_FORM_line_strp: {
           auto off = readOffset(entries, is64Bit);
-          attrValue = getStringFromStringSection(debugLineStr, off);
+          attrValue =
+              getStringFromStringSection(asStringPiece(debugLineStr), off);
         } break;
         case DW_FORM_strp:
           attrValue = getStringFromStringSection(
-              debugStr, readOffset(entries, is64Bit));
+              asStringPiece(debugStr), readOffset(entries, is64Bit));
           break;
         case DW_FORM_strp_sup:
           FOLLY_SAFE_DFATAL("Unexpected DW_FORM_strp_sup");

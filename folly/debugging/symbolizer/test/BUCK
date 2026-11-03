@@ -169,6 +169,18 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "dwarf_section_test",
+    srcs = ["DwarfSectionTest.cpp"],
+    labels = fbcode_ci_default_labels(),
+    target_compatible_with = ["ovr_config//runtime:fbcode"],
+    deps = [
+        "fbsource//xplat/folly/portability:config",
+        "//folly/debugging/symbolizer:dwarf",
+        "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "symbol_cache_test",
     srcs = ["SymbolCacheTest.cpp"],
     labels = fbcode_ci_default_labels(),

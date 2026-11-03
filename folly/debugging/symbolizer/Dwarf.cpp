@@ -69,10 +69,11 @@ namespace {
  * .debug_info for compilation unit to which this address belongs.
  */
 bool findDebugInfoOffset(
-    uintptr_t address, StringPiece aranges, uint64_t& offset) {
+    uintptr_t address, std::span<const uint8_t> aranges, uint64_t& offset) {
   DwarfSection section(aranges);
-  folly::StringPiece chunk;
-  while (section.next(chunk)) {
+  std::span<const uint8_t> chunkBytes;
+  while (section.next(chunkBytes)) {
+    auto chunk = asStringPiece(chunkBytes);
     auto version = read<uint16_t>(chunk);
     if (version != 2) {
       FOLLY_SAFE_DFATAL("invalid aranges version: ", version);
@@ -96,7 +97,8 @@ bool findDebugInfoOffset(
     // padding.
     {
       size_t alignment = 2 * sizeof(uintptr_t);
-      size_t remainder = (chunk.data() - aranges.data()) % alignment;
+      size_t remainder =
+          (chunk.data() - asStringPiece(aranges).data()) % alignment;
       if (remainder != 0) {
         if (alignment - remainder > chunk.size()) {
           FOLLY_SAFE_DFATAL(

@@ -28,7 +28,7 @@ namespace symbolizer {
 class DwarfLineNumberVM {
  public:
   DwarfLineNumberVM(
-      folly::StringPiece data,
+      std::span<const uint8_t> data,
       folly::StringPiece compilationDirectory,
       const DebugSections& debugSections);
 

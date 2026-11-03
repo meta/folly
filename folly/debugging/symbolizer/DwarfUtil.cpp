@@ -31,7 +31,12 @@
 namespace folly {
 namespace symbolizer {
 
-folly::StringPiece getElfSection(const ElfFile* elf, const char* name) {
+folly::StringPiece asStringPiece(std::span<const uint8_t> bytes) noexcept {
+  return folly::StringPiece(
+      reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+
+std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name) {
   const ElfShdr* elfSection = elf->getSectionByName(name);
   if (!elfSection) {
     return {};
@@ -41,9 +46,7 @@ folly::StringPiece getElfSection(const ElfFile* elf, const char* name) {
     return {};
   }
 #endif
-  auto body = elf->getSectionBody(*elfSection);
-  return folly::StringPiece(
-      reinterpret_cast<const char*>(body.data()), body.size());
+  return elf->getSectionBody(*elfSection);
 }
 
 // Read (bitwise) an unsigned number of N bytes (N in 1, 2, 3, 4).
@@ -266,7 +269,7 @@ bool findCompiliationOffset(
 }
 
 bool parseCompilationUnitMetadata(CompilationUnit& cu, size_t offset) {
-  auto debugInfo = cu.debugSections.debugInfo;
+  auto debugInfo = asStringPiece(cu.debugSections.debugInfo);
   folly::StringPiece chunk(debugInfo);
   cu.offset = offset;
   chunk.advance(offset);
@@ -382,7 +385,7 @@ CompilationUnits getCompilationUnits(
     const DebugSections& debugSections,
     uint64_t offset,
     bool requireSplitDwarf) {
-  const folly::StringPiece debugInfo = debugSections.debugInfo;
+  const folly::StringPiece debugInfo = asStringPiece(debugSections.debugInfo);
   FOLLY_SAFE_DCHECK(offset < debugInfo.size(), "unexpected offset");
   CompilationUnits cu;
   cu.mainCompilationUnit.debugSections = debugSections;
@@ -483,7 +486,7 @@ CompilationUnits getCompilationUnits(
 
   if (useDWP) {
     if (!findCompiliationOffset(
-            splitCU.debugSections.debugCuIndex,
+            asStringPiece(splitCU.debugSections.debugCuIndex),
             *cu.mainCompilationUnit.dwoId,
             splitCU) ||
         !parseCompilationUnitMetadata(splitCU, splitCU.offset)) {
@@ -549,7 +552,8 @@ CompilationUnits getCompilationUnits(
 }
 
 Die getDieAtOffset(const CompilationUnit& cu, uint64_t offset) {
-  const folly::StringPiece debugInfo = cu.debugSections.debugInfo;
+  const folly::StringPiece debugInfo =
+      asStringPiece(cu.debugSections.debugInfo);
   FOLLY_SAFE_DCHECK(offset < debugInfo.size(), "unexpected offset");
   Die die;
   folly::StringPiece sp = folly::StringPiece{
@@ -565,7 +569,7 @@ Die getDieAtOffset(const CompilationUnit& cu, uint64_t offset) {
   die.abbr = !cu.abbrCache.empty() && die.code < kMaxAbbreviationEntries
       ? cu.abbrCache[die.code - 1]
       : getAbbreviation(
-            cu.debugSections.debugAbbrev,
+            asStringPiece(cu.debugSections.debugAbbrev),
             die.code,
             cu.abbrevOffset.value_or(0));
 
@@ -599,9 +603,11 @@ Attribute readAttribute(
     // the value of DW_AT_str_offsets_base is implicitly zero.
     auto strOffsetsOffset = cu.strOffsetsBase.value_or(0) +
         index * (cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t));
-    auto sp = cu.debugSections.debugStrOffsets.subpiece(strOffsetsOffset);
+    auto sp = asStringPiece(cu.debugSections.debugStrOffsets)
+                  .subpiece(strOffsetsOffset);
     uint64_t strOffset = readOffset(sp, cu.is64Bit);
-    return getStringFromStringSection(cu.debugSections.debugStr, strOffset);
+    return getStringFromStringSection(
+        asStringPiece(cu.debugSections.debugStr), strOffset);
   };
 
   auto readDebugAddr = [&](uint64_t index) {
@@ -612,8 +618,8 @@ Attribute readAttribute(
     // The DW_AT_addr_base attribute points to the first entry following
     // the header. The entries are indexed sequentially from this base
     // entry, starting from 0.
-    auto sp = cu.debugSections.debugAddr.subpiece(
-        *cu.addrBase + index * sizeof(uint64_t));
+    auto sp = asStringPiece(cu.debugSections.debugAddr)
+                  .subpiece(*cu.addrBase + index * sizeof(uint64_t));
     return read<uint64_t>(sp);
   };
 
@@ -669,7 +675,8 @@ Attribute readAttribute(
           spec,
           die,
           getStringFromStringSection(
-              cu.debugSections.debugStr, readOffset(info, die.is64Bit))};
+              asStringPiece(cu.debugSections.debugStr),
+              readOffset(info, die.is64Bit))};
     case DW_FORM_indirect: // form is explicitly specified
       // Update spec with the actual FORM.
       spec.form = readULEB(info);
@@ -700,7 +707,8 @@ Attribute readAttribute(
           spec,
           die,
           getStringFromStringSection(
-              cu.debugSections.debugLineStr, readOffset(info, die.is64Bit))};
+              asStringPiece(cu.debugSections.debugLineStr),
+              readOffset(info, die.is64Bit))};
 
     case DW_FORM_strx:
       return {spec, die, getStringUsingOffsetTable(readULEB(info))};
@@ -723,8 +731,8 @@ Attribute readAttribute(
       }
       const uint64_t offsetSize =
           cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
-      auto sp = cu.debugSections.debugRnglists.subpiece(
-          *cu.rnglistsBase + index * offsetSize);
+      auto sp = asStringPiece(cu.debugSections.debugRnglists)
+                    .subpiece(*cu.rnglistsBase + index * offsetSize);
       auto offset = readOffset(sp, cu.is64Bit);
       return {spec, die, *cu.rnglistsBase + offset};
     }
@@ -736,8 +744,8 @@ Attribute readAttribute(
       }
       const uint64_t offsetSize =
           cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
-      auto sp = cu.debugSections.debugLoclists.subpiece(
-          *cu.loclistsBase + index * offsetSize);
+      auto sp = asStringPiece(cu.debugSections.debugLoclists)
+                    .subpiece(*cu.loclistsBase + index * offsetSize);
       auto offset = readOffset(sp, cu.is64Bit);
       return {spec, die, *cu.loclistsBase + offset};
     }
@@ -768,16 +776,17 @@ size_t forEachAttribute(
     const Die& die,
     folly::FunctionRef<bool(const Attribute&)> f) {
   auto attrs = die.abbr.attributes;
+  const auto debugInfo = asStringPiece(cu.debugSections.debugInfo);
   auto values = folly::StringPiece{
-      cu.debugSections.debugInfo.data() + die.offset + die.attrOffset,
-      cu.debugSections.debugInfo.data() + cu.offset + cu.size};
+      debugInfo.data() + die.offset + die.attrOffset,
+      debugInfo.data() + cu.offset + cu.size};
   while (auto spec = readAttributeSpec(attrs)) {
     auto attr = readAttribute(cu, die, spec, values);
     if (!f(attr)) {
       return static_cast<size_t>(-1);
     }
   }
-  return values.data() - cu.debugSections.debugInfo.data();
+  return values.data() - debugInfo.data();
 }
 
 folly::StringPiece getFunctionNameFromDie(
