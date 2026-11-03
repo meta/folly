@@ -12,3 +12,12 @@ fb_dirsync_cpp_unittest(
         "//folly/portability:gtest",
     ],
 )
+
+fb_dirsync_cpp_unittest(
+    name = "init_silence_test",
+    srcs = ["InitSilenceTest.cpp"],
+    deps = [
+        "//folly/init:init",
+        "//folly/portability:gtest",
+    ],
+)
