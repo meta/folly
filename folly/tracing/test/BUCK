@@ -39,7 +39,6 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/fmt:fmt",
         ":static_tracepoint_test_module",
         "//folly:conv",
-        "//folly:format",
         "//folly:random",
         "//folly:string",
         "//folly:subprocess",

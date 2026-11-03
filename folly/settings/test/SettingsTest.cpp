@@ -22,7 +22,6 @@
 
 #include <fmt/format.h>
 
-#include <folly/Format.h>
 #include <folly/Random.h>
 #include <folly/String.h>
 #include <folly/observer/detail/ObserverManager.h>

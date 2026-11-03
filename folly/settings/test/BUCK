@@ -27,7 +27,6 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/fmt:fmt",
         ":a",
         ":b",
-        "//folly:format",
         "//folly:random",
         "//folly:string",
         "//folly/observer/detail:observer_manager",

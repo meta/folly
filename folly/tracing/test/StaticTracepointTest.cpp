@@ -26,7 +26,6 @@
 #include <fmt/format.h>
 
 #include <folly/Conv.h>
-#include <folly/Format.h>
 #include <folly/Random.h>
 #include <folly/String.h>
 #include <folly/Subprocess.h>
