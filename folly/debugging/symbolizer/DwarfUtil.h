@@ -156,15 +156,23 @@ folly::StringPiece asStringPiece(std::span<const uint8_t> bytes) noexcept;
 // Get an ELF section by name.
 std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name);
 
-// All following read* functions read from a StringPiece, advancing the
-// StringPiece, and aborting if there's not enough room.
+// All following read* functions advance their input and abort if there is not
+// enough room.
 
 // Read (bitwise) one object of type T
 template <class T>
-typename std::enable_if<
-    std::is_standard_layout<T>::value && std::is_trivial<T>::value,
-    T>::type
-read(folly::StringPiece& sp) {
+  requires(std::is_standard_layout_v<T> && std::is_trivial_v<T>)
+T read(std::span<const uint8_t>& bytes) {
+  FOLLY_SAFE_CHECK(bytes.size() >= sizeof(T), "underflow");
+  T x;
+  memcpy(&x, bytes.data(), sizeof(T));
+  bytes = bytes.subspan(sizeof(T));
+  return x;
+}
+
+template <class T>
+  requires(std::is_standard_layout_v<T> && std::is_trivial_v<T>)
+T read(folly::StringPiece& sp) {
   FOLLY_SAFE_CHECK(sp.size() >= sizeof(T), "underflow");
   T x;
   memcpy(&x, sp.data(), sizeof(T));
@@ -174,16 +182,23 @@ read(folly::StringPiece& sp) {
 
 // Read (bitwise) an unsigned number of N bytes (N in 1, 2, 3, 4).
 template <size_t N>
+uint64_t readU64(std::span<const uint8_t>& bytes);
+template <size_t N>
 uint64_t readU64(folly::StringPiece& sp);
 
 // Read ULEB (unsigned) varint value; algorithm from the DWARF spec
+uint64_t readULEB(
+    std::span<const uint8_t>& bytes, uint8_t& shift, uint8_t& val);
+uint64_t readULEB(std::span<const uint8_t>& bytes);
 uint64_t readULEB(folly::StringPiece& sp, uint8_t& shift, uint8_t& val);
 uint64_t readULEB(folly::StringPiece& sp);
 
 // Read SLEB (signed) varint value; algorithm from the DWARF spec
+int64_t readSLEB(std::span<const uint8_t>& bytes);
 int64_t readSLEB(folly::StringPiece& sp);
 
 // Read a value of "section offset" type, which may be 4 or 8 bytes
+uint64_t readOffset(std::span<const uint8_t>& bytes, bool is64Bit);
 uint64_t readOffset(folly::StringPiece& sp, bool is64Bit);
 
 // Read "len" bytes

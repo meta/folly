@@ -28,7 +28,7 @@ DwarfSection::DwarfSection(std::span<const uint8_t> data)
 
 // Next chunk in section
 bool DwarfSection::next(std::span<const uint8_t>& chunk) {
-  auto cursor = asStringPiece(data_);
+  auto cursor = data_;
   if (cursor.empty()) {
     return false;
   }

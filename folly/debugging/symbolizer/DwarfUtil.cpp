@@ -51,12 +51,46 @@ std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name) {
 
 // Read (bitwise) an unsigned number of N bytes (N in 1, 2, 3, 4).
 template <size_t N>
+uint64_t readU64(std::span<const uint8_t>& bytes) {
+  static_assert(N >= 1 && N <= sizeof(uint64_t), "unsupported width");
+  FOLLY_SAFE_CHECK(bytes.size() >= N, "underflow");
+  uint64_t x = 0;
+  memcpy(&x, bytes.data(), N);
+  bytes = bytes.subspan(N);
+  return x;
+}
+
+template <size_t N>
 uint64_t readU64(folly::StringPiece& sp) {
   FOLLY_SAFE_CHECK(sp.size() >= N, "underflow");
   uint64_t x = 0;
   memcpy(&x, sp.data(), N);
   sp.advance(N);
   return x;
+}
+
+uint64_t readULEB(
+    std::span<const uint8_t>& bytes, uint8_t& shift, uint8_t& val) {
+  uint64_t r = 0;
+  shift = 0;
+  // A 64-bit ULEB needs at most 10 bytes. More continuation bytes mean
+  // malformed input, and shifting by 70 or more would be undefined.
+  for (int i = 0; i < 10; ++i) {
+    val = read<uint8_t>(bytes);
+    r |= ((uint64_t)(val & 0x7f) << shift);
+    shift = static_cast<uint8_t>(shift + 7);
+    if (!(val & 0x80)) {
+      return r;
+    }
+  }
+  FOLLY_SAFE_CHECK(false, "ULEB overflow");
+  return 0;
+}
+
+uint64_t readULEB(std::span<const uint8_t>& bytes) {
+  uint8_t shift;
+  uint8_t val;
+  return readULEB(bytes, shift, val);
 }
 
 // Read ULEB (unsigned) varint value; algorithm from the DWARF spec
@@ -90,9 +124,25 @@ int64_t readSLEB(folly::StringPiece& sp) {
   return r;
 }
 
+int64_t readSLEB(std::span<const uint8_t>& bytes) {
+  uint8_t shift;
+  uint8_t val;
+  uint64_t r = readULEB(bytes, shift, val);
+
+  if (shift < 64 && (val & 0x40)) {
+    r |= -(1ULL << shift); // sign extend
+  }
+
+  return r;
+}
+
 // Read a value of "section offset" type, which may be 4 or 8 bytes
 uint64_t readOffset(folly::StringPiece& sp, bool is64Bit) {
   return is64Bit ? read<uint64_t>(sp) : read<uint32_t>(sp);
+}
+
+uint64_t readOffset(std::span<const uint8_t>& bytes, bool is64Bit) {
+  return is64Bit ? read<uint64_t>(bytes) : read<uint32_t>(bytes);
 }
 
 // Read "len" bytes
