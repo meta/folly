@@ -1078,6 +1078,192 @@ class reverse_iterator {
   }
 };
 
+//  wrap_iterator
+//
+//  Wraps Iterator into a distinct type, like libstdc++'s __normal_iterator.
+//  Tag distinguishes wrappers of the same Iterator.
+template <typename Iterator, typename Tag>
+class wrap_iterator {
+  // input iterators are not supported for now
+  static_assert(std::forward_iterator<Iterator>);
+
+ public:
+  // types ----------------------------
+  using iterator_type = Iterator;
+  using iterator_category = iterator_category_t<Iterator>;
+  using iterator_concept = iterator_concept_t<Iterator>;
+  using value_type = std::iter_value_t<Iterator>;
+  using difference_type = std::iter_difference_t<Iterator>;
+  using pointer = typename std::iterator_traits<Iterator>::pointer;
+  using reference = std::iter_reference_t<Iterator>;
+
+  // constructors ----------------------
+  wrap_iterator() = default;
+
+  constexpr explicit wrap_iterator(Iterator x) : current_{x} {}
+
+  constexpr explicit operator Iterator() const { return current_; }
+
+  template <typename U>
+  /* implicit */ constexpr wrap_iterator(const wrap_iterator<U, Tag>& u)
+    requires(!std::same_as<U, Iterator>) &&
+      std::convertible_to<const U&, Iterator>
+      : current_{u.base()} {}
+
+  // access -----------------------------
+
+  constexpr const Iterator& base() const noexcept { return current_; }
+
+  constexpr reference operator*() const { return *current_; }
+
+  constexpr pointer operator->() const
+    requires(
+        std::is_pointer_v<Iterator> ||
+        requires(const Iterator i) { i.operator->(); })
+  {
+    if constexpr (std::is_pointer_v<Iterator>) {
+      return current_;
+    } else {
+      return current_.operator->();
+    }
+  }
+
+  constexpr reference operator[](difference_type n) const
+    requires std::random_access_iterator<Iterator>
+  {
+    return current_[n];
+  }
+
+  // + / -  -----------------------------
+
+  constexpr wrap_iterator& operator++() {
+    ++current_;
+    return *this;
+  }
+
+  constexpr wrap_iterator operator++(int) {
+    auto tmp = *this;
+    ++*this;
+    return tmp;
+  }
+
+  constexpr wrap_iterator& operator--()
+    requires std::bidirectional_iterator<Iterator>
+  {
+    --current_;
+    return *this;
+  }
+
+  constexpr wrap_iterator operator--(int)
+    requires std::bidirectional_iterator<Iterator>
+  {
+    auto tmp = *this;
+    --*this;
+    return tmp;
+  }
+
+  constexpr wrap_iterator& operator+=(difference_type n)
+    requires std::random_access_iterator<Iterator>
+  {
+    current_ += n;
+    return *this;
+  }
+
+  constexpr wrap_iterator& operator-=(difference_type n)
+    requires std::random_access_iterator<Iterator>
+  {
+    current_ -= n;
+    return *this;
+  }
+
+  constexpr wrap_iterator operator+(difference_type n) const
+    requires std::random_access_iterator<Iterator>
+  {
+    auto tmp = *this;
+    tmp += n;
+    return tmp;
+  }
+
+  friend constexpr wrap_iterator operator+(
+      difference_type n, const wrap_iterator& x)
+    requires std::random_access_iterator<Iterator>
+  {
+    return x + n;
+  }
+
+  constexpr wrap_iterator operator-(difference_type n) const
+    requires std::random_access_iterator<Iterator>
+  {
+    auto tmp = *this;
+    tmp -= n;
+    return tmp;
+  }
+
+  template <std::sized_sentinel_for<Iterator> IteratorR>
+  friend constexpr auto operator-(
+      const wrap_iterator& x, const wrap_iterator<IteratorR, Tag>& y) {
+    return x.current_ - y.base();
+  }
+
+  // ordering -----------------------
+
+  bool operator==(const wrap_iterator&) const = default;
+
+  template <std::equality_comparable_with<Iterator> IteratorR>
+  friend constexpr bool operator==(
+      const wrap_iterator& x, const wrap_iterator<IteratorR, Tag>& y) {
+    return x.current_ == y.base();
+  }
+
+  template <std::three_way_comparable_with<Iterator> IteratorR>
+  friend constexpr auto operator<=>(
+      const wrap_iterator& x, const wrap_iterator<IteratorR, Tag>& y) {
+    return x.current_ <=> y.base();
+  }
+
+  template <std::totally_ordered_with<Iterator> IteratorR>
+  friend constexpr bool operator<(
+      const wrap_iterator& x, const wrap_iterator<IteratorR, Tag>& y) {
+    return x.current_ < y.base();
+  }
+
+  template <std::totally_ordered_with<Iterator> IteratorR>
+  friend constexpr bool operator>(
+      const wrap_iterator& x, const wrap_iterator<IteratorR, Tag>& y) {
+    return y < x;
+  }
+
+  template <std::totally_ordered_with<Iterator> IteratorR>
+  friend constexpr bool operator<=(
+      const wrap_iterator& x, const wrap_iterator<IteratorR, Tag>& y) {
+    return !(y < x);
+  }
+
+  template <std::totally_ordered_with<Iterator> IteratorR>
+  friend constexpr bool operator>=(
+      const wrap_iterator& x, const wrap_iterator<IteratorR, Tag>& y) {
+    return !(x < y);
+  }
+
+  // ranges hooks -----------------------
+
+  friend constexpr std::iter_rvalue_reference_t<Iterator> iter_move(
+      const wrap_iterator& x) //
+      noexcept(noexcept(std::ranges::iter_move(x.current_))) {
+    return std::ranges::iter_move(x.current_);
+  }
+
+  template <std::indirectly_swappable<Iterator> IteratorR>
+  friend constexpr void iter_swap(
+      const wrap_iterator& x, const wrap_iterator<IteratorR, Tag>& y) //
+      noexcept(noexcept(std::ranges::iter_swap(x.current_, y.base()))) {
+    std::ranges::iter_swap(x.current_, y.base());
+  }
+
+ private:
+  Iterator current_{};
+};
+
 } // namespace folly
 
 namespace std {

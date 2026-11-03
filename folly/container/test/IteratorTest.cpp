@@ -22,6 +22,7 @@
 #include <concepts>
 #include <cstddef>
 #include <deque>
+#include <forward_list>
 #include <functional>
 #include <istream>
 #include <iterator>
@@ -1453,3 +1454,231 @@ TEST(ReverseIterator, IncompleteValueType) {
 }
 
 } // namespace reverse_iterator_type_tests
+
+// wrap_iterator -------------
+
+namespace wrap_iterator_type_tests {
+namespace {
+
+using namespace iterator_test_utils;
+
+struct tag {};
+struct other_tag {};
+
+struct recursive_node {
+  using iterator = folly::wrap_iterator<recursive_node*, recursive_node>;
+};
+
+} // namespace
+
+TEST(WrapIterator, Types) {
+  for_each_interesting_iterator_type([]<typename Iter>(folly::tag_t<Iter>) {
+    check_traits_match<folly::wrap_iterator<Iter, tag>, Iter>();
+    static_assert(
+        std::same_as<
+            typename folly::wrap_iterator<Iter, tag>::iterator_type,
+            Iter>);
+  });
+}
+
+TEST(WrapIterator, ConstructionAndAssignment) {
+  using wrap = folly::wrap_iterator<int*, tag>;
+  using cwrap = folly::wrap_iterator<const int*, tag>;
+
+  static_assert(std::is_trivially_copy_constructible_v<wrap>);
+  static_assert(std::is_trivially_destructible_v<wrap>);
+
+  static_assert(!std::is_convertible_v<int*, wrap>);
+  static_assert(!std::is_convertible_v<wrap, int*>);
+  static_assert(std::is_constructible_v<int*, wrap>);
+  static_assert(std::is_constructible_v<const int*, wrap>);
+  static_assert(!std::is_constructible_v<int*, cwrap>);
+  static_assert(std::is_convertible_v<wrap, cwrap>);
+  static_assert(!std::is_convertible_v<cwrap, wrap>);
+  static_assert(!std::is_assignable_v<wrap&, cwrap>);
+
+  constexpr auto checks = [] {
+    int ints[] = {1, 2, 3};
+    int* const p = ints + 1;
+
+    const wrap value_initialized;
+    if (std::to_address(value_initialized.base()) != nullptr) {
+      return false;
+    }
+
+    const wrap it{p};
+    if (it.base() != p || &*it != p || static_cast<int*>(it) != p) {
+      return false;
+    }
+
+    const wrap copied = it;
+    const cwrap converted = it;
+    wrap copy_assigned;
+    copy_assigned = it;
+    cwrap convert_assigned;
+    convert_assigned = it;
+    return copied.base() == p && converted.base() == p &&
+        copy_assigned.base() == p && convert_assigned.base() == p;
+  };
+  static_assert(checks());
+  EXPECT_TRUE(checks());
+}
+
+TEST(WrapIterator, Tag) {
+  using wrap = folly::wrap_iterator<int*, tag>;
+  using other_cwrap = folly::wrap_iterator<const int*, other_tag>;
+
+  static_assert(!std::is_constructible_v<other_cwrap, wrap>);
+  static_assert(
+      !std::is_constructible_v<
+          other_cwrap,
+          folly::wrap_iterator<const int*, tag>>);
+  static_assert(!std::equality_comparable_with<wrap, int*>);
+  static_assert(
+      !std::equality_comparable_with<
+          wrap,
+          folly::wrap_iterator<int*, other_tag>>);
+}
+
+TEST(WrapIterator, Access) {
+  constexpr auto checks = [] {
+    int ints[] = {1, 2, 3};
+    const folly::wrap_iterator<int*, tag> it{std::begin(ints)};
+    return same_access(it, std::begin(ints), std::end(ints));
+  };
+  static_assert(checks());
+  EXPECT_TRUE(checks());
+
+  {
+    std::list<std::string> strs = {"a", "bc"};
+    const folly::wrap_iterator<std::list<std::string>::iterator, tag> it{
+        strs.begin()};
+    EXPECT_TRUE(same_access(it, strs.begin(), strs.end()));
+  }
+
+  {
+    std::vector<bool> bits = {false, true};
+    const folly::wrap_iterator<std::vector<bool>::iterator, tag> it{
+        bits.begin()};
+    EXPECT_TRUE(same_access(it, bits.begin(), bits.end()));
+  }
+}
+
+TEST(WrapIterator, Arithmetic) {
+  constexpr auto checks = [] {
+    using wrap = folly::wrap_iterator<int*, tag>;
+    using cwrap = folly::wrap_iterator<const int*, tag>;
+
+    int ints[] = {1, 2, 3};
+    const wrap first{std::begin(ints)};
+    const wrap last{std::end(ints)};
+
+    auto ints_iota = std::views::iota(0, 3);
+    using iota_it = decltype(ints_iota.begin());
+
+    return same_arithmetic(first, std::begin(ints), std::end(ints)) &&
+        same_differences(
+               first, last, cwrap{first}, std::begin(ints), std::end(ints)) &&
+        same_arithmetic(
+               folly::wrap_iterator<iota_it, tag>{ints_iota.begin()},
+               ints_iota.begin(),
+               ints_iota.end());
+  };
+  static_assert(checks());
+  EXPECT_TRUE(checks());
+
+  {
+    using wrap = folly::wrap_iterator<std::vector<int>::iterator, tag>;
+    using cwrap = folly::wrap_iterator<std::vector<int>::const_iterator, tag>;
+
+    std::vector<int> vec = {1, 2, 3};
+    EXPECT_TRUE(same_differences(
+        wrap{vec.begin()},
+        wrap{vec.end()},
+        cwrap{vec.cbegin()},
+        vec.begin(),
+        vec.end()));
+  }
+
+  {
+    using wrap = folly::wrap_iterator<std::forward_list<int>::iterator, tag>;
+
+    std::forward_list<int> fwd = {1, 2, 3};
+    EXPECT_TRUE(same_arithmetic(wrap{fwd.begin()}, fwd.begin(), fwd.end()));
+  }
+}
+
+TEST(WrapIterator, Comparisons) {
+  using wrap = folly::wrap_iterator<int*, tag>;
+  using cwrap = folly::wrap_iterator<const int*, tag>;
+
+  static_assert(std::totally_ordered_with<wrap, cwrap>);
+
+  static constexpr int ints[] = {1, 2, 3};
+  static_assert(same_comparisons(
+      cwrap{std::begin(ints)},
+      cwrap{std::end(ints)},
+      std::begin(ints),
+      std::end(ints)));
+
+  // mismatched types need a mutable array, so they need their own scope
+  constexpr auto mixed = [] {
+    int mut[] = {1, 2, 3};
+    return same_comparisons(
+               wrap{std::begin(mut)},
+               cwrap{std::end(mut)},
+               std::begin(mut),
+               std::end(mut)) &&
+        same_comparisons(
+               cwrap{std::begin(mut)},
+               wrap{std::end(mut)},
+               std::begin(mut),
+               std::end(mut));
+  };
+  static_assert(mixed());
+  EXPECT_TRUE(mixed());
+}
+
+TEST(WrapIterator, Contiguous) {
+  int ints[] = {1, 2, 3};
+  const folly::wrap_iterator<int*, tag> first{std::begin(ints)};
+  const folly::wrap_iterator<int*, tag> last{std::end(ints)};
+
+  const std::span<int> span{first, last};
+  EXPECT_EQ(std::begin(ints), span.data());
+  EXPECT_EQ(3u, span.size());
+}
+
+TEST(WrapIterator, RangesHooks) {
+  constexpr auto checks = [] {
+    using wrap = folly::wrap_iterator<int*, tag>;
+
+    int ints[] = {1, 2, 3};
+    const wrap first{std::begin(ints)};
+    const wrap next{std::begin(ints) + 1};
+
+    static_assert(std::same_as<decltype(std::ranges::iter_move(first)), int&&>);
+    if (std::ranges::iter_move(first) != ints[0]) {
+      return false;
+    }
+
+    std::ranges::iter_swap(first, next);
+    return ints[0] == 2 && ints[1] == 1;
+  };
+  static_assert(checks());
+  EXPECT_TRUE(checks());
+}
+
+TEST(WrapIterator, IncompleteValueType) {
+  static_assert(std::contiguous_iterator<recursive_node::iterator>);
+
+  constexpr auto checks = [] {
+    recursive_node nodes[2];
+    const recursive_node::iterator it{std::begin(nodes)};
+    return &it[1] == &nodes[1];
+  };
+  static_assert(checks());
+  EXPECT_TRUE(checks());
+}
+
+} // namespace wrap_iterator_type_tests
