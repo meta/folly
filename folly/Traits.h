@@ -184,16 +184,12 @@ template <template <typename...> class C, typename... T>
 struct is_instantiation_of
     : std::bool_constant<is_instantiation_of_v<C, T...>> {};
 
-#if defined(__cpp_concepts)
-
 template <typename T, template <typename...> class Templ>
 concept instantiated_from = is_instantiation_of_v<Templ, T>;
 
 template <typename T, template <typename...> class Templ>
 concept uncvref_instantiated_from =
     is_instantiation_of_v<Templ, std::remove_cvref_t<T>>;
-
-#endif
 
 /// member_pointer_traits
 ///
@@ -393,8 +389,6 @@ struct like {
   using type = like_t<Src, Dst>;
 };
 
-#if defined(__cpp_concepts)
-
 /**
  *  Concept to check that a type is same as a given type,
  *  when stripping qualifiers and refernces.
@@ -407,8 +401,6 @@ struct like {
  */
 template <typename Ref, typename To>
 concept uncvref_same_as = std::is_same_v<std::remove_cvref_t<Ref>, To>;
-
-#endif
 
 /**
  *  type_t

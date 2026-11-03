@@ -25,19 +25,9 @@ bool returnTrueIfBitReference(bool&) {
   return false;
 }
 
-#if defined(__cpp_concepts)
 bool returnTrueIfBitReference(folly::vector_bool_reference auto) {
   return true;
 }
-#else
-template <
-    typename BitReference,
-    typename =
-        std::enable_if_t<folly::is_vector_bool_reference_v<BitReference>>>
-bool returnTrueIfBitReference(BitReference) {
-  return true;
-}
-#endif
 
 namespace folly {
 

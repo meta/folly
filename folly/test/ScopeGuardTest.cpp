@@ -454,8 +454,6 @@ TEST(ScopeGuard, TESTThrowingCleanupAction) {
   EXPECT_EQ(scopeExitExecuted, 1);
 }
 
-#if FOLLY_CPLUSPLUS >= 202002L
-
 TEST(ScopeGuard, ConstexprFires) {
   constexpr auto fired = [] {
     int v = 0;
@@ -508,5 +506,3 @@ TEST(ScopeGuard, ConstexprScopeExit) {
   static_assert(exited == 1, "SCOPE_EXIT must run at end of scope");
   EXPECT_EQ(exited, 1);
 }
-
-#endif

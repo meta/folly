@@ -43,9 +43,7 @@ template <typename T>
 constexpr bool is_vector_bool_reference_v<std::_Vb_reference<T>> = true;
 #endif
 
-#if defined(__cpp_concepts)
 template <typename T>
 concept vector_bool_reference = is_vector_bool_reference_v<T>;
-#endif
 
 } // namespace folly

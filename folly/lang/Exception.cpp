@@ -910,7 +910,7 @@ exception_shared_string& exception_shared_string::operator=(
   return *this;
 }
 
-#if FOLLY_CPLUSPLUS >= 202002 && !defined(__NVCC__)
+#if !defined(__NVCC__)
 
 exception_shared_string& exception_shared_string::operator=(
     exception_shared_string&& that) noexcept {

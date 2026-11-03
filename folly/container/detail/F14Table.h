@@ -279,9 +279,7 @@ class F14HashToken final {
 };
 #endif
 
-#if defined(__cpp_concepts) && __cpp_concepts && __has_include(<concepts>)
 static_assert(std::regular<F14HashToken>);
-#endif
 
 namespace f14 {
 namespace detail {

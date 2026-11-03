@@ -67,7 +67,6 @@ namespace folly {
 
 namespace detail {
 
-#if FOLLY_CPLUSPLUS >= 202002L
 // Faster "static bool" using a tri-state atomic. The flag is identified by the
 // Initializer functor argument.
 template <class Initializer>
@@ -100,19 +99,6 @@ class FastStaticBool {
 
 template <class Initializer>
 constinit std::atomic<signed char> FastStaticBool<Initializer>::flag_{};
-#else // FOLLY_CPLUSPLUS >= 202002L
-// Fallback on native static if std::atomic does not have a constexpr
-// constructor.
-template <class Initializer>
-class FastStaticBool {
- public:
-  FOLLY_ALWAYS_INLINE static bool get(
-      std::memory_order = std::memory_order_acquire) noexcept {
-    static const bool rv = Initializer{}();
-    return rv;
-  }
-};
-#endif
 
 struct UsingJEMallocInitializer {
   bool operator()() const noexcept;

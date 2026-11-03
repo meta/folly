@@ -237,10 +237,10 @@ class ObserverManager {
 
   static ObserverManager& getInstance();
   static std::shared_ptr<UpdatesManager> getUpdatesManager();
-  // constinit requires C++20 and must stay off on Mach-O targets, where
+  // constinit must stay off on Mach-O targets, where
   // ld64.lld incorrectly rejects direct TLVP relocations to this symbol from
   // stripped objects.
-#if defined(__cpp_constinit) && !defined(__MACH__)
+#if !defined(__MACH__)
   static thread_local constinit bool inManagerThread_;
 #else
   static thread_local bool inManagerThread_;

@@ -802,8 +802,6 @@ struct tag_invoke_result
           detail_tag_invoke_fn::defer<tag_invoke_result_t, Tag, Args...>,
           detail_tag_invoke_fn::empty> {};
 
-#if defined(__cpp_concepts)
-
 /// passable_to
 ///
 /// Useful for enabling n^k overloads all at once. Example below shows cases of
@@ -862,7 +860,5 @@ struct tag_invoke_result
 ///     object_set objs;
 template <typename Arg, typename Fun>
 concept passable_to = invoke_detail::is_invocable_v<void, Fun, Arg>;
-
-#endif
 
 } // namespace folly

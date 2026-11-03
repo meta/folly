@@ -272,7 +272,7 @@ struct identity_fn {
 using Identity = identity_fn;
 inline constexpr identity_fn identity{};
 
-#if FOLLY_CPLUSPLUS >= 202002 && !defined(__NVCC__)
+#if !defined(__NVCC__)
 
 /// literal_c_str
 ///
@@ -285,7 +285,7 @@ struct literal_c_str {
 
 #endif
 
-#if FOLLY_CPLUSPLUS >= 202002 && !defined(__NVCC__)
+#if !defined(__NVCC__)
 
 /// literal_string
 ///
@@ -529,16 +529,12 @@ struct unsafe_default_initialized_cv {
   FOLLY_GCC_DISABLE_WARNING("-Wmaybe-uninitialized")
   template <typename T>
   FOLLY_ERASE constexpr /* implicit */ operator T() const noexcept {
-#if defined(__cpp_lib_is_constant_evaluated)
-#if __cpp_lib_is_constant_evaluated >= 201811L
 #if (defined(_MSC_VER) && !defined(__MSVC_RUNTIME_CHECKS)) || \
     (defined(__clang__) && !defined(__GNUC__))
     if (!std::is_constant_evaluated()) {
       T uninit;
       return uninit;
     }
-#endif
-#endif
 #endif
     return T();
   }

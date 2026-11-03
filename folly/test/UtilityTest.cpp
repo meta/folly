@@ -207,8 +207,6 @@ TEST_F(UtilityTest, literal_string) {
   EXPECT_EQ(s.c_str(), std::string{s});
 }
 
-#if FOLLY_CPLUSPLUS >= 202002
-
 TEST_F(UtilityTest, literal_string_op_lit) {
   using namespace folly::string_literals;
   constexpr auto s = "hello world"_lit;
@@ -229,8 +227,6 @@ TEST_F(UtilityTest, literal_string_op_litv) {
   EXPECT_EQ(s.c_str(), std::string_view{s});
   EXPECT_EQ(s.c_str(), std::string{s});
 }
-
-#endif
 
 TEST_F(UtilityTest, inheritable) {
   struct foo : folly::index_constant<47> {};

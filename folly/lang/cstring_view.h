@@ -28,8 +28,6 @@
 #include <folly/Traits.h>
 #include <folly/Utility.h>
 
-static_assert(FOLLY_CPLUSPLUS >= 202002L, "__cplusplus >= 202002L");
-
 namespace folly {
 
 /// cstring_view

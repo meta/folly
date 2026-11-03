@@ -569,7 +569,6 @@ TEST(Traits, like) {
   static_assert(std::is_same_v<like_t<int, const char&>, const char>);
 }
 
-#if defined(__cpp_concepts)
 TEST(Traits, UncvrefSameAs) {
   static_assert(folly::uncvref_same_as<std::vector<int>, std::vector<int>>);
   static_assert(folly::uncvref_same_as<std::vector<int>&, std::vector<int>>);
@@ -588,7 +587,6 @@ TEST(Traits, UncvrefSameAs) {
   static_assert(
       !std::invocable<decltype(refersToExample), std::vector<char>&&>);
 }
-#endif
 
 TEST(Traits, isInstantiationOfV) {
   EXPECT_TRUE((is_instantiation_of_v<A, A<int>>));
@@ -600,7 +598,6 @@ TEST(Traits, isInstantiationOf) {
   EXPECT_FALSE((is_instantiation_of<A, B>::value));
 }
 
-#if defined(__cpp_concepts)
 TEST(Traits, InstantiationOf) {
   static_assert(folly::instantiated_from<A<int>, A>);
   static_assert(!folly::instantiated_from<A<int>&, A>);
@@ -617,7 +614,6 @@ TEST(Traits, InstantiationOf) {
   static_assert(std::invocable<decltype(example), const std::vector<int>&>);
   static_assert(std::invocable<decltype(example), std::vector<int>>);
 }
-#endif
 
 TEST(Traits, member_pointer_traits_data) {
   struct o {};

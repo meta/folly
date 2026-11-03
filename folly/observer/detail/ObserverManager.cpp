@@ -30,7 +30,7 @@
 namespace folly {
 namespace observer_detail {
 
-#if defined(__cpp_constinit) && !defined(__MACH__)
+#if !defined(__MACH__)
 thread_local constinit bool ObserverManager::inManagerThread_{false};
 #else
 thread_local bool ObserverManager::inManagerThread_{false};

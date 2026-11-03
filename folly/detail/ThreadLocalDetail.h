@@ -49,10 +49,10 @@
 #include <folly/system/AtFork.h>
 #include <folly/system/ThreadId.h>
 
-// constinit requires C++20 and must stay off on Mach-O targets, where
+// constinit must stay off on Mach-O targets, where
 // ld64.lld incorrectly rejects direct TLVP relocations to this symbol from
 // stripped objects.
-#if !defined(__cpp_constinit) || defined(__MACH__)
+#if defined(__MACH__)
 #define FOLLY_DETAIL_TL_CONSTINIT
 #else
 #define FOLLY_DETAIL_TL_CONSTINIT constinit

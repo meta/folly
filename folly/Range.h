@@ -179,10 +179,7 @@ struct IsUnsignedCharPointer<const unsigned char*> {
 
 void range_is_char_type_f_(char const*);
 void range_is_char_type_f_(wchar_t const*);
-#if (defined(__cpp_char8_t) && __cpp_char8_t >= 201811L) || \
-    FOLLY_CPLUSPLUS >= 202002
 void range_is_char_type_f_(char8_t const*);
-#endif
 void range_is_char_type_f_(char16_t const*);
 void range_is_char_type_f_(char32_t const*);
 template <typename Iter>

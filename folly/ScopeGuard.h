@@ -183,14 +183,12 @@ class ScopeGuardImpl : public ScopeGuardImplBase {
   void* operator new(std::size_t) = delete;
 
   FOLLY_CXX20_CONSTEXPR void execute() noexcept(InvokeNoexcept) {
-#if FOLLY_CPLUSPLUS >= 202002L
     //  no exception can be thrown under constant evaluation, so the
     //  terminate-on-throw wrapper is both unnecessary and not constexpr
     if (std::is_constant_evaluated()) {
       function_();
       return;
     }
-#endif
     if constexpr (InvokeNoexcept) {
       static_assert(std::is_same_v<void, decltype(function_())>);
       catch_exception(function_, &terminate);

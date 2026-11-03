@@ -33,7 +33,7 @@
 #include <version>
 #endif
 
-static_assert(FOLLY_CPLUSPLUS >= 201703L, "__cplusplus >= 201703L");
+static_assert(FOLLY_CPLUSPLUS >= 202002L, "__cplusplus >= 202002L");
 
 #if defined(__GNUC__) && !defined(__clang__)
 #if defined(FOLLY_CONFIG_TEMPORARY_DOWNGRADE_GCC)
@@ -48,7 +48,7 @@ static_assert(_MSC_VER >= 1920);
 #endif
 
 #if defined(_MSC_VER) || defined(_CPPLIB_VER)
-static_assert(FOLLY_CPLUSPLUS >= 201703L, "__cplusplus >= 201703L");
+static_assert(FOLLY_CPLUSPLUS >= 202002L, "__cplusplus >= 202002L");
 #endif
 
 // Unaligned loads and stores
@@ -691,11 +691,7 @@ constexpr auto kCpplibVer = 0;
 //
 //  C++20 permits more cases to be marked constexpr, including destructors and,
 //  by extension, the types owning them.
-#if FOLLY_CPLUSPLUS >= 202002L
 #define FOLLY_CXX20_CONSTEXPR constexpr
-#else
-#define FOLLY_CXX20_CONSTEXPR
-#endif
 
 //  FOLLY_CXX23_CONSTEXPR
 //
@@ -763,9 +759,7 @@ constexpr auto kCpplibVer = 0;
 #define FOLLY_HAS_COROUTINES 0
 #endif
 
-// NB: The C++20 requirement could be relaxed, but there's no clear benefit as
-// of right now.
-#if !FOLLY_HAS_COROUTINES || FOLLY_CPLUSPLUS < 202002L
+#if !FOLLY_HAS_COROUTINES
 #define FOLLY_HAS_IMMOVABLE_COROUTINES 0
 // This logic is written as "good until proven broken" because it's possible
 // that there's a good compiler older than the oldest good version I checked.
@@ -790,10 +784,7 @@ constexpr auto kCpplibVer = 0;
 #endif
 #endif // FOLLY_CFG_NO_COROUTINES
 
-// It'd be possible to relax this, by refactoring `folly/result` code down to
-// C++17, and by only blocking the coroutine support for non-coro compiles.
-// However, `result<T>` is primarily targeted at newer codebases.
-#if FOLLY_CPLUSPLUS >= 202002L && FOLLY_HAS_COROUTINES
+#if FOLLY_HAS_COROUTINES
 #define FOLLY_HAS_RESULT 1
 #else
 #define FOLLY_HAS_RESULT 0

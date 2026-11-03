@@ -145,12 +145,11 @@
   _0
 
 //  FOLLY_PP_DETAIL_NARGS counts its arguments, an empty list as 0. GCC keeps
-//  the comma of `, ##__VA_ARGS__` in its strict modes, so use __VA_OPT__ there
-//  in C++20; strict C++17 still counts an empty list as 1. MSVC's traditional
+//  the comma of `, ##__VA_ARGS__` in its strict modes, so use __VA_OPT__ there.
+//  MSVC's traditional
 //  preprocessor drops the comma itself but needs FB_VA_GLUE to split
 //  __VA_ARGS__.
-#if defined(__GNUC__) && !defined(__clang__) && defined(__STRICT_ANSI__) && \
-    __cplusplus >= 202002L
+#if defined(__GNUC__) && !defined(__clang__) && defined(__STRICT_ANSI__)
 #define FOLLY_PP_DETAIL_NARGS(...)      \
   FOLLY_PP_DETAIL_NARGS_1(              \
       dummy __VA_OPT__(, ) __VA_ARGS__, \

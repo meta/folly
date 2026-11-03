@@ -23,16 +23,10 @@ namespace observer {
 
 namespace detail {
 
-#if FOLLY_CPLUSPLUS >= 202002L && defined(__cpp_concepts) && __cpp_concepts && \
-    __has_include(<concepts>)
 template <typename T, typename O>
 concept HasStaticGetName = requires(O& o) {
   { T::getName(o) } -> std::convertible_to<std::string_view>;
 };
-#else
-template <typename T, typename O>
-constexpr bool HasStaticGetName = false;
-#endif
 
 template <typename Observable, typename Traits>
 class ObserverCreatorContext {

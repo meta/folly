@@ -18,10 +18,6 @@
 
 #include <folly/Portability.h>
 
-#if FOLLY_CPLUSPLUS < 202002L
-#error "C++20 or later is required to include this header"
-#endif
-
 #ifndef FOLLY_HAS_MEMORY_RESOURCE
 
 #if __has_include(<memory_resource>)

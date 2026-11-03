@@ -647,7 +647,6 @@ void test_exception_shared_string_construct(const char* c, String s0) {
     auto s2 = s1;
     EXPECT_STREQ(c, s2.what());
   }
-#if FOLLY_CPLUSPLUS >= 202002
   {
     static_assert(std::is_move_constructible_v<String>);
     auto s1 = std::move(s0);
@@ -655,7 +654,6 @@ void test_exception_shared_string_construct(const char* c, String s0) {
     // NOLINTNEXTLINE(bugprone-use-after-move)
     EXPECT_STREQ("", s0.what());
   }
-#endif
 }
 
 template <typename String>
@@ -668,7 +666,6 @@ void test_exception_shared_string_assign(const char* c, String s0) {
     s1 = std::as_const(std::as_const(s1));
     EXPECT_STREQ(c, s1.what());
   }
-#if FOLLY_CPLUSPLUS >= 202002
   {
     static_assert(std::is_move_assignable_v<String>);
 
@@ -681,7 +678,6 @@ void test_exception_shared_string_assign(const char* c, String s0) {
     s1 = std::move(std::move(s1)); // suppress self-move warning
     EXPECT_STREQ(c, s1.what());
   }
-#endif
 }
 
 TEST_F(ExceptionTest, exception_shared_string_construct_cstr) {
@@ -714,8 +710,6 @@ TEST_F(ExceptionTest, exception_shared_string_assign_string) {
       "msg", folly::exception_shared_string(std::string("msg")));
 }
 
-#if FOLLY_CPLUSPLUS >= 202002
-
 TEST_F(ExceptionTest, exception_shared_string_literal_consteval) {
   constexpr const char* c = "hello, world!";
   {
@@ -737,8 +731,6 @@ TEST_F(ExceptionTest, exception_shared_string_literal_consteval) {
     EXPECT_STREQ(c, s2.what());
   }
 }
-
-#endif // FOLLY_CPLUSPLUS >= 202002
 
 // example of how to do the in-place formatting efficiently
 struct format_param_fn {

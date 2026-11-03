@@ -21,9 +21,7 @@
 #include <folly/Utility.h>
 #include <folly/lang/SafeAlias-fwd.h>
 
-#if FOLLY_CPLUSPLUS >= 202002L
 #include <folly/detail/tuple.h>
-#endif
 
 FOLLY_PUSH_WARNING
 FOLLY_DETAIL_LITE_TUPLE_ADJUST_WARNINGS
@@ -184,11 +182,7 @@ struct must_use_immediately_<std::void_t<must_use_immediately_of_<T>>, T> {
   using type = must_use_immediately_of_<T>;
 };
 
-#if FOLLY_CPLUSPLUS >= 202002L
 namespace must_use_immediately_tuple = folly::detail::lite_tuple;
-#else
-namespace must_use_immediately_tuple = std;
-#endif
 
 } // namespace detail
 
@@ -199,10 +193,8 @@ using must_use_immediately_t =
 template <typename T>
 inline constexpr bool must_use_immediately_v = must_use_immediately_t<T>::value;
 
-#if defined(__cpp_concepts)
 template <typename T>
 concept must_use_immediately = must_use_immediately_v<T>;
-#endif
 
 // Types using `curried_unsafe_mover_t` need to offer a ctor with this passkey.
 class curried_unsafe_mover_private_t {

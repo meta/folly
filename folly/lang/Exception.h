@@ -971,7 +971,7 @@ class exception_shared_string {
       }
     }
 
-#if FOLLY_CPLUSPLUS >= 202002 && !defined(__NVCC__)
+#if !defined(__NVCC__)
     constexpr tagged_what_t(vtag_t<true> /*literal*/, const char* p) : p_{p} {
       if (!std::is_constant_evaluated()) {
         assert_top_bit_is_zero(p);
@@ -988,7 +988,6 @@ class exception_shared_string {
     bool is_literal() const noexcept {
       return !(non_literal_mask & reinterpret_cast<uintptr_t>(p_));
     }
-#if FOLLY_CPLUSPLUS >= 202002
     constexpr const char* what() const noexcept {
       if (std::is_constant_evaluated()) {
         // Only the literal ctor is `constexpr`, so we can assume no
@@ -998,12 +997,6 @@ class exception_shared_string {
       return reinterpret_cast<const char*>(
           ~non_literal_mask & reinterpret_cast<uintptr_t>(p_));
     }
-#else
-    const char* what() const noexcept {
-      return reinterpret_cast<const char*>(
-          ~non_literal_mask & reinterpret_cast<uintptr_t>(p_));
-    }
-#endif
   };
   static_assert(sizeof(tagged_what_t) == sizeof(void*));
 
@@ -1016,7 +1009,7 @@ class exception_shared_string {
   void ruin_state() noexcept;
 
  public:
-#if FOLLY_CPLUSPLUS >= 202002 && !defined(__NVCC__)
+#if !defined(__NVCC__)
   constexpr explicit exception_shared_string(literal_c_str p) noexcept
       : tagged_what_{vtag<true>, p.ptr} {}
 #endif
@@ -1039,9 +1032,7 @@ class exception_shared_string {
   exception_shared_string(exception_shared_string const&) noexcept;
   exception_shared_string& operator=(exception_shared_string const&) noexcept;
 
-  // It would be extra effort to implement move support in C++17, but there is
-  // currently no demand for it.
-#if FOLLY_CPLUSPLUS >= 202002 && !defined(__NVCC__)
+#if !defined(__NVCC__)
   constexpr exception_shared_string(exception_shared_string&& that) noexcept
       : tagged_what_{that.tagged_what_} {
     that.tagged_what_ =
@@ -1054,22 +1045,13 @@ class exception_shared_string {
   exception_shared_string& operator=(exception_shared_string&&) = delete;
 #endif
 
-#if FOLLY_CPLUSPLUS >= 202002 && defined(__cpp_lib_is_constant_evaluated)
   constexpr ~exception_shared_string() {
     if (!std::is_constant_evaluated()) {
       ruin_state();
     }
   }
-#else
-  ~exception_shared_string() { ruin_state(); }
-#endif
 
-#if FOLLY_CPLUSPLUS >= 202002
-  constexpr
-#endif
-      char const* what() const noexcept {
-    return tagged_what_.what();
-  }
+  constexpr char const* what() const noexcept { return tagged_what_.what(); }
 };
 
 } // namespace folly
