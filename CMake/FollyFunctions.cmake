@@ -539,6 +539,38 @@ function (folly_localize_deps out)
       PARENT_SCOPE)
 endfunction ()
 
+define_property(
+  GLOBAL
+  PROPERTY FOLLY_EXTERNAL_LIBRARY_TARGETS
+  BRIEF_DOCS "Targets created by folly_add_external_library()"
+  FULL_DOCS "Recognized in the DEPS and EXPORTED_DEPS of folly_add_library()")
+set_property(GLOBAL PROPERTY FOLLY_EXTERNAL_LIBRARY_TARGETS "")
+
+define_property(
+  GLOBAL
+  PROPERTY FOLLY_MONOLITHIC_EXTERNAL_LIBRARIES
+  BRIEF_DOCS "External library targets of the monolithic folly's components"
+  FULL_DOCS "Recorded by folly_add_library()")
+set_property(GLOBAL PROPERTY FOLLY_MONOLITHIC_EXTERNAL_LIBRARIES "")
+
+# Creates folly_ext_<name>, an INTERFACE target that links LIBRARIES (nothing
+# if the library was not found). The folly libraries whose sources use the
+# library list it in their DEPS or EXPORTED_DEPS, so it reaches only their
+# users instead of every user of folly_deps, and the monolithic folly links it
+# PRIVATE. Include directories stay on folly_deps: headers test for these
+# libraries with __has_include, and a user must see what folly saw.
+function (folly_add_external_library name)
+  cmake_parse_arguments(ARG "" "" "LIBRARIES" ${ARGN})
+  set(target "folly_ext_${name}")
+  add_library(${target} INTERFACE)
+  # A failed find_library() leaves <VAR>-NOTFOUND behind.
+  list(FILTER ARG_LIBRARIES EXCLUDE REGEX "-NOTFOUND$")
+  folly_localize_deps(libraries ${ARG_LIBRARIES})
+  target_link_libraries(${target} INTERFACE ${libraries})
+  install(TARGETS ${target} EXPORT folly)
+  set_property(GLOBAL APPEND PROPERTY FOLLY_EXTERNAL_LIBRARY_TARGETS ${target})
+endfunction ()
+
 # Track deferred dependencies to be linked after all targets are created
 # Each entry is: "target|visibility|dep1,dep2,dep3"
 define_property(
@@ -585,10 +617,11 @@ endfunction ()
 #     SRCS Cursor.cpp IOBuf.cpp     # Source files (optional if using AUTO_SOURCES)
 #     HEADERS Cursor.h IOBuf.h      # Header files
 #     AUTO_SOURCES                  # Use auto_sources() instead of explicit SRCS
-#     DEPS folly_lang_bits          # Private dependencies (internal folly targets)
+#     DEPS folly_lang_bits folly_ext_lz4  # Private dependencies (folly targets
+#                                         # and folly_ext_* libraries)
 #     EXPORTED_DEPS folly_range     # Public dependencies (propagated to users)
-#     EXTERNAL_DEPS ${LIBSODIUM_LIBRARIES}  # External library dependencies
-#     EXTERNAL_INCLUDE_DIRS ${LIBSODIUM_INCLUDE_DIRS}  # External include directories
+#     EXTERNAL_DEPS Boost::context  # External library dependencies
+#     EXTERNAL_INCLUDE_DIRS ${FOO_INCLUDE_DIRS}  # External include directories
 #     COMPILE_OPTIONS -mpclmul      # Optional compile options for source files
 #     EXCLUDE_FROM_MONOLITH         # Don't include in monolithic folly library
 #   )
@@ -614,6 +647,23 @@ function (folly_add_library)
       set(_target_name "folly_${_prefix}_${FOLLY_LIB_NAME}")
     endif ()
   endif ()
+
+  # Libraries from folly_add_external_library() resolve with the other deps, but
+  # also have to reach the monolithic folly, and in a shared build the users of
+  # this target, which then links no code of its own.
+  get_property(_ext_targets GLOBAL PROPERTY FOLLY_EXTERNAL_LIBRARY_TARGETS)
+  set(_private_ext "")
+  set(_public_ext "")
+  foreach (_dep IN LISTS FOLLY_LIB_DEPS)
+    if (_dep IN_LIST _ext_targets)
+      list(APPEND _private_ext ${_dep})
+    endif ()
+  endforeach ()
+  foreach (_dep IN LISTS FOLLY_LIB_EXPORTED_DEPS)
+    if (_dep IN_LIST _ext_targets)
+      list(APPEND _public_ext ${_dep})
+    endif ()
+  endforeach ()
 
   # Handle source collection
   if (FOLLY_LIB_AUTO_SOURCES)
@@ -644,6 +694,8 @@ function (folly_add_library)
       set_property(GLOBAL APPEND PROPERTY FOLLY_DEFERRED_DEPS
                                           "${_target_name}|INTERFACE|${_deps_str}")
     endif ()
+    set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_LIBRARIES
+                                        ${_private_ext} ${_public_ext})
     # Track external deps for monolithic library (header-only deps are used transitively)
     if (FOLLY_LIB_EXTERNAL_DEPS)
       set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS
@@ -713,6 +765,8 @@ function (folly_add_library)
       set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS
                                           ${FOLLY_LIB_EXTERNAL_DEPS})
     endif ()
+    set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_LIBRARIES
+                                        ${_private_ext} ${_public_ext})
   endif ()
 
   # 2. Create the granular library target
@@ -732,6 +786,10 @@ function (folly_add_library)
       target_include_directories(${_target_name}
                                  INTERFACE ${FOLLY_LIB_EXTERNAL_INCLUDE_DIRS})
     endif ()
+
+    # The monolithic folly links these PRIVATE, so pass on the ones this
+    # target's headers need.
+    target_link_libraries(${_target_name} INTERFACE ${_public_ext})
 
     # Track this target to link to folly after monolithic library is created
     set_property(GLOBAL APPEND PROPERTY FOLLY_GRANULAR_INTERFACE_TARGETS
@@ -925,6 +983,12 @@ function (folly_create_monolithic_library)
     folly_localize_deps(_external_deps ${_external_deps})
     target_link_libraries(folly PUBLIC ${_external_deps})
   endif ()
+
+  # Optional libraries stay off the link line of folly's users; see
+  # folly_add_external_library().
+  get_property(_ext_libs GLOBAL PROPERTY FOLLY_MONOLITHIC_EXTERNAL_LIBRARIES)
+  list(REMOVE_DUPLICATES _ext_libs)
+  target_link_libraries(folly PRIVATE ${_ext_libs})
 
   # Create alias for consistency
   add_library(Folly::folly ALIAS folly)

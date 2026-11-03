@@ -298,6 +298,16 @@ endif ()
 # build/install-time include directory generator expressions
 include(GenPkgConfig)
 gen_pkgconfig_vars(FOLLY_PKGCONFIG folly_deps)
+# A static libfolly also needs the optional libraries, which folly_deps leaves
+# to the libraries that use them.
+get_property(folly_external_libraries GLOBAL
+             PROPERTY FOLLY_EXTERNAL_LIBRARY_TARGETS)
+foreach (folly_external_library IN LISTS folly_external_libraries)
+  gen_pkgconfig_vars(folly_external_pkgconfig ${folly_external_library})
+  string(APPEND FOLLY_PKGCONFIG_PRIVATE_LIBS
+         " ${folly_external_pkgconfig_PRIVATE_LIBS}")
+endforeach ()
+string(STRIP "${FOLLY_PKGCONFIG_PRIVATE_LIBS}" FOLLY_PKGCONFIG_PRIVATE_LIBS)
 
 target_include_directories(
   folly_deps
@@ -561,6 +571,9 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     )
   endif ()
   apply_folly_compile_options_to_target(folly_test_support)
+  # Some tests call the optional libraries directly, which a shared folly does
+  # not pass on.
+  target_link_libraries(folly_test_support PUBLIC ${folly_external_libraries})
 
   folly_define_tests(
     DIRECTORY

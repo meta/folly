@@ -29,14 +29,18 @@ folly_add_library(
     ${GLOG_LIBRARIES}
     folly_compression_compression_context_pool_singletons
     folly_conv
+    folly_ext_bz2
+    folly_ext_lz4
+    folly_ext_lzma
+    folly_ext_snappy
     folly_portability_windows
     folly_random
     folly_scope_guard
     folly_utility
     folly_varint
   EXPORTED_DEPS
-    ${ZSTD_LIBRARY}
-    ZLIB::ZLIB
+    folly_ext_zlib
+    folly_ext_zstd
     folly_io_iobuf
     folly_lang_bits
     folly_memory
@@ -67,6 +71,7 @@ folly_add_library(
     folly_system_hardware_concurrency
   EXPORTED_DEPS
     folly_compression_compression_context_pool
+    folly_ext_zstd
     folly_portability_config
     folly_portability_gflags
 )
