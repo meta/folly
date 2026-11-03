@@ -287,6 +287,7 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/glog:glog",
         "//folly:c_portability",
         "//folly:file_util",
+        "//folly:portability",
         "//folly:range",
         "//folly/coro:blocking_wait",
         "//folly/coro:task",
