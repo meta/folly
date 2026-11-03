@@ -126,7 +126,9 @@ folly_add_library(
     folly_portability_unistd
     folly_small_vector
     folly_string
-  EXPORTED_DEPS folly_io_async_async_base_class
+  EXPORTED_DEPS
+    folly_ext_aio
+    folly_io_async_async_base_class
 )
 
 folly_add_library(
@@ -662,6 +664,7 @@ folly_add_library(
 folly_add_library(
   NAME liburing
   HEADERS Liburing.h
+  EXPORTED_DEPS folly_ext_uring
 )
 
 folly_add_library(

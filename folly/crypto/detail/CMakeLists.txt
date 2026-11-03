@@ -46,10 +46,9 @@ folly_add_library(
   SRCS MathOperation_SSE2.cpp
   DEPS
     folly_crypto_detail_lt_hash_internal
+    folly_ext_sodium
     folly_lang_bits
     folly_memory
-  EXTERNAL_DEPS ${LIBSODIUM_LIBRARIES}
-  EXTERNAL_INCLUDE_DIRS ${LIBSODIUM_INCLUDE_DIRS}
 )
 
 if (IS_X86_64_ARCH)
@@ -67,10 +66,9 @@ folly_add_library(
   SRCS MathOperation_AVX2.cpp
   DEPS
     folly_crypto_detail_lt_hash_internal
+    folly_ext_sodium
     folly_lang_bits
     folly_memory
-  EXTERNAL_DEPS ${LIBSODIUM_LIBRARIES}
-  EXTERNAL_INCLUDE_DIRS ${LIBSODIUM_INCLUDE_DIRS}
 )
 
 if (IS_X86_64_ARCH)
@@ -89,10 +87,9 @@ folly_add_library(
   SRCS MathOperation_SSE2.cpp
   DEPS
     folly_crypto_detail_lt_hash_internal
+    folly_ext_sodium
     folly_lang_bits
     folly_memory
-  EXTERNAL_DEPS ${LIBSODIUM_LIBRARIES}
-  EXTERNAL_INCLUDE_DIRS ${LIBSODIUM_INCLUDE_DIRS}
 )
 
 folly_add_library(
@@ -101,8 +98,7 @@ folly_add_library(
   SRCS MathOperation_AVX2.cpp
   DEPS
     folly_crypto_detail_lt_hash_internal
+    folly_ext_sodium
     folly_lang_bits
     folly_memory
-  EXTERNAL_DEPS ${LIBSODIUM_LIBRARIES}
-  EXTERNAL_INCLUDE_DIRS ${LIBSODIUM_INCLUDE_DIRS}
 )

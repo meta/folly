@@ -124,7 +124,9 @@ folly_add_library(
 folly_add_library(
   NAME libunwind
   HEADERS Libunwind.h
-  EXPORTED_DEPS folly_portability_provide_libunwind
+  EXPORTED_DEPS
+    folly_ext_unwind
+    folly_portability_provide_libunwind
 )
 
 folly_add_library(

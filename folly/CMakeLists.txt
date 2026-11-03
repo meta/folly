@@ -314,6 +314,7 @@ folly_add_library(
   HEADERS Demangle.h
   DEPS
     folly_c_portability
+    folly_ext_iberty
     folly_functional_invoke
     folly_lang_c_string
     folly_utility

@@ -481,19 +481,21 @@ endif ()
 folly_add_external_library(snappy LIBRARIES ${SNAPPY_LIBRARY})
 
 find_package(Libiberty)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBIBERTY_LIBRARIES})
+folly_add_external_library(iberty LIBRARIES ${LIBIBERTY_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBIBERTY_INCLUDE_DIRS})
 
 find_package(LibAIO)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBAIO_LIBRARIES})
+folly_add_external_library(aio LIBRARIES ${LIBAIO_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBAIO_INCLUDE_DIRS})
 
 find_package(LibUring)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBURING_LIBRARIES})
+folly_add_external_library(uring LIBRARIES ${LIBURING_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBURING_INCLUDE_DIRS})
 
 find_package(Libsodium)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBSODIUM_LIBRARIES})
+# LtHash's templates call into libsodium.
+folly_add_external_library(sodium MONOLITH_PUBLIC
+                           LIBRARIES ${LIBSODIUM_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBSODIUM_INCLUDE_DIRS})
 
 list(APPEND FOLLY_LINK_LIBRARIES ${CMAKE_DL_LIBS})
@@ -508,13 +510,10 @@ if (PYTHON_EXTENSIONS)
 endif ()
 
 find_package(LibUnwind)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBUNWIND_LIBRARIES})
+folly_add_external_library(unwind LIBRARIES ${LIBUNWIND_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBUNWIND_INCLUDE_DIRS})
 if (LIBUNWIND_FOUND)
   set(FOLLY_HAVE_LIBUNWIND ON)
-endif ()
-if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
-  list(APPEND FOLLY_LINK_LIBRARIES "execinfo")
 endif ()
 
 cmake_push_check_state()
@@ -525,6 +524,12 @@ cmake_pop_check_state()
 set(FOLLY_USE_SYMBOLIZER OFF)
 check_include_file_cxx(elf.h FOLLY_HAVE_ELF)
 find_package(Backtrace)
+# backtrace() is in libc on glibc and macOS.
+set(folly_backtrace_libraries ${Backtrace_LIBRARIES})
+if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+  list(APPEND folly_backtrace_libraries execinfo)
+endif ()
+folly_add_external_library(backtrace LIBRARIES ${folly_backtrace_libraries})
 
 set(FOLLY_HAVE_BACKTRACE ${Backtrace_FOUND})
 # folly reads DWARF itself and needs no library for it, only ELF. It has not

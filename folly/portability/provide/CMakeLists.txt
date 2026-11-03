@@ -30,4 +30,5 @@ folly_add_library(
 
 folly_add_library(
   NAME libunwind-linux
+  EXPORTED_DEPS folly_ext_unwind
 )

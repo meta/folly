@@ -104,6 +104,7 @@ folly_add_library(
   SRCS StackTrace.cpp
   HEADERS StackTrace.h
   DEPS
+    folly_ext_backtrace
     folly_portability
     folly_portability_config
     folly_portability_libunwind
@@ -157,6 +158,7 @@ folly_add_library(
     folly_debugging_symbolizer_detail_signal_safe_libc
     folly_debugging_symbolizer_elf
     folly_demangle
+    folly_ext_backtrace
     folly_file_util
     folly_indestructible
     folly_lang_safe_assert
