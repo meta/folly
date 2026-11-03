@@ -27,3 +27,19 @@ folly_add_library(
   NAME dwarf_constants
   HEADERS DwarfConstants.h
 )
+
+folly_add_library(
+  NAME signal_safe_libc
+  SRCS SignalSafeLibc.cpp
+  HEADERS SignalSafeLibc.h
+  DEPS
+    folly_debugging_symbolizer_detail_debug
+    folly_lang_c_string
+  EXPORTED_DEPS
+    folly_c_portability
+    folly_lang_hint
+    folly_portability_config
+    folly_portability_fcntl
+    folly_portability_sys_mman
+    folly_portability_unistd
+)

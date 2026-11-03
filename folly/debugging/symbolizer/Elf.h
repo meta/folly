@@ -106,6 +106,10 @@ class ElfFile {
 
   ElfFile() noexcept;
 
+  /// Resolve this module's libc-wrapper bindings before installing handlers.
+  /// Binding resolution is not async-signal-safe; no ELF files are loaded.
+  static void warmUp() noexcept;
+
   // Note: may throw, call openNoThrow() explicitly if you don't want to throw
   explicit ElfFile(const char* name, Options const& options = Options());
 

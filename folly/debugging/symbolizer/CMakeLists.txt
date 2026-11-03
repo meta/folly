@@ -50,6 +50,7 @@ folly_add_library(
     Elf.h
   DEPS
     ${GLOG_LIBRARIES}
+    folly_debugging_symbolizer_detail_signal_safe_libc
     folly_exception
     folly_lang_c_string
     folly_portability_sys_mman
@@ -70,6 +71,7 @@ folly_add_library(
   HEADERS ElfCache.h
   DEPS
     folly_c_portability
+    folly_debugging_symbolizer_detail_signal_safe_libc
     folly_lang_hint
     folly_portability_sys_mman
     folly_scope_guard
@@ -152,6 +154,7 @@ folly_add_library(
   DEPS
     ${GLOG_LIBRARIES}
     folly_debugging_symbolizer_detail_debug
+    folly_debugging_symbolizer_detail_signal_safe_libc
     folly_debugging_symbolizer_elf
     folly_demangle
     folly_file_util

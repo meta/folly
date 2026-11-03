@@ -49,6 +49,7 @@ fb_dirsync_cpp_library(
         "fbsource//third-party/glog:glog",
         "//folly:exception",
         "//folly:scope_guard",
+        "//folly/debugging/symbolizer/detail:signal_safe_libc",
         "//folly/lang:c_string",
         "//folly/portability:sys_mman",
     ],
@@ -75,6 +76,7 @@ fb_dirsync_cpp_library(
     deps = [
         "//folly:c_portability",
         "//folly:scope_guard",
+        "//folly/debugging/symbolizer/detail:signal_safe_libc",
         "//folly/lang:hint",
         "//folly/portability:sys_mman",
     ],
@@ -178,6 +180,7 @@ fb_dirsync_cpp_library(
         "//folly:scope_guard",
         "//folly:small_vector",
         "//folly/debugging/symbolizer/detail:debug",
+        "//folly/debugging/symbolizer/detail:signal_safe_libc",
         "//folly/lang:safe_assert",
         "//folly/lang:to_ascii",
         "//folly/memory:sanitize_address",

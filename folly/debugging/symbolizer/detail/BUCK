@@ -19,3 +19,22 @@ fb_dirsync_cpp_library(
     headers = ["DwarfConstants.h"],
     use_raw_headers = True,
 )
+
+fb_dirsync_cpp_library(
+    name = "signal_safe_libc",
+    srcs = ["SignalSafeLibc.cpp"],
+    headers = ["SignalSafeLibc.h"],
+    use_raw_headers = True,
+    deps = [
+        ":debug",
+        "//folly/lang:c_string",
+    ],
+    exported_deps = [
+        "//folly:c_portability",
+        "//folly/lang:hint",
+        "//folly/portability:config",
+        "//folly/portability:fcntl",
+        "//folly/portability:sys_mman",
+        "//folly/portability:unistd",
+    ],
+)

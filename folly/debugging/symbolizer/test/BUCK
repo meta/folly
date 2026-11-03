@@ -103,11 +103,57 @@ python_unittest(
     name = "small_sigaltstack_test",
     srcs = ["small_sigaltstack_test.py"],
     env = {
+        "OBJCOPY": "$(location fbsource//third-party/llvm-project:llvm-objcopy)",
         "SMALL_SIGALTSTACK_CRASH": "$(location :small_sigaltstack_crash)",
     },
     labels = fbcode_ci_default_labels(python = True),
     network_access = network_access_utils.none(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
+)
+
+fb_dirsync_cpp_binary(
+    name = "signal_safe_libc_warmup",
+    srcs = ["SignalSafeLibcWarmUp.cpp"],
+    labels = fbcode_ci_default_labels(),
+    target_compatible_with = [
+        "ovr_config//os:linux",
+        "ovr_config//runtime:fbcode",
+    ],
+    deps = [
+        "fbsource//xplat/folly/lang:c_string",
+        "//folly/debugging/symbolizer/detail:signal_safe_libc",
+        "//folly/lang:hint",
+    ],
+)
+
+python_unittest(
+    name = "signal_safe_libc_warmup_test",
+    srcs = ["signal_safe_libc_warmup_test.py"],
+    env = {
+        "SIGNAL_SAFE_LIBC_WARMUP": "$(location :signal_safe_libc_warmup)",
+    },
+    labels = fbcode_ci_default_labels(python = True),
+    network_access = network_access_utils.none(),
+    target_compatible_with = [
+        "ovr_config//os:linux",
+        "ovr_config//runtime:fbcode",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
+    name = "signal_safe_libc_test",
+    srcs = ["SignalSafeLibcTest.cpp"],
+    labels = fbcode_ci_default_labels(),
+    network_access = network_access_utils.none(),
+    target_compatible_with = [
+        "ovr_config//os:linux",
+        "ovr_config//runtime:fbcode",
+    ],
+    deps = [
+        "//folly/debugging/symbolizer/detail:debug",
+        "//folly/debugging/symbolizer/detail:signal_safe_libc",
+        "//folly/portability:gtest",
+    ],
 )
 
 fb_dirsync_cpp_unittest(

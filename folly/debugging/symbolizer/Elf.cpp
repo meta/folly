@@ -26,6 +26,7 @@
 #include <folly/Conv.h>
 #include <folly/Exception.h>
 #include <folly/ScopeGuard.h>
+#include <folly/debugging/symbolizer/detail/SignalSafeLibc.h>
 #include <folly/lang/CString.h>
 #include <folly/portability/Config.h>
 #include <folly/portability/SysMman.h>
@@ -51,6 +52,10 @@
 
 namespace folly {
 namespace symbolizer {
+
+void ElfFile::warmUp() noexcept {
+  detail::signal_safe_libc::warmUp();
+}
 
 ElfFile::ElfFile() noexcept
     : fd_(-1),
@@ -83,13 +88,14 @@ ElfFile::OpenResult ElfFile::openNoThrow(
   // Always close fd and unmap in case of failure along the way to avoid
   // check failure above if we leave fd != -1 and the object is recycled
   auto guard = makeGuard([&] { reset(); });
-  strlcpy(filepath_, name, kFilepathMaxLen - 1);
-  fd_ = ::open(name, (options.writable() ? O_RDWR : O_RDONLY) | O_CLOEXEC);
+  detail::signal_safe_libc::strlcpy(filepath_, name, kFilepathMaxLen - 1);
+  fd_ = detail::signal_safe_libc::open(
+      name, (options.writable() ? O_RDWR : O_RDONLY) | O_CLOEXEC);
   if (fd_ == -1) {
     return {kSystemError, "open"};
   }
   struct stat st;
-  int r = fstat(fd_, &st);
+  int r = detail::signal_safe_libc::fstat(fd_, &st);
   if (r == -1) {
     return {kSystemError, "fstat"};
   }
@@ -106,7 +112,8 @@ ElfFile::OpenResult ElfFile::openNoThrow(
   if (options.writable()) {
     prot |= PROT_WRITE;
   }
-  file_ = static_cast<char*>(mmap(nullptr, length_, prot, MAP_SHARED, fd_, 0));
+  file_ = static_cast<char*>(detail::signal_safe_libc::mmap(
+      nullptr, length_, prot, MAP_SHARED, fd_, 0));
   if (file_ == MAP_FAILED) {
     return {kSystemError, "mmap"};
   }
@@ -134,7 +141,7 @@ ElfFile::OpenResult ElfFile::openAndFollow(
    *     - dirname(name) + /.debug/
    *     - X/dirname(name)/ - where X is set in gdb's `debug-file-directory`.
    */
-  auto dirend = strrchr(name, '/');
+  auto dirend = detail::signal_safe_libc::strrchr(name, '/');
   // include ending '/' if any.
   auto dirlen = dirend != nullptr ? dirend + 1 - name : 0;
 
@@ -157,8 +164,9 @@ ElfFile::OpenResult ElfFile::openAndFollow(
   }
 
   char linkname[PATH_MAX];
-  memcpy(linkname, name, dirlen);
-  memcpy(linkname + dirlen, debugFileName.data(), debugFileLen + 1);
+  detail::signal_safe_libc::memcpy(linkname, name, dirlen);
+  detail::signal_safe_libc::memcpy(
+      linkname + dirlen, debugFileName.data(), debugFileLen + 1);
   reset();
   result = openNoThrow(linkname, options);
   if (result == kSuccess) {
@@ -178,7 +186,8 @@ ElfFile::ElfFile(ElfFile&& other) noexcept
       fileId_(other.fileId_),
       baseAddress_(other.baseAddress_) {
   // copy other.filepath_, leaving filepath_ zero-terminated, always.
-  strlcpy(filepath_, other.filepath_, kFilepathMaxLen - 1);
+  detail::signal_safe_libc::strlcpy(
+      filepath_, other.filepath_, kFilepathMaxLen - 1);
   other.filepath_[0] = 0;
   other.fd_ = -1;
   other.file_ = static_cast<char*>(MAP_FAILED);
@@ -192,7 +201,8 @@ ElfFile& ElfFile::operator=(ElfFile&& other) noexcept {
   reset();
 
   // copy other.filepath_, leaving filepath_ zero-terminated, always.
-  strlcpy(filepath_, other.filepath_, kFilepathMaxLen - 1);
+  detail::signal_safe_libc::strlcpy(
+      filepath_, other.filepath_, kFilepathMaxLen - 1);
   fd_ = other.fd_;
   file_ = other.file_;
   length_ = other.length_;
@@ -213,12 +223,12 @@ void ElfFile::reset() noexcept {
   filepath_[0] = 0;
 
   if (file_ != MAP_FAILED) {
-    munmap(file_, length_);
+    detail::signal_safe_libc::munmap(file_, length_);
     file_ = static_cast<char*>(MAP_FAILED);
   }
 
   if (fd_ != -1) {
-    fileops::close(fd_);
+    detail::signal_safe_libc::close(fd_);
     fd_ = -1;
   }
 
@@ -231,15 +241,17 @@ ElfFile::OpenResult ElfFile::init() noexcept {
   }
 
   std::array<char, SELFMAG> elfMagBuf = {{0, 0, 0, 0}};
-  if (::lseek(fd_, 0, SEEK_SET) != 0 ||
-      fileops::read(fd_, elfMagBuf.data(), SELFMAG) != SELFMAG) {
+  if (detail::signal_safe_libc::lseek(fd_, 0, SEEK_SET) != 0 ||
+      detail::signal_safe_libc::read(fd_, elfMagBuf.data(), SELFMAG) !=
+          SELFMAG) {
     return {kInvalidElfFile, "unable to read ELF file for magic number"};
   }
-  if (std::strncmp(elfMagBuf.data(), ELFMAG, SELFMAG) != 0) {
+  if (detail::signal_safe_libc::memcmp(elfMagBuf.data(), ELFMAG, SELFMAG) !=
+      0) {
     return {kInvalidElfFile, "invalid ELF magic"};
   }
   char c;
-  if (::pread(fd_, &c, 1, length_ - 1) != 1) {
+  if (detail::signal_safe_libc::pread(fd_, &c, 1, length_ - 1) != 1) {
     auto msg =
         "The last bit of the mmaped memory is no longer valid. This may be "
         "caused by the original file being resized, "
@@ -247,7 +259,7 @@ ElfFile::OpenResult ElfFile::init() noexcept {
     return {kInvalidElfFile, msg};
   }
 
-  if (::lseek(fd_, 0, SEEK_SET) != 0) {
+  if (detail::signal_safe_libc::lseek(fd_, 0, SEEK_SET) != 0) {
     return {
         kInvalidElfFile,
         "unable to reset file descriptor after reading ELF magic number"};

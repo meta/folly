@@ -21,6 +21,7 @@
 
 #include <folly/CPortability.h>
 #include <folly/ScopeGuard.h>
+#include <folly/debugging/symbolizer/detail/SignalSafeLibc.h>
 #include <folly/lang/Hint.h>
 #include <folly/portability/Config.h>
 #include <folly/portability/SysMman.h>
@@ -42,6 +43,7 @@ FOLLY_NOINLINE bool pathLess(
 } // namespace
 
 void SignalSafeElfCache::warmUp() noexcept {
+  detail::signal_safe_libc::warmUp();
   const char* left = "a";
   const char* right = "b";
   compiler_must_not_predict(left);
@@ -83,12 +85,14 @@ std::shared_ptr<ElfFile> SignalSafeElfCache::getFile(StringPiece p) {
   };
 
   sigset_t newsigs;
-  sigfillset(&newsigs);
   sigset_t oldsigs;
-  sigemptyset(&oldsigs);
-  sigprocmask(SIG_SETMASK, &newsigs, &oldsigs);
+  if (detail::signal_safe_libc::fill_signal_set(&newsigs) != 0 ||
+      detail::signal_safe_libc::set_signal_mask(
+          SIG_SETMASK, &newsigs, &oldsigs) != 0) {
+    return nullptr;
+  }
   SCOPE_EXIT {
-    sigprocmask(SIG_SETMASK, &oldsigs, nullptr);
+    detail::signal_safe_libc::set_signal_mask(SIG_SETMASK, &oldsigs, nullptr);
   };
 
   if (!state_) {

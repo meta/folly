@@ -14,12 +14,15 @@
 # limitations under the License.
 
 import os
+import re
 import resource
 import signal
 import subprocess
+import tempfile
 import unittest
 
 
+BINDING = re.compile(r"binding file .* normal symbol `([^']+)'")
 ASAN_SWAPCONTEXT_WARNING = (
     "ASan doesn't fully support makecontext/swapcontext functions"
 )
@@ -52,7 +55,39 @@ class SmallSigAltStackTest(unittest.TestCase):
         self.assertEqual(result.stdout, b"")
         self.assertEqual(result.stderr, b"")
 
-    def test_crash_prints_trace(self) -> None:
+    def test_crash_prints_without_runtime_binding(self) -> None:
+        self.check_crash(self.helper)
+
+    def test_debuglink_crash_prints_without_runtime_binding(self) -> None:
+        # Keep the copy beside the original so its relative library paths work.
+        directory = os.path.dirname(self.helper)
+        with (
+            tempfile.NamedTemporaryFile(dir=directory, suffix=".debuginfo") as debug,
+            tempfile.NamedTemporaryFile(dir=directory, suffix=".stripped") as stripped,
+        ):
+            objcopy = os.environ["OBJCOPY"]
+            subprocess.run(
+                [objcopy, "--only-keep-debug", self.helper, debug.name],
+                check=True,
+                capture_output=True,
+                timeout=30,
+            )
+            subprocess.run(
+                [
+                    objcopy,
+                    "--strip-all",
+                    f"--add-gnu-debuglink={debug.name}",
+                    self.helper,
+                    stripped.name,
+                ],
+                check=True,
+                capture_output=True,
+                timeout=30,
+            )
+            os.chmod(stripped.name, 0o700)
+            self.check_crash(stripped.name)
+
+    def check_crash(self, helper: str) -> None:
         env = dict(os.environ)
         env.pop("LD_BIND_NOW", None)
         env.pop("LD_DEBUG", None)
@@ -63,7 +98,7 @@ class SmallSigAltStackTest(unittest.TestCase):
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
         result = subprocess.run(
-            [self.helper],
+            [helper],
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -80,3 +115,9 @@ class SmallSigAltStackTest(unittest.TestCase):
             self.assertIn("safe mode, symbolizer not available", trace)
         else:
             self.assertIn("SmallSigAltStackCrash.cpp:", trace, stderr[-20000:])
+
+        if not self.sanitized:
+            bound = [
+                match.group(1) for match in BINDING.finditer(trace.partition("\n")[2])
+            ]
+            self.assertEqual(bound, [], stderr[-20000:])

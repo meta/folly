@@ -392,14 +392,12 @@ class UnsafeSelfAllocateStackTracePrinter : public SafeStackTracePrinter {
 
  private:
   struct AllocatedStack;
-  struct ContextFunctions;
 
   static std::unique_ptr<AllocatedStack> allocateStack();
   static void contextStart(UnsafeSelfAllocateStackTracePrinter* that);
   bool runOnAllocatedStack();
 
   const std::unique_ptr<AllocatedStack> stack_;
-  const std::unique_ptr<ContextFunctions> contextFunctions_;
 };
 
 #endif // FOLLY_HAVE_SWAPCONTEXT

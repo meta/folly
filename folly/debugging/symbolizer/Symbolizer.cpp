@@ -18,6 +18,7 @@
 
 #include <cstdlib>
 
+#include <folly/Demangle.h>
 #include <folly/FileUtil.h>
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
@@ -26,6 +27,7 @@
 #include <folly/debugging/symbolizer/ElfCache.h>
 #include <folly/debugging/symbolizer/SymbolCache.h>
 #include <folly/debugging/symbolizer/detail/Debug.h>
+#include <folly/debugging/symbolizer/detail/SignalSafeLibc.h>
 #include <folly/lang/SafeAssert.h>
 #include <folly/lang/ToAscii.h>
 #include <folly/memory/SanitizeAddress.h>
@@ -324,7 +326,8 @@ size_t Symbolizer::symbolize(
 
   char selfPath[PATH_MAX + 8];
   ssize_t selfSize;
-  if ((selfSize = readlink(exePath_.c_str(), selfPath, PATH_MAX + 1)) == -1) {
+  if ((selfSize = detail::signal_safe_libc::readlink(
+           exePath_.c_str(), selfPath, PATH_MAX + 1)) == -1) {
     // Something has gone terribly wrong.
     return 0;
   }
@@ -629,12 +632,6 @@ const size_t kMmapStackSize = 1 * 1024 * 1024;
 
 constexpr bool kUseAllocatedStack = !kIsSanitizeThread;
 
-template <typename Function>
-Function resolve_libc_function(const char* name) {
-  auto* symbol = detail::get_libc_symbol(name);
-  return reinterpret_cast<Function>(symbol);
-}
-
 } // namespace
 
 struct UnsafeSelfAllocateStackTracePrinter::AllocatedStack {
@@ -653,24 +650,6 @@ struct UnsafeSelfAllocateStackTracePrinter::AllocatedStack {
   char* mapping{nullptr};
   void* bottom{nullptr};
   size_t size{0};
-};
-
-struct UnsafeSelfAllocateStackTracePrinter::ContextFunctions {
-  ContextFunctions()
-      : getcontext(
-            resolve_libc_function<decltype(&::getcontext)>("getcontext")),
-        makecontext(
-            resolve_libc_function<decltype(&::makecontext)>("makecontext")),
-        swapcontext(
-            resolve_libc_function<decltype(&::swapcontext)>("swapcontext")) {}
-
-  explicit operator bool() const {
-    return getcontext && makecontext && swapcontext;
-  }
-
-  decltype(&::getcontext) getcontext;
-  decltype(&::makecontext) makecontext;
-  decltype(&::swapcontext) swapcontext;
 };
 
 #if __has_attribute(disable_sanitizer_instrumentation)
@@ -731,9 +710,25 @@ UnsafeSelfAllocateStackTracePrinter::allocateStack() {
 
 UnsafeSelfAllocateStackTracePrinter::UnsafeSelfAllocateStackTracePrinter(int fd)
     : SafeStackTracePrinter(fd),
-      stack_(kUseAllocatedStack ? allocateStack() : nullptr),
-      contextFunctions_(
-          kUseAllocatedStack ? std::make_unique<ContextFunctions>() : nullptr) {
+      stack_(kUseAllocatedStack ? allocateStack() : nullptr) {
+  if (kUseAllocatedStack) {
+    // Resolve wrapper relocations in each consuming ELF object, not just libc.
+#if FOLLY_HAVE_ELF
+    ElfFile::warmUp();
+    SignalSafeElfCache::warmUp();
+#endif
+    detail::signal_safe_libc::warmUp();
+    (void)detail::signal_safe_libc::initialize();
+    // Resolve libc bindings on the DWARF string and demangling paths. Mangled
+    // and plain names take different demangler paths.
+#if FOLLY_HAVE_ELF && FOLLY_HAVE_DWARF
+    StringPiece terminated{"", 1};
+    (void)readNullTerminated(terminated);
+#endif
+    char demangled[8];
+    (void)folly::demangle("_Z1fv", demangled, sizeof(demangled));
+    (void)folly::demangle("f", demangled, sizeof(demangled));
+  }
   // Initialize the pthread TLS key before a fatal signal can request an async
   // stack. No stack is captured when there is no active async root.
   (void)tryGetCurrentAsyncStackRoot();
@@ -756,13 +751,14 @@ UnsafeSelfAllocateStackTracePrinter::contextStart(
 
 FOLLY_DETAIL_SYMBOLIZER_RAW bool
 UnsafeSelfAllocateStackTracePrinter::runOnAllocatedStack() {
-  if (!stack_ || !contextFunctions_ || !*contextFunctions_) {
+  const auto* functions = detail::signal_safe_libc::impl::get();
+  if (!stack_ || !functions) {
     return false;
   }
 
   ucontext_t cur;
   ucontext_t alt;
-  if (contextFunctions_->getcontext(&alt) != 0) {
+  if (functions->getcontext(&alt) != 0) {
     return false;
   }
   alt.uc_link = &cur;
@@ -770,7 +766,7 @@ UnsafeSelfAllocateStackTracePrinter::runOnAllocatedStack() {
   alt.uc_stack.ss_size = stack_->size;
   alt.uc_stack.ss_flags = 0;
 
-  contextFunctions_->makecontext(
+  functions->makecontext(
       &alt,
       (void (*)())(void (*)(UnsafeSelfAllocateStackTracePrinter*))(
           &UnsafeSelfAllocateStackTracePrinter::contextStart),
@@ -780,7 +776,7 @@ UnsafeSelfAllocateStackTracePrinter::runOnAllocatedStack() {
   sanitizer_start_switch_fiber(
       &currentFakestack, alt.uc_stack.ss_sp, alt.uc_stack.ss_size);
   // NOTE: swapcontext is not async-signal-safe
-  const bool switched = contextFunctions_->swapcontext(&cur, &alt) == 0;
+  const bool switched = functions->swapcontext(&cur, &alt) == 0;
   if (!switched) {
     contextStart(nullptr);
   }
