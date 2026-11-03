@@ -16,17 +16,28 @@
 
 #pragma once
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter.
+#else
 #include <Python.h>
+#endif
 
 #include <folly/Executor.h>
 #include <folly/io/IOBuf.h>
 
 namespace folly::python {
 
+#if !defined(__APPLE__) || !(TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
 // Returns a C++ IOBuf that shares ownership of the given Python memoryview
 // object. The C++ IOBuf can then be exposed and used as a Python IOBuf object.
 std::unique_ptr<folly::IOBuf> iobuf_from_memoryview(
     folly::Executor* executor, PyObject* py_object, void* buf, uint64_t length);
+
+#endif // Apple mobile OSes ship no Python interpreter
 
 // Returns a C++ IOBuf that OWNS a copy of the data from buf. Unlike
 // iobuf_from_memoryview, this does not hold any reference to Python objects,

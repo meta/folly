@@ -18,8 +18,17 @@
 #include <folly/python/fibers.h>
 #include <folly/python/import.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
 namespace folly {
 namespace python {
+
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter; the definitions below
+// require it.
+#else
 
 namespace fibers_detail {
 // Will be filled in from Cython Side
@@ -60,6 +69,7 @@ FOLLY_PYTHON_FIBERS_API folly::fibers::FiberManager* getFiberManager(
   DCHECK(fibers_detail::get_fiber_manager != nullptr);
   return fibers_detail::get_fiber_manager(opts);
 }
+#endif // Apple mobile OSes ship no Python interpreter
 
 } // namespace python
 } // namespace folly

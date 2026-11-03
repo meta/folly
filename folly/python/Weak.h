@@ -16,6 +16,25 @@
 
 #pragma once
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter; the header body below
+// requires it.
+namespace folly::python {
+// Without an interpreter there is nothing to link against, and nothing
+// that could be finalizing.
+inline bool isLinked() {
+  return false;
+}
+inline bool isFinalizing() {
+  return false;
+}
+} // namespace folly::python
+#else
+
 #include <Python.h> // @manual=fbsource//third-party/python:python-headers
 
 extern "C" {
@@ -134,4 +153,12 @@ inline bool isLinked() {
 #endif
 }
 
+// The interpreter may be absent at runtime even where it is available at
+// build time; only consult the finalization state when linked.
+inline bool isFinalizing() {
+  return isLinked() && (Py_IsFinalizing() != 0);
+}
+
 } // namespace folly::python
+
+#endif // Apple mobile OSes ship no Python interpreter

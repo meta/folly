@@ -20,8 +20,40 @@
 
 #include <folly/ScopeGuard.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
 namespace folly {
 namespace python {
+namespace {
+
+// Releases the GIL while the executor waits for work. Unlocks the caller's
+// lock before re-acquiring the GIL, to avoid deadlock if another GIL-owning
+// thread is calling add. No-op where there is no interpreter.
+class ReleaseGILWhileWaiting {
+ public:
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+  explicit ReleaseGILWhileWaiting(std::unique_lock<std::mutex>&) {}
+#else
+  explicit ReleaseGILWhileWaiting(std::unique_lock<std::mutex>& lock)
+      : lock_(lock), pyThreadState_(PyEval_SaveThread()) {}
+  ~ReleaseGILWhileWaiting() {
+    lock_.unlock();
+    PyEval_RestoreThread(pyThreadState_);
+  }
+  ReleaseGILWhileWaiting(const ReleaseGILWhileWaiting&) = delete;
+  ReleaseGILWhileWaiting& operator=(const ReleaseGILWhileWaiting&) = delete;
+  ReleaseGILWhileWaiting(ReleaseGILWhileWaiting&&) = delete;
+  ReleaseGILWhileWaiting& operator=(ReleaseGILWhileWaiting&&) = delete;
+
+ private:
+  std::unique_lock<std::mutex>& lock_;
+  PyThreadState* pyThreadState_;
+#endif
+};
+
+} // namespace
 
 GILAwareManualExecutor::~GILAwareManualExecutor() {
   while (keepAliveCount_.load(std::memory_order_relaxed)) {
@@ -44,14 +76,7 @@ void GILAwareManualExecutor::waitBeforeDrive() {
     return;
   }
 
-  // Release GIL before waiting on lock
-  auto* pyThreadState = PyEval_SaveThread();
-  SCOPE_EXIT {
-    // Release lock before re-acquiring GIL,
-    // to avoid deadlock if another GIL-owning thread is calling add
-    lock.unlock();
-    PyEval_RestoreThread(pyThreadState);
-  };
+  ReleaseGILWhileWaiting gilRelease(lock);
   cv_.wait(lock, [&] { return !funcs_.empty(); });
 }
 

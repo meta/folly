@@ -24,6 +24,10 @@
 #include <folly/fibers/FiberManagerInternal.h>
 #include <folly/python/Weak.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
 #ifdef FOLLY_PYTHON_WIN_SHAREDLIB
 #ifdef FOLLY_PYTHON_FIBERS_DETAIL_DEFS
 #define FOLLY_PYTHON_FIBERS_API __declspec(dllexport)
@@ -47,6 +51,10 @@ FOLLY_PYTHON_FIBERS_API void assign_func(
 FOLLY_PYTHON_FIBERS_API folly::fibers::FiberManager* getFiberManager(
     const folly::fibers::FiberManager::Options& opts = {});
 
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter; the helper below requires
+// it.
+#else
 /**
  * Helper function with similar callback/userData parameters as bridgeFuture.
  * This can be convenient in code that calls both (notably our tests),
@@ -73,6 +81,8 @@ void bridgeFibers(
         // guard goes out of scope here, and its stored function is called
       });
 }
+
+#endif // Apple mobile OSes ship no Python interpreter
 
 } // namespace python
 } // namespace folly

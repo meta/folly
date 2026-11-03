@@ -17,10 +17,21 @@
 #include <folly/python/iobuf.h>
 
 #include <folly/python/import.h>
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter. The generated API header and
+// the Python-bound definitions below require it, so they are omitted here.
+#else
 #include <folly/python/iobuf_api.h> // @manual
+#endif
 
 namespace folly::python {
 
+#if !defined(__APPLE__) || !(TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
 constinit static python::import_cache import_folly__iobuf_{
     import_folly__iobuf, "import_folly__iobuf"};
 
@@ -38,5 +49,6 @@ PyObject* make_python_iobuf(std::unique_ptr<folly::IOBuf> iobuf) {
   import_folly__iobuf_();
   return python_iobuf_from_ptr(std::move(iobuf));
 }
+#endif
 
 } // namespace folly::python

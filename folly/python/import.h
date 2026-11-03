@@ -25,9 +25,15 @@
 #include <folly/python/ScopedGILRelease.h>
 #include <folly/python/error.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
+#if !defined(__APPLE__) || !(TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
 #ifndef PY_VERSION_HEX
 #error \
     "Python.h must be included before folly/python/import.h checks Py_GIL_DISABLED"
+#endif
 #endif
 
 #ifdef Py_GIL_DISABLED

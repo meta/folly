@@ -16,12 +16,21 @@
 
 #pragma once
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter.
+#else
 #include <Python.h>
+#endif
 
 #include <folly/io/IOBuf.h>
 
 namespace folly::python {
 
+#if !defined(__APPLE__) || !(TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
 /**
  * Returns a copy of the C++ IOBuf underlying a Python IOBuf object. In
  * practice, this makes it possible to pass Python IOBuf objects across the
@@ -41,6 +50,8 @@ std::unique_ptr<folly::IOBuf> iobuf_ptr_from_python_iobuf(PyObject* iobuf);
  * and for ensuring no further calls to python C api if PyErr set.
  */
 PyObject* make_python_iobuf(std::unique_ptr<folly::IOBuf> iobuf);
+
+#endif // Apple mobile OSes ship no Python interpreter
 
 inline bool check_iobuf_equal(const folly::IOBuf* a, const folly::IOBuf* b) {
   return folly::IOBufEqualTo{}(a, b);

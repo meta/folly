@@ -18,8 +18,17 @@
 #include <folly/python/executor.h>
 #include <folly/python/import.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
 namespace folly {
 namespace python {
+
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter; the definitions below
+// require it.
+#else
 
 namespace executor_detail {
 
@@ -71,6 +80,7 @@ FOLLY_PYTHON_EXECUTOR_API int setExecutorForLoop(
   DCHECK(executor_detail::set_executor_for_loop != nullptr);
   return executor_detail::set_executor_for_loop(loop, executor);
 }
+#endif // Apple mobile OSes ship no Python interpreter
 
 } // namespace python
 } // namespace folly

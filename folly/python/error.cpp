@@ -24,8 +24,17 @@
 #include <folly/Conv.h>
 #include <folly/ScopeGuard.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
 namespace folly {
 namespace python {
+
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter; the definitions below
+// require it.
+#else
 namespace {
 // Best effort c-api implementation of repr(obj)
 std::string pyObjectToString(PyObject* obj) {
@@ -90,5 +99,6 @@ void handlePythonError(StringPiece errPrefix) {
   throw std::runtime_error(
       to<std::string>(errPrefix, pyObjectToString(pvalue)));
 }
+#endif // Apple mobile OSes ship no Python interpreter
 } // namespace python
 } // namespace folly

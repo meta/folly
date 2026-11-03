@@ -47,7 +47,7 @@ class AsyncioExecutor : public DrivableExecutor {
      * If python is finalizing, calling scheduled functions MAY segfault.
      * Any code that could have been called is now inconsequential.
      */
-    if ((isLinked() && !Py_IsFinalizing()) || !isLinked()) {
+    if ((isLinked() && !isFinalizing()) || !isLinked()) {
       while (keepAliveCounter_ > 0) {
         drive();
         // Note: We're busy waiting for new callbacks (not ideal at all)

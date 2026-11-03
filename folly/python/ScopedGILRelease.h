@@ -18,8 +18,16 @@
 
 #include <folly/python/Weak.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
 namespace folly::python {
 
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter; there is no GIL to release.
+// The class below requires it.
+#else
 /**
  * RAII helper to release the Python GIL for the duration of a scope.
  * Only releases if Python is linked, initialized, not finalizing, the current
@@ -60,5 +68,7 @@ class ScopedGILRelease {
  private:
   PyThreadState* tState_;
 };
+
+#endif // Apple mobile OSes ship no Python interpreter
 
 } // namespace folly::python

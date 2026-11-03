@@ -20,6 +20,10 @@
 #include <folly/python/AsyncioExecutor.h>
 #include <folly/python/Weak.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
 #ifdef FOLLY_PYTHON_WIN_SHAREDLIB
 #ifdef FOLLY_PYTHON_EXECUTOR_DETAIL_DEFS
 #define FOLLY_PYTHON_EXECUTOR_API __declspec(dllexport)
@@ -33,6 +37,11 @@
 namespace folly {
 namespace python {
 
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter; the declarations below
+// require it.
+#else
+
 namespace executor_detail {
 void FOLLY_PYTHON_EXECUTOR_API
 assign_funcs(AsyncioExecutor* (*)(int), int (*)(PyObject*, AsyncioExecutor*));
@@ -45,6 +54,8 @@ FOLLY_PYTHON_EXECUTOR_API folly::Executor* getExecutor();
 // any existing executor).
 FOLLY_PYTHON_EXECUTOR_API int setExecutorForLoop(
     PyObject* loop, AsyncioExecutor* executor);
+
+#endif // Apple mobile OSes ship no Python interpreter
 
 } // namespace python
 } // namespace folly

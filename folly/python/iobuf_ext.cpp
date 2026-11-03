@@ -19,7 +19,16 @@
 #include <folly/python/Weak.h>
 #include <folly/python/iobuf_ext.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h> // @manual
+#endif
+
 namespace folly::python {
+
+#if defined(__APPLE__) && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+// Apple mobile OSes ship no Python interpreter; the definition below
+// requires it. The buffer-copy helpers after it stay available.
+#else
 
 namespace {
 
@@ -90,6 +99,8 @@ std::unique_ptr<folly::IOBuf> iobuf_from_memoryview(
       },
       pyUserData);
 }
+
+#endif // Apple mobile OSes ship no Python interpreter
 
 std::unique_ptr<folly::IOBuf> iobuf_copy_from_buffer(
     const void* buf, std::size_t length) {
