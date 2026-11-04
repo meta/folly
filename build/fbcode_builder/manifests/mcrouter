@@ -22,6 +22,9 @@ libevent
 openssl
 zlib
 
+[dependencies.os=linux]
+systemd
+
 [shipit.pathmap]
 fbcode/mcrouter/public_tld = .
 fbcode/mcrouter = mcrouter
