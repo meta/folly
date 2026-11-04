@@ -243,22 +243,16 @@ class Histogram {
   /* Add a data point to the histogram */
   void addValue(ValueType value) {
     Bucket& bucket = buckets_.getByValue(value);
-    // NOTE: Overflow is handled elsewhere and tests check this
-    // behavior (see HistogramTest.cpp TestOverflow* tests).
-    // TODO: It would be nice to handle overflow here and redesign this class.
-    auto const addend = to_unsigned(value);
-    bucket.sum = static_cast<ValueType>(to_unsigned(bucket.sum) + addend);
+    addToAccum(bucket.sum, value);
     bucket.count += 1;
   }
 
   /* Add multiple same data points to the histogram */
   void addRepeatedValue(ValueType value, uint64_t nSamples) {
     Bucket& bucket = buckets_.getByValue(value);
-    // NOTE: Overflow is handled elsewhere and tests check this
-    // behavior (see HistogramTest.cpp TestOverflow* tests).
-    // TODO: It would be nice to handle overflow here and redesign this class.
-    auto const addend = to_unsigned(value) * nSamples;
-    bucket.sum = static_cast<ValueType>(to_unsigned(bucket.sum) + addend);
+    // Saturating arithmetic: clamps at the type's limits instead of
+    // overflowing, and runs in O(1) even for huge nSamples.
+    detail::repeatedValueHelper(bucket.sum, value, nSamples);
     bucket.count += nSamples;
   }
 
@@ -271,12 +265,8 @@ class Histogram {
    */
   void removeValue(ValueType value) {
     Bucket& bucket = buckets_.getByValue(value);
-    // NOTE: Overflow is handled elsewhere and tests check this
-    // behavior (see HistogramTest.cpp TestOverflow* tests).
-    // TODO: It would be nice to handle overflow here and redesign this class.
     if (bucket.count > 0) {
-      auto const subtrahend = to_unsigned(value);
-      bucket.sum = static_cast<ValueType>(to_unsigned(bucket.sum) - subtrahend);
+      subFromAccum(bucket.sum, value);
       bucket.count -= 1;
     } else {
       bucket.sum = ValueType();
@@ -287,9 +277,10 @@ class Histogram {
   /* Remove multiple same data points from the histogram */
   void removeRepeatedValue(ValueType value, uint64_t nSamples) {
     Bucket& bucket = buckets_.getByValue(value);
-    // TODO: It would be nice to handle overflow here.
     if (bucket.count >= nSamples) {
-      bucket.sum -= value * nSamples;
+      // Saturating arithmetic: clamps at the type's limits instead of
+      // overflowing, and runs in O(1) even for huge nSamples.
+      detail::subtractRepeatedHelper(bucket.sum, value, nSamples);
       bucket.count -= nSamples;
     } else {
       bucket.sum = ValueType();
@@ -466,6 +457,18 @@ class Histogram {
     } else {
       return s;
     }
+  }
+
+  /// Add value to accumulator, clamping to numeric limits on overflow.
+  /// Unlike raw arithmetic, this never invokes signed integer overflow UB.
+  static constexpr void addToAccum(ValueType& a, ValueType value) {
+    detail::addHelper(a, value);
+  }
+
+  /// Subtract value from accumulator, clamping to zero on underflow.
+  /// Unlike raw arithmetic, this never invokes signed integer underflow UB.
+  static constexpr void subFromAccum(ValueType& a, ValueType value) {
+    detail::subtractHelper(a, value);
   }
 
   detail::HistogramBuckets<ValueType, Bucket> buckets_;

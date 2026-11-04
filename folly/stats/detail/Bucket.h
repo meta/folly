@@ -18,6 +18,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 
 #include <folly/ConstexprMath.h>
@@ -98,6 +99,149 @@ template <
     typename std::enable_if<std::is_integral<ValueType>::value, int>::type = 0>
 void subtractHelper(ValueType& a, const ValueType& b) {
   a = constexpr_sub_overflow_clamped(a, b);
+}
+
+/*
+ * Applies a +/- (magnitude * nSamples) to the accumulator in a single
+ * saturating step, for signed ValueType. Equivalent to performing nSamples
+ * sequential clamped additions (or subtractions) of an addend with the given
+ * magnitude and sign: because the addend is constant, the running total
+ * moves monotonically and saturates at the same limit either way.
+ *
+ * All arithmetic is done on uint64_t magnitudes, so the exact magnitude of
+ * ValueType min is representable and no intermediate step can overflow.
+ * Runs in O(1), so even the maximum nSamples cannot cause an unbounded loop.
+ *
+ * magnitude must be the exact magnitude of the addend (2^63 is allowed for
+ * 64-bit types, i.e. the magnitude of the most negative value).
+ */
+template <typename ValueType>
+void applyRepeatedAccum(
+    ValueType& a, bool negative, uint64_t magnitude, uint64_t nSamples) {
+  static_assert(std::is_signed<ValueType>::value, "signed type required");
+  if (magnitude == 0 || nSamples == 0) {
+    return;
+  }
+  constexpr uint64_t kMax = uint64_t(std::numeric_limits<ValueType>::max());
+  constexpr uint64_t kMinMag = kMax + 1; // exact magnitude of ValueType min
+  if (nSamples > UINT64_MAX / magnitude) {
+    // The true product is at least 2^64, which dwarfs any accumulator value.
+    a = negative ? std::numeric_limits<ValueType>::min()
+                 : std::numeric_limits<ValueType>::max();
+    return;
+  }
+  const uint64_t p = magnitude * nSamples;
+  if (!negative) {
+    // total = a + p
+    if (a >= ValueType(0)) {
+      a = p > kMax - uint64_t(a) ? std::numeric_limits<ValueType>::max()
+                                 : static_cast<ValueType>(uint64_t(a) + p);
+    } else {
+      const uint64_t am = uint64_t(0) - uint64_t(a);
+      if (p >= am) {
+        const uint64_t t = p - am;
+        a = t > kMax ? std::numeric_limits<ValueType>::max()
+                     : static_cast<ValueType>(t);
+      } else {
+        const uint64_t t = am - p;
+        a = t > kMinMag ? std::numeric_limits<ValueType>::min()
+                        : static_cast<ValueType>(uint64_t(0) - t);
+      }
+    }
+  } else {
+    // total = a - p
+    if (a >= ValueType(0)) {
+      const uint64_t av = uint64_t(a);
+      if (av >= p) {
+        const uint64_t t = av - p;
+        a = t > kMax ? std::numeric_limits<ValueType>::max()
+                     : static_cast<ValueType>(t);
+      } else {
+        const uint64_t t = p - av;
+        a = t > kMinMag ? std::numeric_limits<ValueType>::min()
+                        : static_cast<ValueType>(uint64_t(0) - t);
+      }
+    } else {
+      const uint64_t am = uint64_t(0) - uint64_t(a);
+      if (p > kMinMag - am) {
+        a = std::numeric_limits<ValueType>::min();
+      } else {
+        const uint64_t t = am + p; // <= kMinMag here
+        a = t == kMinMag ? std::numeric_limits<ValueType>::min()
+                         : static_cast<ValueType>(uint64_t(0) - t);
+      }
+    }
+  }
+}
+
+/*
+ * Repeatedly add the same value nSamples times to accumulator a,
+ * clamping at the numeric limits instead of overflowing. O(1).
+ */
+template <typename ValueType>
+void repeatedValueHelper(ValueType& a, ValueType value, uint64_t nSamples) {
+  if (value == ValueType(0) || nSamples == 0) {
+    return;
+  }
+  if constexpr (std::is_integral<ValueType>::value) {
+    if constexpr (std::is_signed<ValueType>::value) {
+      const bool negative = value < ValueType(0);
+      // Negate in unsigned space: -ValueType min is not representable.
+      const uint64_t magnitude =
+          negative ? uint64_t(0) - uint64_t(value) : uint64_t(value);
+      applyRepeatedAccum(a, negative, magnitude, nSamples);
+    } else {
+      const uint64_t magnitude = uint64_t(value);
+      if (nSamples > UINT64_MAX / magnitude) {
+        a = std::numeric_limits<ValueType>::max();
+        return;
+      }
+      const uint64_t p = magnitude * nSamples;
+      a = p > uint64_t(std::numeric_limits<ValueType>::max()) - uint64_t(a)
+          ? std::numeric_limits<ValueType>::max()
+          : static_cast<ValueType>(uint64_t(a) + p);
+    }
+  } else {
+    // Floating point: sums relax to +/-inf rather than overflowing, so a
+    // single clamped add of value * nSamples gives an O(1) repeated add.
+    detail::addHelper(a, value * static_cast<ValueType>(nSamples));
+  }
+}
+
+/*
+ * Repeatedly subtract the same value nSamples times from accumulator a,
+ * clamping at the numeric limits instead of overflowing. O(1).
+ */
+template <typename ValueType>
+void subtractRepeatedHelper(
+    ValueType& a,
+    ValueType value,
+    uint64_t nSamples) {
+  if (value == ValueType(0) || nSamples == 0) {
+    return;
+  }
+  if constexpr (std::is_integral<ValueType>::value) {
+    if constexpr (std::is_signed<ValueType>::value) {
+      const bool negative = value < ValueType(0);
+      const uint64_t magnitude =
+          negative ? uint64_t(0) - uint64_t(value) : uint64_t(value);
+      // Subtracting value n times == adding (-value) n times.
+      applyRepeatedAccum(a, !negative, magnitude, nSamples);
+    } else {
+      const uint64_t magnitude = uint64_t(value);
+      if (nSamples > UINT64_MAX / magnitude) {
+        a = ValueType(0);
+        return;
+      }
+      const uint64_t p = magnitude * nSamples;
+      a = p >= uint64_t(a) ? ValueType(0)
+                           : static_cast<ValueType>(uint64_t(a) - p);
+    }
+  } else {
+    // Floating point: no overflow concern, so a single clamped subtract of
+    // value * nSamples gives an O(1) repeated subtract.
+    detail::subtractHelper(a, value * static_cast<ValueType>(nSamples));
+  }
 }
 
 /*
