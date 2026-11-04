@@ -89,6 +89,7 @@ fb_dirsync_cpp_unittest(
     srcs = ["JsonOtherTest.cpp"],
     headers = [],
     deps = [
+        "//folly:string",
         "//folly/json:dynamic",
         "//folly/portability:gtest",
     ],

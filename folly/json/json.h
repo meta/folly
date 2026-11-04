@@ -41,8 +41,10 @@
 
 #pragma once
 
+#include <array>
 #include <iosfwd>
 #include <string>
+#include <unordered_map>
 
 #include <folly/Function.h>
 #include <folly/Range.h>

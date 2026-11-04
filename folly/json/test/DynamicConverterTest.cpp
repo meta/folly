@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <map>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 #include <folly/Expected.h>

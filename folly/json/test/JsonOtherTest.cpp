@@ -15,6 +15,8 @@
  */
 
 #include <folly/json/json.h>
+
+#include <folly/String.h>
 #include <folly/portability/GTest.h>
 
 // Create a wrapper to suppress lint warnings
