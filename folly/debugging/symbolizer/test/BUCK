@@ -68,6 +68,7 @@ fb_dirsync_cpp_binary(
         ],
     },
     labels = fbcode_ci_default_labels(),
+    overridden_link_style = "static",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:portability",
