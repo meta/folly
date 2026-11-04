@@ -274,6 +274,10 @@ enum class SharedMutexHookEvent : uint8_t {
   AfterReleaseUpgrade,
   AfterReleaseShared,
   BeforeDestroy,
+  BeforeDetachedWakeOne,
+  AfterDetachedWakeOne,
+  BeforeDetachedWakeAll,
+  AfterDetachedWakeAll,
 };
 
 namespace shared_mutex_detail {
@@ -781,11 +785,24 @@ class SharedMutexImpl
 
   static void wakeDetachedWaiters(const Futex* futex, uint32_t wakeMask) {
     if (wakeMask != 0) {
+      invokeHook(HookEvent::BeforeDetachedWakeAll);
       // The releasing RMW is the last access to mutex storage.  futexWake()
       // uses this previously captured address only as a kernel/parking-lot key
       // and is explicitly safe if the mutex has since been destroyed or
       // reused.  Waiters always validate state after waking.
-      detail::futexWake(futex, std::numeric_limits<int>::max(), wakeMask);
+      if (detail::futexWake(futex, std::numeric_limits<int>::max(), wakeMask) >
+          0) {
+        invokeHook(HookEvent::AfterDetachedWakeAll);
+      }
+    }
+  }
+
+  static void wakeOneDetached(const Futex* futex) {
+    invokeHook(HookEvent::BeforeDetachedWakeOne);
+    // A missed waiter observes the release or waits behind a later owner,
+    // whose release supplies the next wake.
+    if (detail::futexWake(futex, 1, kWaitingE) > 0) {
+      invokeHook(HookEvent::AfterDetachedWakeOne);
     }
   }
 
@@ -866,15 +883,18 @@ class SharedMutexImpl
       assert((state & ~kAssertMask) == kHasE);
 
       // Preserve the wake-one chain for saturated exclusive contention.  The
-      // release-in-progress bit lets a successor acquire and release
-      // immediately; a destructor waits until our waiter cleanup is finished.
-      if ((state & (kWakeMask | kReleaseInProgress)) == kWaitingE) {
+      // release-in-progress holder owns waiter cleanup; successors only wake.
+      if ((state & kWakeMask) == kWaitingE) {
         auto after =
             (state & ~(kWaitingNotS | kPrevDefer | kHasE)) | kReleaseInProgress;
         if (state_.compare_exchange_weak(
                 state, after, std::memory_order_release)) {
           invokeHook(HookEvent::AfterReleaseExclusive);
-          finishWakeOne(futex);
+          if ((state & kReleaseInProgress) != 0) {
+            wakeOneDetached(futex);
+          } else {
+            finishWakeOne(futex);
+          }
           return;
         }
         continue;
@@ -931,12 +951,16 @@ class SharedMutexImpl
       assert((state & (kWaitingNotS | kHasE | kBegunE)) == 0);
       assert((state & kHasU) != 0);
 
-      if ((state & (kWakeMask | kReleaseInProgress)) == kWaitingE) {
+      if ((state & kWakeMask) == kWaitingE) {
         auto after = (state & ~kHasU) | kReleaseInProgress;
         if (state_.compare_exchange_weak(
                 state, after, std::memory_order_release)) {
           invokeHook(HookEvent::AfterReleaseUpgrade);
-          finishWakeOne(futex);
+          if ((state & kReleaseInProgress) != 0) {
+            wakeOneDetached(futex);
+          } else {
+            finishWakeOne(futex);
+          }
           return;
         }
         continue;
@@ -1089,10 +1113,9 @@ class SharedMutexImpl
   static constexpr uint32_t kHasS = ~(kIncrHasS - 1);
 
   // Set while an unlock() or unlock_upgrade() has published availability but
-  // may still update waiter bits.  A successor may acquire and release while
-  // this is set, but its release uses the wake-all path without touching
-  // state_ afterward.  The destructor waits for the bit to clear, bounding
-  // post-release state_ access to one thread and keeping the storage alive.
+  // may still update waiter bits.  A successor may release while this is set,
+  // but only the original tail accesses state_ after releasing ownership.  The
+  // destructor waits for the bit to clear before reclaiming the storage.
   static constexpr uint32_t kReleaseInProgress = 1 << 11;
 
   // Set if annotation has been completed for this instance.  That annotation

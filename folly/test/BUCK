@@ -1316,6 +1316,7 @@ fb_dirsync_cpp_unittest(
         "//folly/portability:gflags",
         "//folly/portability:gtest",
         "//folly/synchronization:rw_spin_lock",
+        "//folly/system:hardware_concurrency",
     ],
 )
 

@@ -23,7 +23,9 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <limits>
 #include <mutex>
+#include <new>
 #include <optional>
 #include <random>
 #include <shared_mutex> // std::shared_lock
@@ -38,6 +40,7 @@
 #include <folly/portability/GFlags.h>
 #include <folly/portability/GTest.h>
 #include <folly/synchronization/RWSpinLock.h>
+#include <folly/system/HardwareConcurrency.h>
 #include <folly/test/DeterministicSchedule.h>
 #include <folly/test/TestUtils.h>
 
@@ -148,7 +151,7 @@ class SharedMutexHookRecorder : public SharedMutexHookObserver {
 
  private:
   static constexpr size_t kEventCount =
-      static_cast<size_t>(HookEvent::BeforeDestroy) + 1;
+      static_cast<size_t>(HookEvent::AfterDetachedWakeAll) + 1;
   std::mutex mutex_;
   std::condition_variable cv_;
   std::array<size_t, kEventCount> counts_{};
@@ -160,10 +163,12 @@ constexpr auto kLifetimeTestTimeout = std::chrono::seconds(10);
 
 class LifetimeTestState : public SharedMutexHookObserver {
  public:
-  LifetimeTestState(bool blockWaiters, bool pauseRelease)
+  LifetimeTestState(
+      bool blockWaiters, bool pauseRelease, bool pauseDetachedWakeOne = false)
       : releaser_(std::this_thread::get_id()),
         blockWaiters_(blockWaiters),
-        pauseRelease_(pauseRelease) {}
+        pauseRelease_(pauseRelease),
+        pauseDetachedWakeOne_(pauseDetachedWakeOne) {}
 
   void on_event(HookEvent event) noexcept override {
     switch (event) {
@@ -177,6 +182,18 @@ class LifetimeTestState : public SharedMutexHookObserver {
       case HookEvent::AfterReleaseUpgrade:
       case HookEvent::AfterReleaseShared:
         afterRelease();
+        return;
+      case HookEvent::BeforeDetachedWakeOne:
+        beforeDetachedWakeOne();
+        return;
+      case HookEvent::AfterDetachedWakeOne:
+        afterDetachedWakeOne();
+        return;
+      case HookEvent::BeforeDetachedWakeAll:
+        beforeDetachedWakeAll();
+        return;
+      case HookEvent::AfterDetachedWakeAll:
+        afterDetachedWakeAll();
         return;
       case HookEvent::BeforeDestroy:
         beforeDestroy();
@@ -261,6 +278,11 @@ class LifetimeTestState : public SharedMutexHookObserver {
     });
   }
 
+  void resetWaiters() {
+    std::lock_guard lock(mutex_);
+    waiters_.clear();
+  }
+
   bool waitForRelease() {
     std::unique_lock lock(mutex_);
     return cv_.wait_for(lock, kLifetimeTestTimeout, [&] { return released_; });
@@ -279,6 +301,57 @@ class LifetimeTestState : public SharedMutexHookObserver {
     cv_.notify_all();
   }
 
+  void beforeDetachedWakeOne() {
+    std::unique_lock lock(mutex_);
+    ++detachedWakeOneCount_;
+    cv_.notify_all();
+    const bool didTimeOut =
+        pauseDetachedWakeOne_ && !cv_.wait_for(lock, kLifetimeTestTimeout, [&] {
+          return detachedWakeMayFinish_;
+        });
+    if (didTimeOut) {
+      timedOut_ = true;
+    }
+  }
+
+  void afterDetachedWakeOne() {
+    std::lock_guard lock(mutex_);
+    ++successfulDetachedWakeOneCount_;
+    cv_.notify_all();
+  }
+
+  void beforeDetachedWakeAll() {
+    std::lock_guard lock(mutex_);
+    ++detachedWakeAllCount_;
+    cv_.notify_all();
+  }
+
+  void afterDetachedWakeAll() {
+    std::lock_guard lock(mutex_);
+    ++successfulDetachedWakeAllCount_;
+    cv_.notify_all();
+  }
+
+  bool waitForDetachedWakeOne(size_t count = 1) {
+    std::unique_lock lock(mutex_);
+    return cv_.wait_for(lock, kLifetimeTestTimeout, [&] {
+      return detachedWakeOneCount_ >= count;
+    });
+  }
+
+  void allowDetachedWakeToFinish() {
+    std::lock_guard lock(mutex_);
+    detachedWakeMayFinish_ = true;
+    cv_.notify_all();
+  }
+
+  bool waitForSuccessfulDetachedWakeAll(size_t count = 1) {
+    std::unique_lock lock(mutex_);
+    return cv_.wait_for(lock, kLifetimeTestTimeout, [&] {
+      return successfulDetachedWakeAllCount_ >= count;
+    });
+  }
+
   void objectDeleted() {
     std::lock_guard lock(mutex_);
     deleted_ = true;
@@ -291,16 +364,47 @@ class LifetimeTestState : public SharedMutexHookObserver {
     return released_ && deleted_ && !timedOut_;
   }
 
+  bool didNotTimeOut() {
+    std::lock_guard lock(mutex_);
+    return !timedOut_;
+  }
+
+  size_t detachedWakeOneCount() {
+    std::lock_guard lock(mutex_);
+    return detachedWakeOneCount_;
+  }
+
+  size_t detachedWakeAllCount() {
+    std::lock_guard lock(mutex_);
+    return detachedWakeAllCount_;
+  }
+
+  size_t successfulDetachedWakeOneCount() {
+    std::lock_guard lock(mutex_);
+    return successfulDetachedWakeOneCount_;
+  }
+
+  size_t successfulDetachedWakeAllCount() {
+    std::lock_guard lock(mutex_);
+    return successfulDetachedWakeAllCount_;
+  }
+
  private:
   std::thread::id releaser_;
   const bool blockWaiters_;
   const bool pauseRelease_;
+  const bool pauseDetachedWakeOne_;
   std::mutex mutex_;
   std::condition_variable cv_;
   std::vector<std::thread::id> waiters_;
   bool released_{false};
   bool deleted_{false};
   bool releaseMayFinish_{false};
+  bool detachedWakeMayFinish_{false};
+  size_t detachedWakeOneCount_{0};
+  size_t successfulDetachedWakeOneCount_{0};
+  size_t detachedWakeAllCount_{0};
+  size_t successfulDetachedWakeAllCount_{0};
   bool destructorWaiting_{false};
   bool ownerReady_{false};
   bool releaseRequested_{false};
@@ -385,7 +489,7 @@ void runSaturatedExclusiveWaitersTest() {
   ASSERT_EQ(kWaiters, acquired.load());
 }
 
-template <typename Mutex>
+template <typename Mutex, LifetimeReleaseMode SuccessorMode>
 void runSelfDestructionDuringSaturatedReleaseTest() {
   constexpr size_t kWaiters = 2;
   auto* mutex = new Mutex;
@@ -418,14 +522,15 @@ void runSelfDestructionDuringSaturatedReleaseTest() {
     waiter.join();
   }
 
-  constexpr size_t kSuccessors = 8;
+  constexpr size_t kSuccessors =
+      SuccessorMode == LifetimeReleaseMode::Exclusive ? 8 : 1;
   std::atomic<size_t> successorReleases{0};
   std::vector<std::thread> successors;
   successors.reserve(kSuccessors);
   for (size_t i = 0; i < kSuccessors; ++i) {
     successors.emplace_back([&] {
-      mutex->lock();
-      mutex->unlock();
+      acquireInitialOwnership<SuccessorMode>(*mutex);
+      releaseInitialOwnership<SuccessorMode>(*mutex);
       ++successorReleases;
     });
   }
@@ -433,6 +538,8 @@ void runSelfDestructionDuringSaturatedReleaseTest() {
     successor.join();
   }
   const bool didAllSuccessorsRelease = successorReleases.load() == kSuccessors;
+  const auto detachedWakeOneCount = state.detachedWakeOneCount();
+  const auto detachedWakeAllCount = state.detachedWakeAllCount();
 
   std::atomic<bool> deleted{false};
   std::thread deleter([&] {
@@ -453,9 +560,258 @@ void runSelfDestructionDuringSaturatedReleaseTest() {
   ASSERT_TRUE(didWaitersPark);
   ASSERT_TRUE(didReleaseStart);
   ASSERT_TRUE(didAllSuccessorsRelease);
+  ASSERT_GT(detachedWakeOneCount, 0);
+  ASSERT_EQ(detachedWakeAllCount, 0);
   ASSERT_TRUE(didDestructorStart);
   ASSERT_FALSE(deletedBeforeReleaseFinished);
   ASSERT_TRUE(deleted.load());
+  ASSERT_TRUE(state.completedWithoutTimeout());
+}
+
+template <typename Mutex>
+void runDetachedWakeOneHandsOffQueuedWaiterTest() {
+  constexpr size_t kWaiters = 3;
+  Mutex mutex;
+
+  LifetimeTestState state(/* blockWaiters */ false, /* pauseRelease */ true);
+  LifetimeTestRegistration registration(state);
+  std::thread releaser([&] {
+    mutex.lock();
+    state.setReleaser(std::this_thread::get_id());
+    state.ownerReady();
+    state.waitForReleaseRequest();
+    mutex.unlock();
+  });
+  const bool didOwnerBecomeReady = state.waitForOwner();
+
+  std::atomic<size_t> acquired{0};
+  std::vector<std::thread> waiters;
+  waiters.reserve(kWaiters);
+  for (size_t i = 0; i < kWaiters; ++i) {
+    waiters.emplace_back([&] {
+      if (mutex.try_lock_for(3 * kLifetimeTestTimeout)) {
+        ++acquired;
+        mutex.unlock();
+      }
+    });
+  }
+  const bool didWaitersPark = state.waitForWaiters(kWaiters);
+
+  state.requestRelease();
+  const bool didReleaseStart = state.waitForRelease();
+  std::thread successor([&] {
+    mutex.lock();
+    mutex.unlock();
+  });
+
+  successor.join();
+  for (auto& waiter : waiters) {
+    waiter.join();
+  }
+  const auto detachedWakeOneCount = state.detachedWakeOneCount();
+  const auto successfulDetachedWakeOneCount =
+      state.successfulDetachedWakeOneCount();
+  const auto detachedWakeAllCount = state.detachedWakeAllCount();
+
+  state.allowReleaseToFinish();
+  releaser.join();
+
+  ASSERT_TRUE(didOwnerBecomeReady);
+  ASSERT_TRUE(didWaitersPark);
+  ASSERT_TRUE(didReleaseStart);
+  ASSERT_EQ(kWaiters, acquired.load());
+  ASSERT_GT(detachedWakeOneCount, 0);
+  ASSERT_GT(successfulDetachedWakeOneCount, 0);
+  ASSERT_EQ(detachedWakeAllCount, 0);
+  ASSERT_TRUE(state.didNotTimeOut());
+}
+
+template <typename Mutex>
+void runMixedWaitersDuringPendingReleaseTest() {
+  Mutex mutex;
+
+  LifetimeTestState state(/* blockWaiters */ false, /* pauseRelease */ true);
+  LifetimeTestRegistration registration(state);
+  std::thread releaser([&] {
+    mutex.lock();
+    state.setReleaser(std::this_thread::get_id());
+    state.ownerReady();
+    state.waitForReleaseRequest();
+    mutex.unlock();
+  });
+  const bool didOwnerBecomeReady = state.waitForOwner();
+
+  std::vector<std::thread> staleWaiters;
+  staleWaiters.reserve(2);
+  for (size_t i = 0; i < 2; ++i) {
+    staleWaiters.emplace_back([&] {
+      if (mutex.try_lock_for(kLifetimeTestTimeout / 10)) {
+        mutex.unlock();
+      }
+    });
+  }
+  const bool didStaleWaitersPark = state.waitForWaiters(2);
+  for (auto& waiter : staleWaiters) {
+    waiter.join();
+  }
+  state.resetWaiters();
+
+  state.requestRelease();
+  const bool didReleaseStart = state.waitForRelease();
+
+  std::mutex successorMutex;
+  std::condition_variable successorCv;
+  bool successorReady = false;
+  bool releaseSuccessor = false;
+  std::thread successor([&] {
+    mutex.lock();
+    {
+      std::unique_lock lock(successorMutex);
+      successorReady = true;
+      successorCv.notify_all();
+      successorCv.wait(lock, [&] { return releaseSuccessor; });
+    }
+    mutex.unlock();
+  });
+  bool didSuccessorAcquire = false;
+  {
+    std::unique_lock lock(successorMutex);
+    didSuccessorAcquire = successorCv.wait_for(lock, kLifetimeTestTimeout, [&] {
+      return successorReady;
+    });
+  }
+
+  std::atomic<bool> exclusiveAcquired{false};
+  std::thread exclusiveWaiter([&] {
+    if (mutex.try_lock_for(3 * kLifetimeTestTimeout)) {
+      exclusiveAcquired = true;
+      mutex.unlock();
+    }
+  });
+  std::atomic<bool> upgradeAcquired{false};
+  std::thread upgradeWaiter([&] {
+    if (mutex.try_lock_upgrade_for(3 * kLifetimeTestTimeout)) {
+      upgradeAcquired = true;
+      mutex.unlock_upgrade();
+    }
+  });
+  const bool didWaitersPark = state.waitForWaiters(2);
+  {
+    std::lock_guard lock(successorMutex);
+    releaseSuccessor = true;
+    successorCv.notify_all();
+  }
+
+  const bool didWakeAll = state.waitForSuccessfulDetachedWakeAll();
+  state.allowReleaseToFinish();
+  releaser.join();
+  successor.join();
+  exclusiveWaiter.join();
+  upgradeWaiter.join();
+  const auto detachedWakeOneCount = state.detachedWakeOneCount();
+  const auto detachedWakeAllCount = state.detachedWakeAllCount();
+  const auto successfulDetachedWakeAllCount =
+      state.successfulDetachedWakeAllCount();
+
+  ASSERT_TRUE(didOwnerBecomeReady);
+  ASSERT_TRUE(didStaleWaitersPark);
+  ASSERT_TRUE(didWaitersPark);
+  ASSERT_TRUE(didReleaseStart);
+  ASSERT_TRUE(didSuccessorAcquire);
+  ASSERT_TRUE(exclusiveAcquired.load());
+  ASSERT_TRUE(upgradeAcquired.load());
+  ASSERT_TRUE(didWakeAll);
+  ASSERT_EQ(detachedWakeOneCount, 0);
+  ASSERT_GT(detachedWakeAllCount, 0);
+  ASSERT_GT(successfulDetachedWakeAllCount, 0);
+  ASSERT_TRUE(state.didNotTimeOut());
+}
+
+template <typename Mutex>
+void runDetachedWakeAfterStorageReuseTest() {
+  alignas(Mutex) unsigned char storage[sizeof(Mutex)];
+  auto* mutex = ::new (static_cast<void*>(storage)) Mutex;
+
+  LifetimeTestState state(
+      /* blockWaiters */ false,
+      /* pauseRelease */ true,
+      /* pauseDetachedWakeOne */ true);
+  LifetimeTestRegistration registration(state);
+  std::thread releaser([&] {
+    mutex->lock();
+    state.setReleaser(std::this_thread::get_id());
+    state.ownerReady();
+    state.waitForReleaseRequest();
+    mutex->unlock();
+  });
+  const bool didOwnerBecomeReady = state.waitForOwner();
+
+  std::atomic<size_t> staleWaitersAcquired{0};
+  std::vector<std::thread> staleWaiters;
+  staleWaiters.reserve(2);
+  for (size_t i = 0; i < 2; ++i) {
+    staleWaiters.emplace_back([&] {
+      if (mutex->try_lock_for(kLifetimeTestTimeout / 10)) {
+        ++staleWaitersAcquired;
+        mutex->unlock();
+      }
+    });
+  }
+  const bool didStaleWaitersPark = state.waitForWaiters(2);
+  for (auto& waiter : staleWaiters) {
+    waiter.join();
+  }
+  state.resetWaiters();
+
+  state.requestRelease();
+  const bool didReleaseStart = state.waitForRelease();
+  std::thread successor([&] {
+    mutex->lock();
+    mutex->unlock();
+  });
+  const bool didDetachedWakeStart = state.waitForDetachedWakeOne();
+
+  if (!didDetachedWakeStart) {
+    state.allowReleaseToFinish();
+    state.allowDetachedWakeToFinish();
+    releaser.join();
+    successor.join();
+    mutex->~Mutex();
+    ASSERT_TRUE(didDetachedWakeStart);
+    return;
+  }
+
+  state.allowReleaseToFinish();
+  releaser.join();
+  mutex->~Mutex();
+  state.objectDeleted();
+
+  auto* replacement = ::new (static_cast<void*>(storage)) Mutex;
+  const bool didReuseAddress = replacement == mutex;
+  replacement->lock();
+  std::atomic<bool> replacementWaiterAcquired{false};
+  std::thread replacementWaiter([&] {
+    if (replacement->try_lock_for(3 * kLifetimeTestTimeout)) {
+      replacementWaiterAcquired = true;
+      replacement->unlock();
+    }
+  });
+  const bool didReplacementWaiterPark = state.waitForWaiters(1);
+
+  state.allowDetachedWakeToFinish();
+  successor.join();
+  replacement->unlock();
+  replacementWaiter.join();
+  replacement->~Mutex();
+
+  ASSERT_TRUE(didOwnerBecomeReady);
+  ASSERT_TRUE(didStaleWaitersPark);
+  ASSERT_EQ(staleWaitersAcquired.load(), 0);
+  ASSERT_TRUE(didReleaseStart);
+  ASSERT_TRUE(didDetachedWakeStart);
+  ASSERT_TRUE(didReuseAddress);
+  ASSERT_TRUE(didReplacementWaiterPark);
+  ASSERT_TRUE(replacementWaiterAcquired.load());
   ASSERT_TRUE(state.completedWithoutTimeout());
 }
 
@@ -487,6 +843,132 @@ void runReaderDrainWaitBitConversionTest() {
   writer.join();
 
   ASSERT_TRUE(didWriterPark);
+}
+
+enum class PendingReleaseSchedulePhase {
+  RoundRobin,
+  RunFirstSuccessor,
+  RunSecondSuccessor,
+  RunPredecessor,
+};
+
+template <typename Mutex>
+void runPendingReleaseStaleWaiterCleanupTest() {
+  std::atomic<PendingReleaseSchedulePhase> phase{
+      PendingReleaseSchedulePhase::RoundRobin};
+  std::atomic<bool> wakeSequenceDiverged{false};
+  std::atomic<size_t> queuedEvents{0};
+  size_t roundRobin = 0;
+  const void* queuedFutex = nullptr;
+  uint32_t queuedMask = 0;
+  std::vector<DeterministicFutexEvent> wakeEvents;
+
+  auto scheduler = [&](size_t numActive) {
+    auto selectThread = [&](size_t index) {
+      if (index < numActive) {
+        return index;
+      }
+      wakeSequenceDiverged.store(true, std::memory_order_relaxed);
+      phase.store(
+          PendingReleaseSchedulePhase::RoundRobin, std::memory_order_relaxed);
+      return roundRobin++ % numActive;
+    };
+    switch (phase.load(std::memory_order_relaxed)) {
+      case PendingReleaseSchedulePhase::RunFirstSuccessor:
+        return selectThread(1);
+      case PendingReleaseSchedulePhase::RunSecondSuccessor:
+        return selectThread(2);
+      case PendingReleaseSchedulePhase::RunPredecessor:
+        return selectThread(0);
+      case PendingReleaseSchedulePhase::RoundRobin:
+        return roundRobin++ % numActive;
+    }
+    folly::assume_unreachable();
+  };
+  FutexObserver observer = [&](const DeterministicFutexEvent& event) {
+    if (event.kind == DeterministicFutexEvent::Kind::WaitQueued) {
+      queuedFutex = event.futex;
+      queuedMask = event.mask;
+      queuedEvents.fetch_add(1, std::memory_order_release);
+      return;
+    }
+
+    wakeEvents.push_back(event);
+    const auto advancePhase = [&](int expectedResult, auto nextPhase) {
+      if (event.count == 1 && event.result == expectedResult) {
+        phase.store(nextPhase, std::memory_order_relaxed);
+        return;
+      }
+      wakeSequenceDiverged.store(true, std::memory_order_relaxed);
+      phase.store(
+          PendingReleaseSchedulePhase::RoundRobin, std::memory_order_relaxed);
+    };
+    if (wakeEvents.size() == 1) {
+      advancePhase(1, PendingReleaseSchedulePhase::RunFirstSuccessor);
+    } else if (wakeEvents.size() == 2) {
+      advancePhase(1, PendingReleaseSchedulePhase::RunSecondSuccessor);
+    } else if (wakeEvents.size() == 3) {
+      advancePhase(0, PendingReleaseSchedulePhase::RunPredecessor);
+    }
+  };
+  DSched sched(std::move(scheduler), std::move(observer));
+
+  Mutex mutex;
+  mutex.lock();
+  auto firstSuccessor = DSched::thread([&] {
+    mutex.lock();
+    mutex.unlock();
+  });
+
+  DeterministicAtomic<uint32_t> progress{0};
+  while (queuedEvents.load(std::memory_order_acquire) < 1) {
+    progress.fetch_add(1, std::memory_order_relaxed);
+  }
+  auto secondSuccessor = DSched::thread([&] {
+    mutex.lock();
+    mutex.unlock();
+  });
+  while (queuedEvents.load(std::memory_order_acquire) < 2) {
+    progress.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  mutex.unlock();
+  phase.store(
+      PendingReleaseSchedulePhase::RoundRobin, std::memory_order_relaxed);
+  DSched::join(firstSuccessor);
+  DSched::join(secondSuccessor);
+  const auto wakeCountBeforeCleanup = wakeEvents.size();
+
+  mutex.lock();
+  mutex.unlock();
+  const auto wakeCountAfterCleanup = wakeEvents.size();
+
+  mutex.lock();
+  mutex.unlock();
+
+  ASSERT_EQ(2, queuedEvents.load());
+  ASSERT_NE(nullptr, queuedFutex);
+  ASSERT_NE(0, queuedMask);
+  EXPECT_EQ(3, wakeCountBeforeCleanup);
+  EXPECT_EQ(5, wakeCountAfterCleanup);
+  EXPECT_EQ(wakeCountAfterCleanup, wakeEvents.size());
+  EXPECT_FALSE(wakeSequenceDiverged.load());
+
+  std::vector<std::pair<int, int>> wakeResults;
+  wakeResults.reserve(wakeEvents.size());
+  for (const auto& event : wakeEvents) {
+    EXPECT_EQ(queuedFutex, event.futex);
+    EXPECT_EQ(queuedMask, event.mask);
+    wakeResults.emplace_back(event.count, event.result);
+  }
+  const std::vector<std::pair<int, int>> expectedWakeResults{
+      {1, 1},
+      {1, 1},
+      {1, 0},
+      {1, 0},
+      {std::numeric_limits<int>::max(), 0},
+  };
+  EXPECT_EQ(expectedWakeResults, wakeResults);
 }
 
 } // namespace
@@ -711,12 +1193,74 @@ TEST(SharedMutex, saturatedExclusiveWaitersAfterUpgradeRelease) {
 TEST(SharedMutex, selfDestructionDuringSaturatedRelease) {
   {
     SCOPED_TRACE("write priority");
-    runSelfDestructionDuringSaturatedReleaseTest<HookedSharedMutex>();
+    runSelfDestructionDuringSaturatedReleaseTest<
+        HookedSharedMutex,
+        LifetimeReleaseMode::Exclusive>();
   }
   {
     SCOPED_TRACE("reader priority");
     runSelfDestructionDuringSaturatedReleaseTest<
-        HookedSharedMutexReadPriority>();
+        HookedSharedMutexReadPriority,
+        LifetimeReleaseMode::Exclusive>();
+  }
+}
+
+TEST(SharedMutex, upgradeReleaseDuringSaturatedRelease) {
+  {
+    SCOPED_TRACE("write priority");
+    runSelfDestructionDuringSaturatedReleaseTest<
+        HookedSharedMutex,
+        LifetimeReleaseMode::Upgrade>();
+  }
+  {
+    SCOPED_TRACE("reader priority");
+    runSelfDestructionDuringSaturatedReleaseTest<
+        HookedSharedMutexReadPriority,
+        LifetimeReleaseMode::Upgrade>();
+  }
+}
+
+TEST(SharedMutex, detachedWakeOneHandsOffQueuedWaiter) {
+  {
+    SCOPED_TRACE("write priority");
+    runDetachedWakeOneHandsOffQueuedWaiterTest<HookedSharedMutex>();
+  }
+  {
+    SCOPED_TRACE("reader priority");
+    runDetachedWakeOneHandsOffQueuedWaiterTest<HookedSharedMutexReadPriority>();
+  }
+}
+
+TEST(SharedMutex, mixedWaitersDuringPendingRelease) {
+  {
+    SCOPED_TRACE("write priority");
+    runMixedWaitersDuringPendingReleaseTest<HookedSharedMutex>();
+  }
+  {
+    SCOPED_TRACE("reader priority");
+    runMixedWaitersDuringPendingReleaseTest<HookedSharedMutexReadPriority>();
+  }
+}
+
+TEST(SharedMutex, detachedWakeAfterStorageReuse) {
+  {
+    SCOPED_TRACE("write priority");
+    runDetachedWakeAfterStorageReuseTest<HookedSharedMutex>();
+  }
+  {
+    SCOPED_TRACE("reader priority");
+    runDetachedWakeAfterStorageReuseTest<HookedSharedMutexReadPriority>();
+  }
+}
+
+TEST(SharedMutex, deterministicPendingReleaseStaleWaiterCleanupIsBounded) {
+  {
+    SCOPED_TRACE("write priority");
+    runPendingReleaseStaleWaiterCleanupTest<DSharedMutexWritePriority>();
+  }
+  {
+    SCOPED_TRACE("reader priority");
+    runPendingReleaseStaleWaiterCleanupTest<DSharedMutexReadPriority>();
   }
 }
 
@@ -1454,6 +1998,21 @@ static void shmtx_rd_pri(
       numOps, numThreads, writeFraction, useSeparateLocks);
 }
 
+static size_t shmtx_matrix_threads(size_t reservedThreads) {
+  const auto available = std::max<size_t>(1, folly::available_concurrency());
+  return available > reservedThreads ? available - reservedThreads : 1;
+}
+
+static void shmtx_matrix_wr_pri(
+    uint32_t numOps, size_t numThreads, double writeFraction) {
+  shmtx_wr_pri(numOps, numThreads, writeFraction, false);
+}
+
+static void shmtx_matrix_rd_pri(
+    uint32_t numOps, size_t numThreads, double writeFraction) {
+  shmtx_rd_pri(numOps, numThreads, writeFraction, false);
+}
+
 static void shmtx_r_bare(
     uint32_t numOps,
     size_t numThreads,
@@ -1506,6 +2065,115 @@ static void timed_rd_pri(
     bool useSeparateLocks) {
   runMixed<atomic, fibers::TimedRWMutexReadPriority<fibers::Baton>, Locker>(
       numOps, numThreads, writeFraction, useSeparateLocks);
+}
+
+template <typename Lock>
+static void runWriteBurstToIdle(
+    UserCounters& counters, unsigned numBursts, size_t numWriters) {
+  Lock mutex;
+  size_t protectedValue = 0;
+  std::mutex controlMutex;
+  std::condition_variable controlCv;
+  size_t generation = 0;
+  size_t ready = 0;
+  size_t started = 0;
+  size_t completed = 0;
+  bool stop = false;
+  std::vector<std::thread> writers;
+
+  folly::BenchmarkSuspender initialSetup;
+  writers.reserve(numWriters);
+  for (size_t i = 0; i < numWriters; ++i) {
+    writers.emplace_back([&] {
+      size_t observedGeneration = 0;
+      std::unique_lock controlLock(controlMutex);
+      ++ready;
+      controlCv.notify_all();
+      while (true) {
+        controlCv.wait(controlLock, [&] {
+          return stop || generation != observedGeneration;
+        });
+        if (stop) {
+          return;
+        }
+        observedGeneration = generation;
+        ++started;
+        controlCv.notify_all();
+        controlLock.unlock();
+
+        mutex.lock();
+        ++protectedValue;
+        mutex.unlock();
+
+        controlLock.lock();
+        ++completed;
+        controlCv.notify_all();
+      }
+    });
+  }
+  {
+    std::unique_lock controlLock(controlMutex);
+    controlCv.wait(controlLock, [&] { return ready == numWriters; });
+  }
+  initialSetup.dismiss();
+
+  std::chrono::steady_clock::duration firstIdleDuration{};
+  std::chrono::steady_clock::duration secondIdleDuration{};
+  for (unsigned burst = 0; burst < numBursts; ++burst) {
+    mutex.lock();
+    {
+      std::unique_lock controlLock(controlMutex);
+      started = 0;
+      completed = 0;
+      ++generation;
+      controlCv.notify_all();
+      controlCv.wait(controlLock, [&] { return started == numWriters; });
+    }
+    mutex.unlock();
+    {
+      std::unique_lock controlLock(controlMutex);
+      controlCv.wait(controlLock, [&] { return completed == numWriters; });
+    }
+
+    auto start = std::chrono::steady_clock::now();
+    mutex.lock();
+    folly::doNotOptimizeAway(protectedValue);
+    mutex.unlock();
+    auto firstComplete = std::chrono::steady_clock::now();
+    mutex.lock();
+    folly::doNotOptimizeAway(protectedValue);
+    mutex.unlock();
+    auto secondComplete = std::chrono::steady_clock::now();
+    firstIdleDuration += firstComplete - start;
+    secondIdleDuration += secondComplete - firstComplete;
+  }
+
+  folly::BenchmarkSuspender cleanup;
+  {
+    std::lock_guard controlLock(controlMutex);
+    stop = true;
+  }
+  controlCv.notify_all();
+  for (auto& writer : writers) {
+    writer.join();
+  }
+  counters["first_idle"] = UserMetric(
+      std::chrono::duration<double>(firstIdleDuration).count() / numBursts,
+      UserMetric::Type::TIME);
+  counters["second_idle"] = UserMetric(
+      std::chrono::duration<double>(secondIdleDuration).count() / numBursts,
+      UserMetric::Type::TIME);
+}
+
+static void shmtx_write_burst_to_idle(
+    UserCounters& counters, unsigned numBursts, size_t numWriters) {
+  runWriteBurstToIdle<SharedMutexWritePriority>(
+      counters, numBursts, numWriters);
+}
+
+static void shmtx_read_burst_to_idle(
+    UserCounters& counters, unsigned numBursts, size_t numWriters) {
+  runWriteBurstToIdle<SharedMutexReadPriority>(counters, numBursts, numWriters);
 }
 
 template <typename Lock, template <typename> class Atom>
@@ -2409,6 +3077,47 @@ BENCHMARK(single_thread_lock_unlock, iters) {
 BENCHMARK_DRAW_LINE();
 BENCHMARK_NAMED_PARAM(upgrade_lock_unlock_with_readers, 1reader, 1)
 BENCHMARK_NAMED_PARAM(upgrade_lock_unlock_with_readers, 4readers, 4)
+
+// Each iteration creates a short exclusive-contention burst and waits for
+// every writer to become idle again.  The first isolated write may clean a
+// stale waiter registration; the second is the steady-idle baseline.
+BENCHMARK_DRAW_LINE();
+BENCHMARK_COUNTERS_NAMED_PARAM(shmtx_write_burst_to_idle, 8writers, 8)
+BENCHMARK_COUNTERS_NAMED_PARAM(shmtx_read_burst_to_idle, 8writers, 8)
+BENCHMARK_DRAW_LINE();
+BENCHMARK_COUNTERS_NAMED_PARAM(shmtx_write_burst_to_idle, 32writers, 32)
+BENCHMARK_COUNTERS_NAMED_PARAM(shmtx_read_burst_to_idle, 32writers, 32)
+
+// Exercise the highly contended region around the process-visible CPU count.
+// Leaving 16 or 8 CPUs free brackets the scheduling cliff at full occupancy.
+// The 90% and 99% rows expose the effect of infrequent readers on writer
+// handoff, while 100% writes isolates the exclusive wake chain.
+#define BENCH_SHMTX_MATRIX(param_name, reserved_threads, write_fraction) \
+  BENCHMARK_NAMED_PARAM(                                                 \
+      shmtx_matrix_wr_pri,                                               \
+      param_name,                                                        \
+      shmtx_matrix_threads(reserved_threads),                            \
+      write_fraction)                                                    \
+  BENCHMARK_RELATIVE_NAMED_PARAM(                                        \
+      shmtx_matrix_rd_pri,                                               \
+      param_name,                                                        \
+      shmtx_matrix_threads(reserved_threads),                            \
+      write_fraction)
+
+BENCHMARK_DRAW_LINE();
+BENCH_SHMTX_MATRIX(available_minus_16_90pct_write, 16, 0.90)
+BENCH_SHMTX_MATRIX(available_minus_8_90pct_write, 8, 0.90)
+BENCH_SHMTX_MATRIX(available_90pct_write, 0, 0.90)
+BENCHMARK_DRAW_LINE();
+BENCH_SHMTX_MATRIX(available_minus_16_99pct_write, 16, 0.99)
+BENCH_SHMTX_MATRIX(available_minus_8_99pct_write, 8, 0.99)
+BENCH_SHMTX_MATRIX(available_99pct_write, 0, 0.99)
+BENCHMARK_DRAW_LINE();
+BENCH_SHMTX_MATRIX(available_minus_16_all_write, 16, 1.0)
+BENCH_SHMTX_MATRIX(available_minus_8_all_write, 8, 1.0)
+BENCH_SHMTX_MATRIX(available_all_write, 0, 1.0)
+
+#undef BENCH_SHMTX_MATRIX
 
 #define BENCH_BASE(...) FB_VA_GLUE(BENCHMARK_NAMED_PARAM, (__VA_ARGS__))
 #define BENCH_REL(...) FB_VA_GLUE(BENCHMARK_RELATIVE_NAMED_PARAM, (__VA_ARGS__))
