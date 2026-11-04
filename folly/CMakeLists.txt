@@ -341,7 +341,6 @@ folly_add_library(
     json.h
   DEPS
     ${GLOG_LIBRARIES}
-    Boost::headers
     folly_utility
   EXPORTED_DEPS
     folly_c_portability
@@ -983,7 +982,7 @@ folly_add_library(
   NAME padded
   HEADERS Padded.h
   EXPORTED_DEPS
-    Boost::headers
+    folly_detail_iterators
     folly_functional_invoke
     folly_portability
     folly_portability_sys_types

@@ -33,7 +33,6 @@ folly_add_library(
   NAME bit_iterator
   HEADERS BitIterator.h
   EXPORTED_DEPS
-    Boost::headers
     folly_container_detail_bit_iterator_detail
     folly_lang_bits
     folly_portability
@@ -69,6 +68,7 @@ folly_add_library(
     Boost::headers
     folly_container_f14_hash
     folly_container_heterogeneous_access
+    folly_detail_iterators
     folly_lang_exception
 )
 

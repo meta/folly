@@ -17,6 +17,7 @@
 #include <folly/detail/Iterators.h>
 
 #include <map>
+#include <vector>
 
 #include <folly/container/Array.h>
 #include <folly/portability/GTest.h>
@@ -198,4 +199,105 @@ TEST(IteratorsTest, MixedConstAndNonconstIters) {
   ++valueIter;
   ++valueIter;
   EXPECT_EQ(valueIter, cend);
+}
+
+namespace {
+// Random-access adaptor whose iteration methods are private.
+class IntVectorIter
+    : public IteratorAdaptor<
+          IntVectorIter,
+          std::vector<int>::iterator,
+          int,
+          std::random_access_iterator_tag> {
+  using Super = IteratorAdaptor<
+      IntVectorIter,
+      std::vector<int>::iterator,
+      int,
+      std::random_access_iterator_tag>;
+  friend Super::Super;
+
+ public:
+  IntVectorIter() = default;
+  explicit IntVectorIter(std::vector<int>::iterator iter) : Super(iter) {}
+
+ private:
+  int& dereference() const { return *base_reference(); }
+};
+
+// Iterator whose reference type is a proxy.
+struct Proxy {
+  int* p;
+  int get() const { return *p; }
+};
+
+class ProxyIter
+    : public IteratorFacade<
+          ProxyIter,
+          int,
+          std::random_access_iterator_tag,
+          Proxy,
+          long> {
+ public:
+  explicit ProxyIter(int* p) : p_(p) {}
+
+ private:
+  friend IteratorFacade;
+
+  Proxy dereference() const { return Proxy{p_}; }
+  bool equal(ProxyIter const& rhs) const { return p_ == rhs.p_; }
+  void increment() { ++p_; }
+  void decrement() { --p_; }
+  void advance(long n) { p_ += n; }
+  long distance_to(ProxyIter const& rhs) const { return rhs.p_ - p_; }
+
+  int* p_;
+};
+} // namespace
+
+TEST(IteratorsTest, RandomAccessIterAdaptor) {
+  using TR = std::iterator_traits<IntVectorIter>;
+  static_assert(std::is_same_v<TR::reference, int&>);
+  static_assert(std::is_same_v<TR::pointer, int*>);
+  static_assert(
+      std::is_same_v<TR::iterator_category, std::random_access_iterator_tag>);
+  static_assert(std::random_access_iterator<IntVectorIter>);
+
+  std::vector<int> v{40, 41, 42, 43, 44};
+  IntVectorIter begin(v.begin());
+  IntVectorIter end(v.end());
+  EXPECT_EQ(5, end - begin);
+  EXPECT_EQ(-5, begin - end);
+  EXPECT_EQ(42, begin[2]);
+  EXPECT_EQ(43, *(begin + 3));
+  EXPECT_EQ(43, *(3 + begin));
+  EXPECT_EQ(44, *(end - 1));
+  EXPECT_TRUE(begin < end);
+  EXPECT_TRUE(begin <= begin);
+  EXPECT_TRUE(end > begin);
+  EXPECT_TRUE(end >= end);
+  EXPECT_FALSE(end < begin);
+  auto it = begin;
+  it += 4;
+  EXPECT_EQ(44, *it);
+  it -= 2;
+  EXPECT_EQ(42, *it);
+  EXPECT_EQ(42, *it--);
+  EXPECT_EQ(41, *it);
+  *it = 7;
+  EXPECT_EQ(7, v[1]);
+}
+
+TEST(IteratorsTest, ProxyReference) {
+  using TR = std::iterator_traits<ProxyIter>;
+  static_assert(std::is_same_v<TR::reference, Proxy>);
+  static_assert(std::is_same_v<TR::difference_type, long>);
+
+  int a[] = {1, 2, 3};
+  ProxyIter begin(a);
+  ProxyIter end(a + 3);
+  EXPECT_EQ(3, end - begin);
+  EXPECT_EQ(2, (*++begin).get());
+  EXPECT_EQ(2, begin->get());
+  EXPECT_EQ(3, begin[1].get());
+  EXPECT_TRUE(begin < end);
 }

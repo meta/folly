@@ -34,7 +34,6 @@ folly_add_library(
     folly_portability_constexpr
     folly_unicode
   EXPORTED_DEPS
-    Boost::headers
     folly_c_portability
     folly_container_access
     folly_container_f14_hash

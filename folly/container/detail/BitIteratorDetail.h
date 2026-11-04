@@ -19,8 +19,7 @@
 #include <iterator>
 #include <type_traits>
 
-#include <boost/iterator/iterator_adaptor.hpp>
-
+#include <folly/detail/Iterators.h>
 #include <folly/portability/SysTypes.h>
 
 namespace folly {
@@ -70,12 +69,11 @@ struct BitIteratorBase {
       std::is_integral<
           typename std::iterator_traits<BaseIter>::value_type>::value,
       "BitIterator may only be used with integral types");
-  using type = boost::iterator_adaptor<
+  using type = folly::detail::IteratorAdaptor<
       BitIterator<BaseIter>, // Derived
       BaseIter, // Base
       bool, // Value
-      typename std::iterator_traits<
-          BaseIter>::iterator_category, // CategoryOrTraversal
+      typename std::iterator_traits<BaseIter>::iterator_category, // Category
       bititerator_detail::BitReference<
           typename std::iterator_traits<BaseIter>::reference,
           typename std::iterator_traits<BaseIter>::value_type>, // Reference

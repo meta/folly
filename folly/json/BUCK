@@ -27,7 +27,6 @@ fb_dirsync_cpp_library(
         "//folly/portability:constexpr",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",
         "//folly:c_portability",
         "//folly:conv",
         "//folly:cpp_attributes",

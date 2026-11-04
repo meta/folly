@@ -580,8 +580,6 @@ fb_dirsync_cpp_library(
     fbobjc_complete_nullability = True,
     use_raw_headers = True,
     deps = [
-        "fbsource//third-party/boost:boost",  # @manual
-        "fbsource//third-party/boost:boost_algorithm",  # @manual
         "fbsource//third-party/glog:glog",
         ":utility",
     ],
@@ -2088,9 +2086,9 @@ fb_dirsync_cpp_library(
     headers = ["Padded.h"],
     use_raw_headers = True,
     exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         ":portability",
         ":traits",
+        "//folly/detail:iterators",
         "//folly/functional:invoke",
         "//folly/portability:sys_types",
     ],

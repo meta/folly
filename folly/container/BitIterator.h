@@ -34,8 +34,6 @@
 #include <limits>
 #include <type_traits>
 
-#include <boost/iterator/iterator_adaptor.hpp>
-
 #include <folly/Portability.h>
 #include <folly/container/detail/BitIteratorDetail.h>
 #include <folly/lang/Bits.h>
@@ -92,7 +90,7 @@ class BitIterator : public bititerator_detail::BitIteratorBase<BaseIter>::type {
   }
 
  private:
-  friend class boost::iterator_core_access;
+  friend typename bititerator_detail::BitIteratorBase<BaseIter>::type::Super;
   friend BitIterator findFirstSet<>(BitIterator, BitIterator);
 
   using BitRef = bititerator_detail::BitReference<

@@ -25,10 +25,9 @@
 #include <limits>
 #include <type_traits>
 
-#include <boost/iterator/iterator_adaptor.hpp>
-
 #include <folly/Portability.h>
 #include <folly/Traits.h>
+#include <folly/detail/Iterators.h>
 #include <folly/functional/Invoke.h>
 #include <folly/portability/SysTypes.h>
 
@@ -133,12 +132,13 @@ template <
     class Traits = std::iterator_traits<Iter>,
     class Ref = typename Traits::reference,
     class Val = typename Traits::value_type::value_type>
-using IteratorBase = boost::iterator_adaptor<
+using IteratorBase = folly::detail::IteratorAdaptor<
     Class<Iter>, // CRTC
     Iter, // Base iterator type
     Val, // Value type
-    boost::use_default, // Category or traversal
-    like_t<Ref, Val>>; // Reference type
+    typename Traits::iterator_category,
+    like_t<Ref, Val>, // Reference type
+    typename Traits::difference_type>;
 
 } // namespace detail
 
@@ -209,7 +209,7 @@ class Iterator : public detail::IteratorBase<Iterator, Iter> {
     return nblocks * elementCount + (other.pos_ - pos_);
   }
 
-  friend class boost::iterator_core_access;
+  friend typename Super::Super;
   ssize_t pos_; // signed for easier advance() implementation
 };
 

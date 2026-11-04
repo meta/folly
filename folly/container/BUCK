@@ -132,6 +132,7 @@ fb_dirsync_cpp_library(
         "fbsource//third-party/boost:boost",
         "//folly/container:f14_hash",
         "//folly/container:heterogeneous_access",
+        "//folly/detail:iterators",
         "//folly/lang:exception",
     ],
 )
@@ -222,7 +223,6 @@ fb_dirsync_cpp_library(
     headers = ["BitIterator.h"],
     use_raw_headers = True,
     exported_deps = [
-        "fbsource//third-party/boost:boost",
         "//folly:portability",
         "//folly/container/detail:bit_iterator_detail",
         "//folly/lang:bits",

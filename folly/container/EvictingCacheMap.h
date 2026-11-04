@@ -19,14 +19,16 @@
 #include <algorithm>
 #include <exception>
 #include <functional>
+#include <iterator>
 #include <memory>
+#include <type_traits>
 
 #include <boost/intrusive/list.hpp>
-#include <boost/iterator/iterator_adaptor.hpp>
 
 #include <folly/CppAttributes.h>
 #include <folly/container/F14Set.h>
 #include <folly/container/HeterogeneousAccess.h>
+#include <folly/detail/Iterators.h>
 #include <folly/lang/Exception.h>
 
 namespace folly {
@@ -81,23 +83,30 @@ class EvictingCacheMap {
   // iterator base : returns TPair on dereference
   template <typename Value, typename TIterator>
   class iterator_base
-      : public boost::iterator_adaptor<
+      : public detail::IteratorAdaptor<
             iterator_base<Value, TIterator>,
             TIterator,
-            Value,
-            boost::bidirectional_traversal_tag> {
+            std::remove_const_t<Value>,
+            std::bidirectional_iterator_tag,
+            Value&> {
+    using Super = detail::IteratorAdaptor<
+        iterator_base<Value, TIterator>,
+        TIterator,
+        std::remove_const_t<Value>,
+        std::bidirectional_iterator_tag,
+        Value&>;
+
    public:
     iterator_base() {}
 
-    explicit iterator_base(TIterator it)
-        : iterator_base::iterator_adaptor_(it) {}
+    explicit iterator_base(TIterator it) : Super(it) {}
 
     template <typename V, typename I>
       requires(
           std::is_same<V const, Value>::value &&
           std::is_convertible<I, TIterator>::value)
     /* implicit */ iterator_base(iterator_base<V, I> const& other)
-        : iterator_base::iterator_adaptor_(other.base()) {}
+        : Super(other.base()) {}
 
     Value& dereference() const { return this->base_reference()->pr; }
   };

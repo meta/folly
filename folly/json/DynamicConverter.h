@@ -30,8 +30,8 @@
 
 #include <iterator>
 #include <type_traits>
-
-#include <boost/iterator/iterator_adaptor.hpp>
+#include <utility>
+#include <vector>
 
 #include <folly/Likely.h>
 #include <folly/Optional.h>
@@ -129,85 +129,43 @@ using is_optional = std::conjunction<
 } // namespace dynamicconverter_detail
 
 ///////////////////////////////////////////////////////////////////////////////
-// custom iterators
-
-/**
- * We have iterators that dereference to dynamics, but need iterators
- * that dereference to typename T.
- *
- * Implementation details:
- *   1. We cache the value of the dereference operator. This is necessary
- *      because boost::iterator_adaptor requires *it to return a
- *      reference.
- *   2. For const reasons, we cannot call operator= to refresh the
- *      cache: we must call the destructor then placement new.
- */
+// element conversion
 
 namespace dynamicconverter_detail {
 
 template <typename T>
-struct Dereferencer {
-  static inline void derefToCache(
-      Optional<T>* /* mem */, const dynamic::const_item_iterator& /* it */) {
+struct ItemConverter {
+  static T convert(const dynamic::const_item_iterator::value_type& /* kv */) {
     throw_exception<TypeError>("array", dynamic::Type::OBJECT);
-  }
-
-  static inline void derefToCache(
-      Optional<T>* mem, const dynamic::const_iterator& it) {
-    mem->emplace(convertTo<T>(*it));
   }
 };
 
 template <typename F, typename S>
-struct Dereferencer<std::pair<F, S>> {
-  static inline void derefToCache(
-      Optional<std::pair<F, S>>* mem, const dynamic::const_item_iterator& it) {
-    mem->emplace(convertTo<F>(it->first), convertTo<S>(it->second));
-  }
-
-  // Intentional duplication of the code in Dereferencer
-  template <typename T>
-  static inline void derefToCache(
-      Optional<T>* mem, const dynamic::const_iterator& it) {
-    mem->emplace(convertTo<T>(*it));
+struct ItemConverter<std::pair<F, S>> {
+  static std::pair<F, S> convert(
+      const dynamic::const_item_iterator::value_type& kv) {
+    return {convertTo<F>(kv.first), convertTo<S>(kv.second)};
   }
 };
 
-template <typename T, typename It>
-class Transformer
-    : public boost::iterator_adaptor<
-          Transformer<T, It>,
-          It,
-          typename T::value_type,
-          std::input_iterator_tag> {
-  friend class boost::iterator_core_access;
-
-  using ttype = typename T::value_type;
-
-  mutable Optional<ttype> cache_;
-
-  void increment() {
-    ++this->base_reference();
-    cache_ = none;
-  }
-
-  ttype& dereference() const {
-    if (!cache_) {
-      Dereferencer<ttype>::derefToCache(&cache_, this->base_reference());
+// Converts the elements of an array, or the items of an object, to T.
+template <typename T>
+std::vector<T> convertElements(const dynamic& d) {
+  std::vector<T> elements;
+  if (d.isArray()) {
+    elements.reserve(d.size());
+    for (const auto& v : d) {
+      elements.push_back(convertTo<T>(v));
     }
-    return cache_.value();
+  } else if (d.isObject()) {
+    elements.reserve(d.size());
+    for (const auto& kv : d.items()) {
+      elements.push_back(ItemConverter<T>::convert(kv));
+    }
+  } else {
+    throw_exception<TypeError>("object or array", d.type());
   }
-
- public:
-  explicit Transformer(const It& it) : Transformer::iterator_adaptor_(it) {}
-
-  ttype&& operator*() const { return std::move(dereference()); }
-};
-
-// conversion factory
-template <typename T, typename It>
-inline Transformer<T, It> conversionIterator(const It& it) {
-  return Transformer<T, It>(it);
+  return elements;
 }
 
 } // namespace dynamicconverter_detail
@@ -305,50 +263,18 @@ struct DynamicConverter<
   }
 };
 
-// non-associative containers
+// containers
 template <typename C>
 struct DynamicConverter<
     C,
     typename std::enable_if<
-        dynamicconverter_detail::is_container<C>::value &&
-        !dynamicconverter_detail::is_associative<C>::value>::type> {
+        dynamicconverter_detail::is_container<C>::value>::type> {
   static C convert(const dynamic& d) {
-    if (d.isArray()) {
-      return C(
-          dynamicconverter_detail::conversionIterator<C>(d.begin()),
-          dynamicconverter_detail::conversionIterator<C>(d.end()));
-    } else if (d.isObject()) {
-      return C(
-          dynamicconverter_detail::conversionIterator<C>(d.items().begin()),
-          dynamicconverter_detail::conversionIterator<C>(d.items().end()));
-    } else {
-      throw_exception<TypeError>("object or array", d.type());
-    }
-  }
-};
-
-// associative containers
-template <typename C>
-struct DynamicConverter<
-    C,
-    typename std::enable_if<
-        dynamicconverter_detail::is_container<C>::value &&
-        dynamicconverter_detail::is_associative<C>::value>::type> {
-  static C convert(const dynamic& d) {
-    C ret; // avoid direct initialization due to unordered_map's constructor
-           // causing memory corruption if the iterator throws an exception
-    if (d.isArray()) {
-      ret.insert(
-          dynamicconverter_detail::conversionIterator<C>(d.begin()),
-          dynamicconverter_detail::conversionIterator<C>(d.end()));
-    } else if (d.isObject()) {
-      ret.insert(
-          dynamicconverter_detail::conversionIterator<C>(d.items().begin()),
-          dynamicconverter_detail::conversionIterator<C>(d.items().end()));
-    } else {
-      throw_exception<TypeError>("object or array", d.type());
-    }
-    return ret;
+    auto elements =
+        dynamicconverter_detail::convertElements<typename C::value_type>(d);
+    return C(
+        std::make_move_iterator(elements.begin()),
+        std::make_move_iterator(elements.end()));
   }
 };
 
