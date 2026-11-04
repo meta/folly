@@ -8,6 +8,19 @@ get_filename_component(
   _FB_FETCH_FBCODE_BUILDER_DIR "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY
 )
 
+# For CI that builds against its dependencies' code on main rather than their
+# pins. ShipIt exports the projects within minutes of each other, but
+# build/deps/github_hashes is refreshed about once a day, so a change that
+# spans projects can break a pinned build until then. ShipIt also dates each
+# exported commit with the time its fbsource commit landed, the same in every
+# project, so a project's commit time picks out the dependencies it was
+# exported with.
+set(
+  FB_FETCH_AS_OF ""
+  CACHE STRING
+  "Fetch git dependencies' branches as they were at this time, such as git log -1 --format=%cI or now, ignoring build/deps/github_hashes"
+)
+
 # Sets <out> to <key> in the first [<section>] or [<section>.<condition>] of
 # getdeps' <manifest> that has it, or to an empty string. The condition isn't
 # evaluated: what getdeps takes from the system on this platform, such as
@@ -32,19 +45,67 @@ function(fb_manifest_value manifest section key out)
   set(${out} "${value}" PARENT_SCOPE)
 endfunction()
 
+# Sets <out> to the last commit on <branch> of <repo_url> at or before
+# FB_FETCH_AS_OF, which a clone of the branch's commits alone can tell. A later
+# configure with the same time reuses the answer.
+function(_fb_fetch_commit_as_of out name repo_url branch)
+  string(TOLOWER "${name}" lower)
+  set(key "${repo_url} ${branch} ${FB_FETCH_AS_OF}")
+  if(NOT _FB_FETCH_AS_OF_${lower}_KEY STREQUAL key)
+    find_package(Git REQUIRED)
+    set(history "${CMAKE_BINARY_DIR}/CMakeFiles/fb_fetch_${lower}_history")
+    file(REMOVE_RECURSE "${history}")
+    execute_process(
+      COMMAND
+        "${GIT_EXECUTABLE}" clone --quiet --bare --filter=tree:0
+        --single-branch --branch "${branch}" "${repo_url}" "${history}"
+      RESULT_VARIABLE result
+    )
+    set(commit "")
+    if(result EQUAL 0)
+      execute_process(
+        COMMAND
+          "${GIT_EXECUTABLE}" -C "${history}" rev-list -1
+          "--before=${FB_FETCH_AS_OF}" "${branch}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE commit
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+    endif()
+    file(REMOVE_RECURSE "${history}")
+    if(NOT result EQUAL 0)
+      message(
+        FATAL_ERROR "git couldn't read ${name}'s ${branch} from ${repo_url}."
+      )
+    endif()
+    if(NOT commit)
+      message(
+        FATAL_ERROR
+        "Can't find the commit on ${name}'s ${branch} at ${FB_FETCH_AS_OF} in "
+        "${repo_url}."
+      )
+    endif()
+    set(_FB_FETCH_AS_OF_${lower} "${commit}" CACHE INTERNAL "")
+    set(_FB_FETCH_AS_OF_${lower}_KEY "${key}" CACHE INTERNAL "")
+  endif()
+  set(${out} "${_FB_FETCH_AS_OF_${lower}}" PARENT_SCOPE)
+endfunction()
+
 # Adds to the build, as <name>, the dependency that getdeps' <manifest> pins,
 # so that it can't drift from the one getdeps builds: the [download] archive,
 # or the [git] repo_url at the revision getdeps picks, built from the [build]
 # subdir. Like getdeps, that's the manifest's rev, else the one that
 # build/deps/github_hashes or build/project_hashes records, else the
-# manifest's branch, else main, with a warning. Further arguments go to
-# FetchContent_Declare().
+# manifest's branch, else main, with a warning. FB_FETCH_AS_OF skips the
+# recorded revision and the warning, and takes the branch's commit at that
+# time. Further arguments go to FetchContent_Declare().
 function(fb_fetch_from_manifest name manifest)
   fb_manifest_value(${manifest} git repo_url repo_url)
   fb_manifest_value(${manifest} build subdir subdir)
+  set(branch "")
   if(repo_url)
     fb_manifest_value(${manifest} git rev rev)
-    if(NOT rev)
+    if(NOT rev AND NOT FB_FETCH_AS_OF)
       string(REGEX REPLACE "^[^:]+://[^/]*/" "" rev_file "${repo_url}")
       string(REGEX REPLACE "\\.git$" "-rev.txt" rev_file "${rev_file}")
       foreach(hashes deps/github_hashes project_hashes)
@@ -62,17 +123,23 @@ function(fb_fetch_from_manifest name manifest)
       endforeach()
     endif()
     if(NOT rev)
-      fb_manifest_value(${manifest} git branch rev)
-    endif()
-    if(NOT rev)
-      set(rev main)
-      message(
-        WARNING
-        "getdeps pins no ${name} revision: its ${manifest} manifest has no "
-        "rev or branch, and neither build/deps/github_hashes nor "
-        "build/project_hashes has ${rev_file}. Fetching ${name}'s main "
-        "instead."
-      )
+      fb_manifest_value(${manifest} git branch branch)
+      if(NOT branch)
+        if(NOT FB_FETCH_AS_OF)
+          message(
+            WARNING
+            "getdeps pins no ${name} revision: its ${manifest} manifest has no "
+            "rev or branch, and neither build/deps/github_hashes nor "
+            "build/project_hashes has ${rev_file}. Fetching ${name}'s main "
+            "instead."
+          )
+        endif()
+        set(branch main)
+      endif()
+      set(rev "${branch}")
+      if(FB_FETCH_AS_OF)
+        _fb_fetch_commit_as_of(rev ${name} "${repo_url}" "${branch}")
+      endif()
     endif()
     message(STATUS "${name} not found, fetching ${repo_url} ${rev}")
     set(source GIT_REPOSITORY "${repo_url}" GIT_TAG "${rev}")
@@ -153,9 +220,25 @@ function(fb_fetch_from_manifest name manifest)
   cmake_push_check_state(RESET)
   FetchContent_MakeAvailable(${name})
   cmake_pop_check_state()
+  string(TOLOWER "${name}" lower)
+  # A branch moves, so name the commit this configure got.
+  if(branch AND rev STREQUAL branch)
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+      execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
+        WORKING_DIRECTORY "${${lower}_SOURCE_DIR}"
+        OUTPUT_VARIABLE head
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+      )
+      if(head)
+        message(STATUS "${name} is at ${head}")
+      endif()
+    endif()
+  endif()
   # A project fetched after this one skips its find_package() for this one when
   # it sees <name>_SOURCE_DIR, which FetchContent_MakeAvailable() sets here.
-  string(TOLOWER "${name}" lower)
   set(${lower}_SOURCE_DIR "${${lower}_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
