@@ -27,12 +27,16 @@ enum class annotate_rwlock_level : long {
 
 namespace detail {
 
+using tsan_acquire_t = void(void*);
+using tsan_release_t = void(void*);
 using annotate_rwlock_cd_t = void(char const*, int, void const volatile*);
 using annotate_rwlock_ar_t = void(char const*, int, void const volatile*, long);
 using annotate_benign_race_sized_t =
     void(char const*, int, void const volatile*, long, char const*);
 using annotate_ignore_t = void(char const*, int);
 
+extern tsan_acquire_t* const tsan_acquire_v;
+extern tsan_release_t* const tsan_release_v;
 extern annotate_rwlock_cd_t* const annotate_rwlock_create_v;
 extern annotate_rwlock_cd_t* const annotate_rwlock_create_static_v;
 extern annotate_rwlock_cd_t* const annotate_rwlock_destroy_v;
@@ -47,6 +51,28 @@ extern annotate_ignore_t* const annotate_ignore_sync_begin_v;
 extern annotate_ignore_t* const annotate_ignore_sync_end_v;
 
 } // namespace detail
+
+//  tsan_acquire
+//
+//  Establishes a happens-before relation with a preceding tsan_release on the
+//  same address.
+//
+//  mimic: __tsan_acquire, llvm compiler-rt
+FOLLY_ALWAYS_INLINE static void tsan_acquire(void* const addr) {
+  auto fun = detail::tsan_acquire_v;
+  return kIsSanitizeThread && fun ? fun(addr) : void();
+}
+
+//  tsan_release
+//
+//  Establishes a happens-before relation with a subsequent tsan_acquire on the
+//  same address.
+//
+//  mimic: __tsan_release, llvm compiler-rt
+FOLLY_ALWAYS_INLINE static void tsan_release(void* const addr) {
+  auto fun = detail::tsan_release_v;
+  return kIsSanitizeThread && fun ? fun(addr) : void();
+}
 
 FOLLY_ALWAYS_INLINE static void annotate_rwlock_create(
     void const volatile* const addr, char const* const f, int const l) {

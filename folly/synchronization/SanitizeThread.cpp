@@ -22,6 +22,10 @@
 // long, so it is helpful to keep these declarations out of widely-included
 // header files.
 
+extern "C" void __tsan_acquire(void* addr);
+
+extern "C" void __tsan_release(void* addr);
+
 extern "C" void AnnotateRWLockCreate(
     char const* f, int l, const volatile void* addr);
 
@@ -57,6 +61,10 @@ extern "C" void AnnotateIgnoreSyncBegin(char const* f, int l);
 extern "C" void AnnotateIgnoreSyncEnd(char const* f, int l);
 
 namespace {
+
+FOLLY_CREATE_EXTERN_ACCESSOR(tsan_acquire_access_v, __tsan_acquire);
+
+FOLLY_CREATE_EXTERN_ACCESSOR(tsan_release_access_v, __tsan_release);
 
 FOLLY_CREATE_EXTERN_ACCESSOR(
     annotate_rwlock_create_access_v, AnnotateRWLockCreate);
@@ -100,6 +108,12 @@ static constexpr auto const E = folly::kIsSanitizeThread;
 
 namespace folly {
 namespace detail {
+
+FOLLY_STORAGE_CONSTEXPR tsan_acquire_t* const tsan_acquire_v =
+    tsan_acquire_access_v<E>;
+
+FOLLY_STORAGE_CONSTEXPR tsan_release_t* const tsan_release_v =
+    tsan_release_access_v<E>;
 
 FOLLY_STORAGE_CONSTEXPR annotate_rwlock_cd_t* const annotate_rwlock_create_v =
     annotate_rwlock_create_access_v<E>;
