@@ -16,6 +16,7 @@
 
 #include <folly/system/ThreadName.h>
 
+#include <atomic>
 #include <type_traits>
 
 #include <folly/Portability.h>
@@ -323,11 +324,26 @@ bool setThreadName(pthread_t pid, StringPiece name) {
 #endif // !_WIN32
 }
 
+namespace {
+std::atomic<CurrentThreadNameCallback> currentThreadNameCallback{nullptr};
+} // namespace
+
 bool setThreadName(StringPiece name) {
 #if FOLLY_HAVE_PTHREAD
-  return setThreadName(pthread_self(), name);
+  const bool named = setThreadName(pthread_self(), name);
 #else
-  return setThreadName(std::this_thread::get_id(), name);
+  const bool named = setThreadName(std::this_thread::get_id(), name);
 #endif
+  if (const auto callback =
+          currentThreadNameCallback.load(std::memory_order_acquire)) {
+    callback(name);
+  }
+  return named;
+}
+
+CurrentThreadNameCallback setCurrentThreadNameCallback(
+    CurrentThreadNameCallback callback) noexcept {
+  return currentThreadNameCallback.exchange(
+      callback, std::memory_order_acq_rel);
 }
 } // namespace folly

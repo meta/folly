@@ -66,7 +66,29 @@ bool setThreadName(pthread_t pid, StringPiece name);
 /**
  * Equivalent to setThreadName(std::this_thread::get_id(), name);
  *
+ * Also runs the callback set by setCurrentThreadNameCallback, if any, on the
+ * calling thread.
+ *
  * @param name Name to set
  */
 bool setThreadName(StringPiece name);
+
+/**
+ * A function run on a thread right after it names itself through
+ * setThreadName(StringPiece). It lets a program apply per-thread settings keyed
+ * on the thread name (for example, choosing a memory allocator arena) to
+ * threads that libraries it does not control create and name.
+ *
+ * It runs whether or not the platform could apply the name, may run
+ * concurrently on many threads, and must not throw.
+ */
+using CurrentThreadNameCallback = void (*)(StringPiece name) noexcept;
+
+/**
+ * Sets the callback run by setThreadName(StringPiece), or clears it with
+ * nullptr, and returns the previous one. Threads that named themselves before
+ * the callback was set are not revisited.
+ */
+CurrentThreadNameCallback setCurrentThreadNameCallback(
+    CurrentThreadNameCallback callback) noexcept;
 } // namespace folly

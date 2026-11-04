@@ -16,7 +16,9 @@
 
 #include <folly/system/ThreadName.h>
 
+#include <string>
 #include <thread>
+#include <vector>
 
 #include <folly/ScopeGuard.h>
 #include <folly/portability/GTest.h>
@@ -82,4 +84,64 @@ TEST(ThreadName, setThreadNameOtherId) {
   if (expectedSetOtherThreadNameResult) {
     EXPECT_EQ(*getThreadName(th.get_id()), kThreadName);
   }
+}
+
+namespace {
+
+struct NamedThread {
+  std::string name;
+  std::thread::id id;
+};
+std::vector<NamedThread> namedThreads;
+
+void recordNamedThread(StringPiece name) noexcept {
+  namedThreads.push_back({name.toString(), std::this_thread::get_id()});
+}
+
+} // namespace
+
+TEST(ThreadName, currentThreadNameCallbackRunsOnTheNamingThread) {
+  namedThreads.clear();
+  const auto previous = setCurrentThreadNameCallback(recordNamedThread);
+  SCOPE_EXIT {
+    setCurrentThreadNameCallback(previous);
+  };
+  std::thread::id namingThread;
+  thread th([&] {
+    namingThread = std::this_thread::get_id();
+    setThreadName(kThreadName);
+  });
+  th.join();
+
+  ASSERT_EQ(namedThreads.size(), 1);
+  EXPECT_EQ(namedThreads[0].name, kThreadName.toString());
+  EXPECT_EQ(namedThreads[0].id, namingThread);
+}
+
+TEST(ThreadName, currentThreadNameCallbackSkipsNamingAnotherThread) {
+  namedThreads.clear();
+  const auto previous = setCurrentThreadNameCallback(recordNamedThread);
+  SCOPE_EXIT {
+    setCurrentThreadNameCallback(previous);
+  };
+  Baton<> let_thread_end;
+  thread th([&] { let_thread_end.wait(); });
+  setThreadName(th.get_id(), kThreadName);
+  let_thread_end.post();
+  th.join();
+
+  EXPECT_TRUE(namedThreads.empty());
+}
+
+TEST(ThreadName, clearedCurrentThreadNameCallbackIsNotRun) {
+  namedThreads.clear();
+  const auto previous = setCurrentThreadNameCallback(recordNamedThread);
+  EXPECT_EQ(setCurrentThreadNameCallback(nullptr), recordNamedThread);
+  SCOPE_EXIT {
+    setCurrentThreadNameCallback(previous);
+  };
+  thread th([] { setThreadName(kThreadName); });
+  th.join();
+
+  EXPECT_TRUE(namedThreads.empty());
 }
