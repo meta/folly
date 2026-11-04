@@ -114,14 +114,16 @@ elseif (WIN32)
         )
         string(REGEX REPLACE ".*ARCH_VALUE ([a-zA-Z0-9_]+).*" "\\1" _TARGET_ARCH "${_COMPILATION_LOG}")
 
-        # construct library path
+        # construct library path; on other architectures sodium is not found
+        set(_PLATFORM_PATH "")
         if (_TARGET_ARCH STREQUAL "x86_32")
-            string(APPEND _PLATFORM_PATH "Win32")
+            set(_PLATFORM_PATH "Win32")
         elseif(_TARGET_ARCH STREQUAL "x86_64")
-            string(APPEND _PLATFORM_PATH "x64")
-        else()
-            message(FATAL_ERROR "the ${_TARGET_ARCH} architecture is not supported by Findsodium.cmake.")
+            set(_PLATFORM_PATH "x64")
         endif()
+    endif()
+
+    if (MSVC AND _PLATFORM_PATH)
         string(APPEND _PLATFORM_PATH "/$$CONFIG$$")
 
         if (MSVC_VERSION LESS 1900)
@@ -162,7 +164,7 @@ elseif (WIN32)
             set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_BCK})
         endif()
 
-    elseif(_GCC_COMPATIBLE)
+    elseif(NOT MSVC AND _GCC_COMPATIBLE)
         if (sodium_USE_STATIC_LIBS)
             find_library(sodium_LIBRARY_DEBUG libsodium.a
                 HINTS ${sodium_DIR}
@@ -196,15 +198,8 @@ elseif (WIN32)
                 PATH_SUFFIXES bin
             )
         endif()
-    else()
-        message(FATAL_ERROR "this platform is not supported by FindSodium.cmake")
     endif()
 
-
-########################################################################
-# unsupported
-else()
-    message(FATAL_ERROR "this platform is not supported by FindSodium.cmake")
 endif()
 
 
@@ -246,6 +241,10 @@ mark_as_advanced(sodium_LIBRARY_RELEASE)
 if (WIN32)
     mark_as_advanced(sodium_DLL_DEBUG)
     mark_as_advanced(sodium_DLL_RELEASE)
+endif()
+
+if(NOT Sodium_FOUND)
+    return()
 endif()
 
 # create imported target
