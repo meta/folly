@@ -129,6 +129,7 @@ Sample usage:
 #include <folly/Likely.h>
 #include <folly/Memory.h>
 #include <folly/detail/Iterators.h>
+#include <folly/lang/Builtin.h>
 #include <folly/memory/Allocator.h>
 #include <folly/synchronization/MicroSpinLock.h>
 
@@ -234,6 +235,7 @@ class ConcurrentSkipList {
       while (greater(data, node)) {
         pred = node;
         node = node->skip(layer);
+        FOLLY_BUILTIN_PREFETCH(node, 0, 0);
       }
       if (foundLayer == -1 && !less(data, node)) { // the two keys equal
         foundLayer = layer;
@@ -470,6 +472,7 @@ class ConcurrentSkipList {
       while (greater(data, node)) {
         pred = node;
         node = node->skip(ht);
+        FOLLY_BUILTIN_PREFETCH(node, 0, 0);
       }
       found = !less(data, node);
     }
@@ -488,6 +491,7 @@ class ConcurrentSkipList {
       while (greater(data, node)) {
         pred = node;
         node = node->skip(layer);
+        FOLLY_BUILTIN_PREFETCH(node, 0, 0);
       }
       found = !less(data, node);
     }
@@ -498,6 +502,7 @@ class ConcurrentSkipList {
     auto node = findNode(data).first;
     while (node != nullptr && node->markedForRemoval()) {
       node = node->skip(0);
+      FOLLY_BUILTIN_PREFETCH(node, 0, 0);
     }
     return node;
   }
