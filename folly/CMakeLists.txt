@@ -256,7 +256,6 @@ folly_add_library(
   EXPORTED_DEPS
     fmt::fmt
     folly_detail_static_singleton_manager
-    folly_format
     folly_function
     folly_shared_mutex
 )

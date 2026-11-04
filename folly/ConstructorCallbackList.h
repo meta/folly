@@ -19,11 +19,11 @@
 #include <atomic>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <fmt/format.h>
 #include <folly/detail/StaticSingletonManager.h>
 
-#include <folly/Format.h>
 #include <folly/Function.h>
 #include <folly/SharedMutex.h>
 
