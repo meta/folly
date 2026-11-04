@@ -34,7 +34,9 @@
 #endif
 
 #include <charconv>
+#include <cstdint>
 #include <limits>
+#include <type_traits>
 
 #if FOLLY_USE_FAST_FLOAT
 #include <fast_float/fast_float.h>
@@ -387,42 +389,73 @@ const char* skip_leading_space(const char* b, const char* e) noexcept {
 
 #if FOLLY_HAVE_STD_FLOAT_FROM_CHARS
 
-/// Whether the number in `[b, e)`, known to be outside `long double` range,
-/// is the tiny one rather than the huge one.
+/// Whether the number in `[b, e)`, known to be out of range, is the tiny one
+/// rather than the huge one. With its magnitude written as `0.d... * 10^k` and
+/// a nonzero `d`, k is at least 39 when it is huge and at most -45 when it is
+/// tiny, whatever the type.
 bool is_underflow(const char* b, const char* e) noexcept {
-  if (*b == '-' || *b == '+') {
+  if (*b == '-') {
     ++b;
   }
-  auto const* exponent = std::find_if(b, e, [](char c) {
-    return c == 'e' || c == 'E';
-  });
-  if (exponent != e) {
-    return exponent + 1 != e && exponent[1] == '-';
+  std::int64_t k = 0;
+  bool significant = false;
+  bool fraction = false;
+  for (; b != e && *b != 'e' && *b != 'E'; ++b) {
+    if (*b == '.') {
+      fraction = true;
+      continue;
+    }
+    significant = significant || *b != '0';
+    if (!fraction && significant) {
+      ++k;
+    } else if (fraction && !significant) {
+      --k;
+    }
   }
-  // Without an exponent, leaving the range takes thousands of characters:
-  // either integer digits, which is huge, or "0.000...", which is tiny.
-  return *b == '0' || *b == '.';
+  if (b != e) {
+    ++b;
+    bool const negative = b != e && *b == '-';
+    if (b != e && (*b == '-' || *b == '+')) {
+      ++b;
+    }
+    // Saturating far beyond any feasible input length keeps the sign of k.
+    constexpr std::int64_t kMaxExponent = std::int64_t(1) << 56;
+    std::int64_t exponent = 0;
+    for (; b != e && *b >= '0' && *b <= '9'; ++b) {
+      exponent = std::min(exponent * 10 + (*b - '0'), kMaxExponent);
+    }
+    k += negative ? -exponent : exponent;
+  }
+  return k < 0;
 }
 
 /// `std::from_chars` leaves the output unmodified on `result_out_of_range`,
 /// and libstdc++ reports that for subnormal results too. A wider type, where
-/// those are normal, recovers them; the rest saturates the way strtod does.
+/// those are normal, recovers them. libc++ has no `long double` overload, but
+/// it reports out of range only beyond subnormals, so `double` needs no wider
+/// type there. The rest saturates the way strtod does.
 template <class Tgt>
 Tgt out_of_range_value(const char* b, const char* e) noexcept {
   constexpr auto kInf = std::numeric_limits<Tgt>::infinity();
-  constexpr auto kMax =
-      static_cast<long double>(std::numeric_limits<Tgt>::max());
+#if FOLLY_HAVE_STD_LONG_DOUBLE_FROM_CHARS
+  using Wide = long double;
+#else
+  using Wide = double;
+#endif
 
-  long double wide = 0;
-  if (std::from_chars(b, e, wide, std::chars_format::general).ec ==
-      std::errc()) {
-    if (wide > kMax) {
-      return kInf;
+  if constexpr (!std::is_same_v<Tgt, Wide>) {
+    constexpr auto kMax = static_cast<Wide>(std::numeric_limits<Tgt>::max());
+    Wide wide = 0;
+    if (std::from_chars(b, e, wide, std::chars_format::general).ec ==
+        std::errc()) {
+      if (wide > kMax) {
+        return kInf;
+      }
+      if (wide < -kMax) {
+        return -kInf;
+      }
+      return static_cast<Tgt>(wide);
     }
-    if (wide < -kMax) {
-      return -kInf;
-    }
-    return static_cast<Tgt>(wide);
   }
 
   auto const magnitude = is_underflow(b, e) ? Tgt(0) : kInf;

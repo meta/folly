@@ -1389,6 +1389,9 @@ void tryStringToFloat(const StrToFloat<String>& strToFloat) {
     auto rv = strToFloat(input);
     EXPECT_EQ(rv.value(), -numeric_limits<float>::infinity()) << input;
   }
+  // Huge despite a negative exponent, and beyond long double range too.
+  auto rvHuge = strToFloat(String("1" + std::string(5000, '0') + "E-10"));
+  EXPECT_EQ(rvHuge.value(), numeric_limits<float>::infinity());
 
   // Subnormals: representable, but below numeric_limits<float>::min()
   auto rv6 = strToFloat(String("1.4E-45"));
@@ -1401,7 +1404,10 @@ void tryStringToFloat(const StrToFloat<String>& strToFloat) {
   // Below numeric limits. Underflow saturates to a zero carrying the sign of
   // the input, the way strtod does, whatever the underlying parser reports.
   // Every strToFloat implementation owes this, so assert it for all of them.
-  for (const std::string& magnitude : {"1E-46", "1E-400"}) {
+  for (const std::string& magnitude :
+       {std::string("1E-46"),
+        std::string("1E-400"),
+        "0." + std::string(5000, '0') + "1E10"}) {
     for (const std::string& input : {magnitude, "-" + magnitude}) {
       auto rv = strToFloat(String(input));
       ASSERT_TRUE(rv.hasValue()) << input;
@@ -1573,6 +1579,64 @@ TEST(Conv, TryStringToFloat_StdFromChars) {
 }
 
 #endif // FOLLY_HAVE_STD_FLOAT_FROM_CHARS
+
+/// Range edge cases that every conversion to double owes, whatever parser is
+/// underneath.
+void checkStringToDoubleRange(
+    Expected<double, ConversionCode> (*strToDouble)(StringPiece*)) {
+  constexpr auto kInf = numeric_limits<double>::infinity();
+  constexpr auto kMax = numeric_limits<double>::max();
+  constexpr auto kDenormMin = numeric_limits<double>::denorm_min();
+  const std::string zeros(5000, '0');
+  const std::pair<std::string, double> kCases[] = {
+      // Subnormals
+      {"4.9E-324", kDenormMin},
+      {"-4.9E-324", -kDenormMin},
+      {"+4.9E-324", kDenormMin},
+      {"2.5E-324", kDenormMin},
+      {"1E-310", 1E-310},
+      {"-1E-310", -1E-310},
+      {"2.2E-308", 2.2E-308},
+      {"-2.2250738585072009E-308",
+       -std::nextafter(numeric_limits<double>::min(), 0.0)},
+      // Underflow
+      {"2.4E-324", 0.0},
+      {"1E-400", 0.0},
+      {"-1E-400", -0.0},
+      {"+1E-400", 0.0},
+      {"0." + zeros + "1E10", 0.0},
+      {"-0." + zeros + "1E10", -0.0},
+      // Overflow
+      {"1.7976931348623157E308", kMax},
+      {"1.7976931348623159E308", kInf},
+      {"1E400", kInf},
+      {"-1E400", -kInf},
+      {"+1E400", kInf},
+      {"1" + zeros + "E-10", kInf},
+      {"-1" + zeros + "E-10", -kInf},
+  };
+  for (const auto& [input, expected] : kCases) {
+    StringPiece sp(input);
+    auto rv = strToDouble(&sp);
+    ASSERT_TRUE(rv.hasValue()) << input;
+    EXPECT_EQ(rv.value(), expected) << input;
+    EXPECT_EQ(std::signbit(rv.value()), std::signbit(expected)) << input;
+    EXPECT_TRUE(sp.empty()) << input;
+  }
+
+  StringPiece plusMinus("+-1");
+  EXPECT_EQ(
+      strToDouble(&plusMinus).error(), ConversionCode::STRING_TO_FLOAT_ERROR);
+}
+
+TEST(Conv, StringToDoubleRange) {
+  checkStringToDoubleRange(folly::detail::str_to_floating<double>);
+  checkStringToDoubleRange(folly::detail::str_to_floating_from_chars<double>);
+#if FOLLY_HAVE_STD_FLOAT_FROM_CHARS
+  checkStringToDoubleRange(
+      folly::detail::str_to_floating_std_from_chars<double>);
+#endif
+}
 
 template <class String>
 void tryToDouble() {

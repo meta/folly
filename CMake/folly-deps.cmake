@@ -97,22 +97,31 @@ list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
 
 find_package(FastFloat MODULE)
 if (NOT FASTFLOAT_FOUND)
-  # Conv.h checks the same macro.
+  # Conv.h checks the same macros. Conv.cpp calls the long double overload
+  # only where __cpp_lib_to_chars promises it; libc++ has none.
   check_cxx_source_compiles(
     "
     #include <charconv>
-    #if !defined(__cpp_lib_to_chars)
+    #if defined(__cpp_lib_to_chars)
+    #define LONG_DOUBLE 1
+    #elif _LIBCPP_VERSION >= 200000 && _LIBCPP_AVAILABILITY_HAS_FROM_CHARS_FLOATING_POINT
+    #define LONG_DOUBLE 0
+    #else
     #error no floating-point std::from_chars
     #endif
     int main() {
       const char s[] = \"1.5\";
       float f = 0;
       double d = 0;
-      long double ld = 0;
       auto general = std::chars_format::general;
-      return (std::from_chars(s, s + 3, f, general).ec != std::errc()) +
-          (std::from_chars(s, s + 3, d, general).ec != std::errc()) +
-          (std::from_chars(s, s + 3, ld, general).ec != std::errc());
+      int failures = 0;
+      failures += std::from_chars(s, s + 3, f, general).ec != std::errc();
+      failures += std::from_chars(s, s + 3, d, general).ec != std::errc();
+    #if LONG_DOUBLE
+      long double ld = 0;
+      failures += std::from_chars(s, s + 3, ld, general).ec != std::errc();
+    #endif
+      return failures;
     }"
     FOLLY_HAVE_FLOAT_FROM_CHARS)
 endif ()

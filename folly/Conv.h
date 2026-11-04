@@ -127,13 +127,20 @@
 #include <charconv>
 #endif
 
-// libc++ implements std::from_chars for integers only. The standard requires
-// the floating-point overloads too, so __cpp_lib_to_chars marks a complete
-// implementation and libc++ leaves it undefined.
+// __cpp_lib_to_chars marks a complete std::from_chars. libc++ 20 and newer
+// leave it undefined: they have the float and double overloads but not the
+// long double one, and on Apple platforms only for new enough deployment
+// targets.
 #if defined(__cpp_lib_to_chars)
 #define FOLLY_HAVE_STD_FLOAT_FROM_CHARS 1
+#define FOLLY_HAVE_STD_LONG_DOUBLE_FROM_CHARS 1
+#elif _LIBCPP_VERSION >= 200000 && \
+    _LIBCPP_AVAILABILITY_HAS_FROM_CHARS_FLOATING_POINT
+#define FOLLY_HAVE_STD_FLOAT_FROM_CHARS 1
+#define FOLLY_HAVE_STD_LONG_DOUBLE_FROM_CHARS 0
 #else
 #define FOLLY_HAVE_STD_FLOAT_FROM_CHARS 0
+#define FOLLY_HAVE_STD_LONG_DOUBLE_FROM_CHARS 0
 #endif
 
 #include <folly/CPortability.h>
