@@ -1,1 +1,0 @@
-INSTALL_COMMAND="sudo -E dnf install -y"
