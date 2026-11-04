@@ -147,6 +147,8 @@ def validate_symbolizer_dwp(name, binary, mode = "fbcode//mode/opt", modifiers =
         # The dwp-packaged binary cannot build in these modes (its objects
         # would mix ambient and pinned DWARF versions), so do not schedule it
         # there at all.
+        if "fbcode//mode/opt" in drop_modes:
+            ci_labels.append(ci.remove(ci.linux(ci.opt())))
         ci_labels.append(ci.remove(*[ci.linux(ci.mode(m)) for m in drop_modes]))
     custom_unittest(
         name = name,
