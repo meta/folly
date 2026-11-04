@@ -190,7 +190,7 @@ ElfFile::iterateNotesInBodyHelper(std::span<const uint8_t> body, Fn& fn) const
       return note;
     }
 
-    body = body.subspan(note.alignedSize());
+    body = body.subspan(note.size());
   }
 
   return Unexpected(FindNoteError(FindNoteFailureCode::NoteNotFound));

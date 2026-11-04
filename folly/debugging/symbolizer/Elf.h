@@ -22,7 +22,9 @@
 #include <sys/types.h>
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <initializer_list>
+#include <limits>
 #include <span>
 #include <stdexcept>
 #include <system_error>
@@ -432,13 +434,19 @@ class ElfFile {
     }
 
     cstring_view getName() const {
-      if (!header()) {
+      if (!header() || header()->n_namesz == 0) {
         return {};
       }
-
-      // Subtract 1 to remove the trailing null character.
-      return cstring_view(
-          reinterpret_cast<const char*>(body().data()), header()->n_namesz - 1);
+      const auto noteBody = body();
+      if (header()->n_namesz > noteBody.size()) {
+        return {};
+      }
+      const auto* name = reinterpret_cast<const char*>(noteBody.data());
+      const auto* terminator =
+          static_cast<const char*>(std::memchr(name, 0, header()->n_namesz));
+      return terminator == nullptr
+          ? cstring_view{}
+          : cstring_view(name, terminator - name);
     }
 
     std::span<const uint8_t> getDesc() const {
@@ -447,7 +455,7 @@ class ElfFile {
       }
 
       size_t paddedNameSize = folly::align_ceil(header()->n_namesz, 4);
-      return body().subspan(paddedNameSize);
+      return body().subspan(paddedNameSize, header()->n_descsz);
     }
 
     static size_t alignedBodySize(const ElfNhdr& nhdr) {
@@ -465,6 +473,9 @@ class ElfFile {
      */
     size_t alignedSize() const { return header() ? alignedSize(*header()) : 0; }
 
+    /** Get the number of bytes consumed by this note, including padding. */
+    size_t size() const { return note.size(); }
+
     /**
      * Parse a note from a given set of bytes. If the supplied bytes is less
      * than the note header, or the aligned size of the body an unexpected will
@@ -477,11 +488,42 @@ class ElfFile {
       }
 
       const ElfNhdr* nhdr = reinterpret_cast<const ElfNhdr*>(noteBody.data());
-      if (alignedSize(*nhdr) > noteBody.size()) {
+      const size_t nameSize = nhdr->n_namesz;
+      const size_t namePadding = (4 - nameSize % 4) % 4;
+      if (namePadding > std::numeric_limits<size_t>::max() - nameSize) {
+        return Unexpected(FindNoteError(FindNoteFailureCode::NoteUndersized));
+      }
+      const size_t paddedNameSize = nameSize + namePadding;
+      const size_t descSize = nhdr->n_descsz;
+      if (paddedNameSize >
+              std::numeric_limits<size_t>::max() - sizeof(ElfNhdr) ||
+          descSize > std::numeric_limits<size_t>::max() - sizeof(ElfNhdr) -
+                  paddedNameSize) {
+        return Unexpected(FindNoteError(FindNoteFailureCode::NoteUndersized));
+      }
+      const size_t unpaddedSize = sizeof(ElfNhdr) + paddedNameSize + descSize;
+      if (unpaddedSize > noteBody.size()) {
         return Unexpected(FindNoteError(FindNoteFailureCode::NoteUndersized));
       }
 
-      return Note(noteBody.subspan(0, alignedSize(*nhdr)));
+      if (nameSize != 0) {
+        const auto* name = noteBody.data() + sizeof(ElfNhdr);
+        const auto* terminator =
+            static_cast<const uint8_t*>(std::memchr(name, 0, nameSize));
+        if (terminator == nullptr) {
+          return Unexpected(FindNoteError(FindNoteFailureCode::NoteUndersized));
+        }
+      }
+
+      const size_t descPadding = (4 - descSize % 4) % 4;
+      const size_t trailingSize = noteBody.size() - unpaddedSize;
+      if (trailingSize != 0 && trailingSize < descPadding) {
+        return Unexpected(FindNoteError(FindNoteFailureCode::NoteUndersized));
+      }
+      const size_t paddedSize = trailingSize >= descPadding
+          ? unpaddedSize + descPadding
+          : unpaddedSize;
+      return Note(noteBody.first(paddedSize));
     }
   };
 

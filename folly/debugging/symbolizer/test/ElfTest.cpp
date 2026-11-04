@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
+#include <array>
+#include <cstring>
 #include <span>
+#include <string_view>
 #include <folly/debugging/symbolizer/Elf.h>
 
 #include <fcntl.h>
@@ -212,6 +215,129 @@ TEST(TestGetNoteGnuBuildId, SimpleElf) {
   auto note = noteMaybe.value();
   EXPECT_EQ(4, note.size());
   EXPECT_THAT(note, ::testing::ElementsAreArray({0xDE, 0xAD, 0xBE, 0xEF}));
+}
+
+TEST(TestNoteParsing, UnpaddedFinalDescriptor) {
+  constexpr std::array<uint8_t, 6> kBuildId{0xba, 0xdf, 0xac, 0xed, 0xec, 0xaf};
+  alignas(ElfNhdr) std::array<uint8_t, sizeof(ElfNhdr) + 4 + kBuildId.size()>
+      bytes{};
+  const ElfNhdr header{
+      .n_namesz = 4,
+      .n_descsz = kBuildId.size(),
+      .n_type = NT_GNU_BUILD_ID,
+  };
+  std::memcpy(bytes.data(), &header, sizeof(header));
+  std::memcpy(bytes.data() + sizeof(header), "GNU", 4);
+  std::memcpy(bytes.data() + sizeof(header) + 4, kBuildId.data(), 6);
+
+  auto result = ElfFile::Note::parse(bytes);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_EQ(bytes.size(), result->size());
+  EXPECT_EQ("GNU", std::string_view(result->getName()));
+  EXPECT_THAT(result->getDesc(), ::testing::ElementsAreArray(kBuildId));
+}
+
+TEST(TestNoteParsing, DescriptorExcludesPadding) {
+  constexpr std::array<uint8_t, 6> kBuildId{0xba, 0xdf, 0xac, 0xed, 0xec, 0xaf};
+  alignas(ElfNhdr) std::array<uint8_t, sizeof(ElfNhdr) + 4 + 8> bytes{};
+  const ElfNhdr header{
+      .n_namesz = 4,
+      .n_descsz = kBuildId.size(),
+      .n_type = NT_GNU_BUILD_ID,
+  };
+  std::memcpy(bytes.data(), &header, sizeof(header));
+  std::memcpy(bytes.data() + sizeof(header), "GNU", 4);
+  std::memcpy(bytes.data() + sizeof(header) + 4, kBuildId.data(), 6);
+
+  auto result = ElfFile::Note::parse(bytes);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_EQ(bytes.size(), result->size());
+  EXPECT_THAT(result->getDesc(), ::testing::ElementsAreArray(kBuildId));
+}
+
+TEST(TestNoteParsing, RejectsUnterminatedName) {
+  alignas(ElfNhdr) std::array<uint8_t, sizeof(ElfNhdr) + 4> bytes{};
+  const ElfNhdr header{
+      .n_namesz = 4,
+      .n_descsz = 0,
+      .n_type = NT_GNU_BUILD_ID,
+  };
+  std::memcpy(bytes.data(), &header, sizeof(header));
+  std::memcpy(bytes.data() + sizeof(header), "GNU!", 4);
+
+  auto result = ElfFile::Note::parse(bytes);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(
+      ElfFile::FindNoteFailureCode::NoteUndersized, result.error().failureCode);
+}
+
+TEST(TestNoteParsing, RejectsTruncatedDescriptor) {
+  // n_descsz claims 16 bytes, but only 6 follow the name.
+  constexpr std::array<uint8_t, 6> kBuildId{0xba, 0xdf, 0xac, 0xed, 0xec, 0xaf};
+  alignas(ElfNhdr) std::array<uint8_t, sizeof(ElfNhdr) + 4 + kBuildId.size()>
+      bytes{};
+  const ElfNhdr header{
+      .n_namesz = 4,
+      .n_descsz = 16,
+      .n_type = NT_GNU_BUILD_ID,
+  };
+  std::memcpy(bytes.data(), &header, sizeof(header));
+  std::memcpy(bytes.data() + sizeof(header), "GNU", 4);
+  std::memcpy(
+      bytes.data() + sizeof(header) + 4, kBuildId.data(), kBuildId.size());
+
+  auto result = ElfFile::Note::parse(bytes);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(
+      ElfFile::FindNoteFailureCode::NoteUndersized, result.error().failureCode);
+}
+
+TEST(TestNoteParsing, RejectsPartialDescriptorPadding) {
+  // A 6-byte descriptor needs 2 padding bytes; only 1 trailing byte follows.
+  constexpr std::array<uint8_t, 6> kBuildId{0xba, 0xdf, 0xac, 0xed, 0xec, 0xaf};
+  alignas(ElfNhdr)
+      std::array<uint8_t, sizeof(ElfNhdr) + 4 + kBuildId.size() + 1>
+          bytes{};
+  const ElfNhdr header{
+      .n_namesz = 4,
+      .n_descsz = kBuildId.size(),
+      .n_type = NT_GNU_BUILD_ID,
+  };
+  std::memcpy(bytes.data(), &header, sizeof(header));
+  std::memcpy(bytes.data() + sizeof(header), "GNU", 4);
+  std::memcpy(
+      bytes.data() + sizeof(header) + 4, kBuildId.data(), kBuildId.size());
+
+  auto result = ElfFile::Note::parse(bytes);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(
+      ElfFile::FindNoteFailureCode::NoteUndersized, result.error().failureCode);
+}
+
+TEST(TestNoteParsing, AcceptsNullPaddedName) {
+  constexpr std::array<uint8_t, 4> kBuildId{0xde, 0xad, 0xbe, 0xef};
+  alignas(ElfNhdr) std::array<uint8_t, sizeof(ElfNhdr) + 8 + kBuildId.size()>
+      bytes{};
+  const ElfNhdr header{
+      .n_namesz = 8,
+      .n_descsz = kBuildId.size(),
+      .n_type = NT_GNU_BUILD_ID,
+  };
+  std::memcpy(bytes.data(), &header, sizeof(header));
+  std::memcpy(bytes.data() + sizeof(header), "GNU", 3);
+  std::memcpy(
+      bytes.data() + sizeof(header) + 8, kBuildId.data(), kBuildId.size());
+
+  auto result = ElfFile::Note::parse(bytes);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_EQ("GNU", std::string_view(result->getName()));
+  EXPECT_THAT(result->getDesc(), ::testing::ElementsAreArray(kBuildId));
 }
 
 TEST(TestNoteSectionIteration, SimpleElf) {
