@@ -27,9 +27,6 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "intrusive_ptr",
     headers = ["IntrusivePtr.h"],
-    exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
-    ],
 )
 
 fb_dirsync_cpp_library(

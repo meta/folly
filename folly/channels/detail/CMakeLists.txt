@@ -33,7 +33,6 @@ folly_add_library(
 folly_add_library(
   NAME intrusive_ptr
   HEADERS IntrusivePtr.h
-  EXPORTED_DEPS Boost::headers
 )
 
 folly_add_library(

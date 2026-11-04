@@ -16,12 +16,16 @@
 
 #pragma once
 
-#include <boost/intrusive_ptr.hpp>
-#include <boost/smart_ptr/intrusive_ref_counter.hpp>
+#include <atomic>
+#include <cstddef>
+#include <utility>
 
 namespace folly {
 namespace channels {
 namespace detail {
+
+template <typename T>
+class intrusive_ptr;
 
 /**
  * An intrusive_ptr is like an std::shared_ptr. However, unlike a shared_ptr,
@@ -35,13 +39,58 @@ namespace detail {
  *
  * To use intrusive_ptr<T>, ensure that T inherits from IntrusivePtrBase<T>.
  */
+template <typename T>
+class IntrusivePtrBase {
+ protected:
+  IntrusivePtrBase() noexcept = default;
+  IntrusivePtrBase(const IntrusivePtrBase&) = delete;
+  IntrusivePtrBase& operator=(const IntrusivePtrBase&) = delete;
+  IntrusivePtrBase(IntrusivePtrBase&&) = delete;
+  IntrusivePtrBase& operator=(IntrusivePtrBase&&) = delete;
+  ~IntrusivePtrBase() = default;
+
+ private:
+  friend class intrusive_ptr<T>;
+
+  mutable std::atomic<size_t> refCount_{0};
+};
 
 template <typename T>
-using intrusive_ptr = boost::intrusive_ptr<T>;
+class intrusive_ptr {
+ public:
+  explicit intrusive_ptr(T* ptr) noexcept : ptr_(ptr) {
+    if (ptr_) {
+      ptr_->refCount_.fetch_add(1, std::memory_order_relaxed);
+    }
+  }
 
-template <typename T>
-using IntrusivePtrBase =
-    boost::intrusive_ref_counter<T, boost::thread_safe_counter>;
+  intrusive_ptr(const intrusive_ptr& other) noexcept
+      : intrusive_ptr(other.ptr_) {}
+
+  intrusive_ptr(intrusive_ptr&& other) noexcept
+      : ptr_(std::exchange(other.ptr_, nullptr)) {}
+
+  intrusive_ptr& operator=(const intrusive_ptr& other) noexcept {
+    return *this = intrusive_ptr(other);
+  }
+
+  intrusive_ptr& operator=(intrusive_ptr&& other) noexcept {
+    intrusive_ptr old(std::move(other));
+    std::swap(ptr_, old.ptr_);
+    return *this;
+  }
+
+  ~intrusive_ptr() {
+    if (ptr_ && ptr_->refCount_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      delete ptr_;
+    }
+  }
+
+  T* operator->() const noexcept { return ptr_; }
+
+ private:
+  T* ptr_;
+};
 
 template <typename T, typename... Args>
 intrusive_ptr<T> make_intrusive(Args&&... args) {

@@ -136,7 +136,6 @@ fb_dirsync_cpp_library(
         "//folly/stats:streaming_stats",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         "fbsource//third-party/glog:glog",
         ":benchmark_util",
         ":portability",

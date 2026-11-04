@@ -18,14 +18,9 @@
 
 #include <type_traits>
 
-#include <boost/function_types/parameter_types.hpp>
-#include <boost/mpl/equal.hpp>
-#include <boost/mpl/pop_front.hpp>
-#include <boost/mpl/transform.hpp>
-#include <boost/mpl/vector.hpp>
-
 #include <folly/Conv.h>
 #include <folly/Traits.h>
+#include <folly/functional/traits.h>
 
 namespace folly {
 
@@ -54,19 +49,24 @@ class IdentifyCallable {
   }
 };
 
+template <typename... Args>
+using DecayedArgumentTypes = tag_t<std::remove_cvref_t<Args>...>;
+
 template <IdentifyCallable::Kind, typename Fn>
 struct ArgumentTypesByKind {};
 template <typename Fn>
 struct ArgumentTypesByKind<IdentifyCallable::Kind::MemberFunction, Fn> {
-  using type = typename boost::mpl::template pop_front<
-      typename boost::function_types::template parameter_types<
-          decltype(&Fn::operator())>::type>::type;
+  using type = typename function_traits<member_pointer_member_t<
+      decltype(&Fn::operator())>>::template arguments<DecayedArgumentTypes>;
 };
 template <typename Fn>
 struct ArgumentTypesByKind<IdentifyCallable::Kind::Function, Fn> {
-  using type = typename boost::function_types::template parameter_types<Fn>;
+  using type = typename function_traits<std::remove_pointer_t<
+      std::remove_reference_t<Fn>>>::template arguments<DecayedArgumentTypes>;
 };
 
+// The argument types of Fn with cv-qualifiers and references stripped, as a
+// tag_t.
 template <typename Fn>
 using ArgumentTypes =
     typename ArgumentTypesByKind<IdentifyCallable::getKind<Fn>(), Fn>::type;
@@ -75,12 +75,7 @@ using ArgumentTypes =
 // extended.  The comparison deliberately strips cv-qualifiers and
 // reference, leaving that choice up to the caller.
 template <typename Fn, typename... Args>
-struct HasArgumentTypes
-    : boost::mpl::template equal<
-          typename boost::mpl::transform<
-              ArgumentTypes<Fn>,
-              std::remove_cvref<boost::mpl::_1>>::type,
-          boost::mpl::vector<Args...>>::type {};
+struct HasArgumentTypes : std::is_same<ArgumentTypes<Fn>, tag_t<Args...>> {};
 template <typename... Args>
 using EnableForArgTypes =
     typename std::enable_if<HasArgumentTypes<Args...>::value, void>::type;

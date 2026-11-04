@@ -62,9 +62,9 @@ folly_add_library(
     ${GLOG_LIBRARIES}
     folly_optional
   EXPORTED_DEPS
-    Boost::headers
     folly_c_portability
     folly_conv
+    folly_functional_traits
     folly_json
     folly_json_dynamic
     folly_scope_guard

@@ -109,13 +109,13 @@ fb_dirsync_cpp_library(
         "//folly:optional",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",
         ":dynamic",
         "//folly:c_portability",
         "//folly:conv",
         "//folly:json",  # @manual
         "//folly:scope_guard",
         "//folly:traits",
+        "//folly/functional:traits",
     ],
 )
 

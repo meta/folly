@@ -39,7 +39,6 @@
 #include <unordered_map>
 #include <variant>
 
-#include <boost/function_types/function_arity.hpp>
 #include <glog/logging.h>
 
 FOLLY_GFLAGS_DECLARE_bool(benchmark);

@@ -102,7 +102,6 @@ folly_add_library(
     folly_string
   EXPORTED_DEPS
     ${GLOG_LIBRARIES}
-    Boost::headers
     folly_benchmark_util
     folly_functional_invoke
     folly_lang_hint
