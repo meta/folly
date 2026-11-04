@@ -24,23 +24,8 @@
 #include <folly/Utility.h>
 
 #if FOLLY_HAS_COROUTINES
-
-// libc++'s <coroutine> header only provides its declarations for C++20 and
-// above, so we need to fall back to <experimental/coroutine> when building with
-// C++17.
-#if (__has_include(<coroutine>) && !defined(LLVM_COROUTINES)) || defined(__cpp_impl_coroutine)
-#define FOLLY_USE_STD_COROUTINE 1
-#else
-#define FOLLY_USE_STD_COROUTINE 0
-#endif
-
-#if FOLLY_USE_STD_COROUTINE
 #include <coroutine>
-#else
-#include <experimental/coroutine>
 #endif
-
-#endif // FOLLY_HAS_COROUTINES
 
 //  A place for foundational vocabulary types.
 //
@@ -59,19 +44,17 @@ struct AsyncStackFrame;
 
 namespace folly::coro {
 
-#if FOLLY_USE_STD_COROUTINE
+// RocksDB names `folly::coro::impl::coroutine_handle`. Remove this alias once
+// fbcode/rocksdb no longer does.
 namespace impl = std;
-#else
-namespace impl = std::experimental;
-#endif
 
-using impl::coroutine_handle;
-using impl::coroutine_traits;
-using impl::noop_coroutine;
-using impl::noop_coroutine_handle;
-using impl::noop_coroutine_promise;
-using impl::suspend_always;
-using impl::suspend_never;
+using std::coroutine_handle;
+using std::coroutine_traits;
+using std::noop_coroutine;
+using std::noop_coroutine_handle;
+using std::noop_coroutine_promise;
+using std::suspend_always;
+using std::suspend_never;
 
 //  ready_awaitable
 //
@@ -236,18 +219,7 @@ struct detect_promise_return_object_eager_conversion_ {
   bool eager = false;
 
   static detect_promise_return_object_eager_conversion_ go() noexcept {
-    // FIXME: when building against Apple SDKs using c++17, we hit this all over
-    // the place on complex testing infrastructure for iOS. Since it's not clear
-    // how to fix the issue properly right now, force ignore this warnings and
-    // unblock expected/optional coroutines. This should be removed once the
-    // build config is changed to use -Wno-deprecated-experimental-coroutine.
-    FOLLY_PUSH_WARNING
-#if defined(__clang__) && \
-    (13 < __clang_major__ && __clang_major__ < 17 - defined(__APPLE__))
-    FOLLY_CLANG_DISABLE_WARNING("-Wdeprecated-experimental-coroutine")
-#endif
     co_return;
-    FOLLY_POP_WARNING
   }
 };
 

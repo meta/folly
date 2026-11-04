@@ -708,14 +708,13 @@ constexpr auto kCpplibVer = 0;
 #define FOLLY_HAS_COROUTINES 0
 #define FOLLY_HAS_IMMOVABLE_COROUTINES 0
 #else
-// folly::coro requires C++17 support
 #if defined(__NVCC__)
 // For now, NVCC matches other compilers but does not offer coroutines.
 #define FOLLY_HAS_COROUTINES 0
 #elif defined(_WIN32) && defined(__clang__) && !defined(LLVM_COROUTINES) && \
     !defined(LLVM_COROUTINES_CPP20)
 // LLVM and MSVC coroutines are ABI incompatible, so for the MSVC implementation
-// of <experimental/coroutine> on Windows we *don't* have coroutines.
+// of <coroutine> on Windows we *don't* have coroutines.
 //
 // LLVM_COROUTINES indicates that LLVM compatible header is added to include
 // path and can be used.
@@ -723,19 +722,9 @@ constexpr auto kCpplibVer = 0;
 // LLVM_COROUTINES_CPP20 indicates that an LLVM compatible header using
 // <coroutine> is added to the include path and can be used.
 
-//
-// Worse, if we define FOLLY_HAS_COROUTINES 1 we will include
-// <experimental/coroutine> which will conflict with anyone who wants to load
-// the LLVM implementation of coroutines on Windows.
 #define FOLLY_HAS_COROUTINES 0
-#elif defined(_MSC_VER) && _MSC_VER && defined(_RESUMABLE_FUNCTIONS_SUPPORTED)
-// NOTE: MSVC 2017 does not currently support the full Coroutines TS since it
-// does not yet support symmetric-transfer.
-#define FOLLY_HAS_COROUTINES 0
-#elif (                                                                    \
-    (defined(__cpp_coroutines) && __cpp_coroutines >= 201703L) ||          \
-    (defined(__cpp_impl_coroutine) && __cpp_impl_coroutine >= 201902L)) && \
-    (__has_include(<coroutine>) || __has_include(<experimental/coroutine>))
+#elif defined(__cpp_impl_coroutine) && __cpp_impl_coroutine >= 201902L && \
+    __has_include(<coroutine>)
 #define FOLLY_HAS_COROUTINES 1
 // FOLLY_NOINLINE here works around an LTO miscompile that promoted
 // await_suspend's stack locals onto the coroutine frame (D15143193).
