@@ -27,6 +27,7 @@
 
 #include <folly/concurrency/CacheLocality.h>
 #include <folly/lang/Bits.h>
+#include <folly/lang/New.h>
 
 namespace folly {
 
@@ -75,7 +76,7 @@ struct alignas(hardware_destructive_interference_size) ProducerConsumerQueue {
       }
     }
 
-    std::free(producer_.records);
+    deallocate(producer_.records);
   }
 
   //  Checks a private, unsynchronized cache of the other side's cursor
@@ -211,7 +212,7 @@ struct alignas(hardware_destructive_interference_size) ProducerConsumerQueue {
 
   //  Bundles the three values makeState() computes, so the delegating
   //  constructor below can initialize both producer_ and consumer_ from a
-  //  single malloc() call rather than validating/allocating twice.
+  //  single allocation rather than validating/allocating twice.
   struct State {
     T* records{};
     uint32_t mask{};
@@ -253,14 +254,41 @@ struct alignas(hardware_destructive_interference_size) ProducerConsumerQueue {
     return static_cast<size_t>(bytes);
   }
 
+  //  std::malloc() only guarantees alignof(std::max_align_t), so a T with a
+  //  stricter alignas needs storage from the aligned allocator; constructing
+  //  using storage allocated with malloc() would be misaligned, and can fault
+  //  on the aligned SIMD instructions the compiler is then entitled to use.
+  static constexpr bool kOverAligned = alignof(T) > alignof(std::max_align_t);
+
+  static T* allocate(uint32_t mask) {
+    size_t const bytes = allocationSize(mask);
+
+    if constexpr (kOverAligned) {
+      return static_cast<T*>(operator_new(bytes, std::align_val_t{alignof(T)}));
+    } else {
+      auto* const records = static_cast<T*>(std::malloc(bytes));
+
+      if (!records) {
+        throw std::bad_alloc();
+      }
+
+      return records;
+    }
+  }
+
+  //  Must mirror allocate(): each allocator must release its own storage.
+  static void deallocate(T* records) noexcept {
+    if constexpr (kOverAligned) {
+      operator_delete(records, std::align_val_t{alignof(T)});
+    } else {
+      std::free(records);
+    }
+  }
+
   static State makeState(uint32_t size) {
     uint32_t const validSize = validateSize(size); // in [1, 1 << 31]
     uint32_t const mask = nextPowTwo(validSize) - 1; // in [1, 1 << 31)
-    auto* const records = static_cast<T*>(std::malloc(allocationSize(mask)));
-    if (!records) {
-      throw std::bad_alloc();
-    }
-    return State{records, mask, validSize};
+    return State{allocate(mask), mask, validSize};
   }
 
   explicit ProducerConsumerQueue(State st) noexcept

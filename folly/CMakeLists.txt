@@ -1025,6 +1025,7 @@ folly_add_library(
   EXPORTED_DEPS
     folly_concurrency_cache_locality
     folly_lang_bits
+    folly_lang_new
 )
 
 folly_add_library(

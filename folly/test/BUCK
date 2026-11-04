@@ -1226,6 +1226,7 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//third-party/glog:glog",
         "//folly:producer_consumer_queue",
+        "//folly/lang:align",
         "//folly/portability:gtest",
     ],
 )
