@@ -30,6 +30,18 @@ namespace folly {
 namespace detail {
 extern Indestructible<std::mutex> atomicReadMostlyMu;
 extern Indestructible<rcu_domain> atomicReadMostlyDomain;
+
+// The index carries the slot payload it selects, so index accesses need at
+// least acquire/release semantics no matter what the caller passes. The
+// caller-supplied order only governs the caller's own pointee ordering.
+constexpr std::memory_order atomicReadMostlyLoadOrder(std::memory_order order) {
+  return order == std::memory_order_seq_cst ? order : std::memory_order_acquire;
+}
+
+constexpr std::memory_order atomicReadMostlyStoreOrder(
+    std::memory_order order) {
+  return order == std::memory_order_seq_cst ? order : std::memory_order_release;
+}
 } // namespace detail
 
 /*
@@ -60,7 +72,8 @@ class AtomicReadMostlyMainPtr {
       std::memory_order order = std::memory_order_seq_cst) const {
     detail::atomicReadMostlyDomain->lock();
     // Synchronization point with the store in storeLocked().
-    auto index = curMainPtrIndex_.load(order);
+    auto index =
+        curMainPtrIndex_.load(detail::atomicReadMostlyLoadOrder(order));
     auto result = mainPtrs_[index].getShared();
     detail::atomicReadMostlyDomain->unlock();
     return result;
@@ -112,7 +125,8 @@ class AtomicReadMostlyMainPtr {
     std::shared_ptr<T> expectedDup;
     {
       std::lock_guard lg(*detail::atomicReadMostlyMu);
-      auto index = curMainPtrIndex_.load(failureOrder);
+      auto index = curMainPtrIndex_.load(
+          detail::atomicReadMostlyLoadOrder(failureOrder));
       ReadMostlyMainPtr<T>& oldMain = mainPtrs_[index];
       if (oldMain.get() != expected.get()) {
         expectedDup = std::move(expected);
@@ -142,21 +156,11 @@ class AtomicReadMostlyMainPtr {
     DCHECK(newMain.get() == nullptr)
         << "Invariant should ensure that at most one version is non-null";
     newMain.reset(std::move(ptr));
-    // If order is acq_rel, it should degrade to just release, and if acquire to
-    // relaxed, since this is a store rather than an RMW. (Of course, this is
-    // such a slow method that we don't really care, but precision is its own
-    // reward. If TSAN one day understands asymmetric barriers, this will also
-    // improve its error detection here). We get our "acquire-y-ness" from the
-    // mutex.
-    auto realOrder =
-        (order == std::memory_order_acq_rel ? std::memory_order_release
-             : order == std::memory_order_acquire
-             ? std::memory_order_relaxed
-             : order);
     // After this, read-side critical sections can access both versions, but
     // new ones will use newMain.
     // This is also synchronization point with loads.
-    curMainPtrIndex_.store(1 - index, realOrder);
+    curMainPtrIndex_.store(
+        1 - index, detail::atomicReadMostlyStoreOrder(order));
     // Wait for all read-side critical sections using oldMain to finish.
     detail::atomicReadMostlyDomain->synchronize();
     // We've reestablished the first half of the invariant (all readers are
