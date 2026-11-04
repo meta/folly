@@ -16,58 +16,89 @@
 
 #include <folly/TimeoutQueue.h>
 
-#include <algorithm>
+#include <iterator>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace folly {
 
+void TimeoutQueue::insert(int64_t expiration, Event event) {
+  Id id = event.id;
+  auto it = byExpiration_.emplace(expiration, std::move(event));
+  try {
+    byId_.emplace(id, it);
+  } catch (...) {
+    byExpiration_.erase(it);
+    throw;
+  }
+}
+
 TimeoutQueue::Id TimeoutQueue::add(
     int64_t now, int64_t delay, Callback callback) {
   Id id = nextId_++;
-  timeouts_.insert({id, now + delay, -1, std::move(callback)});
+  insert(now + delay, {id, -1, std::move(callback)});
   return id;
 }
 
 TimeoutQueue::Id TimeoutQueue::addRepeating(
     int64_t now, int64_t interval, Callback callback) {
   Id id = nextId_++;
-  timeouts_.insert({id, now + interval, interval, std::move(callback)});
+  insert(now + interval, {id, interval, std::move(callback)});
   return id;
 }
 
 int64_t TimeoutQueue::nextExpiration() const {
   return (
-      timeouts_.empty()
+      byExpiration_.empty()
           ? std::numeric_limits<int64_t>::max()
-          : timeouts_.get<BY_EXPIRATION>().begin()->expiration);
+          : byExpiration_.begin()->first);
 }
 
 bool TimeoutQueue::erase(Id id) {
-  return timeouts_.get<BY_ID>().erase(id);
+  auto it = byId_.find(id);
+  if (it == byId_.end()) {
+    return false;
+  }
+  byExpiration_.erase(it->second);
+  byId_.erase(it);
+  return true;
 }
 
 int64_t TimeoutQueue::runInternal(int64_t now, bool onceOnly) {
-  auto& byExpiration = timeouts_.get<BY_EXPIRATION>();
   int64_t nextExp;
   do {
-    const auto end = byExpiration.upper_bound(now);
+    const auto end = byExpiration_.upper_bound(now);
+    // Do everything that can throw before changing either index. One-shot
+    // callbacks are moved out below; repeating ones stay queued, so copy them.
     std::vector<Event> expired;
-    std::move(byExpiration.begin(), end, std::back_inserter(expired));
-    byExpiration.erase(byExpiration.begin(), end);
-    for (const auto& event : expired) {
-      // Reinsert if repeating, do this before executing callbacks
-      // so the callbacks have a chance to call erase
-      if (event.repeatInterval >= 0) {
-        timeouts_.insert(
-            {event.id,
-             now + event.repeatInterval,
-             event.repeatInterval,
-             event.callback});
+    expired.reserve(std::distance(byExpiration_.begin(), end));
+    for (auto it = byExpiration_.begin(); it != end; ++it) {
+      const Event& event = it->second;
+      if (event.repeatInterval < 0) {
+        expired.push_back({event.id, event.repeatInterval, {}});
+      } else {
+        expired.push_back(event);
       }
     }
 
-    // Call callbacks
+    // Nothing below throws. Rescheduled expirations are >= now, so rescheduled
+    // events go after the expired events not yet processed.
+    for (auto& event : expired) {
+      auto it = byExpiration_.begin();
+      auto idIt = byId_.find(event.id);
+      if (event.repeatInterval < 0) {
+        event.callback.swap(it->second.callback);
+        byExpiration_.erase(it);
+        byId_.erase(idIt);
+      } else {
+        // Reschedule before running callbacks so they can erase the event.
+        auto node = byExpiration_.extract(it);
+        node.key() = now + event.repeatInterval;
+        idIt->second = byExpiration_.insert(std::move(node));
+      }
+    }
+
     for (const auto& event : expired) {
       event.callback(event.id, now);
     }

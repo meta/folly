@@ -1987,10 +1987,6 @@ fb_dirsync_cpp_library(
     headers = ["TimeoutQueue.h"],
     apple_sdks = (IOS, MACOSX),
     use_raw_headers = True,
-    exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
-        "fbsource//third-party/boost:boost_multi_index",  # @manual
-    ],
 )
 
 fb_dirsync_cpp_library(

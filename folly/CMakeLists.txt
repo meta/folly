@@ -1326,7 +1326,6 @@ folly_add_library(
   NAME timeout_queue
   SRCS TimeoutQueue.cpp
   HEADERS TimeoutQueue.h
-  EXPORTED_DEPS Boost::headers
 )
 
 folly_add_library(

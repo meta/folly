@@ -27,11 +27,8 @@
 
 #include <cstdint>
 #include <functional>
-
-#include <boost/multi_index/indexed_by.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index_container.hpp>
+#include <map>
+#include <unordered_map>
 
 namespace folly {
 
@@ -97,25 +94,17 @@ class TimeoutQueue {
 
   struct Event {
     Id id;
-    int64_t expiration;
     int64_t repeatInterval;
     Callback callback;
   };
 
-  using Set = boost::multi_index_container<
-      Event,
-      boost::multi_index::indexed_by<
-          boost::multi_index::ordered_unique<
-              boost::multi_index::member<Event, Id, &Event::id>>,
-          boost::multi_index::ordered_non_unique<
-              boost::multi_index::member<Event, int64_t, &Event::expiration>>>>;
+  // Events with equal expirations stay in insertion order.
+  using ByExpiration = std::multimap<int64_t, Event>;
 
-  enum {
-    BY_ID = 0,
-    BY_EXPIRATION = 1,
-  };
+  void insert(int64_t expiration, Event event);
 
-  Set timeouts_;
+  ByExpiration byExpiration_;
+  std::unordered_map<Id, ByExpiration::iterator> byId_;
   Id nextId_;
 };
 
