@@ -19,33 +19,38 @@
 #include <atomic>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <folly/Function.h>
 #include <folly/ThreadLocal.h>
+#include <folly/Utility.h>
 #include <folly/synchronization/AsymmetricThreadFence.h>
-#include <folly/synchronization/RelaxedAtomic.h>
+#include <folly/synchronization/AtomicTraits.h>
 #include <folly/synchronization/detail/ThreadCachedTag.h>
 
 namespace folly {
 
 namespace detail {
 
-// Use memory_order_seq_cst for accesses to increments/decrements if we're
-// running under TSAN, because TSAN ignores barriers completely.
-template <bool>
-struct thread_cached_readers_atomic_;
-template <>
-struct thread_cached_readers_atomic_<false> {
-  template <typename T>
-  using apply = folly::relaxed_atomic<T>;
-};
-template <>
-struct thread_cached_readers_atomic_<true> {
-  template <typename T>
-  using apply = std::atomic<T>;
-};
-template <typename T>
-using thread_cached_readers_atomic = typename thread_cached_readers_atomic_<
-    kIsSanitizeThread>::template apply<T>;
+// Prefer asymmetric fences over acquire/release operations, mirroring
+// hazptr_prefer_fence_light: everywhere except TSAN (which ignores fences
+// but tracks operations), TSO hardware, and where asymmetric fences fall
+// back to symmetric fences (off Linux), relaxed operations are paired
+// with asymmetric fences, cheap on readers with the heavy fence on the
+// reclaimer.
+constexpr inline bool thread_cached_readers_prefer_fence_light =
+    !kIsSanitizeThread && !atomic_arch_mm_is_tso_v && kIsLinux;
+
+// Counter access orders: relaxed where fences carry the ordering, with
+// release/acquire operations where they must carry it themselves. Exit
+// stores need release outside the fence strategy; observing loads need
+// acquire only where TSAN watches, since everywhere else a fence follows
+// the scan.
+constexpr inline std::memory_order thread_cached_readers_store_order =
+    thread_cached_readers_prefer_fence_light
+    ? std::memory_order_relaxed
+    : std::memory_order_release;
+constexpr inline std::memory_order thread_cached_readers_load_order =
+    kIsSanitizeThread ? std::memory_order_acquire : std::memory_order_relaxed;
 
 // A data structure that keeps a per-thread cache of a bitfield that contains
 // the current active epoch for readers in the thread, and the number of active
@@ -65,7 +70,7 @@ using thread_cached_readers_atomic = typename thread_cached_readers_atomic_<
 // These implications afford us debugging opportunities, such
 // as being able to detect long-running readers (T113951078).
 class ThreadCachedReaders {
-  using atomic_type = detail::thread_cached_readers_atomic<uint64_t>;
+  using atomic_type = std::atomic<uint64_t>;
   atomic_type orphan_epoch_readers_{0};
   folly::detail::Futex<> waiting_{0};
 
@@ -77,8 +82,10 @@ class ThreadCachedReaders {
     atomic_type epoch_readers_;
     ~EpochCount() noexcept {
       // Set the cached epoch and readers.
-      uint64_t epoch_readers = epoch_readers_;
-      readers_->orphan_epoch_readers_ = epoch_readers;
+      uint64_t epoch_readers =
+          epoch_readers_.load(std::memory_order_relaxed); // own thread
+      readers_->orphan_epoch_readers_.store(
+          epoch_readers, thread_cached_readers_store_order);
       folly::asymmetric_thread_fence_light(std::memory_order_seq_cst); // B
       detail::futexWake(&readers_->waiting_);
     }
@@ -110,14 +117,17 @@ class ThreadCachedReaders {
       init();
       tls_cache = cs_.get();
     }
-    uint64_t epoch_reader = tls_cache->epoch_readers_;
+    uint64_t epoch_reader =
+        tls_cache->epoch_readers_.load(std::memory_order_relaxed); // own thread
     if (readers_from_epoch_reader(epoch_reader) != 0) {
       DCHECK(
           readers_from_epoch_reader(epoch_reader) <
           std::numeric_limits<uint32_t>::max());
-      tls_cache->epoch_readers_ = epoch_reader + 1;
+      tls_cache->epoch_readers_.store(
+          epoch_reader + 1, thread_cached_readers_store_order);
     } else {
-      tls_cache->epoch_readers_ = create_epoch_reader(epoch, 1);
+      tls_cache->epoch_readers_.store(
+          create_epoch_reader(epoch, 1), thread_cached_readers_store_order);
     }
     folly::asymmetric_thread_fence_light(std::memory_order_seq_cst); // A
   }
@@ -127,9 +137,11 @@ class ThreadCachedReaders {
 
     auto tls_cache = cs_.get();
     DCHECK(tls_cache != nullptr);
-    uint64_t epoch_reader = tls_cache->epoch_readers_;
+    uint64_t epoch_reader =
+        tls_cache->epoch_readers_.load(std::memory_order_relaxed); // own thread
     DCHECK(readers_from_epoch_reader(epoch_reader) > 0);
-    tls_cache->epoch_readers_ = epoch_reader - 1;
+    tls_cache->epoch_readers_.store(
+        epoch_reader - 1, thread_cached_readers_store_order);
 
     folly::asymmetric_thread_fence_light(std::memory_order_seq_cst); // C
     if (waiting_.load(std::memory_order_acquire)) {
@@ -145,7 +157,8 @@ class ThreadCachedReaders {
   }
 
   bool epochIsClear(uint8_t epoch) {
-    uint64_t orphaned = orphan_epoch_readers_;
+    uint64_t orphaned =
+        orphan_epoch_readers_.load(thread_cached_readers_load_order);
     if (epochHasReaders(epoch, orphaned)) {
       return false;
     }
@@ -160,9 +173,27 @@ class ThreadCachedReaders {
     // the callbacks.
     folly::asymmetric_thread_fence_heavy(std::memory_order_seq_cst);
     auto access = cs_.accessAllThreads();
-    return !std::any_of(access.begin(), access.end(), [&](auto& i) {
-      return epochHasReaders(epoch, i.epoch_readers_);
+    bool const clear = !std::any_of(access.begin(), access.end(), [&](auto& i) {
+      uint64_t const epoch_readers =
+          i.epoch_readers_.load(thread_cached_readers_load_order);
+      return epochHasReaders(epoch, epoch_readers);
     });
+    copy(std::move(access)); // drop
+    if (clear) {
+      // Pairs the release exit stores observed above with teardown. The
+      // scan loads are relaxed everywhere except TSAN, amortizing the
+      // acquire into one trailing fence: heavy where fences carry the
+      // ordering, plain acquire fence otherwise (free on TSO, and under
+      // TSAN the acquire loads already order it). Orders only this
+      // thread's accesses, so it runs after the registry guard above
+      // is released.
+      if constexpr (thread_cached_readers_prefer_fence_light) {
+        folly::asymmetric_thread_fence_heavy(std::memory_order_acquire);
+      } else {
+        std::atomic_thread_fence(std::memory_order_acquire);
+      }
+    }
+    return clear;
   }
 
   void waitForZero(uint8_t epoch) {

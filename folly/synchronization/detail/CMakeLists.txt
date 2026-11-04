@@ -49,6 +49,7 @@ folly_add_library(
     ${GLOG_LIBRARIES}
     folly_function
     folly_synchronization_asymmetric_thread_fence
+    folly_synchronization_atomic_traits
     folly_synchronization_relaxed_atomic
     folly_synchronized
     folly_thread_local

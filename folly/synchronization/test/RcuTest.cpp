@@ -27,6 +27,7 @@
 #include <folly/portability/GTest.h>
 #include <folly/synchronization/Rcu.h>
 #include <folly/synchronization/RelaxedAtomic.h>
+#include <folly/synchronization/detail/ThreadCachedReaders.h>
 #include <folly/synchronization/test/Barrier.h>
 
 using namespace folly;
@@ -299,6 +300,36 @@ TEST(RcuTest, Tsan) {
 
   t1.join();
   t2.join();
+  EXPECT_EQ(data, 2);
+}
+
+TEST(RcuTest, TsanActiveNextEpochDuringReclaim) {
+  // A reader exits one epoch and immediately enters the next, remaining
+  // active there while the previous epoch is reclaimed. The reclaiming
+  // scan then observes the entry store rather than the exit store, so
+  // the entry store must order the exited payload before teardown.
+  folly::detail::ThreadCachedReaders readers;
+  int data = 0;
+  std::atomic<bool> entered{false};
+  std::atomic<bool> done{false};
+  std::thread reader([&] {
+    readers.increment(0);
+    data = 1;
+    readers.decrement();
+    readers.increment(1);
+    entered.store(true, std::memory_order_release);
+    while (!done.load(std::memory_order_acquire)) {
+      std::this_thread::yield();
+    }
+    readers.decrement();
+  });
+  while (!entered.load(std::memory_order_acquire)) {
+    std::this_thread::yield();
+  }
+  EXPECT_TRUE(readers.epochIsClear(0));
+  data = 2;
+  done.store(true, std::memory_order_release);
+  reader.join();
   EXPECT_EQ(data, 2);
 }
 

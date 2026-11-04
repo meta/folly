@@ -331,6 +331,7 @@ fb_dirsync_cpp_unittest(
     srcs = ["RcuTest.cpp"],
     deps = [
         "fbsource//third-party/glog:glog",
+        "fbsource//xplat/folly/synchronization/detail:rcu-detail",
         ":barrier",
         "//folly:benchmark",
         "//folly:random",

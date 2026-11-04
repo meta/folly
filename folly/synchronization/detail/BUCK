@@ -55,6 +55,7 @@ fb_dirsync_cpp_library(
         "//folly:synchronized",
         "//folly:thread_local",
         "//folly/synchronization:asymmetric_thread_fence",
+        "//folly/synchronization:atomic_traits",
         "//folly/synchronization:relaxed_atomic",
     ],
 )
