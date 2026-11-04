@@ -160,11 +160,11 @@ template <bool V>
 struct Cond {
   template <typename K = std::string>
   static auto fun_std(std::conditional_t<V, K, std::string>&& arg) {
-    return std::is_same<folly::remove_cvref_t<decltype(arg)>, std::string>{};
+    return std::is_same<std::remove_cvref_t<decltype(arg)>, std::string>{};
   }
   template <typename K = std::string>
   static auto fun_folly(folly::conditional_t<V, K, std::string>&& arg) {
-    return std::is_same<folly::remove_cvref_t<decltype(arg)>, std::string>{};
+    return std::is_same<std::remove_cvref_t<decltype(arg)>, std::string>{};
   }
 };
 
@@ -471,52 +471,6 @@ TEST(Traits, alignedStorageTDefaultAlign) {
   // Type properties.
   EXPECT_TRUE(std::is_trivial<folly::aligned_storage_t<16>>::value);
   EXPECT_TRUE(std::is_standard_layout<folly::aligned_storage_t<16>>::value);
-}
-
-TEST(Traits, removeCvref) {
-  using folly::remove_cvref;
-  using folly::remove_cvref_t;
-
-  // test all possible c-ref qualifiers without volatile
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int&&>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int&&>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int&>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int&>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int const>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int const>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int const&>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int const&>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int const&&>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int const&&>::type, int>::value));
-
-  // test all possible c-ref qualifiers with volatile
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int volatile>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int volatile>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int volatile&&>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int volatile&&>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int volatile&>, int>::value));
-  EXPECT_TRUE((std::is_same<remove_cvref<int volatile&>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int volatile const>, int>::value));
-  EXPECT_TRUE(
-      (std::is_same<remove_cvref<int volatile const>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int volatile const&>, int>::value));
-  EXPECT_TRUE(
-      (std::is_same<remove_cvref<int volatile const&>::type, int>::value));
-
-  EXPECT_TRUE((std::is_same<remove_cvref_t<int volatile const&&>, int>::value));
-  EXPECT_TRUE(
-      (std::is_same<remove_cvref<int volatile const&&>::type, int>::value));
 }
 
 TEST(Traits, copy_cvref) {

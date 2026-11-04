@@ -275,13 +275,6 @@ struct is_constexpr_default_constructible
 template <typename T>
 using _t = typename T::type;
 
-//  remove_cvref
-//  remove_cvref_t
-//
-//  Import std::remove_cvref and std::remove_cvref_t.
-using std::remove_cvref;
-using std::remove_cvref_t;
-
 namespace detail {
 template <typename Src>
 struct copy_cvref_ {
@@ -337,7 +330,7 @@ struct copy_cvref_<Src&&> {
 /// `like_t` and `forward_like` avoid these problems.
 template <typename Src, typename Dst>
 using copy_cvref_t =
-    typename detail::copy_cvref_<Src>::template apply<remove_cvref_t<Dst>>;
+    typename detail::copy_cvref_<Src>::template apply<std::remove_cvref_t<Dst>>;
 
 namespace detail {
 // These `copy_ref_` functions assume `Dst` is not a reference.
