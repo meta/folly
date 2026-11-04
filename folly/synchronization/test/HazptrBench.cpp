@@ -17,6 +17,7 @@
 #include <folly/synchronization/Hazptr.h>
 
 #include <atomic>
+#include <new>
 #include <numeric>
 #include <random>
 #include <vector>
@@ -111,6 +112,33 @@ extern "C" FOLLY_KEEP long check_folly_hazptr_make_protect_default(
   auto holder = folly::make_hazard_pointer(domain);
   auto ptr = holder.protect(channel);
   return ptr ? *ptr : 0;
+}
+
+extern "C" FOLLY_KEEP long check_folly_hazptr_make_protect_default_implicit(
+    std::atomic<hazptr_obj_of<long>*>& channel) {
+  auto holder = folly::make_hazard_pointer();
+  auto ptr = holder.protect(channel);
+  return ptr ? *ptr : 0;
+}
+
+extern "C" FOLLY_KEEP void check_folly_hazptr_holder_destroy(
+    folly::hazptr_holder<std::atomic>* holder) {
+  holder->~hazptr_holder();
+}
+
+extern "C" FOLLY_KEEP void check_folly_hazptr_make_array_default(
+    folly::hazptr_array<3>* out) {
+  ::new (out) folly::hazptr_array<3>(folly::make_hazard_pointer_array<3>());
+}
+
+extern "C" FOLLY_KEEP void check_folly_hazptr_array_destroy_default(
+    folly::hazptr_array<3>* array) {
+  array->~hazptr_array();
+}
+
+extern "C" FOLLY_KEEP void check_folly_hazptr_array_move_assign_default(
+    folly::hazptr_array<3>* dst, folly::hazptr_array<3>* src) {
+  *dst = std::move(*src);
 }
 
 extern "C" FOLLY_KEEP void check_folly_hazptr_obj_retire(
@@ -360,12 +388,12 @@ BENCHMARK_DRAW_LINE();
 
 /// benchmark creating a hazard pointer (aka a hazptr-holder) without using it,
 /// including ctor and dtor
-template <template <typename> class Atom>
+template <typename... Args>
 static void do_hazptr_make(
-    BenchmarkSuspender& braces, hazptr_domain<Atom>& domain, size_t iters) {
+    BenchmarkSuspender& braces, size_t iters, Args&... args) {
   braces.dismissing([&] {
     while (iters--) {
-      make_hazard_pointer(domain);
+      make_hazard_pointer(args...);
     }
   });
 }
@@ -373,13 +401,19 @@ static void do_hazptr_make(
 BENCHMARK(hazptr_make, iters) {
   BenchmarkSuspender braces;
   auto&& domain = hazptr_domain();
-  do_hazptr_make(braces, domain, iters);
+  do_hazptr_make(braces, iters, domain);
 }
 
 BENCHMARK(hazptr_make_default, iters) {
   BenchmarkSuspender braces;
   auto&& domain = default_hazptr_domain();
-  do_hazptr_make(braces, domain, iters);
+  do_hazptr_make(braces, iters, domain);
+}
+
+/// same, but without naming the domain, which is how most callers spell it
+BENCHMARK(hazptr_make_default_implicit, iters) {
+  BenchmarkSuspender braces;
+  do_hazptr_make(braces, iters);
 }
 
 BENCHMARK_DRAW_LINE();
@@ -445,16 +479,37 @@ void hazptr_make_array_default(size_t iters, folly::index_constant<ArraySize>) {
 
 BENCHMARK_PARAM(hazptr_make_array_default, 1_uzic)
 BENCHMARK_PARAM(hazptr_make_array_default, 2_uzic)
+BENCHMARK_PARAM(hazptr_make_array_default, 3_uzic)
 BENCHMARK_PARAM(hazptr_make_array_default, 4_uzic)
 BENCHMARK_PARAM(hazptr_make_array_default, 8_uzic)
 
 BENCHMARK_DRAW_LINE();
 
+/// benchmark move-assigning a hazard pointer array over another one; the same
+/// amount of hazard pointer release work as hazptr_make_array_default, so the
+/// difference between the two is the cost of move assignment over destruction
+template <size_t ArraySize>
+void hazptr_move_assign_array_default(
+    size_t iters, folly::index_constant<ArraySize>) {
+  auto dst = make_hazard_pointer_array<ArraySize>();
+  while (iters--) {
+    dst = make_hazard_pointer_array<ArraySize>();
+  }
+}
+
+BENCHMARK_PARAM(hazptr_move_assign_array_default, 1_uzic)
+BENCHMARK_PARAM(hazptr_move_assign_array_default, 2_uzic)
+BENCHMARK_PARAM(hazptr_move_assign_array_default, 3_uzic)
+BENCHMARK_PARAM(hazptr_move_assign_array_default, 4_uzic)
+BENCHMARK_PARAM(hazptr_move_assign_array_default, 8_uzic)
+
+BENCHMARK_DRAW_LINE();
+
 /// benchmark creating a hazard pointer and using it to protect a pointer,
 /// including hazard pointer ctor/dtor and protection/unprotection
-template <template <typename> class Atom>
+template <typename... Args>
 static void do_hazptr_make_protect(
-    BenchmarkSuspender& braces, hazptr_domain<Atom>& domain, size_t iters) {
+    BenchmarkSuspender& braces, size_t iters, Args&... args) {
   auto own = std::make_unique<TestObj>(42);
   std::atomic<TestObj*> ptr{own.get()};
   folly::compiler_must_not_predict(ptr);
@@ -462,7 +517,7 @@ static void do_hazptr_make_protect(
   int sum = 0;
   braces.dismissing([&] {
     while (iters--) {
-      auto h = make_hazard_pointer(domain);
+      auto h = make_hazard_pointer(args...);
       auto* obj = h.protect(ptr);
       folly::compiler_must_not_predict(obj->value);
       sum += obj->value;
@@ -474,13 +529,19 @@ static void do_hazptr_make_protect(
 BENCHMARK(hazptr_make_protect, iters) {
   BenchmarkSuspender braces;
   auto&& domain = hazptr_domain();
-  do_hazptr_make_protect(braces, domain, iters);
+  do_hazptr_make_protect(braces, iters, domain);
 }
 
 BENCHMARK(hazptr_make_protect_default, iters) {
   BenchmarkSuspender braces;
   auto&& domain = default_hazptr_domain();
-  do_hazptr_make_protect(braces, domain, iters);
+  do_hazptr_make_protect(braces, iters, domain);
+}
+
+/// same, but without naming the domain, which is how most callers spell it
+BENCHMARK(hazptr_make_protect_default_implicit, iters) {
+  BenchmarkSuspender braces;
+  do_hazptr_make_protect(braces, iters);
 }
 
 BENCHMARK_DRAW_LINE();
