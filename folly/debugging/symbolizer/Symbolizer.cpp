@@ -17,6 +17,7 @@
 #include <folly/debugging/symbolizer/Symbolizer.h>
 
 #include <cstdlib>
+#include <span>
 
 #include <folly/Demangle.h>
 #include <folly/FileUtil.h>
@@ -722,7 +723,8 @@ UnsafeSelfAllocateStackTracePrinter::UnsafeSelfAllocateStackTracePrinter(int fd)
     // Resolve libc bindings on the DWARF string and demangling paths. Mangled
     // and plain names take different demangler paths.
 #if FOLLY_HAVE_ELF && FOLLY_HAVE_DWARF
-    StringPiece terminated{"", 1};
+    constexpr uint8_t kTerminator[] = {0};
+    std::span<const uint8_t> terminated{kTerminator};
     (void)readNullTerminated(terminated);
 #endif
     char demangled[8];

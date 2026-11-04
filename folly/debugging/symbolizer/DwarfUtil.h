@@ -152,8 +152,6 @@ struct Attribute {
       attrValue;
 };
 
-folly::StringPiece asStringPiece(std::span<const uint8_t> bytes) noexcept;
-
 // Get an ELF section by name.
 std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name);
 
@@ -171,57 +169,35 @@ T read(std::span<const uint8_t>& bytes) {
   return x;
 }
 
-template <class T>
-  requires(std::is_standard_layout_v<T> && std::is_trivial_v<T>)
-T read(folly::StringPiece& sp) {
-  FOLLY_SAFE_CHECK(sp.size() >= sizeof(T), "underflow");
-  T x;
-  memcpy(&x, sp.data(), sizeof(T));
-  sp.advance(sizeof(T));
-  return x;
-}
-
 // Read (bitwise) an unsigned number of N bytes (N in 1, 2, 3, 4).
 template <size_t N>
 uint64_t readU64(std::span<const uint8_t>& bytes);
-template <size_t N>
-uint64_t readU64(folly::StringPiece& sp);
 
 // Read ULEB (unsigned) varint value; algorithm from the DWARF spec
 uint64_t readULEB(
     std::span<const uint8_t>& bytes, uint8_t& shift, uint8_t& val);
 uint64_t readULEB(std::span<const uint8_t>& bytes);
-uint64_t readULEB(folly::StringPiece& sp, uint8_t& shift, uint8_t& val);
-uint64_t readULEB(folly::StringPiece& sp);
 
 // Read SLEB (signed) varint value; algorithm from the DWARF spec
 int64_t readSLEB(std::span<const uint8_t>& bytes);
-int64_t readSLEB(folly::StringPiece& sp);
 
 // Read a value of "section offset" type, which may be 4 or 8 bytes
 uint64_t readOffset(std::span<const uint8_t>& bytes, bool is64Bit);
-uint64_t readOffset(folly::StringPiece& sp, bool is64Bit);
 
 // Read "len" bytes
 std::span<const uint8_t> readBytes(
     std::span<const uint8_t>& bytes, uint64_t len);
-folly::StringPiece readBytes(folly::StringPiece& sp, uint64_t len);
 
 AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes);
-AttributeSpec readAttributeSpec(folly::StringPiece& sp);
 
-// Reads an abbreviation from a StringPiece, return true if at end; advance sp
+// Read an abbreviation, returning false at the end and advancing the input.
 bool readAbbreviation(std::span<const uint8_t>& section, DIEAbbreviation& abbr);
-bool readAbbreviation(folly::StringPiece& section, DIEAbbreviation& abbr);
 
 // Read a null-terminated string
 folly::StringPiece readNullTerminated(std::span<const uint8_t>& bytes);
-folly::StringPiece readNullTerminated(folly::StringPiece& sp);
 
 folly::StringPiece getStringFromStringSection(
     std::span<const uint8_t> bytes, uint64_t offset);
-folly::StringPiece getStringFromStringSection(
-    folly::StringPiece str, uint64_t offset);
 
 CompilationUnits getCompilationUnits(
     ElfCacheBase* elfCache,

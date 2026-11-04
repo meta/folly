@@ -19,7 +19,6 @@
 #include <array>
 #include <type_traits>
 
-#include <folly/Optional.h>
 #include <folly/debugging/symbolizer/DwarfImpl.h>
 #include <folly/debugging/symbolizer/DwarfSection.h>
 #include <folly/debugging/symbolizer/detail/DwarfConstants.h>
@@ -71,9 +70,8 @@ namespace {
 bool findDebugInfoOffset(
     uintptr_t address, std::span<const uint8_t> aranges, uint64_t& offset) {
   DwarfSection section(aranges);
-  std::span<const uint8_t> chunkBytes;
-  while (section.next(chunkBytes)) {
-    auto chunk = asStringPiece(chunkBytes);
+  std::span<const uint8_t> chunk;
+  while (section.next(chunk)) {
     auto version = read<uint16_t>(chunk);
     if (version != 2) {
       FOLLY_SAFE_DFATAL("invalid aranges version: ", version);
@@ -97,8 +95,7 @@ bool findDebugInfoOffset(
     // padding.
     {
       size_t alignment = 2 * sizeof(uintptr_t);
-      size_t remainder =
-          (chunk.data() - asStringPiece(aranges).data()) % alignment;
+      size_t remainder = (chunk.data() - aranges.data()) % alignment;
       if (remainder != 0) {
         if (alignment - remainder > chunk.size()) {
           FOLLY_SAFE_DFATAL(
@@ -110,7 +107,7 @@ bool findDebugInfoOffset(
               chunk.size());
           return false;
         }
-        chunk.advance(alignment - remainder);
+        chunk = chunk.subspan(alignment - remainder);
       }
     }
 

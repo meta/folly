@@ -31,11 +31,6 @@
 namespace folly {
 namespace symbolizer {
 
-folly::StringPiece asStringPiece(std::span<const uint8_t> bytes) noexcept {
-  return folly::StringPiece(
-      reinterpret_cast<const char*>(bytes.data()), bytes.size());
-}
-
 std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name) {
   const ElfShdr* elfSection = elf->getSectionByName(name);
   if (!elfSection) {
@@ -60,15 +55,7 @@ uint64_t readU64(std::span<const uint8_t>& bytes) {
   return x;
 }
 
-template <size_t N>
-uint64_t readU64(folly::StringPiece& sp) {
-  FOLLY_SAFE_CHECK(sp.size() >= N, "underflow");
-  uint64_t x = 0;
-  memcpy(&x, sp.data(), N);
-  sp.advance(N);
-  return x;
-}
-
+// Read ULEB (unsigned) varint value; algorithm from the DWARF spec
 uint64_t readULEB(
     std::span<const uint8_t>& bytes, uint8_t& shift, uint8_t& val) {
   uint64_t r = 0;
@@ -93,37 +80,7 @@ uint64_t readULEB(std::span<const uint8_t>& bytes) {
   return readULEB(bytes, shift, val);
 }
 
-// Read ULEB (unsigned) varint value; algorithm from the DWARF spec
-uint64_t readULEB(folly::StringPiece& sp, uint8_t& shift, uint8_t& val) {
-  uint64_t r = 0;
-  shift = 0;
-  do {
-    val = read<uint8_t>(sp);
-    r |= ((uint64_t)(val & 0x7f) << shift);
-    shift += 7;
-  } while (val & 0x80);
-  return r;
-}
-
-uint64_t readULEB(folly::StringPiece& sp) {
-  uint8_t shift;
-  uint8_t val;
-  return readULEB(sp, shift, val);
-}
-
 // Read SLEB (signed) varint value; algorithm from the DWARF spec
-int64_t readSLEB(folly::StringPiece& sp) {
-  uint8_t shift;
-  uint8_t val;
-  uint64_t r = readULEB(sp, shift, val);
-
-  if (shift < 64 && (val & 0x40)) {
-    r |= -(1ULL << shift); // sign extend
-  }
-
-  return r;
-}
-
 int64_t readSLEB(std::span<const uint8_t>& bytes) {
   uint8_t shift;
   uint8_t val;
@@ -137,10 +94,6 @@ int64_t readSLEB(std::span<const uint8_t>& bytes) {
 }
 
 // Read a value of "section offset" type, which may be 4 or 8 bytes
-uint64_t readOffset(folly::StringPiece& sp, bool is64Bit) {
-  return is64Bit ? read<uint64_t>(sp) : read<uint32_t>(sp);
-}
-
 uint64_t readOffset(std::span<const uint8_t>& bytes, bool is64Bit) {
   return is64Bit ? read<uint64_t>(bytes) : read<uint32_t>(bytes);
 }
@@ -151,13 +104,6 @@ std::span<const uint8_t> readBytes(
   FOLLY_SAFE_CHECK(len <= bytes.size(), "invalid byte length");
   auto ret = bytes.first(len);
   bytes = bytes.subspan(len);
-  return ret;
-}
-
-folly::StringPiece readBytes(folly::StringPiece& sp, uint64_t len) {
-  FOLLY_SAFE_CHECK(len <= sp.size(), "invalid string length");
-  folly::StringPiece ret(sp.data(), len);
-  sp.advance(len);
   return ret;
 }
 
@@ -172,36 +118,11 @@ folly::StringPiece readNullTerminated(std::span<const uint8_t>& bytes) {
   return ret;
 }
 
-folly::StringPiece readNullTerminated(folly::StringPiece& sp) {
-  const char* p = static_cast<const char*>(memchr(sp.data(), 0, sp.size()));
-  FOLLY_SAFE_CHECK(p, "invalid null-terminated string");
-  folly::StringPiece ret(sp.data(), p);
-  sp.assign(p + 1, sp.end());
-  return ret;
-}
-
 folly::StringPiece getStringFromStringSection(
     std::span<const uint8_t> bytes, uint64_t offset) {
   FOLLY_SAFE_CHECK(offset < bytes.size(), "invalid string offset");
   bytes = bytes.subspan(offset);
   return readNullTerminated(bytes);
-}
-
-folly::StringPiece getStringFromStringSection(
-    folly::StringPiece str, uint64_t offset) {
-  FOLLY_SAFE_CHECK(offset < str.size(), "invalid string offset");
-  str.advance(offset);
-  return readNullTerminated(str);
-}
-
-AttributeSpec readAttributeSpec(folly::StringPiece& sp) {
-  AttributeSpec spec;
-  spec.name = readULEB(sp);
-  spec.form = readULEB(sp);
-  if (spec.form == DW_FORM_implicit_const) {
-    spec.implicitConst = readSLEB(sp);
-  }
-  return spec;
 }
 
 AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes) {
@@ -212,14 +133,6 @@ AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes) {
     spec.implicitConst = readSLEB(bytes);
   }
   return spec;
-}
-
-bool readAbbreviation(folly::StringPiece& section, DIEAbbreviation& abbr) {
-  auto bytes = std::span(
-      reinterpret_cast<const uint8_t*>(section.data()), section.size());
-  auto result = readAbbreviation(bytes, abbr);
-  section.advance(section.size() - bytes.size());
-  return result;
 }
 
 bool readAbbreviation(
@@ -269,8 +182,13 @@ DIEAbbreviation getAbbreviation(
 // Parse compilation unit info, abbrev and str_offsets offset from
 // .debug_cu_index section.
 bool findCompiliationOffset(
-    folly::StringPiece debugCuIndex, uint64_t dwoId, CompilationUnit& cu) {
+    std::span<const uint8_t> debugCuIndex,
+    uint64_t dwoId,
+    CompilationUnit& cu) {
   if (debugCuIndex.empty()) {
+    return false;
+  }
+  if (debugCuIndex.size() < 4 * sizeof(uint32_t)) {
     return false;
   }
 
@@ -288,14 +206,20 @@ bool findCompiliationOffset(
     return false;
   }
   auto numColumns = read<uint32_t>(debugCuIndex);
-  read<uint32_t>(debugCuIndex);
+  auto numUnits = read<uint32_t>(debugCuIndex);
   auto numBuckets = read<uint32_t>(debugCuIndex);
 
   // Get index of the CU matches the given dwo id.
-  folly::StringPiece signatureSection = debugCuIndex;
-  folly::StringPiece indexesSection = debugCuIndex;
-  indexesSection.advance(numBuckets * sizeof(uint64_t));
-  ssize_t idx = -1;
+  if (numBuckets > debugCuIndex.size() / sizeof(uint64_t)) {
+    return false;
+  }
+  auto signatureSection =
+      readBytes(debugCuIndex, numBuckets * sizeof(uint64_t));
+  if (numBuckets > debugCuIndex.size() / sizeof(uint32_t)) {
+    return false;
+  }
+  auto indexesSection = readBytes(debugCuIndex, numBuckets * sizeof(uint32_t));
+  uint32_t idx = 0;
   for (unsigned i = 0; i < numBuckets; i++) {
     uint64_t hash = read<uint64_t>(signatureSection);
     uint32_t index = read<uint32_t>(indexesSection);
@@ -304,15 +228,14 @@ bool findCompiliationOffset(
       break;
     }
   }
-  if (idx <= 0) {
+  if (idx == 0 || idx > numUnits) {
     return false;
   }
 
-  // Skip signature and parallel table of indexes
-  debugCuIndex.advance(numBuckets * sizeof(uint64_t));
-  debugCuIndex.advance(numBuckets * sizeof(uint32_t));
-
   // column headers
+  if (numColumns > debugCuIndex.size() / sizeof(uint32_t)) {
+    return false;
+  }
   ssize_t infoSectionIndex = -1;
   ssize_t abbrevSectionIndex = -1;
   ssize_t strOffsetsSectionIndex = -1;
@@ -338,7 +261,16 @@ bool findCompiliationOffset(
   }
 
   // debugCuIndex offsets
-  debugCuIndex.advance((idx - 1) * numColumns * sizeof(uint32_t));
+  const size_t rowIndex = idx - 1;
+  const size_t availableEntries = debugCuIndex.size() / sizeof(uint32_t);
+  if (numColumns != 0 && rowIndex > availableEntries / numColumns) {
+    return false;
+  }
+  const size_t entriesToSkip = rowIndex * numColumns;
+  readBytes(debugCuIndex, entriesToSkip * sizeof(uint32_t));
+  if (numColumns > debugCuIndex.size() / sizeof(uint32_t)) {
+    return false;
+  }
   for (unsigned i = 0; i != numColumns; ++i) {
     auto offset = read<uint32_t>(debugCuIndex);
     if (i == infoSectionIndex) {
@@ -358,10 +290,12 @@ bool findCompiliationOffset(
 }
 
 bool parseCompilationUnitMetadata(CompilationUnit& cu, size_t offset) {
-  auto debugInfo = asStringPiece(cu.debugSections.debugInfo);
-  folly::StringPiece chunk(debugInfo);
+  auto debugInfo = cu.debugSections.debugInfo;
   cu.offset = offset;
-  chunk.advance(offset);
+  if (offset > debugInfo.size()) {
+    return false;
+  }
+  auto chunk = debugInfo.subspan(offset);
   // 1) unit_length
   auto initialLength = read<uint32_t>(chunk);
   cu.is64Bit = (initialLength == uint32_t(-1));
@@ -474,7 +408,7 @@ CompilationUnits getCompilationUnits(
     const DebugSections& debugSections,
     uint64_t offset,
     bool requireSplitDwarf) {
-  const folly::StringPiece debugInfo = asStringPiece(debugSections.debugInfo);
+  const auto debugInfo = debugSections.debugInfo;
   FOLLY_SAFE_DCHECK(offset < debugInfo.size(), "unexpected offset");
   CompilationUnits cu;
   cu.mainCompilationUnit.debugSections = debugSections;
@@ -575,7 +509,7 @@ CompilationUnits getCompilationUnits(
 
   if (useDWP) {
     if (!findCompiliationOffset(
-            asStringPiece(splitCU.debugSections.debugCuIndex),
+            splitCU.debugSections.debugCuIndex,
             *cu.mainCompilationUnit.dwoId,
             splitCU) ||
         !parseCompilationUnitMetadata(splitCU, splitCU.offset)) {

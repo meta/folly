@@ -55,9 +55,8 @@ namespace symbolizer {
  */
 class Dwarf {
   /**
-   * Note that Dwarf uses (and returns) StringPiece a lot.
-   * The StringPieces point within sections in the ELF file, and so will
-   * be live for as long as the passed-in ElfFile is live.
+   * Text returned as StringPiece points within sections in the ELF file and
+   * remains live for as long as the passed-in ElfFile is live.
    */
  public:
   /** Create a DWARF parser around an ELF file. */
