@@ -891,7 +891,7 @@ TEST_F(TaskTest, CoYieldCoErrorSameExecutor) {
     co_yield folly::coro::co_error(ExpectedException());
   };
   auto scopeAndThrowWrapper = [&]() -> folly::coro::Task<void> {
-    co_await co_withExecutor(ebThread.getEventBase(), scopeAndThrow());
+    co_await co_withExecutor(ebThread.getEventBaseKeepAlive(), scopeAndThrow());
   };
 
   EXPECT_THROW(

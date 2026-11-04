@@ -117,7 +117,7 @@ TEST_F(CoroTest, Sleep) {
   ScopedEventBaseThread evbThread;
 
   auto startTime = std::chrono::steady_clock::now();
-  auto task = co_withExecutor(evbThread.getEventBase(), taskSleep());
+  auto task = co_withExecutor(evbThread.getEventBaseKeepAlive(), taskSleep());
 
   coro::blockingWait(std::move(task));
 
@@ -134,7 +134,8 @@ TEST_F(CoroTest, ExecutorKeepAlive) {
   auto future = [] {
     ScopedEventBaseThread evbThread;
 
-    return co_withExecutor(evbThread.getEventBase(), taskSleep()).start();
+    return co_withExecutor(evbThread.getEventBaseKeepAlive(), taskSleep())
+        .start();
   }();
   EXPECT_TRUE(future.isReady());
 }
@@ -203,7 +204,8 @@ coro::Task<int> taskRecursion(int depth) {
 
 TEST_F(CoroTest, LargeStack) {
   ScopedEventBaseThread evbThread;
-  auto task = co_withExecutor(evbThread.getEventBase(), taskRecursion(50000));
+  auto task =
+      co_withExecutor(evbThread.getEventBaseKeepAlive(), taskRecursion(50000));
 
   EXPECT_EQ(50000, coro::blockingWait(std::move(task)));
 }
@@ -227,7 +229,8 @@ TEST_F(CoroTest, NestedThreads) {
     folly::ScopedEventBaseThread evbThread;
 
     co_await co_withExecutor(
-        evbThread.getEventBase(), taskThreadNested(evbThread.getThreadId()));
+        evbThread.getEventBaseKeepAlive(),
+        taskThreadNested(evbThread.getThreadId()));
 
     EXPECT_EQ(threadId, std::this_thread::get_id());
 
@@ -235,7 +238,7 @@ TEST_F(CoroTest, NestedThreads) {
   };
 
   ScopedEventBaseThread evbThread;
-  auto task = co_withExecutor(evbThread.getEventBase(), taskThread());
+  auto task = co_withExecutor(evbThread.getEventBaseKeepAlive(), taskThread());
   EXPECT_EQ(42, coro::blockingWait(std::move(task)));
 }
 
@@ -249,7 +252,7 @@ TEST_F(CoroTest, CurrentExecutor) {
 
   ScopedEventBaseThread evbThread;
   auto task = co_withExecutor(
-      evbThread.getEventBase(),
+      evbThread.getEventBaseKeepAlive(),
       taskGetCurrentExecutor(evbThread.getEventBase()));
   EXPECT_EQ(42, coro::blockingWait(std::move(task)));
 }
