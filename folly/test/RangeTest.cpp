@@ -16,6 +16,7 @@
 
 #include <folly/Range.h>
 
+#include <algorithm>
 #include <array>
 #include <deque>
 #include <iterator>
@@ -25,9 +26,6 @@
 #include <string>
 #include <type_traits>
 #include <vector>
-
-#include <boost/algorithm/string/trim.hpp>
-#include <boost/range/concepts.hpp>
 
 #include <folly/Memory.h>
 #include <folly/memory/Allocator.h>
@@ -61,9 +59,8 @@ static_assert(std::is_convertible_v<folly::Range<int*>, std::span<int>>);
 #if defined(__cpp_lib_ranges)
 static_assert(std::ranges::borrowed_range<folly::Range<int*>>);
 static_assert(std::ranges::borrowed_range<folly::Range<const int*>>);
+static_assert(std::ranges::random_access_range<StringPiece>);
 #endif
-
-BOOST_CONCEPT_ASSERT((boost::RandomAccessRangeConcept<StringPiece>));
 
 #define EXPECT_CMP_(op, a_, b_, eq, ne, lt, le, gt, ge)  \
   ::std::invoke(                                         \
@@ -556,10 +553,6 @@ TEST(StringPiece, erase) {
   e = a.end();
   a.erase(b, e);
   EXPECT_EQ("l", a);
-
-  a = "      hello  ";
-  boost::algorithm::trim(a);
-  EXPECT_EQ(a, "hello");
 }
 
 TEST(StringPiece, splitStepCharDelimiter) {

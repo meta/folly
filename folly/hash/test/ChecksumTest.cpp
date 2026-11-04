@@ -16,8 +16,6 @@
 
 #include <folly/hash/Checksum.h>
 
-#include <boost/crc.hpp>
-
 #include <folly/Benchmark.h>
 #include <folly/Portability.h>
 #include <folly/Random.h>
@@ -105,14 +103,28 @@ bool avx512CrcUsable() {
       folly::detail::avx512_crc32c_v8s3x4_available();
 }
 
-void testMatchesBoost32Type() {
+// Bitwise CRC-32 (the zlib and boost::crc_32_type parameters).
+uint32_t referenceCrc32(const uint8_t* data, size_t length) {
+  uint32_t crc = ~0U;
+  for (size_t i = 0; i < length; ++i) {
+    crc ^= data[i];
+    for (int bit = 0; bit < 8; ++bit) {
+      crc = (crc >> 1) ^ (0xEDB88320U & (0U - (crc & 1)));
+    }
+  }
+  return ~crc;
+}
+
+void testMatchesReference32Type() {
+  const auto check = reinterpret_cast<const uint8_t*>("123456789");
+  EXPECT_EQ(0xCBF43926U, referenceCrc32(check, 9));
+  EXPECT_EQ(0xCBF43926U, folly::crc32_type(check, 9));
   for (auto expected : expectedResults) {
-    boost::crc_32_type result;
-    result.process_bytes(buffer + expected.offset, expected.length);
-    const uint32_t boostResult = result.checksum();
+    const uint32_t referenceResult =
+        referenceCrc32(buffer + expected.offset, expected.length);
     const uint32_t follyResult =
         folly::crc32_type(buffer + expected.offset, expected.length);
-    EXPECT_EQ(follyResult, boostResult);
+    EXPECT_EQ(follyResult, referenceResult);
   }
 }
 
@@ -559,8 +571,7 @@ TEST(Checksum, crc32HardwareExactSizedBuffer) {
 }
 
 TEST(Checksum, crc32Type) {
-  // Test that crc32_type matches boost::crc_32_type
-  testMatchesBoost32Type();
+  testMatchesReference32Type();
 }
 
 TEST(Checksum, crc32Combine) {

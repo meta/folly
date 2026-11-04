@@ -16,11 +16,13 @@
 
 #include <folly/small_vector.h>
 
+#include <algorithm>
 #include <array>
 #include <forward_list>
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <list>
 #include <memory>
 #include <numeric>
 #include <sstream>
@@ -28,7 +30,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <boost/algorithm/string.hpp>
 #include <fmt/format.h>
 
 #include <folly/Conv.h>
@@ -532,7 +533,9 @@ TEST(smallVector, Swap) {
   EXPECT_LT(shrinker.size(), other.size());
   swap(shrinker, other);
   EXPECT_EQ(shrinker.size(), 4);
-  EXPECT_TRUE(boost::all(shrinker, boost::is_any_of(std::vector<int>{10})));
+  EXPECT_TRUE(std::all_of(shrinker.begin(), shrinker.end(), [](int i) {
+    return i == 10;
+  }));
   EXPECT_TRUE((other == small_vector<int, 5>{0, 1}));
 }
 

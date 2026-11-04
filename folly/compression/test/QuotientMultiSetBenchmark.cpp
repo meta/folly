@@ -16,7 +16,8 @@
 
 #include <folly/compression/QuotientMultiSet.h>
 
-#include <boost/sort/spreadsort/integer_sort.hpp>
+#include <algorithm>
+
 #include <fmt/format.h>
 
 #include <folly/Benchmark.h>
@@ -207,7 +208,7 @@ void benchmarkSetup() {
     uint64_t key = folly::Random::rand64(rng) & maxKey;
     uniform.emplace_back(key);
   }
-  boost::sort::spreadsort::integer_sort(uniform.begin(), uniform.end());
+  std::sort(uniform.begin(), uniform.end());
   buildQuotientMultiSet(uniform);
 
   LOG(INFO) << fmt::format(

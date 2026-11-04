@@ -7,7 +7,6 @@ fb_dirsync_cpp_unittest(
     name = "checksum_test",
     srcs = ["ChecksumTest.cpp"],
     deps = [
-        "fbsource//third-party/boost:boost",
         "//folly:benchmark",
         "//folly:portability",
         "//folly:random",

@@ -18,7 +18,6 @@
 
 #include <system_error>
 
-#include <boost/algorithm/string.hpp>
 #include <glog/logging.h>
 
 #include <folly/FileUtil.h>
@@ -71,15 +70,13 @@ TEST(TemporaryFile, EarlyClose) {
 TEST(TemporaryFile, Prefix) {
   TemporaryFile f("Foo");
   EXPECT_TRUE(f.path().is_absolute());
-  EXPECT_TRUE(
-      boost::algorithm::starts_with(f.path().filename().native(), "Foo"));
+  EXPECT_TRUE(f.path().filename().string().starts_with("Foo"));
 }
 
 TEST(TemporaryFile, PathPrefix) {
   TemporaryFile f("Foo", ".");
   EXPECT_EQ(fs::path("."), f.path().parent_path());
-  EXPECT_TRUE(
-      boost::algorithm::starts_with(f.path().filename().native(), "Foo"));
+  EXPECT_TRUE(f.path().filename().string().starts_with("Foo"));
 }
 
 TEST(TemporaryFile, NoSuchPath) {

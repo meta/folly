@@ -7,7 +7,6 @@ fb_dirsync_cpp_unittest(
     srcs = ["TestUtilTest.cpp"],
     headers = [],
     deps = [
-        "fbsource//third-party/boost:boost_algorithm",
         "fbsource//third-party/glog:glog",
         "//folly:file_util",
         "//folly:memory",

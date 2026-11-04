@@ -17,8 +17,8 @@
 #include <folly/Uri.h>
 
 #include <map>
+#include <string_view>
 
-#include <boost/algorithm/string.hpp>
 #include <glog/logging.h>
 
 #include <folly/portability/GTest.h>
@@ -328,7 +328,7 @@ TEST(Uri, Simple) {
       Uri u(s);
       CHECK(false) << "Control should not have reached here";
     } catch (const std::invalid_argument& ex) {
-      EXPECT_TRUE(boost::algorithm::ends_with(ex.what(), s));
+      EXPECT_TRUE(std::string_view(ex.what()).ends_with(s));
     }
   }
 
@@ -339,7 +339,7 @@ TEST(Uri, Simple) {
       Uri u("http://" + s);
       CHECK(false) << "Control should not have reached here";
     } catch (const std::invalid_argument& ex) {
-      EXPECT_TRUE(boost::algorithm::ends_with(ex.what(), s));
+      EXPECT_TRUE(std::string_view(ex.what()).ends_with(s));
     }
   }
 

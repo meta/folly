@@ -24,12 +24,12 @@
 #include <random>
 #include <sstream>
 
-#include <boost/algorithm/string.hpp>
 #include <glog/logging.h>
 
 #include <folly/Conv.h>
 #include <folly/Portability.h>
 #include <folly/Random.h>
+#include <folly/String.h>
 #include <folly/Utility.h>
 #include <folly/container/irange.h>
 #include <folly/memory/UninitializedMemoryHacks.h>
@@ -1298,7 +1298,7 @@ id eros. Mauris vulputate tortor nec neque pellentesque sagittis quis \n\
 sed nisl. In diam lacus, lobortis ut posuere nec, ornare id quam.";
 
   vector<fbstring> v;
-  boost::split(v, s1, boost::is_any_of("\n"));
+  folly::split('\n', s1, v);
   {
     istringstream input(s1);
     fbstring line;

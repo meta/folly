@@ -70,7 +70,6 @@ fb_dirsync_cpp_unittest(
     srcs = ["EnvUtilTest.cpp"],
     feature = triage_InfrastructureSupermoduleOptou,
     deps = [
-        "fbsource//third-party/boost:boost_algorithm",  # @manual
         "fbsource//third-party/glog:glog",
         "//folly:subprocess",
         "//folly/container:array",

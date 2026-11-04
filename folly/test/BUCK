@@ -580,13 +580,13 @@ fb_dirsync_cpp_unittest(
     srcs = ["FBStringTest.cpp"],
     allocator = "jemalloc",
     deps = [
-        "fbsource//third-party/boost:boost_algorithm",  # @manual
         "fbsource//third-party/glog:glog",
         ":test_utils",
         "//folly:conv",
         "//folly:fbstring",
         "//folly:portability",
         "//folly:random",
+        "//folly:string",
         "//folly:utility",
         "//folly/container:irange",
         "//folly/memory:uninitialized_memory_hacks",
@@ -1271,8 +1271,6 @@ fb_dirsync_cpp_unittest(
         ],
     }),
     deps = [
-        "fbsource//third-party/boost:boost_algorithm",  # @manual
-        "fbsource//third-party/boost:boost_range",  # @manual
         "fbsource//third-party/range-v3:range-v3",
         "//folly:memory",
         "//folly:range",
@@ -1514,7 +1512,6 @@ fb_dirsync_cpp_unittest(
         ":subprocess_test_parent_death_helper",
     ],
     deps = [
-        "fbsource//third-party/boost:boost_container",  # @manual
         "fbsource//third-party/fmt:fmt",
         "fbsource//third-party/glog:glog",
         ":subprocess_test_parent_death_helper",  # @manual
@@ -1834,7 +1831,6 @@ fb_dirsync_cpp_unittest(
     name = "uri_test",
     srcs = ["UriTest.cpp"],
     deps = [
-        "fbsource//third-party/boost:boost_algorithm",  # @manual
         "fbsource//third-party/glog:glog",
         "//folly:uri",
         "//folly/portability:gtest",

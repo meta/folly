@@ -29,13 +29,13 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
 
-#include <boost/container/flat_set.hpp>
 #include <fmt/ranges.h>
 #include <glog/logging.h>
 
@@ -445,7 +445,7 @@ TEST(SimpleSubprocessTest, KillAfterTerminate) {
 }
 
 namespace {
-boost::container::flat_set<int> getOpenFds() {
+std::set<int> getOpenFds() {
   auto pid = getpid();
   auto dirname = to<std::string>("/proc/", pid, "/fd");
 
@@ -454,7 +454,7 @@ boost::container::flat_set<int> getOpenFds() {
        ++it) {
     fdVec.push_back(to<int>(it->path().filename().native()));
   }
-  return boost::container::flat_set<int>(fdVec.begin(), fdVec.end());
+  return std::set<int>(fdVec.begin(), fdVec.end());
 }
 
 template <class Runnable>

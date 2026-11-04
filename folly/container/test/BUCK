@@ -1021,7 +1021,6 @@ fb_dirsync_cpp_unittest(
     modifiers = ["ovr_config//build_mode:asan_ubsan_dev_sanitizer_flags[enabled]"],
     supports_static_listing = False,
     deps = [
-        "fbsource//third-party/boost:boost_algorithm",
         "fbsource//third-party/fmt:fmt",
         "//folly:conv",
         "//folly:small_vector",

@@ -61,7 +61,6 @@ fb_dirsync_cpp_binary(
         "QuotientMultiSetBenchmark.cpp",
     ],
     deps = [
-        "fbsource//third-party/boost:boost_sort",  # @manual
         "fbsource//third-party/fmt:fmt",
         "//folly:benchmark",
         "//folly:random",

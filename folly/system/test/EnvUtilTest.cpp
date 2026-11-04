@@ -18,8 +18,6 @@
 
 #include <spawn.h>
 
-#include <boost/algorithm/string.hpp>
-
 #include <folly/Subprocess.h>
 #include <folly/container/Array.h>
 #include <folly/portability/Fcntl.h>
