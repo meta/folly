@@ -38,7 +38,6 @@ fb_dirsync_cpp_library(
         "//folly/lang:exception",
         "//folly/lang:thunk",
         "//folly/portability:config",
-        "//folly/portability:constexpr",
         "//folly/portability:malloc",
     ],
 )
@@ -424,7 +423,6 @@ fb_dirsync_cpp_library(
         "//folly/hash:spooky_hash_v2",
         "//folly/lang:c_string",
         "//folly/lang:exception",
-        "//folly/portability:constexpr",
     ],
 )
 
@@ -451,7 +449,6 @@ fb_dirsync_cpp_library(
         ":utility",
         "//folly/lang:exception",
         "//folly/lang:ordering",
-        "//folly/portability:constexpr",
     ],
 )
 
@@ -607,7 +604,6 @@ fb_dirsync_cpp_library(
         "//folly/lang:assume",
         "//folly/lang:bits",
         "//folly/lang:exception",
-        "//folly/portability:constexpr",
     ],
 )
 
@@ -710,7 +706,6 @@ fb_dirsync_cpp_library(
     exported_deps = [
         ":portability",
         "//folly/lang:checked_math",
-        "//folly/portability:constexpr",
     ],
 )
 

@@ -27,7 +27,6 @@ folly_add_library(
     folly_detail_base64_detail_base64_common
     folly_detail_base64_detail_base64_scalar
     folly_portability
-    folly_portability_constexpr
 )
 
 folly_add_library(
@@ -56,7 +55,6 @@ folly_add_library(
     folly_detail_base64_detail_base64_common
     folly_detail_base64_detail_base64_constants
     folly_memory_uninitialized_memory_hacks
-    folly_portability_constexpr
     folly_utility
 )
 

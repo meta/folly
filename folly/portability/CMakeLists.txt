@@ -41,14 +41,6 @@ folly_add_library(
 )
 
 folly_add_library(
-  NAME constexpr
-  HEADERS Constexpr.h
-  EXPORTED_DEPS
-    folly_c_portability
-    folly_portability
-)
-
-folly_add_library(
   NAME dirent
   SRCS Dirent.cpp
   HEADERS Dirent.h

@@ -25,7 +25,6 @@
 #include <folly/Portability.h>
 #include <folly/Traits.h>
 #include <folly/lang/SafeAssert.h>
-#include <folly/portability/Constexpr.h>
 
 namespace folly {
 

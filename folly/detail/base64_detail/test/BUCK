@@ -33,7 +33,6 @@ fb_dirsync_cpp_library(
         "//folly/detail/base64_detail:base64_scalar",
         "//folly/detail/base64_detail:base64_simd",
         "//folly/detail/base64_detail:base64_sse4_2",
-        "//folly/portability:constexpr",
         "//folly/portability:gtest",
     ],
 )

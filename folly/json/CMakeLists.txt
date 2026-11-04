@@ -31,7 +31,6 @@ folly_add_library(
     folly_hash_hash
     folly_lang_assume
     folly_lang_bits
-    folly_portability_constexpr
     folly_unicode
   EXPORTED_DEPS
     folly_c_portability

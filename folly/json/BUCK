@@ -24,7 +24,6 @@ fb_dirsync_cpp_library(
         "//folly/hash:hash",
         "//folly/lang:assume",
         "//folly/lang:bits",
-        "//folly/portability:constexpr",
     ],
     exported_deps = [
         "//folly:c_portability",

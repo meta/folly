@@ -4,15 +4,6 @@ load("@fbsource//tools/target_determinator/macros:ci.bzl", "ci")
 oncall("fbcode_entropy_wardens_folly")
 
 fb_dirsync_cpp_unittest(
-    name = "constexpr_test",
-    srcs = ["ConstexprTest.cpp"],
-    deps = [
-        "//folly/portability:constexpr",
-        "//folly/portability:gtest",
-    ],
-)
-
-fb_dirsync_cpp_unittest(
     name = "fcntl_test",
     srcs = ["FcntlTest.cpp"],
     labels = ci.labels(

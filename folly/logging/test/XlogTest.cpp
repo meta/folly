@@ -17,6 +17,7 @@
 #include <folly/logging/xlog.h>
 
 #include <chrono>
+#include <string_view>
 #include <thread>
 
 #include <folly/logging/LogConfigParser.h>
@@ -26,7 +27,6 @@
 #include <folly/logging/test/TestLogHandler.h>
 #include <folly/logging/test/XlogHeader1.h>
 #include <folly/logging/test/XlogHeader2.h>
-#include <folly/portability/Constexpr.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 #include <folly/test/TestUtils.h>
@@ -716,9 +716,8 @@ TEST(Xlog, xlogStripFilename) {
   // We use EXPECT_STREQ() checks above for most of the testing since it
   // produces nicer messages on failure.
   static_assert(
-      constexpr_strcmp(
-          xlogStripFilename("/my/project/src/test.cpp", "/my/project"),
-          "src/test.cpp") == 0,
+      std::string_view{xlogStripFilename(
+          "/my/project/src/test.cpp", "/my/project")} == "src/test.cpp",
       "incorrect xlogStripFilename() behavior");
 
   if (kIsWindows) {

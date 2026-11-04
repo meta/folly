@@ -20,7 +20,6 @@
 
 #include <folly/CPortability.h>
 #include <folly/lang/Bits.h>
-#include <folly/portability/Constexpr.h>
 
 namespace folly {
 namespace hash {

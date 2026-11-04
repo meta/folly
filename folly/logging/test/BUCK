@@ -338,7 +338,6 @@ fb_dirsync_cpp_unittest(
         "//folly/logging:init",
         "//folly/logging:log_handler",
         "//folly/logging:logging",
-        "//folly/portability:constexpr",
         "//folly/portability:gmock",
         "//folly/portability:gtest",
         "//folly/test:test_utils",

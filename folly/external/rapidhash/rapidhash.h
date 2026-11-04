@@ -45,7 +45,6 @@ all
 
 #include <folly/CPortability.h>
 #include <folly/lang/Bits.h>
-#include <folly/portability/Constexpr.h>
 
 FOLLY_UNSAFE_BUFFER_USAGE_BEGIN
 

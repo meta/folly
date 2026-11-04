@@ -1481,10 +1481,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     DIRECTORY
     portability/test/
     TEST
-    portability_constexpr_test
-    SOURCES
-    ConstexprTest.cpp
-    TEST
     portability_filesystem_test
     SOURCES
     FilesystemTest.cpp

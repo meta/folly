@@ -247,7 +247,6 @@ folly_add_library(
   EXPORTED_DEPS
     folly_lang_checked_math
     folly_portability
-    folly_portability_constexpr
 )
 
 folly_add_library(
@@ -361,7 +360,6 @@ folly_add_library(
     folly_likely
     folly_optional
     folly_portability
-    folly_portability_constexpr
     folly_range
     folly_string
     folly_traits
@@ -530,7 +528,6 @@ folly_add_library(
     folly_lang_exception
     folly_lang_ordering
     folly_portability
-    folly_portability_constexpr
     folly_range
     folly_utility
 )
@@ -816,7 +813,6 @@ folly_add_library(
     folly_likely
     folly_portability
     folly_portability_config
-    folly_portability_constexpr
     folly_portability_malloc
     folly_traits
     folly_utility
@@ -1069,7 +1065,6 @@ folly_add_library(
     folly_lang_exception
     folly_likely
     folly_portability
-    folly_portability_constexpr
     folly_traits
 )
 

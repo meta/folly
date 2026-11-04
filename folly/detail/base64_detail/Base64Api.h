@@ -20,7 +20,6 @@
 #include <folly/Portability.h>
 #include <folly/detail/base64_detail/Base64Common.h>
 #include <folly/detail/base64_detail/Base64Scalar.h>
-#include <folly/portability/Constexpr.h>
 
 namespace folly::detail::base64_detail {
 

@@ -59,18 +59,6 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
-    name = "constexpr",
-    headers = ["Constexpr.h"],
-    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
-    compiler_flags = ["-fno-omit-frame-pointer"],
-    use_raw_headers = True,
-    exported_deps = [
-        "//folly:c_portability",
-        "//folly:portability",
-    ],
-)
-
-fb_dirsync_cpp_library(
     name = "dirent",
     srcs = ["Dirent.cpp"],
     headers = ["Dirent.h"],

@@ -125,7 +125,6 @@ fb_dirsync_cpp_library(
         ":safe_assert",
         "//folly:portability",
         "//folly:traits",
-        "//folly/portability:constexpr",
     ],
 )
 

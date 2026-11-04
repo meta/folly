@@ -39,7 +39,6 @@
 #include <folly/hash/SpookyHashV2.h>
 #include <folly/lang/CString.h>
 #include <folly/lang/Exception.h>
-#include <folly/portability/Constexpr.h>
 
 #include <algorithm>
 #include <array>
@@ -320,7 +319,7 @@ class Range {
   /* implicit */ Range(std::nullptr_t) = delete;
 
   constexpr /* implicit */ Range(Iter str)
-      : b_(str), e_(str + constexpr_strlen(str)) {
+      : b_(str), e_(str + std::char_traits<char>::length(str)) {
     static_assert(
         std::is_same<int, typename detail::IsCharPointer<Iter>::type>::value,
         "This constructor is only available for character ranges");

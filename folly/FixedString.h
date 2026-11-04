@@ -35,7 +35,6 @@
 #include <folly/Utility.h>
 #include <folly/lang/Exception.h>
 #include <folly/lang/Ordering.h>
-#include <folly/portability/Constexpr.h>
 
 namespace folly {
 
@@ -97,7 +96,7 @@ constexpr const Char (&checkNullTerminated(const Char (&a)[N]) noexcept)[N] {
   // Strange decltype(a)(a) used to make MSVC happy.
   return a[N - 1u] == Char(0)
           // In Debug mode, guard against embedded nulls:
-          && (!kIsDebug || N - 1u == folly::constexpr_strlen(a))
+          && (!kIsDebug || N - 1u == std::char_traits<Char>::length(a))
       ? decltype(a)(a)
       : (assertNotNullTerminated(), decltype(a)(a));
 }
@@ -1277,7 +1276,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \note Equivalent to `append(that, strlen(that))`.
    */
   constexpr BasicFixedString& append(const Char* that) noexcept(false) {
-    return append(that, folly::constexpr_strlen(that));
+    return append(that, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -1527,7 +1526,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \note Equivalent to `compare(0, size(), that, strlen(that))`
    */
   constexpr int compare(const Char* that) const noexcept {
-    return compare(0u, size_, that, folly::constexpr_strlen(that));
+    return compare(0u, size_, that, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -1545,7 +1544,8 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
   constexpr int compare(
       std::size_t this_pos, std::size_t this_count, const Char* that) const
       noexcept(false) {
-    return compare(this_pos, this_count, that, folly::constexpr_strlen(that));
+    return compare(
+        this_pos, this_count, that, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -1678,7 +1678,8 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
       std::size_t this_pos,
       std::size_t this_count,
       const Char* that) noexcept(false) {
-    return replace(this_pos, this_count, that, folly::constexpr_strlen(that));
+    return replace(
+        this_pos, this_count, that, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -1692,7 +1693,10 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
   constexpr BasicFixedString& replace(
       const Char* first, const Char* last, const Char* that) noexcept(false) {
     return replace(
-        first - data_, last - first, that, folly::constexpr_strlen(that));
+        first - data_,
+        last - first,
+        that,
+        std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2056,7 +2060,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \note Equivalent to `find(that.data(), 0, strlen(that))`
    */
   constexpr std::size_t find(const Char* that) const noexcept {
-    return find(that, 0u, folly::constexpr_strlen(that));
+    return find(that, 0u, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2067,7 +2071,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    */
   constexpr std::size_t find(const Char* that, std::size_t pos) const
       noexcept(false) {
-    return find(that, pos, folly::constexpr_strlen(that));
+    return find(that, pos, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2145,7 +2149,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \note Equivalent to `rfind(that, size(), strlen(that))`
    */
   constexpr std::size_t rfind(const Char* that) const noexcept {
-    return rfind(that, size_, folly::constexpr_strlen(that));
+    return rfind(that, size_, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2155,7 +2159,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    */
   constexpr std::size_t rfind(const Char* that, std::size_t pos) const
       noexcept(false) {
-    return rfind(that, pos, folly::constexpr_strlen(that));
+    return rfind(that, pos, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2240,7 +2244,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \note Equivalent to `find_first_of(that, 0, strlen(that))`
    */
   constexpr std::size_t find_first_of(const Char* that) const noexcept {
-    return find_first_of(that, 0u, folly::constexpr_strlen(that));
+    return find_first_of(that, 0u, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2251,7 +2255,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    */
   constexpr std::size_t find_first_of(const Char* that, std::size_t pos) const
       noexcept(false) {
-    return find_first_of(that, pos, folly::constexpr_strlen(that));
+    return find_first_of(that, pos, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2325,7 +2329,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \note Equivalent to `find_first_not_of(that, 0, strlen(that))`
    */
   constexpr std::size_t find_first_not_of(const Char* that) const noexcept {
-    return find_first_not_of(that, 0u, folly::constexpr_strlen(that));
+    return find_first_not_of(that, 0u, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2336,7 +2340,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    */
   constexpr std::size_t find_first_not_of(
       const Char* that, std::size_t pos) const noexcept(false) {
-    return find_first_not_of(that, pos, folly::constexpr_strlen(that));
+    return find_first_not_of(that, pos, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2416,7 +2420,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \note Equivalent to `find_last_of(that, size(), strlen(that))`
    */
   constexpr std::size_t find_last_of(const Char* that) const noexcept {
-    return find_last_of(that, size_, folly::constexpr_strlen(that));
+    return find_last_of(that, size_, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2427,7 +2431,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    */
   constexpr std::size_t find_last_of(const Char* that, std::size_t pos) const
       noexcept(false) {
-    return find_last_of(that, pos, folly::constexpr_strlen(that));
+    return find_last_of(that, pos, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2516,7 +2520,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \note Equivalent to `find_last_not_of(that, size(), strlen(that))`
    */
   constexpr std::size_t find_last_not_of(const Char* that) const noexcept {
-    return find_last_not_of(that, size_, folly::constexpr_strlen(that));
+    return find_last_not_of(that, size_, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2527,7 +2531,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    */
   constexpr std::size_t find_last_not_of(
       const Char* that, std::size_t pos) const noexcept(false) {
-    return find_last_not_of(that, pos, folly::constexpr_strlen(that));
+    return find_last_not_of(that, pos, std::char_traits<Char>::length(that));
   }
 
   /**
@@ -2587,7 +2591,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
   friend constexpr bool operator==(
       const Char* a, const BasicFixedString& b) noexcept {
     return detail::fixedstring::equal_(
-        a, folly::constexpr_strlen(a), b.data_, b.size_);
+        a, std::char_traits<Char>::length(a), b.data_, b.size_);
   }
 
   /**
@@ -2646,7 +2650,12 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
   friend constexpr std::strong_ordering operator<=>(
       const Char* a, const BasicFixedString& b) noexcept {
     return static_cast<int>(detail::fixedstring::compare_(
-               a, 0u, folly::constexpr_strlen(a), b.data_, 0u, b.size_)) <=> 0;
+               a,
+               0u,
+               std::char_traits<Char>::length(a),
+               b.data_,
+               0u,
+               b.size_)) <=> 0;
   }
 
   /**

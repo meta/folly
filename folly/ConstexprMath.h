@@ -26,7 +26,6 @@
 
 #include <folly/Portability.h>
 #include <folly/lang/CheckedMath.h>
-#include <folly/portability/Constexpr.h>
 
 namespace folly {
 

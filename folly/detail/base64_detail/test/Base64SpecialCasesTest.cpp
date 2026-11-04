@@ -23,7 +23,6 @@
 #include <folly/detail/base64_detail/Base64Scalar.h>
 #include <folly/detail/base64_detail/Base64Simd.h>
 #include <folly/detail/base64_detail/Base64_SSE4_2.h>
-#include <folly/portability/Constexpr.h>
 #include <folly/portability/GTest.h>
 
 namespace folly::detail::base64_detail {

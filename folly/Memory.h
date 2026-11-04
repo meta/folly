@@ -37,7 +37,6 @@
 #include <folly/lang/Exception.h>
 #include <folly/lang/Thunk.h>
 #include <folly/portability/Config.h>
-#include <folly/portability/Constexpr.h>
 #include <folly/portability/Malloc.h>
 
 namespace folly {

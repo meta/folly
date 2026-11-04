@@ -23,6 +23,7 @@
 #include <iterator>
 #include <limits>
 #include <sstream>
+#include <string>
 #include <string_view>
 #include <type_traits>
 
@@ -37,7 +38,6 @@
 #include <folly/Unicode.h>
 #include <folly/Utility.h>
 #include <folly/lang/Bits.h>
-#include <folly/portability/Constexpr.h>
 
 namespace folly {
 
@@ -992,8 +992,8 @@ dynamic parseNumber(Input<T>& in) {
 
   constexpr const char* maxIntStr = "9223372036854775807";
   constexpr const char* minIntStr = "-9223372036854775808";
-  constexpr auto maxIntLen = constexpr_strlen(maxIntStr);
-  constexpr auto minIntLen = constexpr_strlen(minIntStr);
+  constexpr auto maxIntLen = std::char_traits<char>::length(maxIntStr);
+  constexpr auto minIntLen = std::char_traits<char>::length(minIntStr);
   auto extremaLen = negative ? minIntLen : maxIntLen;
   auto extremaStr = negative ? minIntStr : maxIntStr;
   if (*in != '.' && !wasE) {

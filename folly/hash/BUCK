@@ -65,7 +65,6 @@ fb_dirsync_cpp_library(
     exported_deps = [
         "//folly:c_portability",
         "//folly/lang:bits",
-        "//folly/portability:constexpr",
     ],
 )
 

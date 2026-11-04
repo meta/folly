@@ -98,7 +98,6 @@ folly_add_library(
   EXPORTED_DEPS
     folly_c_portability
     folly_lang_bits
-    folly_portability_constexpr
 )
 
 folly_add_library(

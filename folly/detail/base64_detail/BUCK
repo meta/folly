@@ -36,7 +36,6 @@ fb_dirsync_cpp_library(
         ":base64_constants",
         "//folly:utility",
         "//folly/memory:uninitialized_memory_hacks",
-        "//folly/portability:constexpr",
     ],
 )
 
@@ -113,6 +112,5 @@ fb_dirsync_cpp_library(
         ":base64_common",
         ":base64_scalar",
         "//folly:portability",
-        "//folly/portability:constexpr",
     ],
 )
