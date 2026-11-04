@@ -37,6 +37,12 @@ WITH_PKGCONFIG=ON
 [cmake.defines.feature_shared_libs=on]
 BUILD_SHARED_LIBS=ON
 
+# Always shared on Windows. glog picks gflags' DLL there, whose DEFINE_* macros
+# put __declspec(dllexport) on glog's flags, and a static glog declares them
+# without it in logging.h: MSVC rejects that with error C2370.
+[cmake.defines.os=windows]
+BUILD_SHARED_LIBS=ON
+
 [cmake.defines.os=freebsd]
 HAVE_TR1_UNORDERED_MAP=OFF
 HAVE_TR1_UNORDERED_SET=OFF
