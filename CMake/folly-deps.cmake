@@ -97,6 +97,33 @@ list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
 
 find_package(FastFloat MODULE)
 if (NOT FASTFLOAT_FOUND)
+  # Conv.h checks the same macro.
+  check_cxx_source_compiles(
+    "
+    #include <charconv>
+    #if !defined(__cpp_lib_to_chars)
+    #error no floating-point std::from_chars
+    #endif
+    int main() {
+      const char s[] = \"1.5\";
+      float f = 0;
+      double d = 0;
+      long double ld = 0;
+      auto general = std::chars_format::general;
+      return (std::from_chars(s, s + 3, f, general).ec != std::errc()) +
+          (std::from_chars(s, s + 3, d, general).ec != std::errc()) +
+          (std::from_chars(s, s + 3, ld, general).ec != std::errc());
+    }"
+    FOLLY_HAVE_FLOAT_FROM_CHARS)
+endif ()
+set(FOLLY_HAVE_FAST_FLOAT ON)
+if (FASTFLOAT_FOUND)
+  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${FASTFLOAT_INCLUDE_DIR})
+elseif (FOLLY_HAVE_FLOAT_FROM_CHARS)
+  set(FOLLY_HAVE_FAST_FLOAT OFF)
+  message(STATUS "fast_float not found, parsing floating-point numbers with "
+                 "std::from_chars, which is several times slower")
+else ()
   # fast_float asks for cmake_minimum_required 3.9, which is deprecated and
   # leaves CMP0077 OLD, so its option() calls would clear the two settings
   # below. 3.13 is where that policy arrived.
@@ -106,15 +133,14 @@ if (NOT FASTFLOAT_FOUND)
   folly_fetch_from_manifest(FastFloat fast_float)
   unset(CMAKE_POLICY_VERSION_MINIMUM)
   # Header-only, and Conv.cpp selects it with __has_include, so only the
-  # include directory matters. The std::from_chars fallback parses into
-  # long double, which libc++ has no overload for.
+  # include directory matters.
   FetchContent_GetProperties(FastFloat SOURCE_DIR folly_fast_float_source_dir)
   if (NOT folly_fast_float_source_dir)
     message(FATAL_ERROR "fast_float was fetched but not populated")
   endif ()
-  set(FASTFLOAT_INCLUDE_DIR "${folly_fast_float_source_dir}/include")
+  list(APPEND FOLLY_INCLUDE_DIRECTORIES
+       "${folly_fast_float_source_dir}/include")
 endif ()
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${FASTFLOAT_INCLUDE_DIR})
 
 # gflags is optional: without it, folly/portability/GFlags.h defines folly's
 # flags as plain variables. The tests and benchmarks use gflags directly, so

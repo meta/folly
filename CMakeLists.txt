@@ -1989,10 +1989,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     SOURCES
     StringTest.cpp
     BENCHMARK
-    string_to_float_benchmark
-    SOURCES
-    StringToFloatBenchmark.cpp
-    BENCHMARK
     synchronized_benchmark
     WINDOWS_DISABLED
     SOURCES
@@ -2195,6 +2191,17 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
       fmt_utility_test
       SOURCES
       FmtUtilityTest.cpp
+    )
+  endif ()
+
+  if (FOLLY_HAVE_FAST_FLOAT)
+    folly_define_tests(
+      DIRECTORY
+      test/
+      BENCHMARK
+      string_to_float_benchmark
+      SOURCES
+      StringToFloatBenchmark.cpp
     )
   endif ()
 

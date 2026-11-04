@@ -143,6 +143,9 @@ OpenSSL from source when it is not installed, configure with
 `-DFOLLY_BUILD_OPENSSL=ON`, which is the default when folly is built as part
 of another project.
 
+fast_float is optional with a standard library that has complete
+floating-point `std::from_chars`, such as libstdc++ 11 or newer.
+
 `cmake --install` needs CMake 3.28 or newer once anything has been fetched,
 because fetched dependencies are deliberately left out of what folly installs.
 An installed folly expects its dependencies on the consumer's system instead;
