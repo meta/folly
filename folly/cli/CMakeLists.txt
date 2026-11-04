@@ -43,7 +43,6 @@ if (LIBGFLAGS_FOUND OR gflags_FOUND)
         fmt::fmt
         folly_conv
         folly_file_util
-        folly_format
         folly_io_fs_util
         folly_portability
       EXPORTED_DEPS

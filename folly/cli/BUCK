@@ -34,7 +34,6 @@ fb_dirsync_cpp_library(
         "fbsource//third-party/glog:glog",
         "//folly:conv",
         "//folly:file_util",
-        "//folly:format",
         "//folly:portability",
         "//folly/io:fs_util",
     ],

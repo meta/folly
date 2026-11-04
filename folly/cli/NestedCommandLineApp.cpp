@@ -23,7 +23,7 @@
 #include <glog/logging.h>
 
 #include <folly/FileUtil.h>
-#include <folly/Format.h>
+#include <folly/String.h>
 #include <folly/io/FsUtil.h>
 
 namespace po = ::boost::program_options;
