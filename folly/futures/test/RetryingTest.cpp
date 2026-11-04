@@ -28,29 +28,20 @@ using namespace std;
 using namespace std::chrono;
 using namespace folly;
 
-// Runs func num_times in parallel, expects that all of them will take
-// at least min_duration and at least 1 execution will take less than
-// max_duration.
+// Runs func up to max_tries times, expects that every run takes at least
+// min_duration and that some run takes at most max_duration.
 template <typename D, typename F>
 void multiAttemptExpectDurationWithin(
-    size_t num_tries, D min_duration, D max_duration, const F& func) {
-  vector<thread> threads(num_tries);
-  vector<D> durations(num_tries, D::min());
-  for (size_t i = 0; i < num_tries; ++i) {
-    threads[i] = thread([&, i] {
-      auto start = steady_clock::now();
-      func();
-      durations[i] = duration_cast<D>(steady_clock::now() - start);
-    });
+    size_t max_tries, D min_duration, D max_duration, const F& func) {
+  auto shortest = D::max();
+  for (size_t i = 0; i < max_tries && shortest > max_duration; ++i) {
+    auto start = steady_clock::now();
+    func();
+    auto duration = duration_cast<D>(steady_clock::now() - start);
+    EXPECT_GE(duration.count(), min_duration.count());
+    shortest = std::min(shortest, duration);
   }
-  for (auto& t : threads) {
-    t.join();
-  }
-  sort(durations.begin(), durations.end());
-  for (auto d : durations) {
-    EXPECT_GE(d.count(), min_duration.count());
-  }
-  EXPECT_LE(durations[0].count(), max_duration.count());
+  EXPECT_LE(shortest.count(), max_duration.count());
 }
 
 TEST(RetryingTest, hasOpCall) {
