@@ -31,9 +31,11 @@
 #include <exception>
 #include <span>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <folly/Conv.h>
@@ -48,6 +50,76 @@
 #include <folly/detail/SplitStringSimd.h>
 
 namespace folly {
+
+/** Consume a matching prefix or suffix; leave the view unchanged on mismatch.
+ */
+constexpr bool removePrefix(
+    std::string_view& input, std::string_view prefix) noexcept {
+  if (!input.starts_with(prefix)) {
+    return false;
+  }
+  input.remove_prefix(prefix.size());
+  return true;
+}
+
+constexpr bool removePrefix(std::string_view& input, char prefix) noexcept {
+  if (!input.starts_with(prefix)) {
+    return false;
+  }
+  input.remove_prefix(1);
+  return true;
+}
+
+constexpr bool removeSuffix(
+    std::string_view& input, std::string_view suffix) noexcept {
+  if (!input.ends_with(suffix)) {
+    return false;
+  }
+  input.remove_suffix(suffix.size());
+  return true;
+}
+
+constexpr bool removeSuffix(std::string_view& input, char suffix) noexcept {
+  if (!input.ends_with(suffix)) {
+    return false;
+  }
+  input.remove_suffix(1);
+  return true;
+}
+
+/**
+ * Return the next field and consume it and its delimiter from input.
+ * A missing delimiter consumes the entire input. An empty delimiter returns an
+ * empty field without advancing input.
+ */
+constexpr std::string_view splitStep(
+    std::string_view& input, char delimiter) noexcept {
+  auto const pos = input.find(delimiter);
+  auto const result = input.substr(0, pos);
+  input.remove_prefix(pos == input.npos ? input.size() : pos + 1);
+  return result;
+}
+
+constexpr std::string_view splitStep(
+    std::string_view& input, std::string_view delimiter) noexcept {
+  auto const pos = input.find(delimiter);
+  auto const result = input.substr(0, pos);
+  input.remove_prefix(
+      pos == input.npos ? input.size() : pos + delimiter.size());
+  return result;
+}
+
+/** The callback observes input after the field has been consumed. */
+template <typename Delimiter, typename Process, typename... Args>
+auto splitStep(
+    std::string_view& input,
+    Delimiter const& delimiter,
+    Process&& process,
+    Args&&... args)
+    -> decltype(process(
+        splitStep(input, delimiter), std::forward<Args>(args)...)) {
+  return process(splitStep(input, delimiter), std::forward<Args>(args)...);
+}
 
 /// SplitOptions
 ///

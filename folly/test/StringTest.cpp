@@ -20,9 +20,13 @@
 
 #include <folly/String.h>
 
+#include <array>
 #include <cinttypes>
+#include <memory>
 #include <set>
+#include <string_view>
 #include <tuple>
+#include <vector>
 
 #include <boost/regex.hpp>
 #include <glog/logging.h>
@@ -35,6 +39,171 @@
 
 using namespace folly;
 using namespace std;
+
+TEST(StringView, RemoveAffixesMatchRange) {
+  using namespace std::literals::string_view_literals;
+  const std::array inputs{
+      std::string_view{}, ""sv, "a"sv, "abc"sv, "aaa"sv, "a\0b"sv};
+  const std::array affixes{
+      ""sv, "a"sv, "b"sv, "aa"sv, "abc"sv, "abcd"sv, "\0"sv};
+  for (auto input : inputs) {
+    for (auto affix : affixes) {
+      SCOPED_TRACE(testing::PrintToString(std::make_tuple(input, affix)));
+      auto prefixView = input;
+      auto prefixRange = StringPiece(input);
+      EXPECT_EQ(
+          prefixRange.removePrefix(affix), removePrefix(prefixView, affix));
+      EXPECT_EQ(std::string_view(prefixRange), prefixView);
+      EXPECT_EQ(prefixRange.data(), prefixView.data());
+      auto suffixView = input;
+      auto suffixRange = StringPiece(input);
+      EXPECT_EQ(
+          suffixRange.removeSuffix(affix), removeSuffix(suffixView, affix));
+      EXPECT_EQ(std::string_view(suffixRange), suffixView);
+      EXPECT_EQ(suffixRange.data(), suffixView.data());
+    }
+  }
+}
+
+TEST(StringView, RemoveCharacterAffixesMatchRange) {
+  using namespace std::literals::string_view_literals;
+  const std::array inputs{std::string_view{}, ""sv, "a"sv, "abc"sv, "\0a\0"sv};
+  for (auto input : inputs) {
+    for (char affix : {'a', 'b', '\0'}) {
+      SCOPED_TRACE(testing::PrintToString(std::make_tuple(input, affix)));
+      auto prefixView = input;
+      auto prefixRange = StringPiece(input);
+      EXPECT_EQ(
+          prefixRange.removePrefix(affix), removePrefix(prefixView, affix));
+      EXPECT_EQ(std::string_view(prefixRange), prefixView);
+      EXPECT_EQ(prefixRange.data(), prefixView.data());
+      auto suffixView = input;
+      auto suffixRange = StringPiece(input);
+      EXPECT_EQ(
+          suffixRange.removeSuffix(affix), removeSuffix(suffixView, affix));
+      EXPECT_EQ(std::string_view(suffixRange), suffixView);
+      EXPECT_EQ(suffixRange.data(), suffixView.data());
+    }
+  }
+}
+
+TEST(StringView, RemoveAffixesKnownResults) {
+  std::string_view input = "hello";
+  std::string_view const prefix = "he";
+  std::string_view const suffix = "lo";
+  std::string_view const delimiter = "::";
+  static_assert(noexcept(removePrefix(input, 'h')));
+  static_assert(noexcept(removePrefix(input, prefix)));
+  static_assert(noexcept(removeSuffix(input, 'o')));
+  static_assert(noexcept(removeSuffix(input, suffix)));
+  static_assert(noexcept(splitStep(input, ',')));
+  static_assert(noexcept(splitStep(input, delimiter)));
+  static_assert([] {
+    std::string_view view = "hello::world";
+    return removePrefix(view, 'h') && removeSuffix(view, "ld") &&
+        splitStep(view, "::") == "ello" && splitStep(view, ':') == "wor" &&
+        view.empty();
+  }());
+  EXPECT_FALSE(removePrefix(input, "hellox"));
+  EXPECT_EQ("hello", input);
+  EXPECT_TRUE(removePrefix(input, 'h'));
+  EXPECT_EQ("ello", input);
+  EXPECT_FALSE(removeSuffix(input, 'x'));
+  EXPECT_EQ("ello", input);
+  EXPECT_TRUE(removeSuffix(input, "lo"));
+  EXPECT_EQ("el", input);
+  EXPECT_TRUE(removePrefix(input, "el"));
+  EXPECT_TRUE(input.empty());
+  EXPECT_TRUE(removeSuffix(input, ""));
+  EXPECT_FALSE(removePrefix(input, 'e'));
+}
+
+TEST(StringView, SplitStepCharacterDelimitersMatchRange) {
+  using namespace std::literals::string_view_literals;
+  const std::array inputs{
+      std::string_view{}, ""sv, "a"sv, ",a,,b,"sv, "aaa"sv, "a\0b\0"sv};
+  for (auto input : inputs) {
+    for (char delimiter : {',', 'a', '\0'}) {
+      auto view = input;
+      auto range = StringPiece(input);
+      do {
+        auto part = splitStep(view, delimiter);
+        auto oldPart = range.split_step(delimiter);
+        EXPECT_EQ(std::string_view(oldPart), part);
+        EXPECT_EQ(oldPart.data(), part.data());
+        EXPECT_EQ(std::string_view(range), view);
+        EXPECT_EQ(range.data(), view.data());
+      } while (!view.empty());
+      EXPECT_TRUE(splitStep(view, delimiter).empty());
+    }
+  }
+}
+
+TEST(StringView, SplitStepStringDelimitersMatchRange) {
+  using namespace std::literals::string_view_literals;
+  const std::array inputs{
+      std::string_view{}, ""sv, "a"sv, "a::b::::c::"sv, "aaa"sv, "a\0b\0"sv};
+  const std::array delimiters{""sv, ":"sv, "::"sv, "aa"sv, "\0"sv, "abcd"sv};
+  for (auto input : inputs) {
+    for (auto delimiter : delimiters) {
+      auto view = input;
+      auto range = StringPiece(input);
+      do {
+        auto part = splitStep(view, delimiter);
+        auto oldPart = range.split_step(delimiter);
+        EXPECT_EQ(std::string_view(oldPart), part);
+        EXPECT_EQ(oldPart.data(), part.data());
+        EXPECT_EQ(std::string_view(range), view);
+        EXPECT_EQ(range.data(), view.data());
+        if (delimiter.empty()) {
+          EXPECT_TRUE(part.empty());
+          EXPECT_EQ(input, view);
+          break;
+        }
+      } while (!view.empty());
+    }
+  }
+}
+
+TEST(StringView, SplitStepKnownFields) {
+  std::string_view input = ",a,,b,";
+  std::vector<std::string_view> fields;
+  while (!input.empty()) {
+    fields.push_back(splitStep(input, ','));
+  }
+  EXPECT_THAT(fields, testing::ElementsAre("", "a", "", "b"));
+  EXPECT_TRUE(splitStep(input, ',').empty());
+}
+
+TEST(StringView, SplitStepCallbackConsumesBeforeCalling) {
+  std::string_view input = "first::second";
+  auto process = [&](std::string_view part, std::unique_ptr<int> value) {
+    EXPECT_EQ("first", part);
+    EXPECT_EQ("second", input);
+    return *value;
+  };
+  EXPECT_EQ(7, splitStep(input, "::", process, std::make_unique<int>(7)));
+  EXPECT_EQ("second", input);
+  splitStep(input, ':', [&](std::string_view part) {
+    EXPECT_EQ("second", part);
+    EXPECT_TRUE(input.empty());
+  });
+}
+
+TEST(StringView, SplitStepCallbackThrowKeepsConsumption) {
+  std::string_view input = "first,second";
+  EXPECT_THROW(
+      splitStep(
+          input,
+          ',',
+          [](std::string_view part) {
+            if (part == "first") {
+              throw std::runtime_error("bad field");
+            }
+          }),
+      std::runtime_error);
+  EXPECT_EQ("second", input);
+}
 
 TEST(StringPrintf, BasicTest) {
   EXPECT_EQ("abc", stringPrintf("%s", "abc"));
