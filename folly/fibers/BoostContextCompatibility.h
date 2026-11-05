@@ -20,10 +20,7 @@
 #include <glog/logging.h>
 
 /**
- * Wrappers for different versions of boost::context library
- * API reference for different versions
- * Boost 1.61:
- * https://github.com/boostorg/context/blob/boost-1.61.0/include/boost/context/detail/fcontext.hpp
+ * A wrapper for the low-level fcontext API of boost::context.
  */
 
 #include <folly/Function.h>

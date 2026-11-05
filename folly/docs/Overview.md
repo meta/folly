@@ -124,7 +124,8 @@ A simple class for collecting histogram data.
 
 #### `IntrusiveList.h`
 
-Convenience type definitions for using `boost::intrusive_list`.
+Intrusive doubly linked lists (`folly::IntrusiveList`, `SafeIntrusiveList` and
+`CountedIntrusiveList`) and their hooks.
 
 #### `json.h`
 

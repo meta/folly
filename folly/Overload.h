@@ -29,7 +29,7 @@
  * Example:
  *  struct One {};
  *  struct Two {};
- *  boost::variant<One, Two> value;
+ *  std::variant<One, Two> value;
  *
  *  variant_match(value,
  *    [] (const One& one) { ... },

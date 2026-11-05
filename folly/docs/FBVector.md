@@ -45,7 +45,7 @@ The initial HP implementation by Stepanov used a
 growth factor of 2; i.e., whenever you'd `push_back` into a vector
 without there being room, it would double the current capacity. This
 was not a good choice: it can be mathematically proven that a growth factor of
-2 is rigorously the <i>worst</i> possible because it never allows the vector 
+2 is rigorously the <i>worst</i> possible because it never allows the vector
 to reuse any of its previously-allocated memory. Despite other compilers
 reducing the growth factor to 1.5, gcc has staunchly maintained its factor of
 2. This makes `std::vector` cache- unfriendly and memory manager unfriendly.
@@ -70,7 +70,7 @@ the remarkable equality:
 This means that any new chunk requested will be larger
 than all previously used chunks combined, so the vector must
 crawl forward in memory; it can't move back to its deallocated chunks.
-But any number smaller than 2 guarantees that you'll at some point be 
+But any number smaller than 2 guarantees that you'll at some point be
 able to reuse the previous chunks. For instance, choosing 1.5 as the factor
 allows memory reuse after 4 reallocations; 1.45 allows memory reuse after 3
 reallocations; and 1.3 allows reuse after only 2 reallocations.
@@ -183,7 +183,8 @@ after `Widget`'s definition and write this:
 ```cpp
     // at global namespace level
     namespace folly {
-      struct IsRelocatable<Widget> : boost::true_type {};
+      template <>
+      struct IsRelocatable<Widget> : std::true_type {};
     }
 ```
 If you don't do this, `fbvector<Widget>` will fail to compile
