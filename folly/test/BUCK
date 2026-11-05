@@ -1196,6 +1196,19 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "portability_disable_avx512_override_test",
+    srcs = ["PortabilityDisableAvx512OverrideTest.cpp"],
+    preprocessor_flags = [
+        "-DDISABLE_AVX512",
+        "-DFOLLY_DISABLE_AVX512=0",
+    ],
+    deps = [
+        "//folly:portability",
+        "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "preprocessor_test",
     srcs = ["PreprocessorTest.cpp"],
     deps = [

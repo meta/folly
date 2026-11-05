@@ -121,6 +121,7 @@ fb_dirsync_cpp_unittest(
     name = "traponavx512_test_negative",
     srcs = ["TrapOnAvx512TestNegative.cpp"],
     deps = [
+        "//folly:portability",
         "//folly/detail:traponavx512",
         "//folly/portability:gtest",
     ],

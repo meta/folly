@@ -411,6 +411,17 @@ constexpr auto kHasWeakSymbols = false;
 #define FOLLY_SSE_PREREQ(major, minor) \
   (FOLLY_SSE > major || FOLLY_SSE == major && FOLLY_SSE_MINOR >= minor)
 
+// A build that must not run AVX-512 code, even on a CPU that has it, sets
+// FOLLY_DISABLE_AVX512 to 1. Defining DISABLE_AVX512, which other libraries
+// also read, does the same.
+#ifndef FOLLY_DISABLE_AVX512
+#ifdef DISABLE_AVX512
+#define FOLLY_DISABLE_AVX512 1
+#else
+#define FOLLY_DISABLE_AVX512 0
+#endif
+#endif
+
 #ifndef FOLLY_NEON
 #if (defined(__ARM_NEON) || defined(__ARM_NEON__)) && !defined(__CUDACC__)
 #define FOLLY_NEON 1

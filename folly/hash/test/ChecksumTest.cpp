@@ -17,6 +17,7 @@
 #include <folly/hash/Checksum.h>
 
 #include <folly/Benchmark.h>
+#include <folly/CpuId.h>
 #include <folly/Portability.h>
 #include <folly/Random.h>
 #include <folly/external/fast-crc32/avx512_crc32c_v8s3x4.h>
@@ -228,6 +229,20 @@ TEST(Checksum, crc32cContinuationHardwareSse42) {
                  << " (not supported on this CPU)";
 #endif
   }
+}
+
+// This binary is not BOLTed, so neither the probe nor the kernel's entry is
+// trapped. A build with FOLLY_DISABLE_AVX512, such as
+// -c fbcode.hhvm_tuning_flags=true, never picks the kernel. Otherwise the CPU
+// alone decides.
+TEST(Checksum, crc32cHardwareAvx512Guard) {
+#if FOLLY_DISABLE_AVX512
+  EXPECT_FALSE(folly::detail::crc32c_hw_supported_avx512());
+#else
+  EXPECT_EQ(
+      folly::kIsArchAmd64 && folly::CpuId().avx512vl(),
+      folly::detail::crc32c_hw_supported_avx512());
+#endif
 }
 
 TEST(Checksum, crc32cHardwareAvx512) {

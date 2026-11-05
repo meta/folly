@@ -86,10 +86,18 @@ bool crc32c_hw_supported_sse42() {
   return id.sse42();
 }
 
+// Under FOLLY_DISABLE_AVX512 the kernel stays compiled so that tests can
+// still call it.
 bool crc32c_hw_supported_avx512() {
+#if FOLLY_DISABLE_AVX512
+  return false;
+#else
   static folly::CpuId id;
-  static bool supported = id.avx512vl() && !detail::hasTrapOnAvx512();
+  static bool supported = id.avx512vl() && !detail::hasTrapOnAvx512() &&
+      !detail::hasTrapOnEntry(reinterpret_cast<const void*>(
+          &detail::avx512_crc32c_v8s3x4));
   return supported;
+#endif
 }
 
 bool crc32_hw_supported() {

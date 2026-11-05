@@ -8,6 +8,7 @@ fb_dirsync_cpp_unittest(
     srcs = ["ChecksumTest.cpp"],
     deps = [
         "//folly:benchmark",
+        "//folly:cpu_id",
         "//folly:portability",
         "//folly:random",
         "//folly/external/fast-crc32:avx512_crc32c_v8s3x4",

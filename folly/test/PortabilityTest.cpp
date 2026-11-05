@@ -46,6 +46,14 @@ int fooDerived(const Derived* p) {
   return p->foo() + 1;
 }
 
+TEST(Portability, DisableAvx512) {
+#ifdef DISABLE_AVX512
+  EXPECT_EQ(1, FOLLY_DISABLE_AVX512);
+#else
+  EXPECT_EQ(0, FOLLY_DISABLE_AVX512);
+#endif
+}
+
 TEST(Portability, Final) {
   std::unique_ptr<Derived> p(new Derived);
   EXPECT_EQ(3, fooBase(p.get()));

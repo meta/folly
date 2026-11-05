@@ -18,4 +18,11 @@
 
 namespace folly::detail {
 bool hasTrapOnAvx512();
+
+// Whether the code at fn starts with ud2. BOLT's -trap-avx512 writes one over
+// the entry of each function it rewrites and finds an EVEX instruction in. In
+// lite mode BOLT rewrites only functions that have profile samples, so one
+// function being trapped says nothing about another. Check the function that
+// is about to be called.
+bool hasTrapOnEntry(const void* fn);
 } // namespace folly::detail

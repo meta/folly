@@ -30,12 +30,20 @@ void detectTrapOnAvx512Helper() {
 } // namespace
 
 bool hasTrapOnAvx512() {
-  static constexpr uint8_t kUd2[] = {0x0f, 0x0b};
-  return memcmp((void*)detectTrapOnAvx512Helper, kUd2, sizeof(kUd2)) == 0;
+  return hasTrapOnEntry((void*)detectTrapOnAvx512Helper);
 }
 #else
 bool hasTrapOnAvx512() {
   return false;
 }
 #endif
+
+bool hasTrapOnEntry([[maybe_unused]] const void* fn) {
+#if FOLLY_X64
+  static constexpr uint8_t kUd2[] = {0x0f, 0x0b};
+  return memcmp(fn, kUd2, sizeof(kUd2)) == 0;
+#else
+  return false;
+#endif
+}
 } // namespace folly::detail
