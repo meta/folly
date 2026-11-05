@@ -65,11 +65,12 @@ mod bridge {
         fn new_dynamic_bool(value: bool) -> UniquePtr<dynamic>;
         fn new_dynamic_int(value: i64) -> UniquePtr<dynamic>;
         fn new_dynamic_double(value: f64) -> UniquePtr<dynamic>;
-        fn new_dynamic_string(value: StringPiece) -> UniquePtr<dynamic>;
+        fn new_dynamic_string_bytes(value: &[u8]) -> UniquePtr<dynamic>;
         fn new_dynamic_array() -> UniquePtr<dynamic>;
         fn new_dynamic_object() -> UniquePtr<dynamic>;
 
         fn get_string(d: &dynamic) -> Result<String>;
+        fn get_borrowed_bytes<'d>(d: &'d dynamic) -> Result<&'d [u8]>;
 
         fn array_push_back(d: Pin<&mut dynamic>, value: UniquePtr<dynamic>) -> Result<()>;
         fn array_pop_back(d: Pin<&mut dynamic>) -> Result<()>;
@@ -77,31 +78,31 @@ mod bridge {
         fn at_mut(d: Pin<&mut dynamic>, index: usize) -> Result<Pin<&mut dynamic>>;
         fn array_set(d: Pin<&mut dynamic>, index: usize, value: UniquePtr<dynamic>) -> Result<()>;
 
-        fn object_contains(d: &dynamic, key: StringPiece) -> Result<bool>;
-        fn get<'val>(d: &'val dynamic, key: StringPiece) -> Result<&'val dynamic>;
-        fn get_mut<'val>(
+        fn object_contains_bytes(d: &dynamic, key: &[u8]) -> Result<bool>;
+        fn get_bytes<'val>(d: &'val dynamic, key: &[u8]) -> Result<&'val dynamic>;
+        fn get_mut_bytes<'val>(
             d: Pin<&'val mut dynamic>,
-            key: StringPiece,
+            key: &[u8],
         ) -> Result<Pin<&'val mut dynamic>>;
-        fn object_set(
+        fn object_set_bytes(
             d: Pin<&mut dynamic>,
-            key: StringPiece,
+            key: &[u8],
             value: UniquePtr<dynamic>,
         ) -> Result<()>;
-        fn object_erase(d: Pin<&mut dynamic>, key: StringPiece) -> Result<bool>;
+        fn object_erase_bytes(d: Pin<&mut dynamic>, key: &[u8]) -> Result<bool>;
         fn object_keys(d: &dynamic) -> Result<Vec<String>>;
 
         fn clone_dynamic(d: &dynamic) -> UniquePtr<dynamic>;
 
         fn to_json(d: &dynamic) -> String;
         fn to_pretty_json(d: &dynamic) -> String;
-        fn parse_json(json: StringPiece) -> Result<UniquePtr<dynamic>>;
+        fn parse_json_bytes(json: &[u8]) -> Result<UniquePtr<dynamic>>;
 
         fn set_null(d: Pin<&mut dynamic>);
         fn set_bool(d: Pin<&mut dynamic>, value: bool);
         fn set_int(d: Pin<&mut dynamic>, value: i64);
         fn set_double(d: Pin<&mut dynamic>, value: f64);
-        fn set_string(d: Pin<&mut dynamic>, value: StringPiece);
+        fn set_string_bytes(d: Pin<&mut dynamic>, value: &[u8]);
         fn set_dynamic(d: Pin<&mut dynamic>, value: &dynamic);
 
         fn equals(lhs: &dynamic, rhs: &dynamic) -> bool;
@@ -112,6 +113,7 @@ pub type Dynamic = bridge::dynamic;
 
 use std::fmt;
 use std::ops::Index;
+use std::str;
 use std::str::Utf8Error;
 
 use cxx::UniquePtr;
@@ -159,7 +161,7 @@ impl Index<&str> for Dynamic {
     type Output = Dynamic;
 
     fn index(&self, key: &str) -> &Self::Output {
-        bridge::get(self, key.into()).unwrap()
+        bridge::get_bytes(self, key.as_bytes()).unwrap()
     }
 }
 
@@ -181,7 +183,8 @@ impl Dynamic {
     }
 
     pub fn new_string<'a, S: Into<bridge::StringPiece<'a>>>(value: S) -> UniquePtr<Self> {
-        bridge::new_dynamic_string(value.into())
+        let value: bridge::StringPiece<'a> = value.into();
+        bridge::new_dynamic_string_bytes(value.as_slice())
     }
 
     pub fn new_array() -> UniquePtr<Self> {
@@ -196,8 +199,32 @@ impl Dynamic {
         bridge::get_string(self)
     }
 
+    /// Borrow this string without allocating; validate its UTF-8 bytes.
+    ///
+    /// ```
+    /// use folly_dynamic::Dynamic;
+    /// let d = Dynamic::new_string("borrowed");
+    /// assert_eq!(d.as_str().unwrap(), "borrowed");
+    /// ```
+    ///
+    /// ```compile_fail
+    /// use folly_dynamic::Dynamic;
+    /// let borrowed = {
+    ///     let d = Dynamic::new_string("borrowed");
+    ///     d.as_str().unwrap()
+    /// };
+    /// assert_eq!(borrowed, "borrowed");
+    /// ```
+    ///
+    /// ```compile_fail
+    /// use folly_dynamic::{Dynamic, DynamicMut};
+    /// let mut d = Dynamic::new_string("borrowed");
+    /// let borrowed = d.as_str().unwrap();
+    /// d.set_value("changed");
+    /// assert_eq!(borrowed, "borrowed");
+    /// ```
     pub fn as_str(&self) -> Result<&str, AsStrError> {
-        Ok(self.as_string_piece()?.as_str()?)
+        Ok(str::from_utf8(bridge::get_borrowed_bytes(self)?)?)
     }
 
     /// Clone this dynamic value
@@ -210,7 +237,8 @@ impl Dynamic {
         &self,
         key: K,
     ) -> Result<bool, cxx::Exception> {
-        bridge::object_contains(self, key.into())
+        let key: bridge::StringPiece<'a> = key.into();
+        bridge::object_contains_bytes(self, key.as_slice())
     }
 
     /// Get the keys of an object
@@ -232,14 +260,16 @@ impl Dynamic {
     pub fn from_json<'a, S: Into<bridge::StringPiece<'a>>>(
         json: S,
     ) -> Result<UniquePtr<Self>, cxx::Exception> {
-        bridge::parse_json(json.into())
+        let json: bridge::StringPiece<'a> = json.into();
+        bridge::parse_json_bytes(json.as_slice())
     }
 
     pub fn get<'a, K: Into<bridge::StringPiece<'a>>>(
         &self,
         key: K,
     ) -> Result<&Self, cxx::Exception> {
-        bridge::get(self, key.into())
+        let key: bridge::StringPiece<'a> = key.into();
+        bridge::get_bytes(self, key.as_slice())
     }
 
     pub fn at(&self, index: usize) -> Result<&Self, cxx::Exception> {
@@ -327,7 +357,7 @@ impl IntoDynamic for f32 {
 
 impl IntoDynamic for &str {
     fn set_into(self, d: std::pin::Pin<&mut Dynamic>) {
-        bridge::set_string(d, self.into());
+        bridge::set_string_bytes(d, self.as_bytes());
     }
 
     fn into_dynamic(self) -> UniquePtr<Dynamic> {
@@ -337,7 +367,7 @@ impl IntoDynamic for &str {
 
 impl IntoDynamic for String {
     fn set_into(self, d: std::pin::Pin<&mut Dynamic>) {
-        bridge::set_string(d, self.as_str().into());
+        bridge::set_string_bytes(d, self.as_bytes());
     }
 
     fn into_dynamic(self) -> UniquePtr<Dynamic> {
@@ -347,7 +377,7 @@ impl IntoDynamic for String {
 
 impl IntoDynamic for &String {
     fn set_into(self, d: std::pin::Pin<&mut Dynamic>) {
-        bridge::set_string(d, self.as_str().into());
+        bridge::set_string_bytes(d, self.as_bytes());
     }
 
     fn into_dynamic(self) -> UniquePtr<Dynamic> {
@@ -483,7 +513,8 @@ impl DynamicMut for UniquePtr<Dynamic> {
         key: K,
         value: T,
     ) -> Result<(), cxx::Exception> {
-        bridge::object_set(self.pin_mut(), key.into(), value.into_dynamic())
+        let key: bridge::StringPiece<'a> = key.into();
+        bridge::object_set_bytes(self.pin_mut(), key.as_slice(), value.into_dynamic())
     }
 
     /// Erase a key from an object
@@ -491,7 +522,8 @@ impl DynamicMut for UniquePtr<Dynamic> {
         &mut self,
         key: K,
     ) -> Result<bool, cxx::Exception> {
-        bridge::object_erase(self.pin_mut(), key.into())
+        let key: bridge::StringPiece<'a> = key.into();
+        bridge::object_erase_bytes(self.pin_mut(), key.as_slice())
     }
 
     /// Get a mutable reference to an array element at the specified index
@@ -504,7 +536,8 @@ impl DynamicMut for UniquePtr<Dynamic> {
         &mut self,
         key: K,
     ) -> Result<std::pin::Pin<&mut Dynamic>, cxx::Exception> {
-        bridge::get_mut(self.pin_mut(), key.into())
+        let key: bridge::StringPiece<'a> = key.into();
+        bridge::get_mut_bytes(self.pin_mut(), key.as_slice())
     }
 
     /// Set the value of this dynamic to the provided value
@@ -557,14 +590,16 @@ impl DynamicMut for std::pin::Pin<&mut Dynamic> {
         key: K,
         value: T,
     ) -> Result<(), cxx::Exception> {
-        bridge::object_set(self.as_mut(), key.into(), value.into_dynamic())
+        let key: bridge::StringPiece<'a> = key.into();
+        bridge::object_set_bytes(self.as_mut(), key.as_slice(), value.into_dynamic())
     }
 
     fn erase<'a, K: Into<bridge::StringPiece<'a>>>(
         &mut self,
         key: K,
     ) -> Result<bool, cxx::Exception> {
-        bridge::object_erase(self.as_mut(), key.into())
+        let key: bridge::StringPiece<'a> = key.into();
+        bridge::object_erase_bytes(self.as_mut(), key.as_slice())
     }
 
     fn at_mut(&mut self, index: usize) -> Result<std::pin::Pin<&mut Dynamic>, cxx::Exception> {
@@ -575,7 +610,8 @@ impl DynamicMut for std::pin::Pin<&mut Dynamic> {
         &mut self,
         key: K,
     ) -> Result<std::pin::Pin<&mut Dynamic>, cxx::Exception> {
-        bridge::get_mut(self.as_mut(), key.into())
+        let key: bridge::StringPiece<'a> = key.into();
+        bridge::get_mut_bytes(self.as_mut(), key.as_slice())
     }
 
     fn set_value<T: IntoDynamic>(&mut self, value: T) {
@@ -1564,5 +1600,58 @@ mod tests {
 
         assert_eq!(obj.get("key").unwrap().as_string().unwrap(), "value");
         assert_eq!(obj["key"].as_string().unwrap(), "value");
+    }
+
+    #[test]
+    fn test_string_byte_subview_and_nul() {
+        let input = b"!a\0b?";
+        let d = Dynamic::new_string(&input[1..4]);
+        let borrowed = d.as_str().unwrap();
+        assert_eq!(borrowed, "a\0b");
+        assert_eq!(
+            borrowed.as_ptr(),
+            d.as_string_piece().unwrap().as_slice().as_ptr()
+        );
+    }
+
+    #[test]
+    fn test_invalid_utf8_error_parity() {
+        let input = [b'a', 0xff, 0];
+        let d = Dynamic::new_string(input.as_slice());
+        let super::AsStrError::Utf8Error(error) = d.as_str().unwrap_err() else {
+            panic!("byte strings must fail UTF-8 validation, not construction");
+        };
+        let legacy = d.as_string_piece().unwrap().as_str().unwrap_err();
+        assert_eq!(error.valid_up_to(), legacy.valid_up_to());
+        assert_eq!(error.error_len(), legacy.error_len());
+        assert!(d.as_string().is_err());
+    }
+
+    #[test]
+    fn test_string_input_ownership_and_nul_setter() {
+        let mut input = vec![b'v'; 48];
+        let mut d = Dynamic::new_string(input.as_slice());
+        input.fill(b'x');
+        drop(input);
+        assert_eq!(d.as_str().unwrap(), "v".repeat(48));
+        d.set_value(String::from("replacement\0tail"));
+        assert_eq!(d.as_str().unwrap(), "replacement\0tail");
+    }
+
+    #[test]
+    fn test_byte_keys_and_json_subviews() {
+        let key = b"!\xff\0k?";
+        let key = &key[1..4];
+        let mut d = Dynamic::new_object();
+        d.set_key(key, "before").unwrap();
+        assert!(d.contains(key).unwrap());
+        assert_eq!(d.get(key).unwrap().as_str().unwrap(), "before");
+        d.get_mut(key).unwrap().set_value("after\0tail");
+        assert_eq!(d.get(key).unwrap().as_str().unwrap(), "after\0tail");
+        assert!(d.keys().is_err());
+        assert!(d.erase(key).unwrap());
+        let json = b"![\"a\\u0000b\"]?";
+        let parsed = Dynamic::from_json(&json[1..json.len() - 1]).unwrap();
+        assert_eq!(parsed[0].as_str().unwrap(), "a\0b");
     }
 }

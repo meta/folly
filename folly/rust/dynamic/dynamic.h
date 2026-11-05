@@ -15,6 +15,10 @@
  */
 
 #pragma once
+
+#include <cstdint>
+#include <memory>
+
 #include <folly/json/dynamic.h>
 #include <folly/json/json.h>
 #include "rust/cxx.h"
@@ -61,6 +65,25 @@ void set_dynamic(folly::dynamic& d, const folly::dynamic& value) noexcept;
 rust::String to_json(const folly::dynamic& d);
 rust::String to_pretty_json(const folly::dynamic& d);
 std::unique_ptr<folly::dynamic> parse_json(folly::StringPiece json);
+
+std::unique_ptr<folly::dynamic> new_dynamic_string_bytes(
+    rust::Slice<const std::uint8_t> value) noexcept;
+rust::Slice<const std::uint8_t> get_borrowed_bytes(const folly::dynamic& d);
+bool object_contains_bytes(
+    const folly::dynamic& d, rust::Slice<const std::uint8_t> key);
+const folly::dynamic& get_bytes(
+    const folly::dynamic& d, rust::Slice<const std::uint8_t> key);
+folly::dynamic& get_mut_bytes(
+    folly::dynamic& d, rust::Slice<const std::uint8_t> key);
+void object_set_bytes(
+    folly::dynamic& d,
+    rust::Slice<const std::uint8_t> key,
+    std::unique_ptr<folly::dynamic> value);
+bool object_erase_bytes(folly::dynamic& d, rust::Slice<const std::uint8_t> key);
+void set_string_bytes(
+    folly::dynamic& d, rust::Slice<const std::uint8_t> value) noexcept;
+std::unique_ptr<folly::dynamic> parse_json_bytes(
+    rust::Slice<const std::uint8_t> json);
 
 bool equals(const folly::dynamic& lhs, const folly::dynamic& rhs) noexcept;
 

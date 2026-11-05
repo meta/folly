@@ -14,12 +14,22 @@
  * limitations under the License.
  */
 
-#include <sstream>
-#include <folly/json/json.h>
 #include <folly/rust/dynamic/dynamic.h>
+
+#include <string_view>
+#include <utility>
+
+#include <folly/json/json.h>
 
 namespace facebook::folly_rust::dynamic {
 using folly::dynamic;
+
+namespace {
+std::string_view as_string_view(
+    rust::Slice<const std::uint8_t> bytes) noexcept {
+  return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+}
+} // namespace
 
 std::unique_ptr<dynamic> new_dynamic_null() noexcept {
   return std::make_unique<dynamic>();
@@ -140,6 +150,51 @@ rust::String to_pretty_json(const dynamic& d) {
 
 std::unique_ptr<dynamic> parse_json(folly::StringPiece json) {
   return std::make_unique<dynamic>(folly::parseJson(json));
+}
+
+std::unique_ptr<dynamic> new_dynamic_string_bytes(
+    rust::Slice<const std::uint8_t> value) noexcept {
+  return new_dynamic_string(as_string_view(value));
+}
+
+rust::Slice<const std::uint8_t> get_borrowed_bytes(const dynamic& d) {
+  const auto& value = d.getString();
+  return {reinterpret_cast<const std::uint8_t*>(value.data()), value.size()};
+}
+
+bool object_contains_bytes(
+    const dynamic& d, rust::Slice<const std::uint8_t> key) {
+  return object_contains(d, as_string_view(key));
+}
+
+const dynamic& get_bytes(
+    const dynamic& d, rust::Slice<const std::uint8_t> key) {
+  return get(d, as_string_view(key));
+}
+
+dynamic& get_mut_bytes(dynamic& d, rust::Slice<const std::uint8_t> key) {
+  return get_mut(d, as_string_view(key));
+}
+
+void object_set_bytes(
+    dynamic& d,
+    rust::Slice<const std::uint8_t> key,
+    std::unique_ptr<dynamic> value) {
+  object_set(d, as_string_view(key), std::move(value));
+}
+
+bool object_erase_bytes(dynamic& d, rust::Slice<const std::uint8_t> key) {
+  return object_erase(d, as_string_view(key));
+}
+
+void set_string_bytes(
+    dynamic& d, rust::Slice<const std::uint8_t> value) noexcept {
+  set_string(d, as_string_view(value));
+}
+
+std::unique_ptr<dynamic> parse_json_bytes(
+    rust::Slice<const std::uint8_t> json) {
+  return parse_json(as_string_view(json));
 }
 
 bool equals(const dynamic& lhs, const dynamic& rhs) noexcept {
