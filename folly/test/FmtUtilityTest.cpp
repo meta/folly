@@ -1108,6 +1108,34 @@ TEST_F(FmtUtilityTest, fmt_vformat_mangle) {
               })));
 }
 
+TEST_F(FmtUtilityTest, fmt_vformat_mangle_name_bounded_view) {
+  auto const backing = "name\0suffix"s;
+  auto const key = std::string_view(backing.data(), 4);
+  EXPECT_EQ(
+      folly::fmt_vformat_mangle_name("name"),
+      folly::fmt_vformat_mangle_name(key));
+  EXPECT_NE(
+      folly::fmt_vformat_mangle_name(backing),
+      folly::fmt_vformat_mangle_name(key));
+  std::string out = "prefix";
+  folly::fmt_vformat_mangle_name(out, key);
+  EXPECT_EQ("prefix" + folly::fmt_vformat_mangle_name("name"), out);
+}
+
+TEST_F(FmtUtilityTest, fmt_vformat_mangle_name_binary_view) {
+  std::array<char, 4> const bytes{'a', '\0', char(0xff), 'b'};
+  std::string const owned(bytes.data(), bytes.size());
+  auto const key = std::string_view(bytes.data(), bytes.size());
+  EXPECT_EQ(
+      folly::fmt_vformat_mangle_name(owned),
+      folly::fmt_vformat_mangle_name(key));
+  EXPECT_NE(
+      folly::fmt_vformat_mangle_name("a"), folly::fmt_vformat_mangle_name(key));
+  EXPECT_EQ(
+      folly::fmt_vformat_mangle_name(""),
+      folly::fmt_vformat_mangle_name(std::string_view{}));
+}
+
 TEST_F(FmtUtilityTest, fmt_vformat_mangle_numeric_args_as_named) {
   auto const opts =
       folly::fmt_vformat_mangle_format_string_options{}

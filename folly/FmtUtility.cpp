@@ -32,7 +32,7 @@ std::string fmt_vformat_mangle_name_fn::operator()(
 
 void fmt_vformat_mangle_name_fn::operator()(
     std::string& out, std::string_view const key) const {
-  auto const keyr = folly::ByteRange(folly::StringPiece(key));
+  auto const keyr = folly::ByteRange(key);
   uint8_t enc[32];
   auto const encr = folly::MutableByteRange{std::begin(enc), std::end(enc)};
 #if FOLLY_OPENSSL_HAS_BLAKE2B
