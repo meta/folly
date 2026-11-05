@@ -18,16 +18,107 @@
 
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
+#include <stdexcept>
 #include <string_view>
 
-#include <boost/regex/pending/unicode_iterator.hpp>
+#include <folly/lang/Exception.h>
 
 namespace folly {
 
+/**
+ * A view of UTF-8 text as a bidirectional range of code points.
+ *
+ * Invalid UTF-8 throws std::out_of_range: construction checks that the text
+ * doesn't start with a continuation byte or end with a truncated sequence,
+ * incrementing and decrementing check the sequence structure, and
+ * dereferencing also rejects overlong encodings, surrogates and values above
+ * U+10FFFF.
+ */
 class UTF8StringPiece {
  public:
-  using iterator = boost::u8_to_u32_iterator<const char*>;
+  class iterator {
+   public:
+    using iterator_category = std::bidirectional_iterator_tag;
+    using value_type = std::uint32_t;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const value_type*;
+    using reference = value_type;
+
+    iterator() = default;
+
+    value_type operator*() const {
+      size_t const size = sequenceSize(byte(0));
+      static constexpr value_type kLeadMask[] = {0, 0x7F, 0x1F, 0x0F, 0x07};
+      static constexpr value_type kMin[] = {0, 0, 0x80, 0x800, 0x10000};
+      value_type cp = byte(0) & kLeadMask[size];
+      for (size_t i = 1; i < size; ++i) {
+        if (!isContinuation(byte(i))) {
+          invalid();
+        }
+        cp = (cp << 6) | (byte(i) & 0x3F);
+      }
+      if (cp < kMin[size] || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+        invalid();
+      }
+      return cp;
+    }
+
+    iterator& operator++() {
+      size_t const size = sequenceSize(byte(0));
+      for (size_t i = 1; i < size; ++i) {
+        if (!isContinuation(byte(i))) {
+          invalid();
+        }
+      }
+      pos_ += size;
+      return *this;
+    }
+
+    iterator operator++(int) {
+      iterator it = *this;
+      ++*this;
+      return it;
+    }
+
+    iterator& operator--() {
+      size_t size = 1;
+      // Can't pass begin_: the constructor rejects a leading continuation byte.
+      while (isContinuation(static_cast<unsigned char>(*--pos_))) {
+        ++size;
+      }
+      if (sequenceSize(byte(0)) != size) {
+        invalid();
+      }
+      return *this;
+    }
+
+    iterator operator--(int) {
+      iterator it = *this;
+      --*this;
+      return it;
+    }
+
+    // Returns the position of the current code point in the UTF-8 text.
+    const char* base() const noexcept { return pos_; }
+
+    friend bool operator==(const iterator& a, const iterator& b) noexcept {
+      return a.pos_ == b.pos_;
+    }
+
+   private:
+    friend class UTF8StringPiece;
+
+    explicit iterator(const char* pos) noexcept : pos_(pos) {}
+
+    unsigned char byte(size_t i) const noexcept {
+      return static_cast<unsigned char>(pos_[i]);
+    }
+
+    const char* pos_ = nullptr;
+  };
+
   using size_type = std::size_t;
 
   /* implicit */ UTF8StringPiece(const std::string_view piece)
@@ -52,7 +143,51 @@ class UTF8StringPiece {
 
  private:
   UTF8StringPiece(const char* first, const char* last)
-      : begin_{first, first, last}, end_{last, first, last} {}
+      : begin_{first}, end_{last} {
+    if (first == last) {
+      return;
+    }
+    if (isContinuation(static_cast<unsigned char>(*first))) {
+      invalid();
+    }
+    // Make sure the last sequence is complete so iteration stays in bounds.
+    const char* lead = last - 1;
+    while (lead != first && isContinuation(static_cast<unsigned char>(*lead))) {
+      --lead;
+    }
+    if (static_cast<size_t>(last - lead) <
+        sequenceSize(static_cast<unsigned char>(*lead))) {
+      invalid();
+    }
+  }
+
+  static bool isContinuation(unsigned char c) noexcept {
+    return (c & 0xC0) == 0x80;
+  }
+
+  // Returns the length of a sequence from its lead byte.
+  static size_t sequenceSize(unsigned char lead) {
+    if (lead < 0x80) {
+      return 1;
+    }
+    if (lead < 0xC0) {
+      invalid(); // continuation byte
+    }
+    if (lead < 0xE0) {
+      return 2;
+    }
+    if (lead < 0xF0) {
+      return 3;
+    }
+    if (lead < 0xF8) {
+      return 4;
+    }
+    invalid();
+  }
+
+  [[noreturn]] static void invalid() {
+    throw_exception<std::out_of_range>("Invalid UTF-8 sequence");
+  }
 
   iterator begin_;
   iterator end_;

@@ -2186,20 +2186,7 @@ fb_dirsync_cpp_library(
     ],
     use_raw_headers = True,
     exported_deps = [
-        "fbsource//third-party/boost:boost_regex",  # @manual
-    ],
-)
-
-fb_dirsync_cpp_library(
-    name = "utf8_string_icu",
-    headers = [
-        "UTF8String.h",
-    ],
-    apple_sdks = (IOS, MACOSX),
-    platforms = (CXX, ANDROID, APPLE),
-    use_raw_headers = True,
-    exported_deps = [
-        "fbsource//third-party/boost:boost_regex_icu",  # @manual
+        "//folly/lang:exception",
     ],
 )
 

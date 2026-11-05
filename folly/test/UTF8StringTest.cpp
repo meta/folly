@@ -16,6 +16,8 @@
 
 #include <folly/UTF8String.h>
 
+#include <cstdint>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -27,6 +29,9 @@
 using namespace folly;
 
 static_assert(!std::is_constructible_v<UTF8StringPiece, std::nullptr_t>);
+static_assert(std::bidirectional_iterator<UTF8StringPiece::iterator>);
+static_assert(
+    std::is_same_v<UTF8StringPiece::iterator::value_type, std::uint32_t>);
 
 const std::string_view kTestUTF8 =
     reinterpret_cast<const char*>(u8"This is \U0001F602 stuff!");
@@ -90,4 +95,23 @@ TEST(UTF8StringPiece, implicitViewOnlyConversion) {
   };
   UTF8StringPiece utf8 = ViewOnly{};
   EXPECT_EQ(U"hello", std::u32string(utf8.begin(), utf8.end()));
+}
+
+TEST(UTF8StringPiece, decrement) {
+  UTF8StringPiece utf8 = kTestUTF8;
+  auto it = utf8.end();
+  std::advance(it, -8);
+  EXPECT_EQ(U'\U0001F602', *it);
+  EXPECT_EQ(U' ', *std::prev(it));
+}
+
+TEST(UTF8StringPiece, invalidSequences) {
+  // Overlong encoding, surrogate, above U+10FFFF.
+  for (std::string_view s : {"\xC0\x80", "\xED\xA0\x80", "\xF4\x90\x80\x80"}) {
+    EXPECT_THROW(*UTF8StringPiece(s).begin(), std::out_of_range) << s;
+  }
+  // 5-byte lead byte.
+  EXPECT_THROW(UTF8StringPiece("\xF8\x88\x80\x80\x80"), std::out_of_range);
+  // Missing continuation byte.
+  EXPECT_THROW(UTF8StringPiece("\xC3x").walk_size(), std::out_of_range);
 }
