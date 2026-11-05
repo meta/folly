@@ -36,6 +36,15 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "reproducible_accumulator_subnormal_test",
+    srcs = ["ReproducibleAccumulatorSubnormalTest.cpp"],
+    deps = [
+        "//folly/math:reproducible_accumulator",
+        "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "kahan_summation_test",
     srcs = ["KahanSummationTest.cpp"],
     deps = [

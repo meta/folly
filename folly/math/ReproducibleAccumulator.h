@@ -53,6 +53,10 @@ namespace folly {
 /// (condition number >> 1). The O(N * epsilon * max_abs_val) bound above
 /// always holds.
 ///
+/// Subnormal residuals survive when the fold's window includes terminal
+/// padding. Promotion can truncate that padding; in particular, float with
+/// Fold=2 does not retain every subnormal unit near the minimum normal value.
+///
 /// Performance: `operator+=` (one-at-a-time) costs roughly 4x a naive FP add
 /// due to the serial dependency chain through Fold bin levels. The batch
 /// `add(first, last)` method uses multiple independent accumulators for
@@ -132,7 +136,10 @@ class reproducible_accumulator {
           static_cast<ftype>(0.75 * constexpr_pow(double(2), bin_exponent));
     }
     for (int index = kMaxIndex + 1; index < kMaxIndex + kMaxFold; index++) {
-      bins[index] = bins[index - 1];
+      // A normal sentinel with the minimum subnormal as its ULP retains the
+      // residual below the last regular bin.
+      bins[index] =
+          static_cast<ftype>(0.75 * constexpr_pow(double(2), kMinExp));
     }
 
     return bins;
@@ -268,7 +275,8 @@ class reproducible_accumulator {
   /// Deposits a single floating-point value @p X into the primary
   /// accumulator bins. The accumulator must already be updated to
   /// accommodate @p X via binned_dmdupdate().
-  void binned_dmddeposit(ftype x) {
+  template <bool HasPadding>
+  void binned_dmddeposit_impl(ftype x) {
     ftype m;
 
     if (is_nan_or_inf(x) || is_nan_or_inf(primary[0])) {
@@ -293,15 +301,35 @@ class reproducible_accumulator {
     for (; i < Fold - 1; i++) {
       m = primary[i];
       qd = x;
-      set_low_bit(qd);
+      // Only padding has exponent 1, which valid deposits and renormalization
+      // preserve. Its exact subnormal grid needs no sticky-bit adjustment.
+      if (!HasPadding || get_exponent(m) != 1) {
+        set_low_bit(qd);
+      }
       qd += m;
       primary[i] = qd;
       m -= qd;
       x += m;
     }
     qd = x;
-    set_low_bit(qd);
+    if (!HasPadding || get_exponent(primary[i]) != 1) {
+      set_low_bit(qd);
+    }
     primary[i] += qd;
+  }
+
+  bool has_regular_window() const {
+    constexpr int normalWindowThreshold =
+        (kMaxExp + kExpBias) - (kMaxIndex - Fold + 1) * kBinWidth;
+    return max_safe_exp_ >= normalWindowThreshold;
+  }
+
+  void binned_dmddeposit(ftype x) {
+    if (has_regular_window()) {
+      binned_dmddeposit_impl<false>(x);
+    } else {
+      binned_dmddeposit_impl<true>(x);
+    }
   }
 
   /// Renormalizes the accumulator by extracting carry bits from
@@ -321,11 +349,16 @@ class reproducible_accumulator {
 
   /// Adds a single floating-point value @p X to this accumulator.
   /// Performs update, deposit, and renormalization in sequence.
+  template <bool OrdinaryWindow = false>
   void binned_dmdadd(ftype const X) {
     if (get_exponent(X) > max_safe_exp_) {
       binned_dmdupdate(X);
     }
-    binned_dmddeposit(X);
+    if constexpr (OrdinaryWindow) {
+      binned_dmddeposit_impl<false>(X);
+    } else {
+      binned_dmddeposit(X);
+    }
     if (++deposit_count_ >= kEndurance) {
       binned_dmrenorm();
       deposit_count_ = 0;
@@ -644,14 +677,27 @@ class reproducible_accumulator {
 
       std::array<reproducible_accumulator, K - 1> accs;
       auto const full = n - (n % K);
-      for (diff_t i = 0; i < full; i += K) {
+      diff_t i = 0;
+      for (; i < full; i += K) {
+        // Bin updates only promote a window. Once every lane has no padding,
+        // the remaining groups need no per-deposit padding checks.
+        if (has_regular_window() && accs[0].has_regular_window() &&
+            accs[1].has_regular_window() && accs[2].has_regular_window()) {
+          break;
+        }
         binned_dmdadd(static_cast<ftype>(first[i]));
         accs[0].binned_dmdadd(static_cast<ftype>(first[i + 1]));
         accs[1].binned_dmdadd(static_cast<ftype>(first[i + 2]));
         accs[2].binned_dmdadd(static_cast<ftype>(first[i + 3]));
       }
+      for (; i < full; i += K) {
+        binned_dmdadd<true>(static_cast<ftype>(first[i]));
+        accs[0].template binned_dmdadd<true>(static_cast<ftype>(first[i + 1]));
+        accs[1].template binned_dmdadd<true>(static_cast<ftype>(first[i + 2]));
+        accs[2].template binned_dmdadd<true>(static_cast<ftype>(first[i + 3]));
+      }
 
-      for (diff_t i = full; i < n; ++i) {
+      for (; i < n; ++i) {
         binned_dmdadd(static_cast<ftype>(first[i]));
       }
 

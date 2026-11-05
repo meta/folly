@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
+#include <limits>
+#include <random>
+#include <vector>
+
 #include <folly/math/AccurateSummation.h>
 #include <folly/math/KahanSummation.h>
 #include <folly/math/ReproducibleAccumulator.h>
-
-#include <random>
-#include <vector>
 
 #include <folly/Benchmark.h>
 #include <folly/init/Init.h>
@@ -42,6 +43,18 @@ std::vector<T> makeData(size_t n) {
 size_t const kN = 1'000'000;
 auto const kDoubleData = makeData<double>(kN);
 auto const kFloatData = makeData<float>(kN);
+
+template <typename T>
+std::vector<T> makeZeroPrefixData() {
+  auto data = makeData<T>(kN);
+  for (size_t i = 0; i < 2048; ++i) {
+    data[i] = i % 2 == 0 ? T(0) : std::numeric_limits<T>::denorm_min();
+  }
+  return data;
+}
+
+auto const kZeroPrefixDoubleData = makeZeroPrefixData<double>();
+auto const kZeroPrefixFloatData = makeZeroPrefixData<float>();
 
 } // namespace
 
@@ -272,6 +285,42 @@ BENCHMARK_RELATIVE(SumFloat_ReproducibleBatchAdd_1M, iters) {
     reproducible_accumulator<float> rfa;
     rfa.add(kFloatData.begin(), kFloatData.end());
     folly::doNotOptimizeAway(rfa.value());
+  }
+}
+
+BENCHMARK(SumDouble_ReproducibleZeroPrefixOneAtATime_1M, iters) {
+  while (iters--) {
+    reproducible_accumulator<double> accumulator;
+    for (const auto value : kZeroPrefixDoubleData) {
+      accumulator += value;
+    }
+    folly::doNotOptimizeAway(accumulator.value());
+  }
+}
+
+BENCHMARK_RELATIVE(SumDouble_ReproducibleZeroPrefixBatchAdd_1M, iters) {
+  while (iters--) {
+    reproducible_accumulator<double> accumulator;
+    accumulator.add(kZeroPrefixDoubleData);
+    folly::doNotOptimizeAway(accumulator.value());
+  }
+}
+
+BENCHMARK(SumFloat_ReproducibleZeroPrefixOneAtATime_1M, iters) {
+  while (iters--) {
+    reproducible_accumulator<float> accumulator;
+    for (const auto value : kZeroPrefixFloatData) {
+      accumulator += value;
+    }
+    folly::doNotOptimizeAway(accumulator.value());
+  }
+}
+
+BENCHMARK_RELATIVE(SumFloat_ReproducibleZeroPrefixBatchAdd_1M, iters) {
+  while (iters--) {
+    reproducible_accumulator<float> accumulator;
+    accumulator.add(kZeroPrefixFloatData);
+    folly::doNotOptimizeAway(accumulator.value());
   }
 }
 
