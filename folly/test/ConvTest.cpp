@@ -21,12 +21,15 @@
 #include <folly/Conv.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
+#include <type_traits>
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -1791,6 +1794,122 @@ TEST(conv, customEnumclass) {
   auto str = to<string>(my::SmallEnum{});
   toAppend("|", my::SmallEnum{}, &str);
   EXPECT_EQ("SmallEnum|SmallEnum", str);
+}
+
+TEST(Conv, StringViewCursorConsumesBoundedPrefix) {
+  std::array<char, 9> const bytes{'x', ' ', ' ', '+', '4', '2', '\0', 't', 'x'};
+  std::string_view input(bytes.data() + 1, 7);
+  static_assert(noexcept(folly::tryTo<int>(&input)));
+  auto parsed = folly::tryTo<int>(&input);
+  ASSERT_TRUE(parsed.hasValue());
+  EXPECT_EQ(42, parsed.value());
+  EXPECT_EQ(std::string_view(bytes.data() + 6, 2), input);
+  EXPECT_EQ(bytes.data() + 6, input.data());
+
+  input = std::string_view(bytes.data() + 1, 7);
+  EXPECT_EQ(42, folly::to<int>(&input));
+  EXPECT_EQ(std::string_view(bytes.data() + 6, 2), input);
+  EXPECT_EQ(bytes.data() + 6, input.data());
+}
+
+TEST(Conv, StringViewCursorFailurePreservesInput) {
+  using namespace std::literals::string_view_literals;
+  const std::array cases{
+      ""sv, " "sv, "bad"sv, "+"sv, "128tail"sv, "-129tail"sv};
+  for (auto original : cases) {
+    auto input = original;
+    auto legacy = StringPiece(original);
+    auto parsed = folly::tryTo<int8_t>(&input);
+    auto oldParsed = folly::tryTo<int8_t>(&legacy);
+    ASSERT_FALSE(parsed.hasValue());
+    ASSERT_FALSE(oldParsed.hasValue());
+    EXPECT_EQ(oldParsed.error(), parsed.error());
+    EXPECT_EQ(original, input);
+    EXPECT_EQ(original.data(), input.data());
+    EXPECT_THROW(folly::to<int8_t>(&input), std::range_error);
+    EXPECT_EQ(original, input);
+    EXPECT_EQ(original.data(), input.data());
+  }
+}
+
+TEST(Conv, StringViewCursorBoolAndFloatLeaveSuffix) {
+  std::string_view boolean = "false:tail";
+  auto parsedBool = folly::tryTo<bool>(&boolean);
+  ASSERT_TRUE(parsedBool.hasValue());
+  EXPECT_FALSE(parsedBool.value());
+  EXPECT_EQ(":tail", boolean);
+
+  std::string_view floating = "3.5:tail";
+  EXPECT_EQ(3.5, folly::to<double>(&floating));
+  EXPECT_EQ(":tail", floating);
+}
+
+TEST(Conv, StringViewCursorCustomParser) {
+  std::string_view input = "7x8:tail";
+  auto parsed = folly::tryTo<my::Dimensions>(&input);
+  ASSERT_TRUE(parsed.hasValue());
+  EXPECT_EQ((my::Dimensions{7, 8}), parsed.value());
+  EXPECT_EQ(":tail", input);
+
+  input = "7x8:tail";
+  EXPECT_EQ((my::Dimensions{7, 8}), folly::to<my::Dimensions>(&input));
+  EXPECT_EQ(":tail", input);
+
+  std::string_view const invalid = "7xbad";
+  input = invalid;
+  EXPECT_FALSE(folly::tryTo<my::Dimensions>(&input).hasValue());
+  EXPECT_EQ(invalid, input);
+  EXPECT_EQ(invalid.data(), input.data());
+  EXPECT_THROW(folly::to<my::Dimensions>(&input), std::range_error);
+  EXPECT_EQ(invalid, input);
+  EXPECT_EQ(invalid.data(), input.data());
+}
+
+TEST(Conv, StringViewCursorReturnsBorrowedView) {
+  std::array<char, 3> const bytes{'a', '\0', 'b'};
+  std::string_view input(bytes.data(), bytes.size());
+  auto const original = input;
+  auto parsed = folly::tryTo<std::string_view>(&input);
+  ASSERT_TRUE(parsed.hasValue());
+  EXPECT_EQ(original, parsed.value());
+  EXPECT_EQ(bytes.data(), parsed.value().data());
+  EXPECT_TRUE(input.empty());
+  EXPECT_EQ(bytes.data() + bytes.size(), input.data());
+
+  input = original;
+  auto result = folly::to<std::string_view>(&input);
+  EXPECT_EQ(original, result);
+  EXPECT_EQ(bytes.data(), result.data());
+  EXPECT_TRUE(input.empty());
+  EXPECT_EQ(bytes.data() + bytes.size(), input.data());
+}
+
+TEST(Conv, StringViewCursorReturnsOwningString) {
+  std::array<char, 3> const bytes{'a', '\0', 'b'};
+  std::string_view input(bytes.data(), bytes.size());
+  auto parsed = folly::tryTo<std::string>(&input);
+  ASSERT_TRUE(parsed.hasValue());
+  EXPECT_EQ(std::string(bytes.data(), bytes.size()), parsed.value());
+  EXPECT_TRUE(input.empty());
+  EXPECT_EQ(bytes.data() + bytes.size(), input.data());
+}
+
+TEST(Conv, StringViewCursorPointerIdentity) {
+  std::string_view input = "unchanged";
+  auto const original = input;
+  auto* pointer = &input;
+  EXPECT_EQ(pointer, folly::to<std::string_view*>(pointer));
+  auto parsed = folly::tryTo<std::string_view*>(pointer);
+  ASSERT_TRUE(parsed.hasValue());
+  EXPECT_EQ(pointer, parsed.value());
+  EXPECT_EQ(original, input);
+  EXPECT_EQ(original.data(), input.data());
+
+  std::string_view* nullPointer = nullptr;
+  EXPECT_EQ(nullptr, folly::to<std::string_view*>(nullPointer));
+  auto empty = folly::tryTo<std::string_view*>(nullPointer);
+  ASSERT_TRUE(empty.hasValue());
+  EXPECT_EQ(nullptr, empty.value());
 }
 
 TEST(Conv, TryToThenWithVoid) {

@@ -71,9 +71,9 @@
  * from users sending you down a very slow exception-throwing path), you can use
  * `tryTo<T>`, which will return an `Expected<T, ConversionCode>`.
  *
- * There are overloads of to() and tryTo() that take a `StringPiece*`. These
- * parse out a type from the beginning of a string, and modify the passed-in
- * StringPiece to indicate the portion of the string not consumed.
+ * There are overloads of to() and tryTo() that take a `StringPiece*` or
+ * `std::string_view*`. These parse a type from the beginning of a string and
+ * update the input view to the unconsumed suffix only on success.
  *
  *******************************************************************************
  * ## NUMERIC / ENUM CONVERSIONS
@@ -118,6 +118,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <tuple>
 #include <type_traits>
@@ -1564,6 +1565,30 @@ Tgt to(StringPiece* src) {
             return std::move(result);
           },
           [=](Error e) { return makeConversionError(e, *src); });
+}
+
+/**
+ * Consume a standard string view using the existing parseTo customization.
+ * The input cursor changes only on success, just as for StringPiece pointers.
+ */
+template <class Tgt, class Src>
+  requires(std::is_same_v<Src, std::string_view> && !std::is_same_v<Tgt, Src*>)
+Expected<Tgt, detail::ParseToError<Tgt>> tryTo(Src* src) noexcept {
+  StringPiece piece(*src);
+  auto result = tryTo<Tgt>(&piece);
+  if (result.hasValue()) {
+    *src = std::string_view(piece);
+  }
+  return result;
+}
+
+template <class Tgt, class Src>
+  requires(std::is_same_v<Src, std::string_view> && !std::is_same_v<Tgt, Src*>)
+Tgt to(Src* src) {
+  StringPiece piece(*src);
+  auto result = to<Tgt>(&piece);
+  *src = std::string_view(piece);
+  return result;
 }
 
 /**
