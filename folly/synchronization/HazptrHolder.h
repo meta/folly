@@ -59,6 +59,7 @@ class hazptr_holder {
 
   template <uint8_t M, template <typename> class A>
   friend class hazptr_local;
+  friend hazptr_holder<Atom> make_hazard_pointer<Atom>();
   friend hazptr_holder<Atom> make_hazard_pointer<Atom>(hazptr_domain<Atom>&);
   template <uint8_t M, template <typename> class A>
   friend hazptr_array<M, A> make_hazard_pointer_array();
@@ -188,6 +189,19 @@ class hazptr_holder {
 /**
  *  Free function make_hazard_pointer constructs nonempty holder
  */
+template <template <typename> class Atom>
+FOLLY_ALWAYS_INLINE hazptr_holder<Atom> make_hazard_pointer() {
+#if FOLLY_HAZPTR_THR_LOCAL
+  //  The domain is known to be the default domain, so, unlike the overload
+  //  taking a domain, there is no need to load is_default_domain.
+  auto hprec = hazptr_tc_tls<Atom>().try_get();
+  if (FOLLY_LIKELY(hprec != nullptr)) {
+    return hazptr_holder<Atom>(hprec);
+  }
+#endif
+  return make_hazard_pointer<Atom>(default_hazptr_domain<Atom>());
+}
+
 template <template <typename> class Atom>
 FOLLY_ALWAYS_INLINE hazptr_holder<Atom> make_hazard_pointer(
     hazptr_domain<Atom>& domain) {

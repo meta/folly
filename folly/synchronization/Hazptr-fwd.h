@@ -211,10 +211,12 @@ class hazptr_holder;
 template <template <typename> class Atom = std::atomic>
 using hazard_pointer = hazptr_holder<Atom>;
 
-/** Free function make_hazard_pointer constructs nonempty holder */
+/** Free function make_hazard_pointer constructs nonempty holder.
+    The overload taking no argument uses the default domain. */
 template <template <typename> class Atom = std::atomic>
-hazptr_holder<Atom> make_hazard_pointer(
-    hazptr_domain<Atom>& domain = default_hazptr_domain<Atom>());
+hazptr_holder<Atom> make_hazard_pointer();
+template <template <typename> class Atom = std::atomic>
+hazptr_holder<Atom> make_hazard_pointer(hazptr_domain<Atom>& domain);
 
 /** Free function swap of hazptr_holder-s */
 template <template <typename> class Atom = std::atomic>
