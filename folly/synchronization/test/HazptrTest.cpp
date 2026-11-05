@@ -673,6 +673,24 @@ void array_move_assign_nonempty_test() {
 }
 
 template <template <typename> class Atom = std::atomic>
+void array_move_assign_full_tc_test() {
+#if FOLLY_HAZPTR_THR_LOCAL
+  const uint8_t C = hazptr_tc<Atom>::min_capacity();
+#endif
+  hazptr_array<3, Atom> x = make_hazard_pointer_array<3, Atom>();
+#if FOLLY_HAZPTR_THR_LOCAL
+  {
+    // v dtor fills the thread cache; then w dtor grows it past its base
+    // capacity, so that the release below has to evict back to the domain.
+    hazptr_holder<Atom> w = make_hazard_pointer<Atom>();
+    hazptr_array<C, Atom> v = make_hazard_pointer_array<C, Atom>();
+  }
+#endif
+  // x is nonempty, so move assignment takes the release path.
+  x = make_hazard_pointer_array<3, Atom>();
+}
+
+template <template <typename> class Atom = std::atomic>
 void array_dtor_full_tc_test() {
 #if FOLLY_HAZPTR_THR_LOCAL
   const uint8_t M = hazptr_tc<Atom>::min_capacity();
@@ -1553,6 +1571,10 @@ TEST(HazptrTest, array_move_assign_nonempty) {
 TEST_F(HazptrPreInitTest, dsched_array_move_assign_nonempty) {
   DSched sched(DSched::uniform(0));
   array_move_assign_nonempty_test<DeterministicAtomic>();
+}
+
+TEST(HazptrTest, array_move_assign_full_tc) {
+  array_move_assign_full_tc_test();
 }
 
 TEST(HazptrTest, array_dtor_full_tc) {

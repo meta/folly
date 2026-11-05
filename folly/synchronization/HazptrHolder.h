@@ -324,9 +324,14 @@ class hazptr_array {
     if (FOLLY_UNLIKELY(this == &other)) {
       return *this;
     }
+    if (!empty_) {
+      release_all();
+    }
     auto h = reinterpret_cast<hazptr_holder<Atom>*>(&raw_);
+    auto hother = reinterpret_cast<hazptr_holder<Atom>*>(&other.raw_);
     for (uint8_t i = 0; i < M; ++i) {
-      h[i] = std::move(other[i]);
+      h[i].set_hprec(hother[i].hprec());
+      hother[i].set_hprec(nullptr);
     }
     empty_ = other.empty_;
     other.empty_ = true;
