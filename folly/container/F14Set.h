@@ -60,37 +60,34 @@ namespace detail {
 
 template <typename Policy>
 class F14BasicSet {
-  template <typename K, typename T>
-  using EnableHeterogeneousFind = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousFind =
       ::folly::detail::EligibleForHeterogeneousFind<
           typename Policy::Value,
           typename Policy::Hasher,
           typename Policy::KeyEqual,
-          K>::value,
-      T>;
+          K>::value;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousInsert = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousInsert =
       ::folly::detail::EligibleForHeterogeneousInsert<
           typename Policy::Value,
           typename Policy::Hasher,
           typename Policy::KeyEqual,
-          K>::value,
-      T>;
+          K>::value;
 
   template <typename K>
   using IsIter = std::is_same<typename Policy::Iter, std::remove_cvref_t<K>>;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousErase = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousErase =
       ::folly::detail::EligibleForHeterogeneousFind<
           typename Policy::Value,
           typename Policy::Hasher,
           typename Policy::KeyEqual,
           std::conditional_t<IsIter<K>::value, typename Policy::Value, K>>::
-              value &&
-          !IsIter<K>::value,
-      T>;
+          value &&
+      !IsIter<K>::value;
 
  public:
   //// PUBLIC - Member types
@@ -309,7 +306,8 @@ class F14BasicSet {
 
   /// Add a single element, of a heterognous type.
   template <typename K>
-  EnableHeterogeneousInsert<K, std::pair<iterator, bool>> insert(K&& value) {
+    requires kEligibleForHeterogeneousInsert<K>
+  std::pair<iterator, bool> insert(K&& value) {
     return emplace(std::forward<K>(value));
   }
 
@@ -417,7 +415,8 @@ class F14BasicSet {
 
   /// Remove a key, using a heterogeneous representation.
   template <typename K>
-  EnableHeterogeneousErase<K, size_type> erase(K const& key) {
+    requires kEligibleForHeterogeneousErase<K>
+  size_type erase(K const& key) {
     return eraseInto(key, variadic_noop);
   }
 
@@ -463,8 +462,8 @@ class F14BasicSet {
 
   /// Callback-erase a specific key, using a heterogeneous representation.
   template <typename K, typename BeforeDestroy>
-  EnableHeterogeneousErase<K, size_type> eraseInto(
-      K const& key, BeforeDestroy&& beforeDestroy) {
+    requires kEligibleForHeterogeneousErase<K>
+  size_type eraseInto(K const& key, BeforeDestroy&& beforeDestroy) {
     return table_.eraseKeyInto(key, beforeDestroy);
   }
 
@@ -479,8 +478,8 @@ class F14BasicSet {
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, size_type> count(
-      K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE size_type count(K const& key) const {
     return contains(key) ? 1 : 0;
   }
 
@@ -511,13 +510,14 @@ class F14BasicSet {
 
   /// @copydoc prehash
   template <typename K>
-  EnableHeterogeneousFind<K, F14HashToken> prehash(K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  F14HashToken prehash(K const& key) const {
     return table_.prehash(key);
   }
   /// @copydoc prehash
   template <typename K>
-  EnableHeterogeneousFind<K, F14HashToken> prehash(
-      K const& key, std::size_t hash) const {
+    requires kEligibleForHeterogeneousFind<K>
+  F14HashToken prehash(K const& key, std::size_t hash) const {
     return table_.prehash(key, hash);
   }
 
@@ -580,27 +580,30 @@ class F14BasicSet {
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, iterator> find(K const& key)
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE iterator find(K const& key)
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return const_cast<F14BasicSet const*>(this)->find(key);
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, const_iterator> find(
-      K const& key) const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE const_iterator find(K const& key) const
+      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return table_.makeIter(table_.find(key));
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, iterator> find(
-      F14HashToken const& token, K const& key)
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE iterator find(F14HashToken const& token, K const& key)
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return const_cast<F14BasicSet const*>(this)->find(token, key);
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, const_iterator> find(
-      F14HashToken const& token, K const& key) const
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE const_iterator
+  find(F14HashToken const& token, K const& key) const
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return table_.makeIter(table_.find(token, key));
   }
@@ -615,8 +618,8 @@ class F14BasicSet {
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, bool> contains(
-      K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE bool contains(K const& key) const {
     return !table_.find(key).atEnd();
   }
 
@@ -626,7 +629,8 @@ class F14BasicSet {
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, bool> contains(
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE bool contains(
       F14HashToken const& token, K const& key) const {
     return !table_.find(token, key).atEnd();
   }
@@ -645,14 +649,14 @@ class F14BasicSet {
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, std::pair<iterator, iterator>> equal_range(
-      K const& key) {
+    requires kEligibleForHeterogeneousFind<K>
+  std::pair<iterator, iterator> equal_range(K const& key) {
     return equal_range(*this, key);
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, std::pair<const_iterator, const_iterator>>
-  equal_range(K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  std::pair<const_iterator, const_iterator> equal_range(K const& key) const {
     return equal_range(*this, key);
   }
 
@@ -1087,16 +1091,15 @@ class F14VectorSetImpl
       std::is_same<typename Policy::Iter, std::remove_cvref_t<K>>,
       std::is_same<typename Policy::ReverseIter, std::remove_cvref_t<K>>>;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousVectorErase = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousVectorErase =
       ::folly::detail::EligibleForHeterogeneousFind<
           typename Policy::Value,
           typename Policy::Hasher,
           typename Policy::KeyEqual,
           std::conditional_t<IsIter<K>::value, typename Policy::Value, K>>::
-              value &&
-          !IsIter<K>::value,
-      T>;
+          value &&
+      !IsIter<K>::value;
 
  public:
   using typename Super::const_iterator;
@@ -1172,7 +1175,8 @@ class F14VectorSetImpl
   }
 
   template <typename K>
-  EnableHeterogeneousVectorErase<K, std::size_t> erase(K const& key) {
+    requires kEligibleForHeterogeneousVectorErase<K>
+  std::size_t erase(K const& key) {
     return eraseInto(key, variadic_noop);
   }
 
@@ -1203,8 +1207,8 @@ class F14VectorSetImpl
   }
 
   template <typename K, typename BeforeDestroy>
-  EnableHeterogeneousVectorErase<K, std::size_t> eraseInto(
-      K const& key, BeforeDestroy&& beforeDestroy) {
+    requires kEligibleForHeterogeneousVectorErase<K>
+  std::size_t eraseInto(K const& key, BeforeDestroy&& beforeDestroy) {
     return eraseUnderlyingKey(key, beforeDestroy);
   }
 
