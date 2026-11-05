@@ -176,7 +176,7 @@ Defines only one function---`randomNumberSeed()`.
 
 #### `Range.h`
 
-Boost-style range facility and the `StringPiece` specialization.
+Range facility and the `StringPiece` specialization.
 
 #### `RWSpinLock.h`
 

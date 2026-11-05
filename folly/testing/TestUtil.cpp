@@ -51,11 +51,11 @@ bool isDirectorySeparator(fs::path::value_type c) {
 #endif
 }
 
-// Append `name` to `dir` the way Boost.Filesystem v3 `operator/=` does: add the
-// preferred separator unless `name` starts with a separator or `dir` already
-// ends with one, then concatenate. A name prefix such as "/tmp" or "//tmp" thus
-// always names an entry inside `dir`; with std::filesystem `operator/=`, an
-// absolute or root-name `name` would replace `dir` instead.
+// Append `name` to `dir`: add the preferred separator unless `name` starts with
+// a separator or `dir` already ends with one, then concatenate. A name prefix
+// such as "/tmp" or "//tmp" thus always names an entry inside `dir`; with
+// std::filesystem `operator/=`, an absolute or root-name `name` would replace
+// `dir` instead.
 fs::path appendName(const fs::path& dir, const fs::path& name) {
   auto joined = dir.native();
   const auto& tail = name.native();

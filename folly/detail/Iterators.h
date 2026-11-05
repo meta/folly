@@ -24,23 +24,9 @@
 #include <utility>
 
 /*
- * This contains stripped-down workalikes of some Boost classes:
- *
- *   iterator_adaptor
- *   iterator_facade
- *
- * Rationale: the boost headers providing those classes are surprisingly large.
- * The bloat comes from the headers themselves, but more so, their transitive
- * includes.
- *
- * These implementations are simple and minimal.  They may be missing features
- * provided by the Boost classes mentioned above.  They provide just enough for
- * the uses within Folly libs; more features will be slapped in here if and
- * when they're needed.
- *
- * These classes may possibly add features as well.  Care is taken not to
- * change functionality where it's expected to be the same (e.g. `dereference`
- * will do the same thing).
+ * This contains minimal iterator facade and adaptor classes.  They provide just
+ * enough for the uses within Folly libs; more features will be slapped in here
+ * if and when they're needed.
  *
  * These are currently only intended for use within Folly, hence their living
  * under detail.  Use outside Folly is not recommended.
@@ -66,10 +52,8 @@ namespace detail {
  * distance_to returns rhs - *this, the number of increments that take *this
  * to rhs.
  *
- * These names are consistent with those used by the Boost iterator
- * facade / adaptor classes to ease migration classes in this file.  The
- * facade calls them as members of D, so they may be private if D befriends
- * the facade.
+ * The facade calls them as members of D, so they may be private if D
+ * befriends the facade.
  *
  * Template parameters:
  * D: the deriving class (CRTP)

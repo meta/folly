@@ -641,8 +641,7 @@ int pthread_cond_broadcast(pthread_cond_t* cond) {
   return 0;
 }
 
-// Key destructors are never run, same as the Boost.Thread-based emulation this
-// replaces.
+// Key destructors are never run.
 int pthread_key_create(pthread_key_t* key, void (* /* destructor */)(void*)) {
   DWORD index = TlsAlloc();
   if (index == TLS_OUT_OF_INDEXES) {

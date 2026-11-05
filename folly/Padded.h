@@ -264,8 +264,8 @@ Iterator<typename Container::iterator> end(Container& c) {
  * emplace / erase.  Also provides reserve() / capacity() if supported by the
  * underlying container.
  *
- * Yes, it's called Adaptor, not Adapter, as that's the name used by the STL
- * and by boost.  Deal with it.
+ * Yes, it's called Adaptor, not Adapter, as that's the name used by the STL.
+ * Deal with it.
  *
  * Internally, we hold a container of Node and the number of elements in
  * the last block.  We don't keep empty blocks, so the number of elements in

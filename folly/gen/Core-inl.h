@@ -270,7 +270,7 @@ typename std::
 }
 
 /**
- * operator|() for composing generators with operators, similar to boosts' range
+ * operator|() for composing generators with operators, similar to range
  * adaptors:
  *   gen | map(square) | sum
  */

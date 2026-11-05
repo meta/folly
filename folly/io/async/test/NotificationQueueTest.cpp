@@ -573,8 +573,8 @@ TEST(NotificationQueueTest, UseAfterFork) {
   int childStatus = 0;
   QueueConsumer consumer;
 
-  // Boost sets a custom SIGCHLD handler, which fails the test if a child
-  // process exits abnormally.  We don't want this.
+  // A custom SIGCHLD handler could fail the test when the child process exits
+  // abnormally.  We don't want this.
   signal(SIGCHLD, SIG_DFL);
 
   // Log some info so users reading the test output aren't confused
@@ -595,7 +595,7 @@ TEST(NotificationQueueTest, UseAfterFork) {
     // Fork
     pid_t pid = fork();
     if (pid == 0) {
-      // The boost test framework installs signal handlers to catch errors.
+      // The test framework may install signal handlers to catch errors.
       // We only want to catch in the parent.  In the child let SIGABRT crash
       // us normally.
       signal(SIGABRT, SIG_DFL);

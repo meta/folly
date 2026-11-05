@@ -19,11 +19,7 @@
 //
 
 /**
- * Range abstraction using a pair of iterators. It is not
- * similar to boost's range abstraction because an API identical
- * with the former StringPiece class is required, which is used a lot
- * internally. This abstraction does fulfill the needs of boost's
- * range-oriented algorithms though.
+ * Range abstraction using a pair of iterators.
  *
  * Note: (Keep memory lifetime in mind when using this class, since it
  * does not manage the data it refers to - just like an iterator
