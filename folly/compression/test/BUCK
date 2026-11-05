@@ -1,6 +1,7 @@
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
 
 oncall("fbcode_entropy_wardens_folly")
 
@@ -18,6 +19,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_unittest(
     name = "compression_test",
     srcs = ["CompressionTest.cpp"],
+    network_access = network_access_utils.strict(),
     supports_static_listing = False,
     target_compatible_with = ["fbcode//opensource/macros:broken-in-oss"],
     deps = [
