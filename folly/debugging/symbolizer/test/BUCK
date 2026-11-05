@@ -7,6 +7,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsyn
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
 load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
+load("@fbsource//tools/target_determinator/macros:ci.bzl", "ci")
 load("../../../defs.bzl", "fbcode_ci_default_labels")
 load(":validate_folly_symbolizer.bzl", "SPLIT_DWARF_FLAGS", "customized_unittest", "validate_folly_symbolizer", "validate_symbolizer_dwp")
 
@@ -435,7 +436,14 @@ export_file(name = "eh_sdata8_large.lds")
 fb_dirsync_cpp_unittest(
     name = "stack_trace_large_test",
     srcs = ["StackTraceLargeTest.cpp"],
-    labels = fbcode_ci_default_labels(),
+    labels = fbcode_ci_default_labels(
+        # The sdata8 linker script places .eh_frame_hdr at 8GB, inside
+        # ASan's shadow range, so any sanitizer build aborts at startup.
+        ci.remove(
+            ci.linux(ci.mode("fbcode//mode/dev-asan")),
+            ci.linux(ci.mode("fbcode//mode/opt-asan")),
+        ),
+    ),
     linker_flags = [
         "--script=$(location :eh_sdata8_large.lds)",
     ],
