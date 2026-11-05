@@ -252,6 +252,39 @@ class hazptr_array {
   /** Private constructor used by make_hazard_pointer_array */
   FOLLY_ALWAYS_INLINE explicit hazptr_array(std::nullptr_t) noexcept {}
 
+  /** Releases the owned hazard pointers. Precondition: nonempty. The holders
+      remain alive but their owned hazptr_rec pointers are left unspecified;
+      the caller must either overwrite them or end the lifetime of *this. */
+  FOLLY_ALWAYS_INLINE void release_all() noexcept {
+    DCHECK(!empty_);
+    auto h = reinterpret_cast<hazptr_holder<Atom>*>(&raw_);
+#if FOLLY_HAZPTR_THR_LOCAL
+    auto& tc = hazptr_tc_tls<Atom>();
+    auto count = tc.count();
+    auto cap = hazptr_tc<Atom>::min_capacity();
+    if (FOLLY_UNLIKELY((M + count) > cap)) {
+      tc.evict((M + count) - cap);
+      count = cap - M;
+    }
+    /* The stores through the hazptr_rec pointers may, as far as the compiler
+       can tell, alias both the thread cache entries and the owned hazptr_rec
+       pointers, so without hoisting the entry base and holding each hazptr_rec
+       pointer in a local they are reloaded on every iteration. */
+    auto* entries = &tc[count];
+    for (uint8_t i = 0; i < M; ++i) {
+      auto* rec = h[i].hprec();
+      DCHECK(rec);
+      rec->reset_hazptr();
+      entries[i].fill(rec);
+    }
+    tc.set_count(count + M);
+#else
+    for (uint8_t i = 0; i < M; ++i) {
+      h[i] = hazptr_holder<Atom>();
+    }
+#endif
+  }
+
  public:
   /** Default empty constructor */
   FOLLY_ALWAYS_INLINE hazptr_array() noexcept {
@@ -282,26 +315,7 @@ class hazptr_array {
     if (empty_) {
       return;
     }
-    auto h = reinterpret_cast<hazptr_holder<Atom>*>(&raw_);
-#if FOLLY_HAZPTR_THR_LOCAL
-    auto& tc = hazptr_tc_tls<Atom>();
-    auto count = tc.count();
-    auto cap = hazptr_tc<Atom>::min_capacity();
-    if (FOLLY_UNLIKELY((M + count) > cap)) {
-      tc.evict((M + count) - cap);
-      count = cap - M;
-    }
-    for (uint8_t i = 0; i < M; ++i) {
-      h[i].reset_protection();
-      tc[count + i].fill(h[i].hprec());
-      h[i].set_hprec(nullptr);
-    }
-    tc.set_count(count + M);
-#else
-    for (uint8_t i = 0; i < M; ++i) {
-      h[i].~hazptr_holder();
-    }
-#endif
+    release_all();
   }
 
   /** Move operator */

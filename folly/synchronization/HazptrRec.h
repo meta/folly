@@ -37,6 +37,8 @@ class alignas(hardware_destructive_interference_size) hazptr_rec {
   friend class hazptr_domain<Atom>;
   friend class hazptr_holder<Atom>;
   friend class hazptr_tc<Atom>;
+  template <uint8_t, template <typename> class>
+  friend class hazptr_array;
   friend hazptr_holder<Atom> make_hazard_pointer<Atom>(hazptr_domain<Atom>&);
   template <uint8_t M, template <typename> class A>
   friend hazptr_array<M, A> make_hazard_pointer_array();
