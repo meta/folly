@@ -632,6 +632,47 @@ void array_test() {
 }
 
 template <template <typename> class Atom = std::atomic>
+void array_self_move_test() {
+  c_.clear();
+  {
+    hazptr_array<3, Atom> h = make_hazard_pointer_array<3, Atom>();
+    for (uint8_t i = 0; i < 3; ++i) {
+      auto x = new Node<Atom>();
+      h[i].reset_protection(x);
+      x->retire();
+    }
+    // Self-move must leave h owning its hazard pointers. Going through a
+    // pointer avoids -Wself-move.
+    auto p = &h;
+    h = std::move(*p);
+    // The retired nodes are still protected, so cleanup must not reclaim them.
+    hazptr_cleanup<Atom>();
+    ASSERT_EQ(c_.dtors(), 0);
+  }
+  // h dtor unprotected the nodes, so cleanup can now reclaim them.
+  hazptr_cleanup<Atom>();
+  ASSERT_EQ(c_.dtors(), 3);
+}
+
+template <template <typename> class Atom = std::atomic>
+void array_move_assign_nonempty_test() {
+  c_.clear();
+  {
+    hazptr_array<3, Atom> x = make_hazard_pointer_array<3, Atom>();
+    auto p = new Node<Atom>();
+    x[0].reset_protection(p);
+    p->retire();
+    hazptr_array<3, Atom> y = make_hazard_pointer_array<3, Atom>();
+    // x is nonempty, so move assignment must release x's hazard pointers,
+    // which unprotects p, before taking y's.
+    x = std::move(y);
+    hazptr_cleanup<Atom>();
+    ASSERT_EQ(c_.dtors(), 1);
+  }
+  hazptr_cleanup<Atom>();
+}
+
+template <template <typename> class Atom = std::atomic>
 void array_dtor_full_tc_test() {
 #if FOLLY_HAZPTR_THR_LOCAL
   const uint8_t M = hazptr_tc<Atom>::min_capacity();
@@ -1494,6 +1535,24 @@ TEST(HazptrTest, array) {
 TEST_F(HazptrPreInitTest, dsched_array) {
   DSched sched(DSched::uniform(0));
   array_test<DeterministicAtomic>();
+}
+
+TEST(HazptrTest, array_self_move) {
+  array_self_move_test();
+}
+
+TEST_F(HazptrPreInitTest, dsched_array_self_move) {
+  DSched sched(DSched::uniform(0));
+  array_self_move_test<DeterministicAtomic>();
+}
+
+TEST(HazptrTest, array_move_assign_nonempty) {
+  array_move_assign_nonempty_test();
+}
+
+TEST_F(HazptrPreInitTest, dsched_array_move_assign_nonempty) {
+  DSched sched(DSched::uniform(0));
+  array_move_assign_nonempty_test<DeterministicAtomic>();
 }
 
 TEST(HazptrTest, array_dtor_full_tc) {

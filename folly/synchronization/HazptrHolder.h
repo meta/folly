@@ -320,6 +320,10 @@ class hazptr_array {
 
   /** Move operator */
   FOLLY_ALWAYS_INLINE hazptr_array& operator=(hazptr_array&& other) noexcept {
+    /* Self-move is a no-op. */
+    if (FOLLY_UNLIKELY(this == &other)) {
+      return *this;
+    }
     auto h = reinterpret_cast<hazptr_holder<Atom>*>(&raw_);
     for (uint8_t i = 0; i < M; ++i) {
       h[i] = std::move(other[i]);
