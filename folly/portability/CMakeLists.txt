@@ -51,6 +51,7 @@ folly_add_library(
   NAME event
   HEADERS Event.h
   EXPORTED_DEPS
+    folly_ext_event
     folly_net_detail_socket_file_descriptor_map
     folly_portability_fcntl
     folly_portability_windows

@@ -280,6 +280,16 @@ if (NOT LibEvent_FOUND)
   # The targets carry the include directories; clear the failed find_path()
   # result.
   set(LIBEVENT_INCLUDE_DIR "")
+  # folly_deps doesn't link the targets, but folly's sources still need their
+  # include directories: a shared build compiles them without following
+  # folly_ext_event.
+  foreach (folly_libevent_target IN LISTS LIBEVENT_LIB)
+    list(
+      APPEND
+      FOLLY_BUILD_INCLUDE_DIRECTORIES
+      "$<TARGET_PROPERTY:${folly_libevent_target},INTERFACE_INCLUDE_DIRECTORIES>"
+    )
+  endforeach ()
   # As for glog, a project built alongside folly gets FindLibEvent's variables
   # from here, or it reads the NOTFOUND results cached above.
   file(WRITE "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/libevent-extra.cmake"
@@ -288,7 +298,8 @@ set(LIBEVENT_INCLUDE_DIR \"\")
 ")
   set_property(GLOBAL APPEND PROPERTY FOLLY_BUILD_LOCAL_TARGETS ${LIBEVENT_LIB})
 endif ()
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBEVENT_LIB})
+# EventBase's headers call into libevent.
+folly_add_external_library(event MONOLITH_PUBLIC LIBRARIES ${LIBEVENT_LIB})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBEVENT_INCLUDE_DIR})
 
 find_package(ZLIB MODULE)
@@ -741,6 +752,10 @@ foreach (_dir IN LISTS FOLLY_INCLUDE_DIRECTORIES)
   else ()
     target_include_directories(folly_deps INTERFACE ${_dir})
   endif ()
+endforeach ()
+# Include directories of build-local targets that folly_deps doesn't link.
+foreach (_dir IN LISTS FOLLY_BUILD_INCLUDE_DIRECTORIES)
+  target_include_directories(folly_deps INTERFACE "$<BUILD_INTERFACE:${_dir}>")
 endforeach ()
 folly_localize_deps(folly_deps_link ${FOLLY_LINK_LIBRARIES}
                     ${FOLLY_SHINY_DEPENDENCIES} ${FOLLY_ASAN_FLAGS})
