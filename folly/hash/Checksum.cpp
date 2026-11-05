@@ -37,7 +37,7 @@ namespace folly {
 
 namespace detail {
 
-#if FOLLY_HAS_CRC32_VPCLMUL
+#if FOLLY_X64
 // -1 until the first call. Reading it is still a load, so a call that its
 // size already settles must not reach it.
 bool vendor_intel() {
@@ -294,23 +294,63 @@ uint32_t crc32_sw(
 
 namespace {
 #if FOLLY_X64
+#if FOLLY_HAS_CRC32_VPCLMUL
+// Whether any wider fold exists for this part at all, answered once. A part
+// without VPCLMULQDQ never takes one, and this spares it the per-call tests.
+bool crc32c_any_wide_fold_usable() {
+  static const bool v = detail::crc32c_wide_avx512_usable() ||
+      detail::crc32c_wide256_avx2_usable();
+  return v;
+}
+#endif
+
+// Reached by every part below the wide-fold threshold, and above it only by
+// parts that cannot run a wider fold at all.
+//
 // The fast-crc32 generated kernels are tuned for Intel. Above 4096 bytes they
 // beat crc32c_hw on Xeon (1.10x at 8KiB, 1.63x at 1MiB) and lose to it on every
 // AMD part measured, at every size from 4KiB to 4MiB (0.70x-0.85x on Zen 3).
-// Vendor and size are one decision, so they are answered in one place.
 bool crc32c_prefer_generated(size_t nbytes) {
-  // Size first: most callers are below the threshold and this way they never
-  // touch the guard variable.
-  if (nbytes <= 4096) {
-    return false;
-  }
-  static const bool isIntel = folly::CpuId().vendor_intel();
-  return isIntel;
+  // Size first, so that a short call never reads the vendor.
+  return nbytes > detail::kCrc32cGeneratedMinBytes &&
+      detail::crc32c_generated_for(nbytes, detail::vendor_intel());
 }
 #endif
 } // namespace
 
 uint32_t crc32c(const uint8_t* data, size_t nbytes, uint32_t startingChecksum) {
+#if FOLLY_X64 && FOLLY_HAS_CRC32_VPCLMUL
+  // One fold per part, chosen by what it can run rather than by call size.
+  // Splitting the AMD range by size was measured and is not worth its branch:
+  // a single fold is within 2% of the best fold at every size on every part,
+  // and within noise on three of five. Intel takes the 256-bit fold, which
+  // leads there at every size measured.
+  //
+  // Size first, then capability. The size test is an integer compare and
+  // rejects most calls, so it has to come before anything that does not
+  // inline. The capability answer is read once and cached: a part with
+  // neither ISA can never take any of this, and without that test it paid
+  // three cross-library calls on every large call for a branch that always
+  // fell through.
+  if (nbytes >= detail::kCrc32cWideMinBytesAmd &&
+      crc32c_any_wide_fold_usable()) {
+    switch (detail::crc32c_wide_fold_for(
+        nbytes,
+        detail::crc32c_wide512_usable(),
+        detail::crc32c_wide256_avx512_usable(),
+        detail::crc32c_wide256_avx2_usable(),
+        detail::vendor_intel())) {
+      case detail::Crc32cWideFold::kWide512:
+        return detail::crc32c_wide512(data, nbytes, startingChecksum);
+      case detail::Crc32cWideFold::kWide256Avx512:
+        return detail::crc32c_wide256_avx512(data, nbytes, startingChecksum);
+      case detail::Crc32cWideFold::kWide256Avx2:
+        return detail::crc32c_wide256_avx2(data, nbytes, startingChecksum);
+      case detail::Crc32cWideFold::kNone:
+        break;
+    }
+  }
+#endif
 #if FOLLY_X64
   // available() is a cross-library call that does not inline, so it goes last:
   // a caller below the threshold must not pay for it.
@@ -337,6 +377,8 @@ uint32_t crc32c(const uint8_t* data, size_t nbytes, uint32_t startingChecksum) {
 
   if (detail::crc32c_hw_supported()) {
 #if FOLLY_X64 && defined(FOLLY_ENABLE_SSE42_CRC32C_V8S3X3)
+    // Above the threshold, an Intel part that cannot run the AVX-512 kernel
+    // takes this one.
     if (crc32c_prefer_generated(nbytes)) {
       return detail::sse_crc32c_v8s3x3(data, nbytes, startingChecksum);
     }

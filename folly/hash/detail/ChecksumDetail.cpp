@@ -263,6 +263,506 @@ uint32_t crc32_hw_aligned_vpclmul(
       _mm_cvtsi128_si32(_mm_srli_si128(_mm_xor_si128(x0, x1), 4)));
 }
 
+// Hand-derived from folly/external/fast-crc32/avx512_crc32c_v8s3x4.cpp by
+// pairing its eight 128-bit accumulators into wider registers. VPCLMULQDQ
+// applies the carryless multiply independently within each 128-bit lane and
+// the combine is lane-wise, so with the multiplier broadcast to every lane the
+// result is bit-identical and the folding constants do not change. Same
+// argument as crc32_hw_aligned_vpclmul above, applied to CRC-32C.
+//
+// Only the main loop differs from the generated kernel. The prologue, the
+// reduction of x0...x7 and the scalar tail are copied unchanged.
+static FOLLY_ALWAYS_INLINE __m128i crc32c_clmul_lo(__m128i a, __m128i b) {
+  return _mm_clmulepi64_si128(a, b, 0);
+}
+
+static FOLLY_ALWAYS_INLINE __m128i crc32c_clmul_hi(__m128i a, __m128i b) {
+  return _mm_clmulepi64_si128(a, b, 17);
+}
+
+static FOLLY_ALWAYS_INLINE __m128i
+crc32c_wide_clmul_scalar(uint32_t a, uint32_t b) {
+  return _mm_clmulepi64_si128(_mm_cvtsi32_si128(a), _mm_cvtsi32_si128(b), 0);
+}
+
+static uint32_t crc32c_wide_xnmodp(uint64_t n) {
+  uint64_t stack = ~(uint64_t)1;
+  uint32_t acc, low;
+  for (; n > 191; n = (n >> 1) - 16) {
+    stack = (stack << 1) + (n & 1);
+  }
+  stack = ~stack;
+  acc = ((uint32_t)0x80000000) >> (n & 31);
+  for (n >>= 5; n; --n) {
+    acc = _mm_crc32_u32(acc, 0);
+  }
+  while ((low = stack & 1), stack >>= 1) {
+    __m128i x = _mm_cvtsi32_si128(acc);
+    uint64_t y = _mm_cvtsi128_si64(_mm_clmulepi64_si128(x, x, 0));
+    acc = static_cast<uint32_t>(_mm_crc32_u64(0, y << low));
+  }
+  return acc;
+}
+
+static FOLLY_ALWAYS_INLINE __m128i
+crc32c_wide_crc_shift(uint32_t crc, size_t nbytes) {
+  return crc32c_wide_clmul_scalar(crc, crc32c_wide_xnmodp(nbytes * 8 - 33));
+}
+
+bool crc32c_wide256_avx2_usable() {
+  static const bool value = [] {
+    CpuId id;
+    return id.avx2() && id.vpclmulqdq() && id.pclmuldq() && id.sse42();
+  }();
+  return value;
+}
+
+// Both AVX-512 folds reduce through _mm_ternarylogic_epi64, which is an
+// EVEX-encoded 128-bit instruction, so AVX512VL is needed on top of AVX512F.
+// pclmuldq because the reduction compiles to the VEX.128 form of
+// vpclmulqdq, which the VPCLMULQDQ feature bit does not cover on its own.
+// hasTrapOnAvx512 because BOLT's -trap-avx512 can replace AVX-512 code with
+// ud2, and FOLLY_DISABLE_AVX512 as in crc32c_hw_supported_avx512.
+bool crc32c_wide_avx512_usable() {
+#if FOLLY_DISABLE_AVX512
+  return false;
+#else
+  static const bool value = [] {
+    CpuId id;
+    return id.avx512f() && id.avx512vl() && id.vpclmulqdq() && id.pclmuldq() &&
+        id.sse42() && !hasTrapOnAvx512();
+  }();
+  return value;
+#endif
+}
+
+bool crc32c_wide512_usable() {
+  static const bool value = crc32c_wide_avx512_usable() &&
+      !hasTrapOnEntry(reinterpret_cast<const void*>(&crc32c_wide512));
+  return value;
+}
+
+bool crc32c_wide256_avx512_usable() {
+  static const bool value = crc32c_wide_avx512_usable() &&
+      !hasTrapOnEntry(reinterpret_cast<const void*>(&crc32c_wide256_avx512));
+  return value;
+}
+
+FOLLY_TARGET_ATTRIBUTE("avx2,vpclmulqdq,sse4.2")
+uint32_t crc32c_wide256_avx2(const uint8_t* buf, size_t len, uint32_t crc0) {
+  for (; len && ((uintptr_t)buf & 7); --len) {
+    crc0 = _mm_crc32_u8(crc0, *buf++);
+  }
+  if (((uintptr_t)buf & 8) && len >= 8) {
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+    buf += 8;
+    len -= 8;
+  }
+  if (len >= 224) {
+    size_t blk = (len - 0) / 224;
+    size_t klen = blk * 32;
+    const uint8_t* buf2 = buf + klen * 3;
+    uint32_t crc1 = 0;
+    uint32_t crc2 = 0;
+    __m128i vc0, vc1, vc2;
+    uint64_t vc;
+    // z0 carries accumulators 0 and 1, z1 carries 2 and 3, and so on, so a
+    // 256-bit load at buf2 + 32j lands each 16-byte chunk in the lane that
+    // owns it.
+    __m256i z0 = _mm256_loadu_si256((const __m256i*)buf2), w0;
+    __m256i z1 = _mm256_loadu_si256((const __m256i*)(buf2 + 32)), w1;
+    __m256i z2 = _mm256_loadu_si256((const __m256i*)(buf2 + 64)), w2;
+    __m256i z3 = _mm256_loadu_si256((const __m256i*)(buf2 + 96)), w3;
+    __m128i k = _mm_setr_epi32(0x6992cea2, 0, 0x0d3b6092, 0);
+    __m256i k2 = _mm256_broadcastsi128_si256(k);
+    buf2 += 128;
+    len -= 224;
+    while (len >= 224) {
+      w0 = _mm256_clmulepi64_epi128(z0, k2, 0x00);
+      z0 = _mm256_clmulepi64_epi128(z0, k2, 0x11);
+      w1 = _mm256_clmulepi64_epi128(z1, k2, 0x00);
+      z1 = _mm256_clmulepi64_epi128(z1, k2, 0x11);
+      w2 = _mm256_clmulepi64_epi128(z2, k2, 0x00);
+      z2 = _mm256_clmulepi64_epi128(z2, k2, 0x11);
+      w3 = _mm256_clmulepi64_epi128(z3, k2, 0x00);
+      z3 = _mm256_clmulepi64_epi128(z3, k2, 0x11);
+      z0 = _mm256_xor_si256(
+          _mm256_xor_si256(z0, w0), _mm256_loadu_si256((const __m256i*)buf2));
+      z1 = _mm256_xor_si256(
+          _mm256_xor_si256(z1, w1),
+          _mm256_loadu_si256((const __m256i*)(buf2 + 32)));
+      z2 = _mm256_xor_si256(
+          _mm256_xor_si256(z2, w2),
+          _mm256_loadu_si256((const __m256i*)(buf2 + 64)));
+      z3 = _mm256_xor_si256(
+          _mm256_xor_si256(z3, w3),
+          _mm256_loadu_si256((const __m256i*)(buf2 + 96)));
+      crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 8)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 8)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 8)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 16)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 16)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 16)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 24)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 24)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 24)));
+      buf += 32;
+      buf2 += 128;
+      len -= 224;
+    }
+    // Back to eight 128-bit accumulators for the reduction, which is copied
+    // from the generated kernel and unchanged.
+    __m128i x0 = _mm256_castsi256_si128(z0);
+    __m128i x1 = _mm256_extracti128_si256(z0, 1);
+    __m128i x2 = _mm256_castsi256_si128(z1);
+    __m128i x3 = _mm256_extracti128_si256(z1, 1);
+    __m128i x4 = _mm256_castsi256_si128(z2);
+    __m128i x5 = _mm256_extracti128_si256(z2, 1);
+    __m128i x6 = _mm256_castsi256_si128(z3);
+    __m128i x7 = _mm256_extracti128_si256(z3, 1);
+    __m128i y0, y2, y4, y6;
+    k = _mm_setr_epi32(0xf20c0dfe, 0, 0x493c7d27, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    y2 = crc32c_clmul_lo(x2, k), x2 = crc32c_clmul_hi(x2, k);
+    y4 = crc32c_clmul_lo(x4, k), x4 = crc32c_clmul_hi(x4, k);
+    y6 = crc32c_clmul_lo(x6, k), x6 = crc32c_clmul_hi(x6, k);
+    x0 = _mm_xor_si128(_mm_xor_si128(x0, y0), x1);
+    x2 = _mm_xor_si128(_mm_xor_si128(x2, y2), x3);
+    x4 = _mm_xor_si128(_mm_xor_si128(x4, y4), x5);
+    x6 = _mm_xor_si128(_mm_xor_si128(x6, y6), x7);
+    k = _mm_setr_epi32(0x3da6d0cb, 0, 0xba4fc28e, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    y4 = crc32c_clmul_lo(x4, k), x4 = crc32c_clmul_hi(x4, k);
+    x0 = _mm_xor_si128(_mm_xor_si128(x0, y0), x2);
+    x4 = _mm_xor_si128(_mm_xor_si128(x4, y4), x6);
+    k = _mm_setr_epi32(0x740eef02, 0, 0x9e4addf8, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    x0 = _mm_xor_si128(_mm_xor_si128(x0, y0), x4);
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2)));
+    crc0 =
+        static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)(buf + 8)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 8)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 8)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 16)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 16)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 16)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 24)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 24)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 24)));
+    vc0 = crc32c_wide_crc_shift(crc0, klen * 2 + blk * 128);
+    vc1 = crc32c_wide_crc_shift(crc1, klen + blk * 128);
+    vc2 = crc32c_wide_crc_shift(crc2, 0 + blk * 128);
+    vc = _mm_extract_epi64(_mm_xor_si128(_mm_xor_si128(vc0, vc1), vc2), 0);
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(0, _mm_extract_epi64(x0, 0)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, vc ^ _mm_extract_epi64(x0, 1)));
+    buf = buf2;
+  }
+  for (; len >= 8; buf += 8, len -= 8) {
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+  }
+  for (; len; --len) {
+    crc0 = _mm_crc32_u8(crc0, *buf++);
+  }
+  return crc0;
+}
+
+FOLLY_TARGET_ATTRIBUTE("avx512f,avx512vl,vpclmulqdq,sse4.2")
+uint32_t crc32c_wide256_avx512(const uint8_t* buf, size_t len, uint32_t crc0) {
+  for (; len && ((uintptr_t)buf & 7); --len) {
+    crc0 = _mm_crc32_u8(crc0, *buf++);
+  }
+  if (((uintptr_t)buf & 8) && len >= 8) {
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+    buf += 8;
+    len -= 8;
+  }
+  if (len >= 224) {
+    size_t blk = (len - 0) / 224;
+    size_t klen = blk * 32;
+    const uint8_t* buf2 = buf + klen * 3;
+    uint32_t crc1 = 0;
+    uint32_t crc2 = 0;
+    __m128i vc0, vc1, vc2;
+    uint64_t vc;
+    // z0 carries accumulators 0 and 1, z1 carries 2 and 3, and so on, so a
+    // 256-bit load at buf2 + 32j lands each 16-byte chunk in the lane that
+    // owns it.
+    __m256i z0 = _mm256_loadu_si256((const __m256i*)buf2), w0;
+    __m256i z1 = _mm256_loadu_si256((const __m256i*)(buf2 + 32)), w1;
+    __m256i z2 = _mm256_loadu_si256((const __m256i*)(buf2 + 64)), w2;
+    __m256i z3 = _mm256_loadu_si256((const __m256i*)(buf2 + 96)), w3;
+    __m128i k = _mm_setr_epi32(0x6992cea2, 0, 0x0d3b6092, 0);
+    __m256i k2 = _mm256_broadcastsi128_si256(k);
+    buf2 += 128;
+    len -= 224;
+    while (len >= 224) {
+      w0 = _mm256_clmulepi64_epi128(z0, k2, 0x00);
+      z0 = _mm256_clmulepi64_epi128(z0, k2, 0x11);
+      w1 = _mm256_clmulepi64_epi128(z1, k2, 0x00);
+      z1 = _mm256_clmulepi64_epi128(z1, k2, 0x11);
+      w2 = _mm256_clmulepi64_epi128(z2, k2, 0x00);
+      z2 = _mm256_clmulepi64_epi128(z2, k2, 0x11);
+      w3 = _mm256_clmulepi64_epi128(z3, k2, 0x00);
+      z3 = _mm256_clmulepi64_epi128(z3, k2, 0x11);
+      z0 = _mm256_ternarylogic_epi64(
+          z0, w0, _mm256_loadu_si256((const __m256i*)buf2), 0x96);
+      z1 = _mm256_ternarylogic_epi64(
+          z1, w1, _mm256_loadu_si256((const __m256i*)(buf2 + 32)), 0x96);
+      z2 = _mm256_ternarylogic_epi64(
+          z2, w2, _mm256_loadu_si256((const __m256i*)(buf2 + 64)), 0x96);
+      z3 = _mm256_ternarylogic_epi64(
+          z3, w3, _mm256_loadu_si256((const __m256i*)(buf2 + 96)), 0x96);
+      crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 8)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 8)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 8)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 16)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 16)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 16)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 24)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 24)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 24)));
+      buf += 32;
+      buf2 += 128;
+      len -= 224;
+    }
+    // Back to eight 128-bit accumulators for the reduction, which is copied
+    // from the generated kernel and unchanged.
+    __m128i x0 = _mm256_castsi256_si128(z0);
+    __m128i x1 = _mm256_extracti128_si256(z0, 1);
+    __m128i x2 = _mm256_castsi256_si128(z1);
+    __m128i x3 = _mm256_extracti128_si256(z1, 1);
+    __m128i x4 = _mm256_castsi256_si128(z2);
+    __m128i x5 = _mm256_extracti128_si256(z2, 1);
+    __m128i x6 = _mm256_castsi256_si128(z3);
+    __m128i x7 = _mm256_extracti128_si256(z3, 1);
+    __m128i y0, y2, y4, y6;
+    k = _mm_setr_epi32(0xf20c0dfe, 0, 0x493c7d27, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    y2 = crc32c_clmul_lo(x2, k), x2 = crc32c_clmul_hi(x2, k);
+    y4 = crc32c_clmul_lo(x4, k), x4 = crc32c_clmul_hi(x4, k);
+    y6 = crc32c_clmul_lo(x6, k), x6 = crc32c_clmul_hi(x6, k);
+    x0 = _mm_ternarylogic_epi64(x0, y0, x1, 0x96);
+    x2 = _mm_ternarylogic_epi64(x2, y2, x3, 0x96);
+    x4 = _mm_ternarylogic_epi64(x4, y4, x5, 0x96);
+    x6 = _mm_ternarylogic_epi64(x6, y6, x7, 0x96);
+    k = _mm_setr_epi32(0x3da6d0cb, 0, 0xba4fc28e, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    y4 = crc32c_clmul_lo(x4, k), x4 = crc32c_clmul_hi(x4, k);
+    x0 = _mm_ternarylogic_epi64(x0, y0, x2, 0x96);
+    x4 = _mm_ternarylogic_epi64(x4, y4, x6, 0x96);
+    k = _mm_setr_epi32(0x740eef02, 0, 0x9e4addf8, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    x0 = _mm_ternarylogic_epi64(x0, y0, x4, 0x96);
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2)));
+    crc0 =
+        static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)(buf + 8)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 8)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 8)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 16)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 16)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 16)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 24)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 24)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 24)));
+    vc0 = crc32c_wide_crc_shift(crc0, klen * 2 + blk * 128);
+    vc1 = crc32c_wide_crc_shift(crc1, klen + blk * 128);
+    vc2 = crc32c_wide_crc_shift(crc2, 0 + blk * 128);
+    vc = _mm_extract_epi64(_mm_ternarylogic_epi64(vc0, vc1, vc2, 0x96), 0);
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(0, _mm_extract_epi64(x0, 0)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, vc ^ _mm_extract_epi64(x0, 1)));
+    buf = buf2;
+  }
+  for (; len >= 8; buf += 8, len -= 8) {
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+  }
+  for (; len; --len) {
+    crc0 = _mm_crc32_u8(crc0, *buf++);
+  }
+  return crc0;
+}
+
+FOLLY_TARGET_ATTRIBUTE("avx512f,avx512vl,vpclmulqdq,sse4.2")
+uint32_t crc32c_wide512(const uint8_t* buf, size_t len, uint32_t crc0) {
+  for (; len && ((uintptr_t)buf & 7); --len) {
+    crc0 = _mm_crc32_u8(crc0, *buf++);
+  }
+  if (((uintptr_t)buf & 8) && len >= 8) {
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+    buf += 8;
+    len -= 8;
+  }
+  if (len >= 224) {
+    size_t blk = (len - 0) / 224;
+    size_t klen = blk * 32;
+    const uint8_t* buf2 = buf + klen * 3;
+    uint32_t crc1 = 0;
+    uint32_t crc2 = 0;
+    __m128i vc0, vc1, vc2;
+    uint64_t vc;
+    // q0 carries accumulators 0 to 3, q1 carries 4 to 7.
+    __m512i q0 = _mm512_loadu_si512((const void*)buf2), r0;
+    __m512i q1 = _mm512_loadu_si512((const void*)(buf2 + 64)), r1;
+    __m128i k = _mm_setr_epi32(0x6992cea2, 0, 0x0d3b6092, 0);
+    __m512i k4 = _mm512_broadcast_i32x4(k);
+    buf2 += 128;
+    len -= 224;
+    while (len >= 224) {
+      r0 = _mm512_clmulepi64_epi128(q0, k4, 0x00);
+      q0 = _mm512_clmulepi64_epi128(q0, k4, 0x11);
+      r1 = _mm512_clmulepi64_epi128(q1, k4, 0x00);
+      q1 = _mm512_clmulepi64_epi128(q1, k4, 0x11);
+      q0 = _mm512_ternarylogic_epi64(
+          q0, r0, _mm512_loadu_si512((const void*)buf2), 0x96);
+      q1 = _mm512_ternarylogic_epi64(
+          q1, r1, _mm512_loadu_si512((const void*)(buf2 + 64)), 0x96);
+      crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 8)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 8)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 8)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 16)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 16)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 16)));
+      crc0 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 24)));
+      crc1 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 24)));
+      crc2 = static_cast<uint32_t>(
+          _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 24)));
+      buf += 32;
+      buf2 += 128;
+      len -= 224;
+    }
+    __m128i x0 = _mm512_extracti32x4_epi32(q0, 0);
+    __m128i x1 = _mm512_extracti32x4_epi32(q0, 1);
+    __m128i x2 = _mm512_extracti32x4_epi32(q0, 2);
+    __m128i x3 = _mm512_extracti32x4_epi32(q0, 3);
+    __m128i x4 = _mm512_extracti32x4_epi32(q1, 0);
+    __m128i x5 = _mm512_extracti32x4_epi32(q1, 1);
+    __m128i x6 = _mm512_extracti32x4_epi32(q1, 2);
+    __m128i x7 = _mm512_extracti32x4_epi32(q1, 3);
+    __m128i y0, y2, y4, y6;
+    k = _mm_setr_epi32(0xf20c0dfe, 0, 0x493c7d27, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    y2 = crc32c_clmul_lo(x2, k), x2 = crc32c_clmul_hi(x2, k);
+    y4 = crc32c_clmul_lo(x4, k), x4 = crc32c_clmul_hi(x4, k);
+    y6 = crc32c_clmul_lo(x6, k), x6 = crc32c_clmul_hi(x6, k);
+    x0 = _mm_ternarylogic_epi64(x0, y0, x1, 0x96);
+    x2 = _mm_ternarylogic_epi64(x2, y2, x3, 0x96);
+    x4 = _mm_ternarylogic_epi64(x4, y4, x5, 0x96);
+    x6 = _mm_ternarylogic_epi64(x6, y6, x7, 0x96);
+    k = _mm_setr_epi32(0x3da6d0cb, 0, 0xba4fc28e, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    y4 = crc32c_clmul_lo(x4, k), x4 = crc32c_clmul_hi(x4, k);
+    x0 = _mm_ternarylogic_epi64(x0, y0, x2, 0x96);
+    x4 = _mm_ternarylogic_epi64(x4, y4, x6, 0x96);
+    k = _mm_setr_epi32(0x740eef02, 0, 0x9e4addf8, 0);
+    y0 = crc32c_clmul_lo(x0, k), x0 = crc32c_clmul_hi(x0, k);
+    x0 = _mm_ternarylogic_epi64(x0, y0, x4, 0x96);
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2)));
+    crc0 =
+        static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)(buf + 8)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 8)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 8)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 16)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 16)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 16)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, *(const uint64_t*)(buf + 24)));
+    crc1 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc1, *(const uint64_t*)(buf + klen + 24)));
+    crc2 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc2, *(const uint64_t*)(buf + klen * 2 + 24)));
+    vc0 = crc32c_wide_crc_shift(crc0, klen * 2 + blk * 128);
+    vc1 = crc32c_wide_crc_shift(crc1, klen + blk * 128);
+    vc2 = crc32c_wide_crc_shift(crc2, 0 + blk * 128);
+    vc = _mm_extract_epi64(_mm_ternarylogic_epi64(vc0, vc1, vc2, 0x96), 0);
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(0, _mm_extract_epi64(x0, 0)));
+    crc0 = static_cast<uint32_t>(
+        _mm_crc32_u64(crc0, vc ^ _mm_extract_epi64(x0, 1)));
+    buf = buf2;
+  }
+  for (; len >= 8; buf += 8, len -= 8) {
+    crc0 = static_cast<uint32_t>(_mm_crc32_u64(crc0, *(const uint64_t*)buf));
+  }
+  for (; len; --len) {
+    crc0 = _mm_crc32_u8(crc0, *buf++);
+  }
+  return crc0;
+}
+
 // The 256-bit fold above pairs eight accumulators into four registers and
 // combines with two XORs. On a part with AVX-512 the same eight fit in two
 // registers and the combine is one three-input XOR. Eight vectors cost eight

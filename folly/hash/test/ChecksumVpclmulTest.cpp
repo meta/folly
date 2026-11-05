@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <vector>
 
 #include <folly/CpuId.h>
 #include <folly/Portability.h>
@@ -46,6 +47,61 @@ void recordPath(const char* kernel, bool ran, const char* fallback) {
       id.pclmuldq());
   testing::Test::RecordProperty(kernel, line);
   std::printf("%s: %s\n", kernel, line);
+}
+
+const uint8_t* testBuffer() {
+  static const std::vector<uint8_t> buf = [] {
+    std::vector<uint8_t> v((1u << 20) + 64);
+    for (size_t i = 0; i < v.size(); ++i) {
+      v[i] = static_cast<uint8_t>((i * 1103515245ull) >> 16);
+    }
+    return v;
+  }();
+  return buf.data();
+}
+
+struct Fold {
+  const char* name;
+  uint32_t (*fn)(const uint8_t*, size_t, uint32_t);
+};
+
+uint32_t genericCrc32c(const uint8_t* data, size_t nbytes, uint32_t crc) {
+  return folly::crc32c(data, nbytes, crc);
+}
+
+// Each fold where this host can run it. Where it cannot, the same inputs go
+// through folly::crc32c instead, so every host checks something.
+std::vector<Fold> runnableFolds() {
+  struct Candidate {
+    const char* name;
+    bool usable;
+    uint32_t (*fn)(const uint8_t*, size_t, uint32_t);
+  };
+#if FOLLY_X64 && FOLLY_HAS_CRC32_VPCLMUL
+  const Candidate candidates[] = {
+      {"crc32c_wide512",
+       folly::detail::crc32c_wide512_usable(),
+       folly::detail::crc32c_wide512},
+      {"crc32c_wide256_avx512",
+       folly::detail::crc32c_wide256_avx512_usable(),
+       folly::detail::crc32c_wide256_avx512},
+      {"crc32c_wide256_avx2",
+       folly::detail::crc32c_wide256_avx2_usable(),
+       folly::detail::crc32c_wide256_avx2},
+  };
+#else
+  const Candidate candidates[] = {
+      {"crc32c_wide512", false, nullptr},
+      {"crc32c_wide256_avx512", false, nullptr},
+      {"crc32c_wide256_avx2", false, nullptr},
+  };
+#endif
+  std::vector<Fold> folds;
+  for (const auto& c : candidates) {
+    recordPath(c.name, c.usable, "folly::crc32c");
+    folds.push_back({c.name, c.usable ? c.fn : genericCrc32c});
+  }
+  return folds;
 }
 
 #if FOLLY_X64 && FOLLY_HAS_CRC32_VPCLMUL
@@ -80,6 +136,44 @@ void crc32WideFoldMatchesNarrowerFolds(const uint8_t* aligned) {
 // them runs a narrower kernel and returns the same checksum, so the flag
 // list is invisible in any output comparison.
 #if FOLLY_X64 && FOLLY_HAS_CRC32_VPCLMUL
+TEST(Checksum, crc32cWideUsableChecksTheRightFlags) {
+  const folly::CpuId id;
+
+  constexpr bool kAvx512Allowed = !FOLLY_DISABLE_AVX512;
+  EXPECT_EQ(
+      kAvx512Allowed && id.avx512f() && id.avx512vl() && id.vpclmulqdq() &&
+          id.pclmuldq() && id.sse42() && !folly::detail::hasTrapOnAvx512(),
+      folly::detail::crc32c_wide_avx512_usable());
+  EXPECT_EQ(
+      id.avx2() && id.vpclmulqdq() && id.pclmuldq() && id.sse42(),
+      folly::detail::crc32c_wide256_avx2_usable());
+
+  // These hold whatever the flag lists are, so they survive a rewrite of
+  // the predicates that the equalities above would not. Both folds carry a
+  // 128-bit tail and a scalar remainder, so neither runs without the legacy
+  // PCLMULQDQ and SSE4.2.
+  if (folly::detail::crc32c_wide_avx512_usable() ||
+      folly::detail::crc32c_wide256_avx2_usable()) {
+    EXPECT_TRUE(id.vpclmulqdq());
+    EXPECT_TRUE(id.pclmuldq());
+    EXPECT_TRUE(id.sse42());
+  }
+  if (folly::detail::hasTrapOnAvx512()) {
+    EXPECT_FALSE(folly::detail::crc32c_wide_avx512_usable());
+  }
+
+  // Each AVX-512 fold adds a check of its own entry to the shared test. This
+  // binary is not BOLTed, so neither entry is trapped.
+  EXPECT_EQ(
+      folly::detail::crc32c_wide_avx512_usable(),
+      folly::detail::crc32c_wide512_usable());
+  EXPECT_EQ(
+      folly::detail::crc32c_wide_avx512_usable(),
+      folly::detail::crc32c_wide256_avx512_usable());
+}
+#endif
+
+#if FOLLY_X64 && FOLLY_HAS_CRC32_VPCLMUL
 TEST(Checksum, crc32VpclmulUsableChecksTheRightFlags) {
   const folly::CpuId id;
   const bool entryTrapped = folly::detail::hasTrapOnEntry(
@@ -110,6 +204,60 @@ TEST(Checksum, crc32VpclmulUsableChecksTheRightFlags) {
   }
 }
 #endif
+
+// The wider folds must agree with the kernel they were derived from, not just
+// with crc32c_sw: the whole claim is that pairing the accumulators into wider
+// registers changes nothing. A fold that is wrong in one lane still gets the
+// other seven right, so the sweep runs every length across a block boundary
+// rather than one convenient size.
+TEST(Checksum, crc32cWideFoldsMatchAvx512) {
+  const uint8_t* const buffer = testBuffer();
+  const auto folds = runnableFolds();
+  // Every alignment, because the prologue peels to an 8-byte boundary and
+  // then conditionally consumes one more 8-byte word. 224 bytes is the block
+  // the derived loop consumes per iteration, so the sweep covers no blocks,
+  // one block, the boundary and a partial tail.
+  for (uint32_t startingChecksum : {0U, ~0U}) {
+    for (size_t offset = 0; offset < 16; ++offset) {
+      for (size_t length = 0; length <= 224 * 3 + 32; ++length) {
+        const uint8_t* data = buffer + offset;
+        const uint32_t sw =
+            folly::detail::crc32c_sw(data, length, startingChecksum);
+        for (const auto& fold : folds) {
+          ASSERT_EQ(sw, fold.fn(data, length, startingChecksum))
+              << fold.name << " startingChecksum=" << startingChecksum
+              << " offset=" << offset << " length=" << length;
+        }
+      }
+    }
+  }
+  // The sweep above stops at 704 bytes, so walk a spread of larger lengths
+  // too. A bug that needs a particular number of loop iterations, or a
+  // particular tail, would otherwise sit in the gap.
+  for (size_t length = 705; length < (1u << 20); length += 997) {
+    const uint32_t sw = folly::detail::crc32c_sw(buffer + 3, length, ~0U);
+    for (const auto& fold : folds) {
+      ASSERT_EQ(sw, fold.fn(buffer + 3, length, ~0U))
+          << fold.name << " length=" << length;
+    }
+  }
+  // Large inputs, where the derived loop actually runs many iterations, and
+  // both sides of every size where crc32c changes its mind: 4096 and 6144
+  // pick between scalar and a generated kernel.
+  for (size_t length :
+       {size_t(4095),
+        size_t(4096),
+        size_t(6144),
+        size_t(6145),
+        size_t(8192),
+        size_t(65536),
+        size_t(1) << 20}) {
+    const uint32_t sw = folly::detail::crc32c_sw(buffer, length, 0);
+    for (const auto& fold : folds) {
+      ASSERT_EQ(sw, fold.fn(buffer, length, 0)) << fold.name << " " << length;
+    }
+  }
+}
 
 // The 512-bit fold must agree with the 256-bit one it was derived from and
 // with the 128-bit scalar fold, at every vector count across the 8-vector
