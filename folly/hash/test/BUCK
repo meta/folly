@@ -23,6 +23,29 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
+# Runs the wide-fold kernels, which need VPCLMULQDQ. CI would otherwise run
+# this on whatever worker builds it, and some of those lack the instruction.
+fb_dirsync_cpp_unittest(
+    name = "checksum_vpclmul_test",
+    srcs = ["ChecksumVpclmulTest.cpp"],
+    compatible_with = ["ovr_config//cpu:x86_64"],
+    remote_execution = {
+        "capabilities": {
+            "platform": "linux-remote-execution",
+            "working_dir_on_disk": "true",
+        },
+        "use_case": "fbcode_re_tests",
+    },
+    deps = [
+        "//folly:cpu_id",
+        "//folly:portability",
+        "//folly/detail:traponavx512",
+        "//folly/hash:checksum",
+        "//folly/hash/detail:checksum_detail",
+        "//folly/portability:gtest",
+    ],
+)
+
 fb_dirsync_cpp_benchmark(
     name = "checksum_benchmark",
     srcs = ["ChecksumBenchmark.cpp"],

@@ -20,6 +20,7 @@ fb_dirsync_cpp_library(
         "//folly:bits",
         "//folly:cpp_attributes",
         "//folly:cpu_id",
+        "//folly/detail:traponavx512",
     ],
     exported_deps = [
         "//folly:portability",

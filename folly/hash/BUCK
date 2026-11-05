@@ -25,6 +25,7 @@ fb_dirsync_cpp_library(
         "//folly/external/fast-crc32:neon_eor3_crc32c_v8s2x4e_s2x1",  # @manual
         "//folly/external/fast-crc32:sse_crc32c_v8s3x3",  # @manual
         "//folly/hash/detail:checksum_detail",
+        "//folly/synchronization:relaxed_atomic",
     ],
 )
 

@@ -444,6 +444,100 @@ TEST(Checksum, crc32cEqAcrossDispatchThreshold) {
   }
 }
 
+// Which fold a CRC-32 call gets. All three return the same checksum, so no
+// output comparison can catch a call going to the wrong one.
+TEST(Checksum, crc32FoldChoice) {
+  using folly::detail::Crc32Fold;
+  const auto pick = folly::detail::crc32_fold_for;
+  constexpr size_t kAmd = folly::detail::kCrc32Vpclmul512MinVectorsAmd;
+  constexpr size_t kIntel = folly::detail::kCrc32Vpclmul512MinVectorsIntel;
+  static_assert(kAmd < kIntel, "Intel waits longer for the fold, not less");
+
+  // Below the lower floor a part with both folds takes the 256-bit one,
+  // never the 128-bit one, on either vendor. The floor chooses between the
+  // two widest folds the part has; it must not drop a call two widths.
+  for (size_t vecs : {size_t(0), size_t(1), size_t(8), kAmd - 1}) {
+    EXPECT_EQ(Crc32Fold::kVpclmul256, pick(vecs, true, true, false)) << vecs;
+    EXPECT_EQ(Crc32Fold::kVpclmul256, pick(vecs, true, true, true)) << vecs;
+  }
+
+  // 32 vectors is 512 bytes, a common request size, and one where the two
+  // AMD parts measured disagree about which fold is faster. It is under
+  // both floors, and this pins that rather than leaving it to the constants.
+  EXPECT_EQ(Crc32Fold::kVpclmul256, pick(32, true, true, false));
+  EXPECT_EQ(Crc32Fold::kVpclmul256, pick(32, true, true, true));
+
+  // AMD takes the 512-bit fold from its own floor up. Intel gains nothing
+  // there, so it keeps the 256-bit fold until its floor.
+  EXPECT_EQ(Crc32Fold::kVpclmul512, pick(kAmd, true, true, false));
+  EXPECT_EQ(Crc32Fold::kVpclmul256, pick(kAmd, true, true, true));
+  EXPECT_EQ(Crc32Fold::kVpclmul256, pick(kIntel - 1, true, true, true));
+  EXPECT_EQ(Crc32Fold::kVpclmul512, pick(kIntel, true, true, true));
+
+  // Above the higher floor both vendors take it, at every size.
+  EXPECT_EQ(Crc32Fold::kVpclmul512, pick(size_t(1) << 20, true, true, true));
+  EXPECT_EQ(Crc32Fold::kVpclmul512, pick(size_t(1) << 20, true, true, false));
+
+  // Without the 512-bit fold, the 256-bit one runs at every size.
+  EXPECT_EQ(Crc32Fold::kVpclmul256, pick(kIntel, false, true, true));
+  EXPECT_EQ(Crc32Fold::kVpclmul256, pick(size_t(1) << 20, false, true, false));
+
+  // A part with neither folds 128 bits at a time, at every size.
+  EXPECT_EQ(Crc32Fold::kScalar, pick(0, false, false, false));
+  EXPECT_EQ(Crc32Fold::kScalar, pick(size_t(1) << 20, false, false, true));
+
+  // AVX-512 without the 256-bit fold is not a part that ships, but the
+  // choice still has to be defined: a short call falls to scalar rather
+  // than to a fold the part cannot run.
+  EXPECT_EQ(Crc32Fold::kScalar, pick(0, true, false, false));
+  EXPECT_EQ(Crc32Fold::kVpclmul512, pick(kAmd, true, false, false));
+}
+
+// Both size tests in front of the CPU queries, the one in crc32_fold_for and
+// the one crc32_hw makes on its arguments, only skip work. The fold is the
+// one the rule without them gives, for every size and every part.
+TEST(Checksum, crc32FoldChoiceMatchesRuleWithoutSizeTests) {
+  using folly::detail::Crc32Fold;
+  constexpr size_t kAmd = folly::detail::kCrc32Vpclmul512MinVectorsAmd;
+  constexpr size_t kIntel = folly::detail::kCrc32Vpclmul512MinVectorsIntel;
+  constexpr size_t kLeast = folly::detail::kCrc32Vpclmul512MinVectors;
+  const auto rule = [](size_t vecs, bool u512, bool u256, bool intel) {
+    if (u512 && vecs >= (intel ? kIntel : kAmd)) {
+      return Crc32Fold::kVpclmul512;
+    }
+    return u256 ? Crc32Fold::kVpclmul256 : Crc32Fold::kScalar;
+  };
+  for (size_t vecs = 0; vecs <= 2 * kIntel; ++vecs) {
+    for (int bits = 0; bits < 8; ++bits) {
+      const bool u512 = bits & 1;
+      const bool u256 = bits & 2;
+      const bool intel = bits & 4;
+      SCOPED_TRACE(testing::Message() << "vecs=" << vecs << " bits=" << bits);
+      EXPECT_EQ(
+          rule(vecs, u512, u256, intel),
+          folly::detail::crc32_fold_for(vecs, u512, u256, intel));
+      // The arguments as crc32_hw passes them.
+      const bool sizeOpen = vecs >= kLeast;
+      EXPECT_EQ(
+          rule(vecs, u512, u256, intel),
+          folly::detail::crc32_fold_for(
+              vecs,
+              sizeOpen && u512,
+              u256,
+              sizeOpen && vecs < kIntel && intel));
+    }
+  }
+}
+
+#if FOLLY_X64 && FOLLY_HAS_CRC32_VPCLMUL
+// Twice: the first read may fill the cache, and the second reads it.
+TEST(Checksum, vendorIntelIsCached) {
+  const bool intel = folly::CpuId().vendor_intel();
+  EXPECT_EQ(intel, folly::detail::vendor_intel());
+  EXPECT_EQ(intel, folly::detail::vendor_intel());
+}
+#endif
+
 TEST(Checksum, crc32) {
   if (folly::detail::crc32_hw_supported()) {
     // Just check that sw and hw match

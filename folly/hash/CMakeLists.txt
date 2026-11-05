@@ -28,6 +28,7 @@ folly_add_library(
     folly_external_fast-crc32_neon_eor3_crc32c_v8s2x4e_s2x1
     folly_external_fast-crc32_sse_crc32c_v8s3x3
     folly_hash_detail_checksum_detail
+    folly_synchronization_relaxed_atomic
 )
 
 # Add fast-crc32 dependencies - all built on all platforms (source has stubs)

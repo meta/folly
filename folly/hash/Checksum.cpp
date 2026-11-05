@@ -27,6 +27,7 @@
 #include <folly/external/fast-crc32/neon_eor3_crc32c_v8s2x4e_s2x1.h> // @manual
 #include <folly/external/fast-crc32/sse_crc32c_v8s3x3.h> // @manual
 #include <folly/hash/detail/ChecksumDetail.h>
+#include <folly/synchronization/RelaxedAtomic.h>
 
 #if FOLLY_X64 && FOLLY_SSE_PREREQ(4, 2)
 #include <emmintrin.h>
@@ -35,6 +36,20 @@
 namespace folly {
 
 namespace detail {
+
+#if FOLLY_HAS_CRC32_VPCLMUL
+// -1 until the first call. Reading it is still a load, so a call that its
+// size already settles must not reach it.
+bool vendor_intel() {
+  static relaxed_atomic<int> cache{-1};
+  int v = cache;
+  if (v < 0) {
+    v = folly::CpuId().vendor_intel();
+    cache = v;
+  }
+  return v;
+}
+#endif
 
 uint32_t crc32c_sw(
     const uint8_t* data, size_t nbytes, uint32_t startingChecksum);
@@ -60,9 +75,27 @@ uint32_t crc32_hw(
   if (nbytes >= 16) {
     const __m128i* vec = (const __m128i*)(data + offset);
 #if FOLLY_HAS_CRC32_VPCLMUL
-    sum = crc32_vpclmul_usable()
-        ? crc32_hw_aligned_vpclmul(sum, vec, nbytes / 16)
-        : crc32_hw_aligned(sum, vec, nbytes / 16);
+    const size_t vecs = nbytes / 16;
+    // crc32_fold_for tests the sizes itself. Repeating them here
+    // short-circuits the two queries that do not inline: a call under both
+    // floors reaches neither, and a call at or above the Intel floor never
+    // reads the vendor. The fold picked is the same either way.
+    const bool sizeOpen = vecs >= kCrc32Vpclmul512MinVectors;
+    switch (crc32_fold_for(
+        vecs,
+        sizeOpen && crc32_vpclmul512_usable(),
+        crc32_vpclmul_usable(),
+        sizeOpen && vecs < kCrc32Vpclmul512MinVectorsIntel && vendor_intel())) {
+      case Crc32Fold::kVpclmul512:
+        sum = crc32_hw_aligned_vpclmul512(sum, vec, vecs);
+        break;
+      case Crc32Fold::kVpclmul256:
+        sum = crc32_hw_aligned_vpclmul(sum, vec, vecs);
+        break;
+      case Crc32Fold::kScalar:
+        sum = crc32_hw_aligned(sum, vec, vecs);
+        break;
+    }
 #else
     sum = crc32_hw_aligned(sum, vec, nbytes / 16);
 #endif

@@ -112,6 +112,7 @@
 
 #include <folly/CpuId.h>
 #include <folly/Portability.h>
+#include <folly/detail/TrapOnAvx512.h>
 #include <folly/hash/detail/ChecksumDetail.h>
 
 namespace folly {
@@ -143,7 +144,7 @@ static __m256i crc32MulAdd256(__m256i x, __m256i a, __m256i multiplier) {
 bool crc32_vpclmul_usable() {
   static const bool value = [] {
     CpuId id;
-    return id.avx2() && id.vpclmulqdq();
+    return id.avx2() && id.vpclmulqdq() && id.pclmuldq();
   }();
   return value;
 }
@@ -223,6 +224,133 @@ uint32_t crc32_hw_aligned_vpclmul(
   x5 = _mm256_extracti128_si256(y2, 1);
   x6 = _mm256_castsi256_si128(y3);
   x7 = _mm256_extracti128_si256(y3, 1);
+
+  /* Fold 1024 bits => 512 bits */
+  x0 = crc32MulAdd(x0, x4, multipliers_4);
+  x1 = crc32MulAdd(x1, x5, multipliers_4);
+  x2 = crc32MulAdd(x2, x6, multipliers_4);
+  x3 = crc32MulAdd(x3, x7, multipliers_4);
+
+  /* Fold 512 bits at a time */
+  for (; p != end512; p += 4) {
+    x0 = crc32MulAdd(x0, p[0], multipliers_4);
+    x1 = crc32MulAdd(x1, p[1], multipliers_4);
+    x2 = crc32MulAdd(x2, p[2], multipliers_4);
+    x3 = crc32MulAdd(x3, p[3], multipliers_4);
+  }
+
+  /* Fold 512 bits => 128 bits */
+  x2 = crc32MulAdd(x0, x2, multipliers_2);
+  x3 = crc32MulAdd(x1, x3, multipliers_2);
+  x0 = crc32MulAdd(x2, x3, multipliers_1);
+
+  while (p != end) {
+    x1 = *p++;
+    x0 = crc32MulAdd(x0, x1, multipliers_1);
+  }
+
+  x0 = _mm_xor_si128(
+      _mm_srli_si128(x0, 8), _mm_clmulepi64_si128(x0, multipliers_1, 0x10));
+  x0 = _mm_xor_si128(
+      _mm_srli_si128(x0, 4),
+      _mm_clmulepi64_si128(_mm_and_si128(x0, mask32), final_multiplier, 0x00));
+  x1 = x0;
+  x0 = _mm_clmulepi64_si128(
+      _mm_and_si128(x0, mask32), barrett_reduction_constants, 0x00);
+  x0 = _mm_clmulepi64_si128(
+      _mm_and_si128(x0, mask32), barrett_reduction_constants, 0x10);
+  return static_cast<uint32_t>(
+      _mm_cvtsi128_si32(_mm_srli_si128(_mm_xor_si128(x0, x1), 4)));
+}
+
+// The 256-bit fold above pairs eight accumulators into four registers and
+// combines with two XORs. On a part with AVX-512 the same eight fit in two
+// registers and the combine is one three-input XOR. Eight vectors cost eight
+// instructions here and twenty in the 256-bit fold. Lane-wise again, so the
+// constants are unchanged and the result is bit-identical.
+FOLLY_TARGET_ATTRIBUTE("avx512f,vpclmulqdq")
+static __m512i crc32MulAdd512(__m512i x, __m512i a, __m512i multiplier) {
+  return _mm512_ternarylogic_epi64(
+      a,
+      _mm512_clmulepi64_epi128(x, multiplier, 0x00),
+      _mm512_clmulepi64_epi128(x, multiplier, 0x11),
+      0x96);
+}
+
+// FOLLY_DISABLE_AVX512 and the entry check: see crc32c_hw_supported_avx512().
+bool crc32_vpclmul512_usable() {
+#if FOLLY_DISABLE_AVX512
+  return false;
+#else
+  static const bool value = [] {
+    CpuId id;
+    return id.avx512f() && id.vpclmulqdq() && id.pclmuldq() &&
+        !hasTrapOnAvx512() &&
+        !hasTrapOnEntry(
+               reinterpret_cast<const void*>(&crc32_hw_aligned_vpclmul512));
+  }();
+  return value;
+#endif
+}
+
+FOLLY_TARGET_ATTRIBUTE("avx512f,vpclmulqdq")
+uint32_t crc32_hw_aligned_vpclmul512(
+    uint32_t remainder, const __m128i* p, size_t vec_count) {
+  // Required, not tuning: the loop below loads eight vectors before it
+  // checks anything. crc32_hw() also keeps short calls away from here, so
+  // this covers callers that come in directly.
+  if (vec_count < kCrc32Vpclmul512MinVectorsAmd) {
+    return crc32_vpclmul_usable()
+        ? crc32_hw_aligned_vpclmul(remainder, p, vec_count)
+        : crc32_hw_aligned(remainder, p, vec_count);
+  }
+
+  /* Constants precomputed by gen_crc32_multipliers.c.  Do not edit! */
+  const __m128i multipliers_8 = _mm_set_epi32(0, 0x910EEEC1, 0, 0x33FFF533);
+  const __m128i multipliers_4 = _mm_set_epi32(0, 0x1D9513D7, 0, 0x8F352D95);
+  const __m128i multipliers_2 = _mm_set_epi32(0, 0x81256527, 0, 0xF1DA05AA);
+  const __m128i multipliers_1 = _mm_set_epi32(0, 0xCCAA009E, 0, 0xAE689191);
+  const __m128i final_multiplier = _mm_set_epi32(0, 0, 0, 0xB8BC6765);
+  const __m128i mask32 = _mm_set_epi32(0, 0, 0, 0xFFFFFFFF);
+  const __m128i barrett_reduction_constants =
+      _mm_set_epi32(0x1, 0xDB710641, 0x1, 0xF7011641);
+  const __m512i multipliers_8_x4 = _mm512_broadcast_i32x4(multipliers_8);
+
+  const __m128i* const end = p + vec_count;
+  const __m128i* const end512 = p + (vec_count & ~3);
+  const __m128i* const end1024 = p + (vec_count & ~7);
+  __m128i x0, x1, x2, x3, x4, x5, x6, x7;
+
+  /* z0 carries accumulators 0 to 3, z1 carries 4 to 7. */
+  __m512i z0 = _mm512_loadu_si512(reinterpret_cast<const void*>(p + 0));
+  __m512i z1 = _mm512_loadu_si512(reinterpret_cast<const void*>(p + 4));
+  z0 = _mm512_xor_si512(
+      z0,
+      _mm512_inserti32x4(
+          _mm512_setzero_si512(),
+          _mm_set_epi32(0, 0, 0, static_cast<int>(remainder)),
+          0));
+  p += 8;
+
+  for (; p != end1024; p += 8) {
+    z0 = crc32MulAdd512(
+        z0,
+        _mm512_loadu_si512(reinterpret_cast<const void*>(p + 0)),
+        multipliers_8_x4);
+    z1 = crc32MulAdd512(
+        z1,
+        _mm512_loadu_si512(reinterpret_cast<const void*>(p + 4)),
+        multipliers_8_x4);
+  }
+
+  x0 = _mm512_extracti32x4_epi32(z0, 0);
+  x1 = _mm512_extracti32x4_epi32(z0, 1);
+  x2 = _mm512_extracti32x4_epi32(z0, 2);
+  x3 = _mm512_extracti32x4_epi32(z0, 3);
+  x4 = _mm512_extracti32x4_epi32(z1, 0);
+  x5 = _mm512_extracti32x4_epi32(z1, 1);
+  x6 = _mm512_extracti32x4_epi32(z1, 2);
+  x7 = _mm512_extracti32x4_epi32(z1, 3);
 
   /* Fold 1024 bits => 512 bits */
   x0 = crc32MulAdd(x0, x4, multipliers_4);
