@@ -23,7 +23,9 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <regex> // NOLINT(facebook-hte-BadInclude-regex)
 #include <sstream>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -41,7 +43,6 @@
 // of `std::numeric_limits<T>::max()`. We explicitly define NOMINMAX here
 // explicitly instead.
 #define NOMINMAX 1
-#include <boost/regex.hpp>
 
 using namespace std;
 
@@ -64,12 +65,16 @@ FOLLY_GFLAGS_DEFINE_string(
 // === Benchmark selection ===
 
 FOLLY_GFLAGS_DEFINE_string(
-    bm_regex, "", "Only run benchmarks whose names match this regex.");
+    bm_regex,
+    "",
+    "Only run benchmarks whose names match this ECMAScript regex. "
+    "A leading (?i) makes it case-insensitive.");
 
 FOLLY_GFLAGS_DEFINE_string(
     bm_file_regex,
     "",
-    "Only run benchmarks whose source filenames match this regex.");
+    "Only run benchmarks whose source filenames match this ECMAScript regex. "
+    "A leading (?i) makes it case-insensitive.");
 
 FOLLY_GFLAGS_DEFINE_bool(
     bm_list, false, "Print benchmark names and exit without running.");
@@ -866,21 +871,36 @@ void addSeparator(BenchmarksToRun& res) {
   }
 }
 
+// Compiles a --bm_regex or --bm_file_regex value. ECMAScript has no inline
+// flags, so a leading (?i), which users pass for case-insensitive selection,
+// becomes std::regex::icase. std::regex is safe here because the patterns come
+// from the command line and the inputs are short benchmark and file names.
+std::regex makeSelectionRegex(std::string_view pattern) {
+  auto flags = std::regex::ECMAScript;
+  if (pattern.starts_with("(?i)")) {
+    pattern.remove_prefix(4);
+    flags |= std::regex::icase;
+  }
+  return std::regex(pattern.begin(), pattern.end(), flags);
+}
+
 BenchmarksToRun selectBenchmarksToRun(
     const std::vector<detail::BenchmarkRegistration>& benchmarks) {
   BenchmarksToRun res;
 
-  folly::Optional<boost::regex> bmRegex;
-  folly::Optional<boost::regex> bmFileRegex;
+  folly::Optional<std::regex> bmRegex;
+  folly::Optional<std::regex> bmFileRegex;
 
   res.benchmarks.reserve(benchmarks.size());
 
   if (!FLAGS_bm_regex.empty()) {
-    bmRegex.emplace(FLAGS_bm_regex);
+    // @lint-ignore CLANGTIDY facebook-hte-StdRegexIsAwful
+    bmRegex = makeSelectionRegex(FLAGS_bm_regex);
   }
 
   if (!FLAGS_bm_file_regex.empty()) {
-    bmFileRegex.emplace(FLAGS_bm_file_regex);
+    // @lint-ignore CLANGTIDY facebook-hte-StdRegexIsAwful
+    bmFileRegex = makeSelectionRegex(FLAGS_bm_file_regex);
   }
 
   for (auto& bm : benchmarks) {
@@ -899,9 +919,8 @@ BenchmarksToRun selectBenchmarksToRun(
       continue;
     }
 
-    bool matchedName = !bmRegex || boost::regex_search(bm.name, *bmRegex);
-    bool matchedFile =
-        !bmFileRegex || boost::regex_search(bm.file, *bmFileRegex);
+    bool matchedName = !bmRegex || std::regex_search(bm.name, *bmRegex);
+    bool matchedFile = !bmFileRegex || std::regex_search(bm.file, *bmFileRegex);
 
     if (matchedName && matchedFile) {
       res.benchmarks.push_back(&bm);

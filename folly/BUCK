@@ -125,7 +125,6 @@ fb_dirsync_cpp_library(
     ],
     use_raw_headers = True,
     deps = [
-        "fbsource//third-party/boost:boost_regex",  # @manual
         ":file_util",
         ":map_util",
         ":overload",

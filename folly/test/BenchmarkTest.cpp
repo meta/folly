@@ -198,6 +198,18 @@ TEST_F(BenchmarkingStateTest, Basic) {
 
     EXPECT_EQ(expected, state.runBenchmarksWithResults());
   }
+
+  // --bm_regex case-insensitive match
+  {
+    folly::gflags::FlagSaver _;
+    folly::gflags::SetCommandLineOption("bm_regex", "(?i)A1");
+
+    const std::vector<BenchmarkResult> expected{
+        {__FILE__, "a1ns", 1, {}},
+    };
+
+    EXPECT_EQ(expected, state.runBenchmarksWithResults());
+  }
 }
 
 TEST_F(BenchmarkingStateTest, Suspender) {
