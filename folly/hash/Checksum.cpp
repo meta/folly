@@ -53,6 +53,21 @@ bool vendor_intel() {
 
 uint32_t crc32c_sw(
     const uint8_t* data, size_t nbytes, uint32_t startingChecksum);
+
+// Under FOLLY_DISABLE_AVX512 the kernel stays compiled so that tests can
+// still call it.
+bool crc32c_hw_supported_avx512() {
+#if FOLLY_X64 && !FOLLY_DISABLE_AVX512
+  static folly::CpuId id;
+  static bool supported = id.avx512vl() && !detail::hasTrapOnAvx512() &&
+      !detail::hasTrapOnEntry(reinterpret_cast<const void*>(
+          &detail::avx512_crc32c_v8s3x4));
+  return supported;
+#else
+  return false;
+#endif
+}
+
 #if FOLLY_X64 && FOLLY_SSE_PREREQ(4, 2)
 
 uint32_t crc32_sw(
@@ -119,20 +134,6 @@ bool crc32c_hw_supported_sse42() {
   return id.sse42();
 }
 
-// Under FOLLY_DISABLE_AVX512 the kernel stays compiled so that tests can
-// still call it.
-bool crc32c_hw_supported_avx512() {
-#if FOLLY_DISABLE_AVX512
-  return false;
-#else
-  static folly::CpuId id;
-  static bool supported = id.avx512vl() && !detail::hasTrapOnAvx512() &&
-      !detail::hasTrapOnEntry(reinterpret_cast<const void*>(
-          &detail::avx512_crc32c_v8s3x4));
-  return supported;
-#endif
-}
-
 bool crc32_hw_supported() {
   static folly::CpuId id;
   return id.sse42();
@@ -159,10 +160,6 @@ bool crc32c_hw_supported() {
 }
 
 bool crc32c_hw_supported_sse42() {
-  return false;
-}
-
-bool crc32c_hw_supported_avx512() {
   return false;
 }
 
@@ -199,10 +196,6 @@ bool crc32c_hw_supported() {
 }
 
 bool crc32c_hw_supported_sse42() {
-  return false;
-}
-
-bool crc32c_hw_supported_avx512() {
   return false;
 }
 
