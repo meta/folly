@@ -52,32 +52,27 @@ class F14BasicSet
   using typename Super::value_type;
 
  private:
-  template <typename K, typename T>
-  using EnableHeterogeneousFind = std::enable_if_t<
-      ::folly::detail::
-          EligibleForHeterogeneousFind<key_type, hasher, key_equal, K>::value,
-      T>;
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousFind = ::folly::detail::
+      EligibleForHeterogeneousFind<key_type, hasher, key_equal, K>::value;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousInsert = std::enable_if_t<
-      ::folly::detail::
-          EligibleForHeterogeneousInsert<key_type, hasher, key_equal, K>::value,
-      T>;
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousInsert = ::folly::detail::
+      EligibleForHeterogeneousInsert<key_type, hasher, key_equal, K>::value;
 
   template <typename K>
   using IsIter = std::disjunction<
       std::is_same<iterator, std::remove_cvref_t<K>>,
       std::is_same<const_iterator, std::remove_cvref_t<K>>>;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousErase = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousErase =
       ::folly::detail::EligibleForHeterogeneousFind<
           key_type,
           hasher,
           key_equal,
           std::conditional_t<IsIter<K>::value, key_type, K>>::value &&
-          !IsIter<K>::value,
-      T>;
+      !IsIter<K>::value;
 
  public:
   F14BasicSet() = default;
@@ -89,7 +84,8 @@ class F14BasicSet
   using Super::insert;
 
   template <typename K>
-  EnableHeterogeneousInsert<K, std::pair<iterator, bool>> insert(K&& value) {
+    requires kEligibleForHeterogeneousInsert<K>
+  std::pair<iterator, bool> insert(K&& value) {
     return emplace(std::forward<K>(value));
   }
 
@@ -148,7 +144,8 @@ class F14BasicSet
   using Super::erase;
 
   template <typename K>
-  EnableHeterogeneousErase<K, size_type> erase(K const& key) {
+    requires kEligibleForHeterogeneousErase<K>
+  size_type erase(K const& key) {
     auto it = find(key);
     if (it != this->end()) {
       erase(it);
@@ -252,7 +249,8 @@ class F14BasicSet
   size_type count(key_type const& key) const { return Super::count(key); }
 
   template <typename K>
-  EnableHeterogeneousFind<K, size_type> count(K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  size_type count(K const& key) const {
     return contains(key) ? 1 : 0;
   }
 
@@ -261,19 +259,22 @@ class F14BasicSet
   const_iterator find(key_type const& key) const { return Super::find(key); }
 
   template <typename K>
-  EnableHeterogeneousFind<K, iterator> find(K const& key) {
+    requires kEligibleForHeterogeneousFind<K>
+  iterator find(K const& key) {
     return findImpl<iterator>(*this, key);
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, const_iterator> find(K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  const_iterator find(K const& key) const {
     return findImpl<const_iterator>(*this, key);
   }
 
   bool contains(key_type const& key) const { return find(key) != this->end(); }
 
   template <typename K>
-  EnableHeterogeneousFind<K, bool> contains(K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  bool contains(K const& key) const {
     return find(key) != this->end();
   }
 
@@ -299,14 +300,14 @@ class F14BasicSet
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, std::pair<iterator, iterator>> equal_range(
-      K const& key) {
+    requires kEligibleForHeterogeneousFind<K>
+  std::pair<iterator, iterator> equal_range(K const& key) {
     return equalRangeImpl(*this, key);
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, std::pair<const_iterator, const_iterator>>
-  equal_range(K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  std::pair<const_iterator, const_iterator> equal_range(K const& key) const {
     return equalRangeImpl(*this, key);
   }
 
@@ -369,8 +370,8 @@ class F14BasicSet
   }
 
   template <typename K, typename BeforeDestroy>
-  EnableHeterogeneousErase<K, size_type> eraseInto(
-      K const& key, BeforeDestroy&& beforeDestroy) {
+    requires kEligibleForHeterogeneousErase<K>
+  size_type eraseInto(K const& key, BeforeDestroy&& beforeDestroy) {
     return eraseIntoImpl(key, beforeDestroy);
   }
 
@@ -433,12 +434,13 @@ class F14BasicSet
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, F14HashToken> prehash(K const& /*key*/) const {
+    requires kEligibleForHeterogeneousFind<K>
+  F14HashToken prehash(K const& /*key*/) const {
     return {};
   }
   template <typename K>
-  EnableHeterogeneousFind<K, F14HashToken> prehash(
-      K const& /*key*/, std::size_t /*hash*/) const {
+    requires kEligibleForHeterogeneousFind<K>
+  F14HashToken prehash(K const& /*key*/, std::size_t /*hash*/) const {
     return {};
   }
 
@@ -451,13 +453,14 @@ class F14BasicSet
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, iterator> find(F14HashToken const&, K const& key) {
+    requires kEligibleForHeterogeneousFind<K>
+  iterator find(F14HashToken const&, K const& key) {
     return find(key);
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, const_iterator> find(
-      F14HashToken const&, K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  const_iterator find(F14HashToken const&, K const& key) const {
     return find(key);
   }
 
@@ -466,8 +469,8 @@ class F14BasicSet
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, bool> contains(
-      F14HashToken const&, K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  bool contains(F14HashToken const&, K const& key) const {
     return find(key) != this->end();
   }
 };

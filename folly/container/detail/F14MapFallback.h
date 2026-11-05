@@ -42,30 +42,27 @@ template <typename K, typename M, typename H, typename E, typename A>
 class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   using Super = std::unordered_map<K, M, H, E, A>;
 
-  template <typename K2, typename T>
-  using EnableHeterogeneousFind = std::enable_if_t<
-      ::folly::detail::EligibleForHeterogeneousFind<K, H, E, K2>::value,
-      T>;
+  template <typename K2>
+  static constexpr bool kEligibleForHeterogeneousFind =
+      ::folly::detail::EligibleForHeterogeneousFind<K, H, E, K2>::value;
 
-  template <typename K2, typename T>
-  using EnableHeterogeneousInsert = std::enable_if_t<
-      ::folly::detail::EligibleForHeterogeneousInsert<K, H, E, K2>::value,
-      T>;
+  template <typename K2>
+  static constexpr bool kEligibleForHeterogeneousInsert =
+      ::folly::detail::EligibleForHeterogeneousInsert<K, H, E, K2>::value;
 
   template <typename K2>
   using IsIter = std::disjunction<
       std::is_same<typename Super::iterator, std::remove_cvref_t<K2>>,
       std::is_same<typename Super::const_iterator, std::remove_cvref_t<K2>>>;
 
-  template <typename K2, typename T>
-  using EnableHeterogeneousErase = std::enable_if_t<
+  template <typename K2>
+  static constexpr bool kEligibleForHeterogeneousErase =
       ::folly::detail::EligibleForHeterogeneousFind<
           K,
           H,
           E,
           std::conditional_t<IsIter<K2>::value, K, K2>>::value &&
-          !IsIter<K2>::value,
-      T>;
+      !IsIter<K2>::value;
 
  public:
   using typename Super::const_iterator;
@@ -89,31 +86,27 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename P>
-  std::enable_if_t<
-      std::is_constructible<value_type, P&&>::value,
-      std::pair<iterator, bool>>
-  insert(P&& value) {
+    requires std::is_constructible_v<value_type, P&&>
+  std::pair<iterator, bool> insert(P&& value) {
     return emplace(std::forward<P>(value));
   }
 
   // TODO(T31574848): Work around libstdc++ versions (e.g., GCC < 6) with no
   // implementation of N4387 ("perfect initialization" for pairs and tuples).
   template <typename U1, typename U2>
-  std::enable_if_t<
-      std::is_constructible<key_type, U1 const&>::value &&
-          std::is_constructible<mapped_type, U2 const&>::value,
-      std::pair<iterator, bool>>
-  insert(std::pair<U1, U2> const& value) {
+    requires(
+        std::is_constructible_v<key_type, U1 const&> &&
+        std::is_constructible_v<mapped_type, U2 const&>)
+  std::pair<iterator, bool> insert(std::pair<U1, U2> const& value) {
     return emplace(value);
   }
 
   // TODO(T31574848)
   template <typename U1, typename U2>
-  std::enable_if_t<
-      std::is_constructible<key_type, U1&&>::value &&
-          std::is_constructible<mapped_type, U2&&>::value,
-      std::pair<iterator, bool>>
-  insert(std::pair<U1, U2>&& value) {
+    requires(
+        std::is_constructible_v<key_type, U1 &&> &&
+        std::is_constructible_v<mapped_type, U2 &&>)
+  std::pair<iterator, bool> insert(std::pair<U1, U2>&& value) {
     return emplace(std::move(value));
   }
 
@@ -126,8 +119,8 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename P>
-  std::enable_if_t<std::is_constructible<value_type, P&&>::value, iterator>
-  insert(const_iterator /*hint*/, P&& value) {
+    requires std::is_constructible_v<value_type, P&&>
+  iterator insert(const_iterator /*hint*/, P&& value) {
     return insert(std::forward<P>(value)).first;
   }
 
@@ -191,8 +184,8 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2, typename M2>
-  EnableHeterogeneousInsert<K2, std::pair<iterator, bool>> insert_or_assign(
-      K2&& key, M2&& obj) {
+    requires kEligibleForHeterogeneousInsert<K2>
+  std::pair<iterator, bool> insert_or_assign(K2&& key, M2&& obj) {
     auto rv = try_emplace(std::forward<K2>(key), std::forward<M2>(obj));
     if (!rv.second) {
       rv.first->second = std::forward<M2>(obj);
@@ -262,8 +255,8 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2, typename... Args>
-  EnableHeterogeneousInsert<K2, std::pair<iterator, bool>> try_emplace(
-      K2&& key, Args&&... args) {
+    requires kEligibleForHeterogeneousInsert<K2>
+  std::pair<iterator, bool> try_emplace(K2&& key, Args&&... args) {
     return emplace(
         std::piecewise_construct,
         std::forward_as_tuple(std::forward<K2>(key)),
@@ -273,7 +266,8 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   using Super::erase;
 
   template <typename K2>
-  EnableHeterogeneousErase<K2, size_type> erase(K2 const& key) {
+    requires kEligibleForHeterogeneousErase<K2>
+  size_type erase(K2 const& key) {
     auto it = find(key);
     if (it != this->end()) {
       erase(it);
@@ -339,33 +333,38 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   mapped_type const& at(key_type const& key) const { return Super::at(key); }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, mapped_type&> at(K2 const& key) {
+    requires kEligibleForHeterogeneousFind<K2>
+  mapped_type& at(K2 const& key) {
     return atImpl(*this, key);
   }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, mapped_type const&> at(K2 const& key) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  mapped_type const& at(K2 const& key) const {
     return atImpl(*this, key);
   }
 
   using Super::operator[];
 
   template <typename K2>
-  EnableHeterogeneousInsert<K2, mapped_type&> operator[](K2&& key) {
+    requires kEligibleForHeterogeneousInsert<K2>
+  mapped_type& operator[](K2&& key) {
     return try_emplace(std::forward<K2>(key)).first->second;
   }
 
   size_type count(key_type const& key) const { return Super::count(key); }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, size_type> count(K2 const& key) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  size_type count(K2 const& key) const {
     return !findLocal(*this, key) ? 0 : 1;
   }
 
   bool contains(key_type const& key) const { return count(key) != 0; }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, bool> contains(K2 const& key) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  bool contains(K2 const& key) const {
     return count(key) != 0;
   }
 
@@ -406,12 +405,14 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   const_iterator find(key_type const& key) const { return Super::find(key); }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, iterator> find(K2 const& key) {
+    requires kEligibleForHeterogeneousFind<K2>
+  iterator find(K2 const& key) {
     return findImpl<iterator>(*this, key);
   }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, const_iterator> find(K2 const& key) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  const_iterator find(K2 const& key) const {
     return findImpl<const_iterator>(*this, key);
   }
 
@@ -437,14 +438,14 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, std::pair<iterator, iterator>> equal_range(
-      K2 const& key) {
+    requires kEligibleForHeterogeneousFind<K2>
+  std::pair<iterator, iterator> equal_range(K2 const& key) {
     return equalRangeImpl(*this, key);
   }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, std::pair<const_iterator, const_iterator>>
-  equal_range(K2 const& key) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  std::pair<const_iterator, const_iterator> equal_range(K2 const& key) const {
     return equalRangeImpl(*this, key);
   }
 
@@ -499,8 +500,8 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2, typename BeforeDestroy>
-  EnableHeterogeneousErase<K2, size_type> eraseInto(
-      K2 const& key, BeforeDestroy&& beforeDestroy) {
+    requires kEligibleForHeterogeneousErase<K2>
+  size_type eraseInto(K2 const& key, BeforeDestroy&& beforeDestroy) {
     return eraseIntoImpl(key, beforeDestroy);
   }
 
@@ -562,7 +563,8 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2, typename V>
-  EnableHeterogeneousInsert<K2, std::pair<iterator, bool>> insert_or_assign(
+    requires kEligibleForHeterogeneousInsert<K2>
+  std::pair<iterator, bool> insert_or_assign(
       F14HashToken const&, K2&& key, V&& obj) {
     return insert_or_assign(std::forward<K2>(key), std::forward<V>(obj));
   }
@@ -580,7 +582,8 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2, typename... Args>
-  EnableHeterogeneousInsert<K2, std::pair<iterator, bool>> try_emplace_token(
+    requires kEligibleForHeterogeneousInsert<K2>
+  std::pair<iterator, bool> try_emplace_token(
       F14HashToken const&, K2&& key, Args&&... args) {
     return try_emplace(std::forward<K2>(key), std::forward<Args>(args)...);
   }
@@ -593,12 +596,13 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, F14HashToken> prehash(K2 const&) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  F14HashToken prehash(K2 const&) const {
     return {}; // Ignored.
   }
   template <typename K2>
-  EnableHeterogeneousFind<K2, F14HashToken> prehash(
-      K2 const&, std::size_t) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  F14HashToken prehash(K2 const&, std::size_t) const {
     return {}; // Ignored.
   }
 
@@ -611,14 +615,14 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, iterator> find(
-      F14HashToken const&, K2 const& key) {
+    requires kEligibleForHeterogeneousFind<K2>
+  iterator find(F14HashToken const&, K2 const& key) {
     return find(key);
   }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, const_iterator> find(
-      F14HashToken const&, K2 const& key) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  const_iterator find(F14HashToken const&, K2 const& key) const {
     return find(key);
   }
 
@@ -627,8 +631,8 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
   }
 
   template <typename K2>
-  EnableHeterogeneousFind<K2, bool> contains(
-      F14HashToken const&, K2 const& key) const {
+    requires kEligibleForHeterogeneousFind<K2>
+  bool contains(F14HashToken const&, K2 const& key) const {
     return contains(key);
   }
 };
