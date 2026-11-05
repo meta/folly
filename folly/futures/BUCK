@@ -84,17 +84,24 @@ fb_dirsync_cpp_library(
         "//folly/detail:async_trace",
         "//folly/executors:drivable_executor",
         "//folly/executors:executor_with_priority",
-        "//folly/executors:global_executor",
         "//folly/executors:inline_executor",
         "//folly/executors:queued_immediate_executor",
         "//folly/executors:timed_drivable_executor",
-        "//folly/fibers:core",
         "//folly/functional:invoke",
         "//folly/futures/detail:core",
-        "//folly/io/async:async_base",
         "//folly/lang:exception",
         "//folly/lang:pretty",
-    ],
+    ] + select({
+        "DEFAULT": [
+            "//folly/executors:global_executor",
+            "//folly/fibers:core",
+            "//folly/io/async:async_base",
+        ],
+        # @fb-only[end= ]: # On wasi: no fibers (boost.context has no wasm port), no global
+        # @fb-only[end= ]: # executors (lazily committed mmap), no EventBase (libevent,
+        # @fb-only[end= ]: # pipe()). Futures wait on a folly::Baton instead.
+        # @fb-only[end= ]: "ovr_config//os:wasi": ["//folly/synchronization:baton"],
+    }),
 )
 
 fb_dirsync_cpp_library(

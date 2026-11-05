@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// No EventBase on wasi; see ThreadWheelTimekeeper.h.
+#if !defined(__wasi__)
+
 #include <folly/futures/ThreadWheelTimekeeper.h>
 
 #include <future>
@@ -65,3 +68,5 @@ SemiFuture<Unit> EventBaseThreadTimekeeper::after(HighResDuration dur) {
 }
 
 } // namespace folly
+
+#endif // !defined(__wasi__)

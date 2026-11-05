@@ -19,6 +19,9 @@
 #include <folly/Likely.h>
 #include <folly/Singleton.h>
 #include <folly/futures/HeapTimekeeper.h>
+// ThreadWheelTimekeeper runs an EventBase, which needs libevent and pipe(),
+// which wasi lacks.
+#if !defined(__wasi__)
 #include <folly/futures/ThreadWheelTimekeeper.h>
 #include <folly/portability/GFlags.h>
 
@@ -26,6 +29,7 @@ FOLLY_GFLAGS_DEFINE_bool(
     folly_futures_use_thread_wheel_timekeeper,
     false,
     "Use ThreadWheelTimekeeper for the default Future timekeeper singleton");
+#endif
 
 namespace folly {
 namespace futures {
@@ -78,6 +82,7 @@ Future<Unit> sleepUnsafe(HighResDuration dur, Timekeeper* tk) {
   return sleep(dur, tk).toUnsafeFuture();
 }
 
+#if !defined(__wasi__)
 namespace {
 template <typename Ptr>
 class FutureWaiter : public fibers::Baton::Waiter {
@@ -112,6 +117,7 @@ SemiFuture<Unit> wait(std::shared_ptr<fibers::Baton> baton) {
       std::move(promise), std::move(baton));
   return sf;
 }
+#endif
 
 } // namespace futures
 
@@ -123,11 +129,12 @@ FOLLY_EXPORT FOLLY_ALWAYS_INLINE
   using TimekeeperSingleton =
       folly::Singleton<Timekeeper, TimekeeperSingletonTag>;
   static TimekeeperSingleton sTimekeeperSingleton([]() -> Timekeeper* {
+#if !defined(__wasi__)
     if (FLAGS_folly_futures_use_thread_wheel_timekeeper) {
       return new ThreadWheelTimekeeper;
-    } else {
-      return new HeapTimekeeper;
     }
+#endif
+    return new HeapTimekeeper;
   });
   return sTimekeeperSingleton;
 }

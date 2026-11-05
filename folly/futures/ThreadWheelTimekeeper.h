@@ -16,6 +16,10 @@
 
 #pragma once
 
+// EventBase needs libevent and pipe(), which wasi lacks, so on wasi nothing is
+// declared here.
+#if !defined(__wasi__)
+
 #include <thread>
 
 #include <folly/futures/Future.h>
@@ -54,3 +58,5 @@ class ThreadWheelTimekeeper : public EventBaseThreadTimekeeper {
 };
 
 } // namespace folly
+
+#endif // !defined(__wasi__)

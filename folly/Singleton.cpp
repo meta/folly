@@ -18,7 +18,9 @@
 
 #ifndef _WIN32
 #include <dlfcn.h>
+#ifndef __wasi__ // wasi has no signals; the shutdown timer needs librt.
 #include <signal.h>
+#endif
 #include <time.h>
 #endif
 
@@ -44,7 +46,9 @@
 // before that.
 #include <glog/raw_logging.h>
 
-#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__ANDROID__)
+// A statically linked wasi program has no dlsym.
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__ANDROID__) && \
+    !defined(__wasi__)
 #define FOLLY_SINGLETON_HAVE_DLSYM 1
 #else
 #define FOLLY_SINGLETON_HAVE_DLSYM 0

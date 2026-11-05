@@ -30,11 +30,16 @@
 #include <folly/container/Foreach.h>
 #include <folly/detail/AsyncTrace.h>
 #include <folly/executors/ExecutorWithPriority.h>
+#if !defined(__wasi__)
 #include <folly/executors/GlobalExecutor.h>
+#endif
 #include <folly/executors/InlineExecutor.h>
 #include <folly/executors/QueuedImmediateExecutor.h>
 #include <folly/futures/detail/Core.h>
 #include <folly/lang/Pretty.h>
+#if defined(__wasi__)
+#include <folly/synchronization/Baton.h>
+#endif
 
 namespace folly {
 
@@ -42,7 +47,18 @@ class Timekeeper;
 
 namespace futures {
 namespace detail {
+#if defined(__wasi__)
+// boost.context has no wasm port, so wasi has no fibers and a wait blocks
+// the thread.
+typedef folly::Baton<> FutureBatonType;
+template <typename F>
+decltype(auto) runInMainContext(F&& func) {
+  return static_cast<F&&>(func)();
+}
+#else
 typedef folly::fibers::Baton FutureBatonType;
+using folly::fibers::runInMainContext;
+#endif
 } // namespace detail
 } // namespace futures
 
@@ -487,7 +503,7 @@ class WaitExecutor final : public folly::Executor {
   void drive() {
     baton_.wait();
 
-    fibers::runInMainContext([&]() {
+    runInMainContext([&]() {
       baton_.reset();
       auto funcs = std::move(queue_.wlock()->funcs);
       for (auto& func : funcs) {
@@ -502,7 +518,7 @@ class WaitExecutor final : public folly::Executor {
     if (!baton_.try_wait_until(deadline)) {
       return false;
     }
-    return fibers::runInMainContext([&]() {
+    return runInMainContext([&]() {
       baton_.reset();
       auto funcs = std::move(queue_.wlock()->funcs);
       for (auto& func : funcs) {
@@ -2686,6 +2702,7 @@ void detachOn(folly::Executor::KeepAlive<> exec, folly::SemiFuture<T>&& fut) {
   std::move(fut).via(exec).detach();
 }
 
+#if !defined(__wasi__)
 template <class T>
 void detachOnGlobalCPUExecutor(folly::SemiFuture<T>&& fut) {
   detachOn(folly::getGlobalCPUExecutor(), std::move(fut));
@@ -2701,6 +2718,7 @@ void maybeDetachOnGlobalExecutorAfter(
         }
       });
 }
+#endif
 
 template <class T>
 void detachWithoutExecutor(folly::SemiFuture<T>&& fut) {

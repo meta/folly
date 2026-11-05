@@ -2748,11 +2748,15 @@ fb_dirsync_cpp_library(
         "ovr_config//os:linux": ["//folly/debugging/symbolizer:symbolizer"],
     })
     + select({
+        "DEFAULT": [":file_util"],
+        # @fb-only[end= ]: "ovr_config//os:wasi": [],
+        "ovr_config//runtime:fbcode": [],
+    })
+    + select({
         "DEFAULT": [
             ":c_portability",
             ":conv",
             ":fbstring",
-            ":file_util",
             ":optional",
             ":range",
             ":small_vector",

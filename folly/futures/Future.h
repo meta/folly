@@ -33,7 +33,9 @@
 #include <folly/coro/Traits.h>
 #include <folly/executors/DrivableExecutor.h>
 #include <folly/executors/TimedDrivableExecutor.h>
+#if !defined(__wasi__)
 #include <folly/fibers/Baton.h>
+#endif
 #include <folly/functional/Invoke.h>
 #include <folly/futures/Portability.h>
 #include <folly/futures/Promise.h>
@@ -468,6 +470,9 @@ futures::detail::DeferredWrapper stealDeferredExecutor(SemiFuture<T>& future);
 template <class T>
 void detachOn(folly::Executor::KeepAlive<> exec, folly::SemiFuture<T>&& fut);
 
+// folly's global executors are thread pools that do not build on wasi, so
+// these two are not declared there.
+#if !defined(__wasi__)
 // Detach the SemiFuture by detaching work onto the global CPU executor.
 template <class T>
 void detachOnGlobalCPUExecutor(folly::SemiFuture<T>&& fut);
@@ -478,6 +483,7 @@ void detachOnGlobalCPUExecutor(folly::SemiFuture<T>&& fut);
 template <class T>
 void maybeDetachOnGlobalExecutorAfter(
     HighResDuration dur, folly::SemiFuture<T>&& fut);
+#endif
 
 // Detach the SemiFuture with no executor.
 // NOTE: If there is deferred work of any sort on this SemiFuture
@@ -2140,8 +2146,11 @@ auto mapTry(Executor& exec, Collection&& c, F&& func)
 template <class F>
 auto when(bool p, F&& thunk) -> decltype(static_cast<F&&>(thunk)().unit());
 
+// boost.context has no wasm port, so wasi has no fibers.
+#if !defined(__wasi__)
 SemiFuture<Unit> wait(std::unique_ptr<fibers::Baton> baton);
 SemiFuture<Unit> wait(std::shared_ptr<fibers::Baton> baton);
+#endif
 
 /**
  * Returns a lazy SemiFuture constructed by f, which also ensures that ensure is
