@@ -122,6 +122,15 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
+    name = "intrusive_list",
+    headers = ["IntrusiveList.h"],
+    use_raw_headers = True,
+    exported_deps = [
+        "//folly/lang:safe_assert",
+    ],
+)
+
+fb_dirsync_cpp_library(
     name = "tape_detail",
     headers = [
         "tape_detail.h",

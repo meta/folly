@@ -936,6 +936,15 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
+fb_dirsync_cpp_unittest(
+    name = "intrusive_list_test",
+    srcs = ["IntrusiveListTest.cpp"],
+    deps = [
+        "//folly/container/detail:intrusive_list",
+        "//folly/portability:gtest",
+    ],
+)
+
 fb_dirsync_cpp_binary(
     name = "hash_maps_bench",
     srcs = ["HashMapsBench.cpp"],

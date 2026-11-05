@@ -88,6 +88,12 @@ folly_add_library(
 )
 
 folly_add_library(
+  NAME intrusive_list
+  HEADERS IntrusiveList.h
+  EXPORTED_DEPS folly_lang_safe_assert
+)
+
+folly_add_library(
   NAME tape_detail
   HEADERS tape_detail.h
   EXPORTED_DEPS

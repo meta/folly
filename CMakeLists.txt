@@ -729,6 +729,10 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     SOURCES
     heap_vector_types_test.cpp
     TEST
+    container_intrusive_list_test
+    SOURCES
+    IntrusiveListTest.cpp
+    TEST
     container_map_util_test
     WINDOWS_DISABLED
     SOURCES
