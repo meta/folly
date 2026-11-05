@@ -19,11 +19,15 @@
 #if defined(FOLLY_USE_JEMALLOC) && (!defined(FOLLY_SANITIZE) || !FOLLY_SANITIZE)
 #include <folly/memory/MallctlHelper.h>
 
+#if defined(__FreeBSD__)
+#include <malloc_np.h>
+#else
 #include <jemalloc/jemalloc.h>
+#endif
 
 using namespace folly;
 
-#if JEMALLOC_VERSION_MAJOR > 4
+#if defined(JEMALLOC_VERSION_MAJOR) && JEMALLOC_VERSION_MAJOR > 4
 static constexpr char const* kDecayCmd = "arena.0.dirty_decay_ms";
 #else
 static constexpr char const* kDecayCmd = "arena.0.decay_time";
