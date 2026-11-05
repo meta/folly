@@ -16,13 +16,16 @@
 
 #include <folly/detail/SimpleSimdStringUtils.h>
 
+#include <cstdint>
+#include <string_view>
+
 #include <folly/algorithm/simd/detail/SimdPlatform.h>
 #include <folly/detail/SimpleSimdStringUtilsImpl.h>
 
 namespace folly {
 namespace detail {
 
-bool simdHasSpaceOrCntrlSymbols(folly::StringPiece s) {
+bool simdHasSpaceOrCntrlSymbols(std::string_view s) {
   return SimpleSimdStringUtilsImpl<
       simd::detail::SimdPlatform<std::uint8_t>>::hasSpaceOrCntrlSymbols(s);
 }

@@ -212,7 +212,7 @@ folly_add_library(
   EXPORTED_DEPS
     folly_algorithm_simd_detail_simd_any_of
     folly_algorithm_simd_detail_simd_platform
-    folly_range
+    folly_portability
 )
 
 folly_add_library(

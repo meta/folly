@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include <folly/Range.h>
+#include <string_view>
 
 namespace folly {
 namespace detail {
 
-bool simdHasSpaceOrCntrlSymbols(folly::StringPiece s);
+bool simdHasSpaceOrCntrlSymbols(std::string_view s);
 
 } // namespace detail
 } // namespace folly

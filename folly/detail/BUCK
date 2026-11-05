@@ -194,7 +194,7 @@ fb_dirsync_cpp_library(
     apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
-        "//folly:range",
+        "//folly:portability",
         "//folly/algorithm/simd/detail:simd_any_of",
         "//folly/algorithm/simd/detail:simd_platform",
     ],

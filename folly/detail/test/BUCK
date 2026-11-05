@@ -65,6 +65,9 @@ fb_dirsync_cpp_unittest(
         "SimpleSimdStringUtilsTest.cpp",
     ],
     deps = [
+        "fbsource//xplat/folly:scope_guard",
+        "fbsource//xplat/folly/portability:sys_mman",
+        "fbsource//xplat/folly/portability:unistd",
         "//folly/algorithm/simd/detail:simd_platform",
         "//folly/detail:simple_simd_string_utils",
         "//folly/portability:gtest",

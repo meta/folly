@@ -16,7 +16,11 @@
 
 #pragma once
 
-#include <folly/Range.h>
+#include <algorithm>
+#include <cstdint>
+#include <string_view>
+
+#include <folly/Portability.h>
 #include <folly/algorithm/simd/detail/SimdAnyOf.h>
 #include <folly/algorithm/simd/detail/SimdPlatform.h>
 
@@ -40,7 +44,10 @@ struct SimpleSimdStringUtilsImpl {
   };
 
   FOLLY_ALWAYS_INLINE
-  static bool hasSpaceOrCntrlSymbols(folly::StringPiece s) {
+  static bool hasSpaceOrCntrlSymbols(std::string_view s) {
+    if (s.empty()) {
+      return false;
+    }
     return simd::detail::simdAnyOf<Platform, /*unrolling*/ 4>(
         reinterpret_cast<const std::uint8_t*>(s.data()),
         reinterpret_cast<const std::uint8_t*>(s.data() + s.size()),
@@ -51,7 +58,10 @@ struct SimpleSimdStringUtilsImpl {
 template <>
 struct SimpleSimdStringUtilsImpl<void> {
   FOLLY_ALWAYS_INLINE
-  static bool hasSpaceOrCntrlSymbols(folly::StringPiece s) {
+  static bool hasSpaceOrCntrlSymbols(std::string_view s) {
+    if (s.empty()) {
+      return false;
+    }
     return std::any_of(s.begin(), s.end(), [](char c) {
       std::uint32_t uc = static_cast<std::uint8_t>(c);
       return uc <= 0x20 || c == 0x7F;
