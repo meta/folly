@@ -1810,3 +1810,114 @@ TEST_F(AsyncUDPSocketTest, TestWritemNontrivialCmsgs) {
 #endif // FOLLY_HAVE_MSG_ERRQUEUE
   socket_->close();
 }
+
+#ifdef FOLLY_HAVE_MSG_ERRQUEUE
+TEST_F(AsyncUDPSocketTest, TestRxSoftwareTimestamp) {
+  ASSERT_TRUE(socket_->setTimestamping(
+      folly::netops::SOF_TIMESTAMPING_RX_SOFTWARE |
+      folly::netops::SOF_TIMESTAMPING_SOFTWARE));
+
+  AsyncUDPSocket sender(&evb_);
+  sender.bind(addr_);
+  const auto send = [&] {
+    sender.write(socket_->address(), folly::IOBuf::copyBuffer("x"));
+  };
+
+  std::array<uint8_t, 16> data{};
+  EXPECT_CALL(readCb, getReadBuffer_(_, _))
+      .WillRepeatedly(Invoke([&](void** buf, size_t* len) {
+        *buf = data.data();
+        *len = data.size();
+      }));
+
+  // net_enable_timestamp() starts RX timestamping from a kernel workqueue, so
+  // datagrams can arrive unstamped until that work runs. Resend until one is
+  // stamped.
+  bool stamped{false};
+  EXPECT_CALL(readCb, onDataAvailable_(_, _, _, _))
+      .WillRepeatedly(Invoke(
+          [&](const folly::SocketAddress&,
+              size_t,
+              bool,
+              OnDataAvailableParams params) {
+            if (params.ts) {
+              stamped = true;
+              evb_.terminateLoopSoon();
+            } else {
+              send();
+            }
+          }));
+
+  socket_->resumeRead(&readCb);
+  send();
+
+  const auto guard =
+      AsyncTimeout::schedule(std::chrono::seconds(10), evb_, [&]() noexcept {
+        evb_.terminateLoopSoon();
+      });
+  evb_.loopForever();
+
+  EXPECT_TRUE(stamped);
+}
+
+namespace {
+
+// Bytes after the payload hold a marker, so a copy that runs past the payload
+// puts the marker in a timestamp slot while staying inside the buffer.
+OnDataAvailableParams paramsFromTimestampCmsg(
+    int cmsgType,
+    const OnDataAvailableParams::Timestamp& payload,
+    size_t payloadSize) {
+  alignas(struct cmsghdr) char
+      control[CMSG_SPACE(sizeof(payload)) + sizeof(payload)]{};
+  memset(control, 0xAB, sizeof(control));
+
+  struct msghdr msg{};
+  msg.msg_control = control;
+  msg.msg_controllen = CMSG_SPACE(payloadSize);
+
+  struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = cmsgType;
+  cmsg->cmsg_len = CMSG_LEN(payloadSize);
+  memcpy(CMSG_DATA(cmsg), &payload, payloadSize);
+
+  OnDataAvailableParams params;
+  AsyncUDPSocket::fromMsg(params, msg);
+
+  return params;
+}
+
+void expectTimespecEq(const struct timespec& actual, time_t sec, long nsec) {
+  EXPECT_EQ(actual.tv_sec, sec);
+  EXPECT_EQ(actual.tv_nsec, nsec);
+}
+
+} // namespace
+
+TEST(AsyncUDPSocketFromMsgTest, TimestampnsFillsOnlySoftwareSlot) {
+  OnDataAvailableParams::Timestamp payload{};
+  payload[0] = {.tv_sec = 1, .tv_nsec = 2};
+
+  const auto params =
+      paramsFromTimestampCmsg(SO_TIMESTAMPNS, payload, sizeof(struct timespec));
+
+  ASSERT_TRUE(params.ts.has_value());
+  expectTimespecEq((*params.ts)[0], 1, 2);
+  expectTimespecEq((*params.ts)[1], 0, 0);
+  expectTimespecEq((*params.ts)[2], 0, 0);
+}
+
+TEST(AsyncUDPSocketFromMsgTest, TimestampingKeepsSoftwareAndHardwareSlots) {
+  OnDataAvailableParams::Timestamp payload{};
+  payload[0] = {.tv_sec = 1, .tv_nsec = 2};
+  payload[2] = {.tv_sec = 5, .tv_nsec = 6};
+
+  const auto params =
+      paramsFromTimestampCmsg(SO_TIMESTAMPING, payload, sizeof(payload));
+
+  ASSERT_TRUE(params.ts.has_value());
+  expectTimespecEq((*params.ts)[0], 1, 2);
+  expectTimespecEq((*params.ts)[2], 5, 6);
+}
+#endif // FOLLY_HAVE_MSG_ERRQUEUE

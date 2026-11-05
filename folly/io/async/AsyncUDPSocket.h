@@ -48,7 +48,9 @@ class AsyncUDPSocket : public EventHandler {
    public:
     struct OnDataAvailableParams {
       int gro = -1;
-      // RX timestamp if available
+      // RX timestamp if available.
+      // ts[0] is software and ts[2] is hardware.
+      // SO_TIMESTAMPNS fills only ts[0]. Slots without a timestamp are zero.
       using Timestamp = std::array<struct timespec, 3>;
       folly::Optional<Timestamp> ts;
       uint8_t tos = 0;
