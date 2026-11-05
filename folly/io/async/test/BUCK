@@ -404,6 +404,7 @@ fb_dirsync_cpp_unittest(
         ":async_signal_handler_test_lib",  # @manual
         ":event_base_test_lib",  # @manual
         "//folly/init:init",
+        "//folly/io/async:async_base",
         "//folly/portability:gtest",
     ],
 )

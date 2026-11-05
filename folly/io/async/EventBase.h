@@ -180,6 +180,10 @@ class EventBase
     std::shared_ptr<RequestContext> context_;
   };
 
+  // List of loop callbacks for code that batches them, such as flush lists.
+  // Folly owns the underlying type; name it only through this alias.
+  using LoopCallbackList = LoopCallback::List;
+
   class FunctionLoopCallback : public LoopCallback {
    public:
     explicit FunctionLoopCallback(Func&& function)
@@ -1036,8 +1040,6 @@ class EventBase
   // Out-of-line slow path of bumpHandlingTime(), taken by the first handler
   // dispatched in a loop cycle.
   void bumpHandlingTimeSlow();
-
-  using LoopCallbackList = LoopCallback::List;
 
   bool isSuccess(LoopStatus status);
 
