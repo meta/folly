@@ -16,34 +16,40 @@
 
 #include <folly/UTF8String.h>
 
-#include <folly/Range.h>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+
 #include <folly/portability/GTest.h>
 #include <folly/test/TestUtils.h>
 
 using namespace folly;
 
-const folly::StringPiece kTestUTF8 =
+static_assert(!std::is_constructible_v<UTF8StringPiece, std::nullptr_t>);
+
+const std::string_view kTestUTF8 =
     reinterpret_cast<const char*>(u8"This is \U0001F602 stuff!");
 
 TEST(UTF8StringPiece, validUtf8) {
-  folly::StringPiece sp = kTestUTF8;
+  std::string_view sp = kTestUTF8;
   UTF8StringPiece utf8 = sp;
   // utf8.size() not available since it's not a random-access range
   EXPECT_EQ(16, utf8.walk_size());
 }
 
 TEST(UTF8StringPiece, validSuffix) {
-  UTF8StringPiece utf8 = kTestUTF8.subpiece(8);
+  UTF8StringPiece utf8 = kTestUTF8.substr(8);
   EXPECT_EQ(8, utf8.walk_size());
 }
 
 TEST(UTF8StringPiece, emptyMidCodepoint) {
-  UTF8StringPiece utf8 = kTestUTF8.subpiece(9, 0); // okay since it's empty
+  UTF8StringPiece utf8 = kTestUTF8.substr(9, 0); // okay since it's empty
   EXPECT_EQ(0, utf8.walk_size());
 }
 
 TEST(UTF8StringPiece, invalidMidCodepoint) {
-  EXPECT_THROW(UTF8StringPiece(kTestUTF8.subpiece(9, 1)), std::out_of_range);
+  EXPECT_THROW(UTF8StringPiece(kTestUTF8.substr(9, 1)), std::out_of_range);
 }
 
 TEST(UTF8StringPiece, validImplicitConversion) {
@@ -53,4 +59,35 @@ TEST(UTF8StringPiece, validImplicitConversion) {
     return implicitCtor.walk_size();
   };
   EXPECT_EQ(3, checkImplicitCtor(input));
+}
+
+TEST(UTF8StringPiece, defaultEmptyView) {
+  const std::string_view piece;
+  UTF8StringPiece utf8 = piece;
+  EXPECT_TRUE(utf8.empty());
+  EXPECT_EQ(0, utf8.walk_size());
+  EXPECT_EQ(piece.data(), utf8.begin().base());
+  EXPECT_EQ(piece.data(), utf8.end().base());
+}
+
+TEST(UTF8StringPiece, boundedViewContainsNul) {
+  const char input[] = {'x', 'a', '\0', '\xF0', '\x9F', '\x98', '\x82', 'y'};
+  const std::string_view piece(input + 1, 6);
+  UTF8StringPiece utf8 = piece;
+  const std::u32string expected(U"a\0\U0001F602", 3);
+  EXPECT_EQ(expected, std::u32string(utf8.begin(), utf8.end()));
+  EXPECT_EQ(piece.data(), utf8.begin().base());
+  EXPECT_EQ(piece.data() + piece.size(), utf8.end().base());
+}
+
+TEST(UTF8StringPiece, invalidTruncatedCodepoint) {
+  EXPECT_THROW(UTF8StringPiece(kTestUTF8.substr(8, 3)), std::out_of_range);
+}
+
+TEST(UTF8StringPiece, implicitViewOnlyConversion) {
+  struct ViewOnly {
+    operator std::string_view() const { return "hello"; }
+  };
+  UTF8StringPiece utf8 = ViewOnly{};
+  EXPECT_EQ(U"hello", std::u32string(utf8.begin(), utf8.end()));
 }

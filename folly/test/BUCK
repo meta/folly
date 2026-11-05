@@ -1855,7 +1855,6 @@ fb_dirsync_cpp_unittest(
     srcs = ["UTF8StringTest.cpp"],
     deps = [
         ":test_utils",
-        "//folly:range",
         "//folly:utf8_string",
         "//folly/portability:gtest",
     ],

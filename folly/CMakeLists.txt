@@ -1388,18 +1388,14 @@ set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS Boost::regex)
 folly_add_library(
   NAME utf8_string
   HEADERS UTF8String.h
-  EXPORTED_DEPS
-    Boost::regex
-    folly_range
+  EXPORTED_DEPS Boost::regex
 )
 set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS Boost::regex)
 
 folly_add_library(
   NAME utf8_string_icu
   HEADERS UTF8String.h
-  DEPS
-    Boost::headers
-    folly_range
+  EXPORTED_DEPS Boost::headers
 )
 
 folly_add_library(

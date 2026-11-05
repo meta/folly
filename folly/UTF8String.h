@@ -16,11 +16,12 @@
 
 #pragma once
 
-#include <string>
+#include <concepts>
+#include <cstddef>
+#include <iterator>
+#include <string_view>
 
 #include <boost/regex/pending/unicode_iterator.hpp>
-
-#include <folly/Range.h>
 
 namespace folly {
 
@@ -29,13 +30,15 @@ class UTF8StringPiece {
   using iterator = boost::u8_to_u32_iterator<const char*>;
   using size_type = std::size_t;
 
-  /* implicit */ UTF8StringPiece(const folly::StringPiece piece)
-      : begin_{piece.begin(), piece.begin(), piece.end()},
-        end_{piece.end(), piece.begin(), piece.end()} {}
+  /* implicit */ UTF8StringPiece(const std::string_view piece)
+      : UTF8StringPiece(
+            piece.data(),
+            piece.empty() ? piece.data() : piece.data() + piece.size()) {}
+  /* implicit */ UTF8StringPiece(std::nullptr_t) = delete;
   template <typename T>
-    requires std::convertible_to<T, folly::StringPiece>
+    requires std::convertible_to<T, std::string_view>
   /* implicit */ UTF8StringPiece(const T& t)
-      : UTF8StringPiece(folly::StringPiece(t)) {}
+      : UTF8StringPiece(std::string_view(t)) {}
 
   iterator begin() const noexcept { return begin_; }
   iterator cbegin() const noexcept { return begin_; }
@@ -48,6 +51,9 @@ class UTF8StringPiece {
   }
 
  private:
+  UTF8StringPiece(const char* first, const char* last)
+      : begin_{first, first, last}, end_{last, first, last} {}
+
   iterator begin_;
   iterator end_;
 };
