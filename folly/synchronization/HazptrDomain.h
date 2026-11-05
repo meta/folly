@@ -116,7 +116,9 @@ class hazptr_domain {
     hazptr_domain* domain_{};
     /* implicit */ HazptrRecArrayPolicy(hazptr_domain* domain) noexcept
         : domain_{domain} {}
-    Rec make() const noexcept { return Rec{domain_}; }
+    Rec make() const noexcept {
+      return Rec{domain_, domain_->is_default_domain()};
+    }
   };
   using HazptrRecArray = atomic_grow_array<Rec, HazptrRecArrayPolicy>;
 

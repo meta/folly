@@ -85,15 +85,14 @@ class hazptr_holder {
   FOLLY_ALWAYS_INLINE ~hazptr_holder() {
     if (FOLLY_LIKELY(hprec_ != nullptr)) {
       hprec_->reset_hazptr();
-      auto domain = hprec_->domain();
 #if FOLLY_HAZPTR_THR_LOCAL
-      if (FOLLY_LIKELY(domain->is_default_domain())) {
+      if (FOLLY_LIKELY(hprec_->domain_is_default_domain())) {
         if (FOLLY_LIKELY(hazptr_tc_tls<Atom>().try_put(hprec_))) {
           return;
         }
       }
 #endif
-      domain->release_hprec(hprec_);
+      hprec_->domain()->release_hprec(hprec_);
     }
   }
 
@@ -274,6 +273,7 @@ class hazptr_array {
     for (uint8_t i = 0; i < M; ++i) {
       auto* rec = h[i].hprec();
       DCHECK(rec);
+      DCHECK(rec->domain_is_default_domain());
       rec->reset_hazptr();
       entries[i].fill(rec);
     }

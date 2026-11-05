@@ -32,6 +32,10 @@ template <template <typename> class Atom>
 class alignas(hardware_destructive_interference_size) hazptr_rec {
   Atom<const void*> hazptr_{nullptr}; // the hazard pointer
   hazptr_domain<Atom>* domain_;
+  //  Cached from the domain so that releasing a hazard pointer does not have
+  //  to load the domain, which is on a different cache line, just to find out
+  //  whether the thread cache applies.
+  const bool domainIsDefaultDomain_;
   hazptr_rec* nextAvail_{nullptr}; // Next available hazard pointer.
 
   friend class hazptr_domain<Atom>;
@@ -43,7 +47,8 @@ class alignas(hardware_destructive_interference_size) hazptr_rec {
   template <uint8_t M, template <typename> class A>
   friend hazptr_array<M, A> make_hazard_pointer_array();
 
-  explicit hazptr_rec(hazptr_domain<Atom>* domain) noexcept : domain_{domain} {}
+  hazptr_rec(hazptr_domain<Atom>* domain, bool domainIsDefaultDomain) noexcept
+      : domain_{domain}, domainIsDefaultDomain_{domainIsDefaultDomain} {}
 
   const void* hazptr(std::memory_order order) const noexcept {
     return hazptr_.load(order);
@@ -87,6 +92,10 @@ class alignas(hardware_destructive_interference_size) hazptr_rec {
   void set_next_avail(hazptr_rec<Atom>* rec) { nextAvail_ = rec; }
 
   FOLLY_ALWAYS_INLINE hazptr_domain<Atom>* domain() { return domain_; }
+
+  FOLLY_ALWAYS_INLINE bool domain_is_default_domain() const noexcept {
+    return domainIsDefaultDomain_;
+  }
 }; // hazptr_rec
 
 } // namespace folly
