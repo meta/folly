@@ -51,17 +51,8 @@ struct tape_reference_traits<Container, true> {
   using value_type = typename std::iterator_traits<iterator>::value_type;
   using reference = Range<const value_type*>;
 
-  static constexpr auto* get_address(iterator it) {
-    // std::to_address is only available since C++20
-    if constexpr (std::is_pointer_v<iterator>) {
-      return it;
-    } else {
-      return it.operator->();
-    }
-  }
-
   static constexpr reference make(iterator f, iterator l) {
-    return reference{get_address(f), get_address(l)};
+    return reference{std::to_address(f), std::to_address(l)};
   }
 };
 
