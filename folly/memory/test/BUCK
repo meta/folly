@@ -137,6 +137,15 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "uninitialized_test",
+    srcs = ["UninitializedTest.cpp"],
+    deps = [
+        "//folly/memory:uninitialized",
+        "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "uninitialized_memory_hacks_test",
     srcs = [
         "UninitializedMemoryHacksODR.cpp",

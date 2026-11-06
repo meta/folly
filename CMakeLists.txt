@@ -1488,6 +1488,10 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     SOURCES
     MallctlHelperTest.cpp
     TEST
+    memory_uninitialized_test
+    SOURCES
+    UninitializedTest.cpp
+    TEST
     memory_uninitialized_memory_hacks_test
     SOURCES
     UninitializedMemoryHacksTest.cpp

@@ -189,6 +189,11 @@ folly_add_library(
 )
 
 folly_add_library(
+  NAME uninitialized
+  HEADERS Uninitialized.h
+)
+
+folly_add_library(
   NAME uninitialized_memory_hacks
   HEADERS UninitializedMemoryHacks.h
   EXPORTED_DEPS folly_traits
