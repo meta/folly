@@ -49,15 +49,6 @@
 #include <folly/system/AtFork.h>
 #include <folly/system/ThreadId.h>
 
-// constinit must stay off on Mach-O targets, where
-// ld64.lld incorrectly rejects direct TLVP relocations to this symbol from
-// stripped objects.
-#if defined(__MACH__)
-#define FOLLY_DETAIL_TL_CONSTINIT
-#else
-#define FOLLY_DETAIL_TL_CONSTINIT constinit
-#endif
-
 namespace folly {
 
 enum class TLPDestructionMode { THIS_THREAD, ALL_THREADS };
@@ -610,11 +601,9 @@ struct FOLLY_EXPORT StaticMeta final : StaticMetaBase {
   static_assert(std::is_standard_layout_v<LocalCache>);
   static_assert(std::is_trivial_v<LocalCache>);
 
-  // @lint-ignore CLANGTIDY facebook-hte-NonPodStaticDeclaration
-  inline static thread_local FOLLY_DETAIL_TL_CONSTINIT LocalCache localCache_{};
-
   FOLLY_EXPORT FOLLY_ALWAYS_INLINE static LocalCache& getLocalCache() {
-    return localCache_;
+    static thread_local LocalCache instance;
+    return instance;
   }
 
   FOLLY_ALWAYS_INLINE static ElementWrapper& get(EntryID* ent) {
