@@ -20,7 +20,6 @@
 
 #include <folly/Portability.h>
 #include <folly/ScopeGuard.h>
-#include <folly/Traits.h>
 #include <folly/portability/PThread.h>
 #include <folly/portability/Windows.h>
 
