@@ -28,7 +28,6 @@
 #include <tuple>
 #include <vector>
 
-#include <boost/regex.hpp>
 #include <glog/logging.h>
 
 #include <folly/FBVector.h>
@@ -1832,7 +1831,7 @@ TEST(String, stripLeftMarginOnlyWhitespace) {
   string input = R"TEXT(
     ~
   )TEXT";
-  input = boost::regex_replace(input, boost::regex("~"), "");
+  std::erase(input, '~');
   EXPECT_EQ("\n    \n  ", input);
   auto expected = "\n";
   EXPECT_EQ(expected, stripLeftMargin(input));
@@ -1844,7 +1843,7 @@ TEST(String, stripLeftMarginOnlyUnevenWhitespace) {
     ~
       ~
   )TEXT";
-  input = boost::regex_replace(input, boost::regex("~"), "");
+  std::erase(input, '~');
   EXPECT_EQ("\n    \n      \n  ", input);
   auto expected = "\n\n";
 
@@ -1905,7 +1904,9 @@ TEST(String, stripLeftMarginInterstitialUndentedWhiteline) {
     ~
       so long!
   )TEXT";
-  input = boost::regex_replace(input, boost::regex(" +~"), "");
+  auto marker = input.find('~');
+  auto spaces = input.find_last_not_of(' ', marker - 1) + 1;
+  input.erase(spaces, marker + 1 - spaces);
   EXPECT_EQ("\n      hi there bob!\n\n      so long!\n  ", input);
   auto expected = "hi there bob!\n\nso long!\n";
   EXPECT_EQ(expected, stripLeftMargin(input));
@@ -1918,7 +1919,7 @@ TEST(String, stripLeftMarginInterstitialDedentedWhiteline) {
     ~
       so long!
   )TEXT";
-  input = boost::regex_replace(input, boost::regex("~"), "");
+  std::erase(input, '~');
   EXPECT_EQ("\n      hi there bob!\n    \n      so long!\n  ", input);
   auto expected = "hi there bob!\n\nso long!\n";
   EXPECT_EQ(expected, stripLeftMargin(input));
@@ -1931,7 +1932,7 @@ TEST(String, stripLeftMarginInterstitialEquidentedWhiteline) {
       ~
       so long!
   )TEXT";
-  input = boost::regex_replace(input, boost::regex("~"), "");
+  std::erase(input, '~');
   EXPECT_EQ("\n      hi there bob!\n      \n      so long!\n  ", input);
   auto expected = "hi there bob!\n\nso long!\n";
   EXPECT_EQ(expected, stripLeftMargin(input));
@@ -1944,7 +1945,7 @@ TEST(String, stripLeftMarginInterstitialIndentedWhiteline) {
         ~
       so long!
   )TEXT";
-  input = boost::regex_replace(input, boost::regex("~"), "");
+  std::erase(input, '~');
   EXPECT_EQ("\n      hi there bob!\n        \n      so long!\n  ", input);
   auto expected = "hi there bob!\n  \nso long!\n";
   EXPECT_EQ(expected, stripLeftMargin(input));
@@ -1956,7 +1957,7 @@ TEST(String, stripLeftMarginNoPreWhitespace) {
         ~
       so long!
   )TEXT";
-  input = boost::regex_replace(input, boost::regex("~"), "");
+  std::erase(input, '~');
   EXPECT_EQ("      hi there bob!\n        \n      so long!\n  ", input);
   auto expected = "hi there bob!\n  \nso long!\n";
   EXPECT_EQ(expected, stripLeftMargin(input));
@@ -1968,7 +1969,7 @@ TEST(String, stripLeftMarginNoPostWhitespace) {
       hi there bob!
         ~
       so long!  )TEXT";
-  input = boost::regex_replace(input, boost::regex("~"), "");
+  std::erase(input, '~');
   EXPECT_EQ("\n      hi there bob!\n        \n      so long!  ", input);
   auto expected = "hi there bob!\n  \nso long!  ";
   EXPECT_EQ(expected, stripLeftMargin(input));

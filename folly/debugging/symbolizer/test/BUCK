@@ -344,7 +344,6 @@ fb_dirsync_cpp_unittest(
     labels = ["oss-broken"] + fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
-        "fbsource//third-party/boost:boost_regex",
         "fbsource//third-party/glog:glog",
         "//folly:file_util",
         "//folly:scope_guard",

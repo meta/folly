@@ -1494,7 +1494,6 @@ fb_dirsync_cpp_unittest(
     name = "string_test",
     srcs = ["StringTest.cpp"],
     deps = [
-        "fbsource//third-party/boost:boost_regex",  # @manual
         "fbsource//third-party/glog:glog",
         ":test_utils",
         "//folly:fbvector",

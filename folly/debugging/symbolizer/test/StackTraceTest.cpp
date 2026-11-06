@@ -23,6 +23,8 @@
 #include <cstring>
 #include <limits>
 #include <new>
+#include <string>
+#include <string_view>
 
 #include <folly/FileUtil.h>
 #include <folly/ScopeGuard.h>
@@ -36,8 +38,6 @@
 #include <folly/testing/TestUtil.h>
 #include <folly/tracing/AsyncStack.h>
 #include <folly/tracing/test/AsyncStackTestUtils.h>
-
-#include <boost/regex.hpp>
 
 #include <glog/logging.h>
 
@@ -919,11 +919,24 @@ TEST(StackTraceTest, TerseFileAndLineStackTracePrinterOutput) {
   // ./folly/debugging/symbolizer/test/StackTraceTest.cpp:202
   // or:
   // (unknown)
-  boost::regex regex("((([^:]*:[0-9]*)|(\\(unknown\\)))\n)+");
-  auto match = boost::regex_match(
-      printer.str(), regex, boost::regex_constants::match_not_dot_newline);
-
-  ASSERT_TRUE(match);
+  auto isFileAndLine = [](std::string_view line) {
+    if (line == "(unknown)") {
+      return true;
+    }
+    auto colon = line.find(':');
+    return colon != std::string_view::npos &&
+        line.find_first_not_of("0123456789", colon + 1) ==
+        std::string_view::npos;
+  };
+  std::string output = printer.str();
+  std::string_view rest = output;
+  ASSERT_FALSE(rest.empty());
+  while (!rest.empty()) {
+    auto end = rest.find('\n');
+    ASSERT_NE(end, std::string_view::npos) << output;
+    EXPECT_TRUE(isFileAndLine(rest.substr(0, end))) << output;
+    rest.remove_prefix(end + 1);
+  }
 }
 
 namespace {
