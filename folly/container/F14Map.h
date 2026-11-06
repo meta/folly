@@ -63,39 +63,36 @@ namespace detail {
 
 template <typename Policy>
 class F14BasicMap {
-  template <typename K, typename T>
-  using EnableHeterogeneousFind = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousFind =
       ::folly::detail::EligibleForHeterogeneousFind<
           typename Policy::Key,
           typename Policy::Hasher,
           typename Policy::KeyEqual,
-          K>::value,
-      T>;
+          K>::value;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousInsert = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousInsert =
       ::folly::detail::EligibleForHeterogeneousInsert<
           typename Policy::Key,
           typename Policy::Hasher,
           typename Policy::KeyEqual,
-          K>::value,
-      T>;
+          K>::value;
 
   template <typename K>
   using IsIter = std::disjunction<
       std::is_same<typename Policy::Iter, std::remove_cvref_t<K>>,
       std::is_same<typename Policy::ConstIter, std::remove_cvref_t<K>>>;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousErase = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousErase =
       ::folly::detail::EligibleForHeterogeneousFind<
           typename Policy::Key,
           typename Policy::Hasher,
           typename Policy::KeyEqual,
           std::conditional_t<IsIter<K>::value, typename Policy::Key, K>>::
-              value &&
-          !IsIter<K>::value,
-      T>;
+          value &&
+      !IsIter<K>::value;
 
  public:
   //// PUBLIC - Member types
@@ -300,10 +297,8 @@ class F14BasicMap {
 
   /// Add a single element, of a heterogeneous type.
   template <typename P>
-  std::enable_if_t<
-      std::is_constructible<value_type, P&&>::value,
-      std::pair<iterator, bool>>
-  insert(P&& value) {
+    requires std::is_constructible_v<value_type, P&&>
+  std::pair<iterator, bool> insert(P&& value) {
     return emplace(std::forward<P>(value));
   }
 
@@ -314,11 +309,10 @@ class F14BasicMap {
    * implementation of N4387 ("perfect initialization" for pairs and tuples).
    */
   template <typename U1, typename U2>
-  std::enable_if_t<
-      std::is_constructible<key_type, U1 const&>::value &&
-          std::is_constructible<mapped_type, U2 const&>::value,
-      std::pair<iterator, bool>>
-  insert(std::pair<U1, U2> const& value) {
+    requires(
+        std::is_constructible_v<key_type, U1 const&> &&
+        std::is_constructible_v<mapped_type, U2 const&>)
+  std::pair<iterator, bool> insert(std::pair<U1, U2> const& value) {
     return emplace(value);
   }
 
@@ -329,11 +323,10 @@ class F14BasicMap {
    * implementation of N4387 ("perfect initialization" for pairs and tuples).
    */
   template <typename U1, typename U2>
-  std::enable_if_t<
-      std::is_constructible<key_type, U1&&>::value &&
-          std::is_constructible<mapped_type, U2&&>::value,
-      std::pair<iterator, bool>>
-  insert(std::pair<U1, U2>&& value) {
+    requires(
+        std::is_constructible_v<key_type, U1 &&> &&
+        std::is_constructible_v<mapped_type, U2 &&>)
+  std::pair<iterator, bool> insert(std::pair<U1, U2>&& value) {
     return emplace(std::move(value));
   }
 
@@ -354,8 +347,8 @@ class F14BasicMap {
 
   /// Add a single element, of heterogeneous type, with a locational hint.
   template <typename P>
-  std::enable_if_t<std::is_constructible<value_type, P&&>::value, iterator>
-  insert(const_iterator /*hint*/, P&& value) {
+    requires std::is_constructible_v<value_type, P&&>
+  iterator insert(const_iterator /*hint*/, P&& value) {
     return insert(std::forward<P>(value)).first;
   }
 
@@ -464,8 +457,8 @@ class F14BasicMap {
   }
 
   template <typename K, typename M>
-  EnableHeterogeneousInsert<K, std::pair<iterator, bool>> insert_or_assign(
-      K&& key, M&& obj) {
+    requires kEligibleForHeterogeneousInsert<K>
+  std::pair<iterator, bool> insert_or_assign(K&& key, M&& obj) {
     auto rv = try_emplace(std::forward<K>(key), std::forward<M>(obj));
     if (!rv.second) {
       rv.first->second = std::forward<M>(obj);
@@ -474,7 +467,8 @@ class F14BasicMap {
   }
 
   template <typename K, typename M>
-  EnableHeterogeneousInsert<K, std::pair<iterator, bool>> insert_or_assign(
+    requires kEligibleForHeterogeneousInsert<K>
+  std::pair<iterator, bool> insert_or_assign(
       F14HashToken const& token, K&& key, M&& obj) {
     auto rv =
         try_emplace_token(token, std::forward<K>(key), std::forward<M>(obj));
@@ -582,8 +576,8 @@ class F14BasicMap {
   }
 
   template <typename K, typename... Args>
-  EnableHeterogeneousInsert<K, std::pair<iterator, bool>> try_emplace(
-      K&& key, Args&&... args) {
+    requires kEligibleForHeterogeneousInsert<K>
+  std::pair<iterator, bool> try_emplace(K&& key, Args&&... args) {
     auto rv = table_.tryEmplaceValue(
         key,
         std::piecewise_construct,
@@ -593,7 +587,8 @@ class F14BasicMap {
   }
 
   template <typename K, typename... Args>
-  EnableHeterogeneousInsert<K, std::pair<iterator, bool>> try_emplace_token(
+    requires kEligibleForHeterogeneousInsert<K>
+  std::pair<iterator, bool> try_emplace_token(
       F14HashToken const& token, K&& key, Args&&... args) {
     auto rv = table_.tryEmplaceValueWithToken(
         token,
@@ -633,7 +628,8 @@ class F14BasicMap {
 
   /// Remove a key, using a heterogeneous representation.
   template <typename K>
-  EnableHeterogeneousErase<K, size_type> erase(K const& key) {
+    requires kEligibleForHeterogeneousErase<K>
+  size_type erase(K const& key) {
     return eraseInto(key, variadic_noop);
   }
 
@@ -710,8 +706,8 @@ class F14BasicMap {
 
   /// Callback-erase a specific key, using a heterogeneous representation.
   template <typename K, typename BeforeDestroy>
-  EnableHeterogeneousErase<K, size_type> eraseInto(
-      K const& key, BeforeDestroy&& beforeDestroy) {
+    requires kEligibleForHeterogeneousErase<K>
+  size_type eraseInto(K const& key, BeforeDestroy&& beforeDestroy) {
     return tableEraseKeyInto(key, beforeDestroy);
   }
 
@@ -730,14 +726,14 @@ class F14BasicMap {
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, mapped_type&> at(K const& key)
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires kEligibleForHeterogeneousFind<K>
+  mapped_type& at(K const& key) [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return at(*this, key);
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, mapped_type const&> at(K const& key) const
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires kEligibleForHeterogeneousFind<K>
+  mapped_type const& at(K const& key) const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return at(*this, key);
   }
 
@@ -753,8 +749,8 @@ class F14BasicMap {
   }
 
   template <typename K>
-  EnableHeterogeneousInsert<K, mapped_type&> operator[](K&& key)
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires kEligibleForHeterogeneousInsert<K>
+  mapped_type& operator[](K&& key) [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return try_emplace(std::forward<K>(key)).first->second;
   }
 
@@ -765,8 +761,8 @@ class F14BasicMap {
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, size_type> count(
-      K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE size_type count(K const& key) const {
     return contains(key) ? 1 : 0;
   }
 
@@ -797,13 +793,14 @@ class F14BasicMap {
 
   /// @copydoc prehash
   template <typename K>
-  EnableHeterogeneousFind<K, F14HashToken> prehash(K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  F14HashToken prehash(K const& key) const {
     return table_.prehash(key);
   }
   /// @copydoc prehash
   template <typename K>
-  EnableHeterogeneousFind<K, F14HashToken> prehash(
-      K const& key, std::size_t hash) const {
+    requires kEligibleForHeterogeneousFind<K>
+  F14HashToken prehash(K const& key, std::size_t hash) const {
     return table_.prehash(key, hash);
   }
 
@@ -867,27 +864,30 @@ class F14BasicMap {
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, iterator> find(K const& key)
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE iterator find(K const& key)
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return table_.makeIter(table_.find(key));
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, const_iterator> find(
-      K const& key) const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE const_iterator find(K const& key) const
+      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return table_.makeConstIter(table_.find(key));
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, iterator> find(
-      F14HashToken const& token, K const& key)
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE iterator find(F14HashToken const& token, K const& key)
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return table_.makeIter(table_.find(token, key));
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, const_iterator> find(
-      F14HashToken const& token, K const& key) const
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE const_iterator
+  find(F14HashToken const& token, K const& key) const
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return table_.makeConstIter(table_.find(token, key));
   }
@@ -902,8 +902,8 @@ class F14BasicMap {
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, bool> contains(
-      K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE bool contains(K const& key) const {
     return !table_.find(key).atEnd();
   }
 
@@ -913,7 +913,8 @@ class F14BasicMap {
   }
 
   template <typename K>
-  FOLLY_ALWAYS_INLINE EnableHeterogeneousFind<K, bool> contains(
+    requires kEligibleForHeterogeneousFind<K>
+  FOLLY_ALWAYS_INLINE bool contains(
       F14HashToken const& token, K const& key) const {
     return !table_.find(token, key).atEnd();
   }
@@ -930,14 +931,14 @@ class F14BasicMap {
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, std::pair<iterator, iterator>> equal_range(
-      K const& key) {
+    requires kEligibleForHeterogeneousFind<K>
+  std::pair<iterator, iterator> equal_range(K const& key) {
     return equal_range(*this, key);
   }
 
   template <typename K>
-  EnableHeterogeneousFind<K, std::pair<const_iterator, const_iterator>>
-  equal_range(K const& key) const {
+    requires kEligibleForHeterogeneousFind<K>
+  std::pair<const_iterator, const_iterator> equal_range(K const& key) const {
     return equal_range(*this, key);
   }
 
@@ -1429,15 +1430,14 @@ class F14VectorMapImpl
       std::is_same<typename Policy::ReverseIter, std::remove_cvref_t<K>>,
       std::is_same<typename Policy::ConstReverseIter, std::remove_cvref_t<K>>>;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousVectorErase = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousVectorErase =
       ::folly::detail::EligibleForHeterogeneousFind<
           Key,
           Hasher,
           KeyEqual,
           std::conditional_t<IsIter<K>::value, Key, K>>::value &&
-          !IsIter<K>::value,
-      T>;
+      !IsIter<K>::value;
 
  public:
   using typename Super::const_iterator;
@@ -1547,7 +1547,8 @@ class F14VectorMapImpl
 
   /// Remove a key, using a heterogeneous representation.
   template <typename K>
-  EnableHeterogeneousVectorErase<K, std::size_t> erase(K const& key) {
+    requires kEligibleForHeterogeneousVectorErase<K>
+  std::size_t erase(K const& key) {
     return eraseInto(key, variadic_noop);
   }
 
@@ -1600,8 +1601,8 @@ class F14VectorMapImpl
 
   /// Callback-erase a specific key, using a heterogeneous representation.
   template <typename K, typename BeforeDestroy>
-  EnableHeterogeneousVectorErase<K, std::size_t> eraseInto(
-      K const& key, BeforeDestroy&& beforeDestroy) {
+    requires kEligibleForHeterogeneousVectorErase<K>
+  std::size_t eraseInto(K const& key, BeforeDestroy&& beforeDestroy) {
     return eraseUnderlyingKey(key, beforeDestroy);
   }
 

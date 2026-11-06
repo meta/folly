@@ -1032,6 +1032,35 @@ TYPED_TEST_P(ConcurrentHashMapTest, HeterogeneousLookup) {
   checks(std::as_const(map));
 }
 
+TYPED_TEST_P(ConcurrentHashMapTest, ExplicitHeterogeneousTemplateArguments) {
+  using Hasher = folly::transparent<folly::hasher<folly::StringPiece>>;
+  using KeyEqual = folly::transparent<std::equal_to<folly::StringPiece>>;
+  CHM<std::string, bool, Hasher, KeyEqual> map;
+  constexpr auto key = "hello"_sp;
+
+  auto inserted = map.template insert<StringPiece, 0>(
+      std::pair<StringPiece, bool>{key, true});
+  EXPECT_TRUE(inserted.second);
+  EXPECT_EQ(key, inserted.first->first);
+  auto found = std::as_const(map).template find<StringPiece, 0>(key);
+  ASSERT_NE(found, map.end());
+  EXPECT_TRUE(found->second);
+  EXPECT_TRUE((std::as_const(map).template at<StringPiece, 0>(key)));
+  EXPECT_TRUE((map.template operator[]<StringPiece, 0>(key)));
+
+  EXPECT_EQ(0, (map.template erase_if_equal<StringPiece, 0>(key, false)));
+  EXPECT_EQ(1, (map.template erase_if_equal<StringPiece, 0>(key, true)));
+  map.emplace(key, true);
+  EXPECT_EQ(1, (map.template erase<StringPiece, 0>(key)));
+  map.emplace(key, true);
+  auto predicate = [](bool value) { return value; };
+  EXPECT_EQ(
+      1,
+      (map.template erase_key_if<StringPiece, decltype(predicate), 0>(
+          key, std::move(predicate))));
+  EXPECT_TRUE(map.empty());
+}
+
 TYPED_TEST_P(ConcurrentHashMapTest, HeterogeneousInsert) {
   using Hasher = folly::transparent<folly::hasher<folly::StringPiece>>;
   using KeyEqual = folly::transparent<std::equal_to<folly::StringPiece>>;
@@ -1302,6 +1331,7 @@ REGISTER_TYPED_TEST_SUITE_P(
     IteratorMove,
     IteratorLoop,
     HeterogeneousLookup,
+    ExplicitHeterogeneousTemplateArguments,
     HeterogeneousInsert,
     InsertOrAssignIterator,
     EraseClonedNonCopyable,

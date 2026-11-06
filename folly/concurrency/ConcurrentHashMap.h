@@ -152,10 +152,9 @@ class ConcurrentHashMap {
       Impl>;
   using SegmentTAllocator = typename std::allocator_traits<
       Allocator>::template rebind_alloc<SegmentT>;
-  template <typename K, typename T>
-  using EnableHeterogeneousFind = std::enable_if_t<
-      detail::EligibleForHeterogeneousFind<KeyType, HashFn, KeyEqual, K>::value,
-      T>;
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousFind =
+      detail::EligibleForHeterogeneousFind<KeyType, HashFn, KeyEqual, K>::value;
 
   float load_factor_ = SegmentT::kDefaultLoadFactor;
 
@@ -173,24 +172,21 @@ class ConcurrentHashMap {
   using const_iterator = ConstIterator;
 
  private:
-  template <typename K, typename T>
-  using EnableHeterogeneousInsert = std::enable_if_t<
-      ::folly::detail::
-          EligibleForHeterogeneousInsert<KeyType, HashFn, KeyEqual, K>::value,
-      T>;
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousInsert = ::folly::detail::
+      EligibleForHeterogeneousInsert<KeyType, HashFn, KeyEqual, K>::value;
 
   template <typename K>
   using IsIter = std::is_same<ConstIterator, std::remove_cvref_t<K>>;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousErase = std::enable_if_t<
+  template <typename K>
+  static constexpr bool kEligibleForHeterogeneousErase =
       ::folly::detail::EligibleForHeterogeneousFind<
           KeyType,
           HashFn,
           KeyEqual,
           std::conditional_t<IsIter<K>::value, KeyType, K>>::value &&
-          !IsIter<K>::value,
-      T>;
+      !IsIter<K>::value;
 
  public:
   /*
@@ -292,7 +288,8 @@ class ConcurrentHashMap {
 
   ConstIterator find(const KeyType& k) const { return findImpl(k); }
 
-  template <typename K, EnableHeterogeneousFind<K, int> = 0>
+  template <typename K, int = 0>
+    requires kEligibleForHeterogeneousFind<K>
   ConstIterator find(const K& k) const {
     return findImpl(k);
   }
@@ -320,7 +317,8 @@ class ConcurrentHashMap {
     return insertImpl(std::move(foo));
   }
 
-  template <typename Key, EnableHeterogeneousInsert<Key, int> = 0>
+  template <typename Key, int = 0>
+    requires kEligibleForHeterogeneousInsert<Key>
   std::pair<ConstIterator, bool> insert(std::pair<Key, mapped_type>&& foo) {
     return insertImpl(std::move(foo));
   }
@@ -487,7 +485,8 @@ class ConcurrentHashMap {
     return item.first->second;
   }
 
-  template <typename Key, EnableHeterogeneousInsert<Key, int> = 0>
+  template <typename Key, int = 0>
+    requires kEligibleForHeterogeneousInsert<Key>
   const ValueType operator[](const Key& key) {
     auto item = insert(key, ValueType());
     return item.first->second;
@@ -495,7 +494,8 @@ class ConcurrentHashMap {
 
   const ValueType at(const KeyType& key) const { return atImpl(key); }
 
-  template <typename K, EnableHeterogeneousFind<K, int> = 0>
+  template <typename K, int = 0>
+    requires kEligibleForHeterogeneousFind<K>
   const ValueType at(const K& key) const {
     return atImpl(key);
   }
@@ -504,7 +504,8 @@ class ConcurrentHashMap {
 
   size_type erase(const key_type& k) { return eraseImpl(k); }
 
-  template <typename K, EnableHeterogeneousErase<K, int> = 0>
+  template <typename K, int = 0>
+    requires kEligibleForHeterogeneousErase<K>
   size_type erase(const K& k) {
     return eraseImpl(k);
   }
@@ -528,7 +529,8 @@ class ConcurrentHashMap {
     return erase_key_if(k, detail::concurrenthashmap::EqualTo1{expected});
   }
 
-  template <typename K, EnableHeterogeneousErase<K, int> = 0>
+  template <typename K, int = 0>
+    requires kEligibleForHeterogeneousErase<K>
   size_type erase_if_equal(const K& k, const ValueType& expected) {
     return erase_key_if(k, detail::concurrenthashmap::EqualTo1{expected});
   }
@@ -539,10 +541,8 @@ class ConcurrentHashMap {
     return eraseKeyIfImpl(k, std::forward<Predicate>(predicate));
   }
 
-  template <
-      typename K,
-      typename Predicate,
-      EnableHeterogeneousErase<K, int> = 0>
+  template <typename K, typename Predicate, int = 0>
+    requires kEligibleForHeterogeneousErase<K>
   size_type erase_key_if(const K& k, Predicate&& predicate) {
     return eraseKeyIfImpl(k, std::forward<Predicate>(predicate));
   }
