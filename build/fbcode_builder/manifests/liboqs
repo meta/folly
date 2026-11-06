@@ -14,3 +14,6 @@ OQS_MINIMAL_BUILD = KEM_kyber_512;KEM_kyber_768;KEM_kyber_1024;KEM_ml_kem_512;KE
 
 [dependencies]
 openssl
+
+[rpms.distro=fedora]
+liboqs-devel
