@@ -16,6 +16,12 @@
 
 #include <folly/json/json_pointer.h>
 
+#include <algorithm>
+#include <iterator>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+
 #include <folly/String.h>
 
 namespace folly {
@@ -26,7 +32,7 @@ static_assert(std::is_nothrow_move_constructible_v<json_pointer>);
 
 // static, public
 Expected<json_pointer, json_pointer::parse_error> json_pointer::try_parse(
-    StringPiece const str) {
+    std::string_view const str) {
   // pointer describes complete document
   if (str.empty()) {
     return json_pointer{};
@@ -50,7 +56,7 @@ Expected<json_pointer, json_pointer::parse_error> json_pointer::try_parse(
 }
 
 // static, public
-json_pointer json_pointer::parse(StringPiece const str) {
+json_pointer json_pointer::parse(std::string_view const str) {
   auto res = try_parse(str);
   if (res.hasValue()) {
     return std::move(res).value();

@@ -57,7 +57,6 @@ fb_dirsync_cpp_library(
     exported_deps = [
         "//folly:cpp_attributes",
         "//folly:expected",
-        "//folly:range",
     ],
 )
 

@@ -99,7 +99,6 @@ folly_add_library(
   EXPORTED_DEPS
     folly_cpp_attributes
     folly_expected
-    folly_range
 )
 
 folly_add_library(

@@ -16,12 +16,13 @@
 
 #pragma once
 
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <folly/CppAttributes.h>
 #include <folly/Expected.h>
-#include <folly/Range.h>
 
 namespace folly {
 
@@ -50,9 +51,9 @@ class json_pointer {
    * Parse string into vector of unescaped tokens.
    * Non-throwing and throwing versions.
    */
-  static Expected<json_pointer, parse_error> try_parse(StringPiece const str);
+  static Expected<json_pointer, parse_error> try_parse(std::string_view str);
 
-  static json_pointer parse(StringPiece const str);
+  static json_pointer parse(std::string_view str);
 
   /*
    * Return true if this pointer is proper to prefix to another pointer
