@@ -1071,7 +1071,6 @@ fb_dirsync_cpp_unittest(
     srcs = ["MPMCQueueTest.cpp"],
     labels = [tpx_labels.heavyweight],
     deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         "fbsource//third-party/fmt:fmt",
         ":deterministic_schedule",
         "//folly:conv",

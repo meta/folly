@@ -22,7 +22,6 @@
 #include <thread>
 #include <utility>
 
-#include <boost/intrusive_ptr.hpp>
 #include <fmt/format.h>
 #include <folly/synchronization/test/Barrier.h>
 
@@ -33,8 +32,6 @@
 #include <folly/portability/Unistd.h>
 #include <folly/stop_watch.h>
 #include <folly/test/DeterministicSchedule.h>
-
-FOLLY_ASSUME_FBVECTOR_COMPATIBLE_1(boost::intrusive_ptr)
 
 using namespace folly;
 using namespace detail;
@@ -130,23 +127,11 @@ void runElementTypeTest(T&& src) {
 struct RefCounted {
   static thread_local int active_instances;
 
-  mutable std::atomic<int> rc;
-
-  RefCounted() : rc(0) { ++active_instances; }
+  RefCounted() { ++active_instances; }
 
   ~RefCounted() { --active_instances; }
 };
 thread_local int RefCounted::active_instances;
-
-void intrusive_ptr_add_ref(RefCounted const* p) {
-  p->rc++;
-}
-
-void intrusive_ptr_release(RefCounted const* p) {
-  if (--(p->rc) == 0) {
-    delete p;
-  }
-}
 
 TEST(MPMCQueue, lotsOfElementTypes) {
   runElementTypeTest(10);
@@ -155,7 +140,7 @@ TEST(MPMCQueue, lotsOfElementTypes) {
   runElementTypeTest(vector<string>{{"abc"}});
   runElementTypeTest(std::make_shared<char>('a'));
   runElementTypeTest(std::make_unique<char>('a'));
-  runElementTypeTest(boost::intrusive_ptr<RefCounted>(new RefCounted));
+  runElementTypeTest(std::make_shared<RefCounted>());
   EXPECT_EQ(RefCounted::active_instances, 0);
 }
 
@@ -166,7 +151,7 @@ TEST(MPMCQueue, lotsOfElementTypesDynamic) {
   runElementTypeTest<true>(vector<string>{{"abc"}});
   runElementTypeTest<true>(std::make_shared<char>('a'));
   runElementTypeTest<true>(std::make_unique<char>('a'));
-  runElementTypeTest<true>(boost::intrusive_ptr<RefCounted>(new RefCounted));
+  runElementTypeTest<true>(std::make_shared<RefCounted>());
   EXPECT_EQ(RefCounted::active_instances, 0);
 }
 
