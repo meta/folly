@@ -17,10 +17,14 @@
 #pragma once
 
 /*
- * This file contains convenience aliases that make boost::intrusive::list
- * easier to use.
+ * Intrusive doubly linked lists. The list types provide the interface of
+ * boost::intrusive::list that users need, with the same names and semantics.
  */
 
+#include <folly/container/detail/IntrusiveList.h>
+
+// Some code outside folly uses boost::intrusive without including it and gets
+// it through this header.
 #include <boost/intrusive/list.hpp>
 
 namespace folly {
@@ -28,8 +32,8 @@ namespace folly {
 /**
  * An auto-unlink intrusive list hook.
  */
-using IntrusiveListHook = boost::intrusive::list_member_hook<
-    boost::intrusive::link_mode<boost::intrusive::auto_unlink>>;
+using IntrusiveListHook =
+    detail::IntrusiveListHookImpl<detail::IntrusiveLinkMode::auto_unlink>;
 
 /**
  * An intrusive list.
@@ -62,16 +66,13 @@ using IntrusiveListHook = boost::intrusive::list_member_hook<
  * variable.
  */
 template <typename T, IntrusiveListHook T::* PtrToMember>
-using IntrusiveList = boost::intrusive::list<
-    T,
-    boost::intrusive::member_hook<T, IntrusiveListHook, PtrToMember>,
-    boost::intrusive::constant_time_size<false>>;
+using IntrusiveList = detail::IntrusiveListImpl<T, PtrToMember, false>;
 
 /**
  * A safe-link intrusive list hook.
  */
-using SafeIntrusiveListHook = boost::intrusive::list_member_hook<
-    boost::intrusive::link_mode<boost::intrusive::safe_link>>;
+using SafeIntrusiveListHook =
+    detail::IntrusiveListHookImpl<detail::IntrusiveLinkMode::safe_link>;
 
 /**
  * A safe intrusive list.
@@ -81,10 +82,7 @@ using SafeIntrusiveListHook = boost::intrusive::list_member_hook<
  * an unlinked state upon removing it from a list.
  */
 template <typename T, SafeIntrusiveListHook T::* PtrToMember>
-using SafeIntrusiveList = boost::intrusive::list<
-    T,
-    boost::intrusive::member_hook<T, SafeIntrusiveListHook, PtrToMember>,
-    boost::intrusive::constant_time_size<false>>;
+using SafeIntrusiveList = detail::IntrusiveListImpl<T, PtrToMember, false>;
 
 /**
  * An intrusive list with const-time size() method.
@@ -123,9 +121,6 @@ using SafeIntrusiveList = boost::intrusive::list<
  * variable.
  */
 template <typename T, SafeIntrusiveListHook T::* PtrToMember>
-using CountedIntrusiveList = boost::intrusive::list<
-    T,
-    boost::intrusive::member_hook<T, SafeIntrusiveListHook, PtrToMember>,
-    boost::intrusive::constant_time_size<true>>;
+using CountedIntrusiveList = detail::IntrusiveListImpl<T, PtrToMember, true>;
 
 } // namespace folly

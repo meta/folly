@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <folly/container/detail/IntrusiveList.h>
+#include <folly/container/IntrusiveList.h>
 
 #include <iterator>
 #include <utility>
@@ -24,10 +24,8 @@
 
 namespace {
 
-using AutoUnlinkHook = folly::detail::IntrusiveListHookImpl<
-    folly::detail::IntrusiveLinkMode::auto_unlink>;
-using SafeHook = folly::detail::IntrusiveListHookImpl<
-    folly::detail::IntrusiveLinkMode::safe_link>;
+using AutoUnlinkHook = folly::IntrusiveListHook;
+using SafeHook = folly::SafeIntrusiveListHook;
 
 struct Item {
   explicit Item(int v) : value(v) {}
@@ -37,9 +35,8 @@ struct Item {
   SafeHook safeHook;
 };
 
-using List = folly::detail::IntrusiveListImpl<Item, &Item::hook, false>;
-using CountedList =
-    folly::detail::IntrusiveListImpl<Item, &Item::safeHook, true>;
+using List = folly::IntrusiveList<Item, &Item::hook>;
+using CountedList = folly::CountedIntrusiveList<Item, &Item::safeHook>;
 
 static_assert(sizeof(AutoUnlinkHook) == 2 * sizeof(void*));
 static_assert(sizeof(SafeHook) == 2 * sizeof(void*));

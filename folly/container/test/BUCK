@@ -958,7 +958,7 @@ fb_dirsync_cpp_unittest(
     name = "intrusive_list_test",
     srcs = ["IntrusiveListTest.cpp"],
     deps = [
-        "//folly/container/detail:intrusive_list",
+        "//folly/container:intrusive_list",
         "//folly/portability:gtest",
     ],
 )
