@@ -106,7 +106,6 @@ folly_add_library(
   HEADERS Shell.h
   EXPORTED_DEPS
     folly_conv
-    folly_format
     folly_range
 )
 

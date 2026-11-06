@@ -244,9 +244,7 @@ folly_add_library(
   NAME async_socket_exception
   SRCS AsyncSocketException.cpp
   HEADERS AsyncSocketException.h
-  DEPS
-    folly_format
-    folly_string
+  DEPS folly_string
   EXPORTED_DEPS
     folly_c_portability
     folly_range
@@ -795,7 +793,6 @@ if (FOLLY_HAVE_OPENSSL)
     SRCS SSLContext.cpp
     HEADERS SSLContext.h
     DEPS
-      folly_format
       folly_memory
       folly_random
       folly_shared_mutex

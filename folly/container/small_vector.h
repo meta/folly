@@ -34,7 +34,6 @@
 
 #include <folly/ConstexprMath.h>
 #include <folly/CppAttributes.h>
-#include <folly/FormatTraits.h>
 #include <folly/Likely.h>
 #include <folly/Portability.h>
 #include <folly/ScopeGuard.h>
@@ -1507,15 +1506,6 @@ void erase_if(small_vector<T, MaxInline, P>& v, Predicate predicate) {
 }
 
 //////////////////////////////////////////////////////////////////////
-
-namespace detail {
-
-// Format support.
-template <class T, size_t M, class P>
-struct IndexableTraits<small_vector<T, M, P>>
-    : public IndexableTraitsSeq<small_vector<T, M, P>> {};
-
-} // namespace detail
 
 template <typename>
 struct is_small_vector : std::false_type {};

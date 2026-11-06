@@ -58,7 +58,6 @@ fb_dirsync_cpp_unittest(
     supports_static_listing = False,
     deps = [
         "fbsource//third-party/fmt:fmt",
-        "//folly:format",
         "//folly:range",
         "//folly:string",
         "//folly/container:enumerate",

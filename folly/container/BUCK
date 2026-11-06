@@ -389,7 +389,6 @@ fb_dirsync_cpp_library(
     compiler_flags = ["-fno-omit-frame-pointer"],
     use_raw_headers = True,
     exported_deps = [
-        "//folly:format_traits",
         "//folly:likely",
         "//folly:scope_guard",
         "//folly:traits",
@@ -429,7 +428,6 @@ fb_dirsync_cpp_library(
     use_raw_headers = True,
     exported_deps = [
         "//folly:constexpr_math",
-        "//folly:format_traits",
         "//folly:likely",
         "//folly:portability",
         "//folly:scope_guard",

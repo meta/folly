@@ -107,7 +107,6 @@ folly_add_library(
   SRCS MallctlHelper.cpp
   HEADERS MallctlHelper.h
   DEPS
-    folly_format
     folly_lang_exception
     folly_string
   EXPORTED_DEPS folly_memory_malloc

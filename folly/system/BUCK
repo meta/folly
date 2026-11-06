@@ -127,7 +127,6 @@ fb_dirsync_cpp_library(
     use_raw_headers = True,
     exported_deps = [
         "//folly:conv",
-        "//folly:format",
         "//folly:range",
     ],
 )

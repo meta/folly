@@ -36,7 +36,6 @@
 #include <utility>
 
 #include <folly/CppAttributes.h>
-#include <folly/FormatTraits.h>
 #include <folly/Likely.h>
 #include <folly/ScopeGuard.h>
 #include <folly/Traits.h>
@@ -1659,15 +1658,6 @@ void swap(fbvector<T, A>& lhs, fbvector<T, A>& rhs) noexcept {
 //=============================================================================
 //-----------------------------------------------------------------------------
 // other
-
-namespace detail {
-
-// Format support.
-template <class T, class A>
-struct IndexableTraits<fbvector<T, A>>
-    : public IndexableTraitsSeq<fbvector<T, A>> {};
-
-} // namespace detail
 
 template <class T, class A>
 void compactResize(fbvector<T, A>* v, size_t sz) {

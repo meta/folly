@@ -248,7 +248,6 @@ fb_dirsync_cpp_library(
     apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
-        "//folly:format",
         "//folly:string",
     ],
     exported_deps = [
@@ -529,7 +528,6 @@ fb_dirsync_cpp_library(
     headers = ["SSLContext.h"],
     use_raw_headers = True,
     deps = [
-        "//folly:format",
         "//folly:memory",
         "//folly:random",
         "//folly:shared_mutex",

@@ -548,38 +548,6 @@ else ()
 endif ()
 
 folly_add_library(
-  NAME format
-  SRCS Format.cpp
-  HEADERS
-    Format-inl.h
-    Format.h
-    FormatArg.h
-  DEPS
-    fmt::fmt
-    folly_constexpr_math
-    folly_container_array
-  EXPORTED_DEPS
-    folly_c_portability
-    folly_conv
-    folly_exception
-    folly_format_traits
-    folly_lang_exception
-    folly_lang_to_ascii
-    folly_likely
-    folly_map_util
-    folly_portability
-    folly_portability_windows
-    folly_range
-    folly_string
-    folly_traits
-)
-
-folly_add_library(
-  NAME format_traits
-  HEADERS FormatTraits.h
-)
-
-folly_add_library(
   NAME function
   HEADERS Function.h
   EXPORTED_DEPS
@@ -896,7 +864,6 @@ folly_add_library(
     fmt::fmt
     folly_detail_ip_address_source
     folly_exception
-    folly_format
     folly_net_net_ops
     folly_scope_guard
     folly_small_vector

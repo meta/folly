@@ -473,42 +473,6 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
-    name = "format",
-    srcs = [
-        "Format.cpp",
-    ],
-    headers = [
-        "Format.h",
-        "Format-inl.h",
-        "FormatArg.h",
-    ],
-    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
-    compiler_flags = [
-        "-fno-omit-frame-pointer",
-    ],
-    deps = [
-        "fbsource//third-party/fmt:fmt",
-        ":constexpr_math",
-        "//folly/container:array",
-    ],
-    exported_deps = [
-        ":c_portability",
-        ":conv",
-        ":exception",
-        ":format_traits",
-        ":likely",
-        ":map_util",
-        ":portability",
-        ":range",
-        ":string",
-        ":traits",
-        "//folly/lang:exception",
-        "//folly/lang:to_ascii",
-        "//folly/portability:windows",
-    ],
-)
-
-fb_dirsync_cpp_library(
     name = "string",
     srcs = [
         "String.cpp",
@@ -1033,16 +997,6 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
-    name = "format_traits",
-    headers = ["FormatTraits.h"],
-    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
-    compiler_flags = [
-        "-fno-omit-frame-pointer",
-    ],
-    use_raw_headers = True,
-)
-
-fb_dirsync_cpp_library(
     name = "glog",
     headers = ["GLog.h"],
     apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
@@ -1168,7 +1122,6 @@ fb_dirsync_cpp_library(
     deps = [
         "fbsource//third-party/fmt:fmt",
         ":exception",
-        ":format",
         ":scope_guard",
         ":small_vector",
         ":string",
@@ -1401,8 +1354,6 @@ non_fbcode_target(
         "fbsource//xplat/folly:fbstring",
         "fbsource//xplat/folly:fbvector",
         "fbsource//xplat/folly:file",
-        "fbsource//xplat/folly:format",
-        "fbsource//xplat/folly:format_traits",
         "fbsource//xplat/folly:function",
         "fbsource//xplat/folly:glog",
         "fbsource//xplat/folly:indestructible",
@@ -1635,8 +1586,6 @@ non_fbcode_target(
         "fbsource//xplat/folly:fbstring",
         "fbsource//xplat/folly:fbvector",
         "fbsource//xplat/folly:file",
-        "fbsource//xplat/folly:format",
-        "fbsource//xplat/folly:format_traits",
         "fbsource//xplat/folly:function",
         "fbsource//xplat/folly:glog",
         "fbsource//xplat/folly:indestructible",
@@ -1824,8 +1773,6 @@ non_fbcode_target(
         "fbsource//xplat/folly:fbstring",
         "fbsource//xplat/folly:fbvector",
         "fbsource//xplat/folly:file",
-        "fbsource//xplat/folly:format",
-        "fbsource//xplat/folly:format_traits",
         "fbsource//xplat/folly:function",
         "fbsource//xplat/folly:glog",
         "fbsource//xplat/folly:indestructible",
