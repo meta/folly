@@ -420,6 +420,6 @@ TEST(Uri, Simple) {
 }
 
 TEST(Uri, BadPortThrowsInvalidArgument) {
-  constexpr folly::StringPiece s = "http://localhost:9999999999999999999/";
+  constexpr std::string_view s = "http://localhost:9999999999999999999/";
   EXPECT_THROW(Uri{s}, std::invalid_argument);
 }

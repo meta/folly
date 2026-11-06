@@ -36,7 +36,7 @@ std::string submatch(const boost::cmatch& m, int idx) {
 Uri::Uri() : hasAuthority_(false), port_(0) {}
 
 // public string constructor
-Uri::Uri(StringPiece str) : hasAuthority_(false), port_(0) {
+Uri::Uri(std::string_view str) : hasAuthority_(false), port_(0) {
   auto maybeUri = tryFromString(str);
   if (maybeUri.hasError()) {
     switch (maybeUri.error()) {
@@ -53,7 +53,8 @@ Uri::Uri(StringPiece str) : hasAuthority_(false), port_(0) {
   *this = maybeUri.value();
 }
 
-Expected<Uri, UriFormatError> Uri::tryFromString(StringPiece str) noexcept {
+Expected<Uri, UriFormatError> Uri::tryFromString(
+    std::string_view str) noexcept {
   Uri result;
 
   static const auto& uriRegex = *new boost::regex(
@@ -65,8 +66,8 @@ Expected<Uri, UriFormatError> Uri::tryFromString(StringPiece str) noexcept {
       *new boost::regex("//([^/]*)(/.*)?");
 
   boost::cmatch match;
-  if (FOLLY_UNLIKELY(
-          !boost::regex_match(str.begin(), str.end(), match, uriRegex))) {
+  if (FOLLY_UNLIKELY(!boost::regex_match(
+          str.data(), str.data() + str.size(), match, uriRegex))) {
     return makeUnexpected(UriFormatError::INVALID_URI);
   }
 
@@ -77,16 +78,16 @@ Expected<Uri, UriFormatError> Uri::tryFromString(StringPiece str) noexcept {
       result.scheme_.begin(),
       ::tolower);
 
-  StringPiece authorityAndPath(match[2].first, match[2].second);
+  std::string_view authorityAndPath(match[2].first, match[2].second);
   boost::cmatch authorityAndPathMatch;
   if (!boost::regex_match(
-          authorityAndPath.begin(),
-          authorityAndPath.end(),
+          authorityAndPath.data(),
+          authorityAndPath.data() + authorityAndPath.size(),
           authorityAndPathMatch,
           authorityAndPathRegex)) {
     // Does not start with //, doesn't have authority
     result.hasAuthority_ = false;
-    result.path_ = authorityAndPath.str();
+    result.path_ = std::string(authorityAndPath);
   } else {
     static const auto& authorityRegex = *new boost::regex(
         "(?:([^@:]*)(?::([^@]*))?@)?" // username, password
@@ -104,7 +105,7 @@ Expected<Uri, UriFormatError> Uri::tryFromString(StringPiece str) noexcept {
       return makeUnexpected(UriFormatError::INVALID_URI_AUTHORITY);
     }
 
-    StringPiece port(authorityMatch[4].first, authorityMatch[4].second);
+    std::string_view port(authorityMatch[4].first, authorityMatch[4].second);
     if (!port.empty()) {
       try {
         result.port_ = to<uint16_t>(port);

@@ -18,6 +18,7 @@
 #define FOLLY_URI_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <folly/Expected.h>
@@ -55,14 +56,15 @@ class Uri {
    * Parse a Uri from a string.  Same as tryFromString except it throws
    * a std::invalid_argument if there's an error.
    */
-  explicit Uri(StringPiece str);
+  explicit Uri(std::string_view str);
 
   /**
    * Parse a Uri from a string.
    *
    * On failure, returns UriFormatError.
    */
-  static Expected<Uri, UriFormatError> tryFromString(StringPiece str) noexcept;
+  static Expected<Uri, UriFormatError> tryFromString(
+      std::string_view str) noexcept;
 
   const std::string& scheme() const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return scheme_;
