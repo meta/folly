@@ -1,5 +1,6 @@
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dirsync_cpp_benchmark")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
 
 oncall("fbcode_entropy_wardens_folly")
 
@@ -29,6 +30,7 @@ fb_dirsync_cpp_unittest(
     name = "checksum_vpclmul_test",
     srcs = ["ChecksumVpclmulTest.cpp"],
     compatible_with = ["ovr_config//cpu:x86_64"],
+    network_access = network_access_utils.private(),
     remote_execution = {
         "capabilities": {
             "platform": "linux-remote-execution",

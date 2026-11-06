@@ -7,6 +7,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dir
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
 
 oncall("fbcode_entropy_wardens_folly")
 
@@ -1517,6 +1518,7 @@ fb_dirsync_cpp_benchmark(
 fb_dirsync_cpp_unittest(
     name = "subprocess_test",
     srcs = ["SubprocessTest.cpp"],
+    network_access = network_access_utils.private(),
     # RE workers delegate cgroups, so the clone3 tests verify placement instead of skipping.
     remote_execution = re_test_utils.remote_execution_linux_default(),
     resources = [
