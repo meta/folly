@@ -1031,8 +1031,10 @@ class alignas(64) SIMDTable {
       uint64x2_t vec;
       vec[0] = low;
       vec[1] = hi;
-      svbool_t matchPred =
-          svmatch_u8(pred, svset_neonq_u8(svundef_u8(), vec), needleV);
+      svbool_t matchPred = svmatch_u8(
+          pred,
+          svset_neonq_u8(svundef_u8(), vreinterpretq_u8_u64(vec)),
+          needleV);
       // get info from every byte into the bottom half of every uint16_t
       // by shifting right 4, then round to get it into a 64-bit vector
       uint8x8_t maskV = vshrn_n_u16(
