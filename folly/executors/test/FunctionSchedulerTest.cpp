@@ -387,6 +387,95 @@ TEST(FunctionScheduler, ResetFuncWhileRunning) {
   EXPECT_EQ(2, state.count) << "sanity check";
 }
 
+TEST(FunctionScheduler, RescheduleQueuedFunction) {
+  FunctionScheduler fs;
+  folly::Baton<> ran;
+  fs.addFunction(
+      [&] { ran.post(); },
+      std::chrono::hours(1),
+      "delayed",
+      std::chrono::hours(1));
+  EXPECT_FALSE(fs.rescheduleFunction("delayed", milliseconds(50)));
+  fs.start();
+  EXPECT_THROW(
+      fs.rescheduleFunction("delayed", milliseconds(-1)),
+      std::invalid_argument);
+  EXPECT_FALSE(fs.rescheduleFunction("missing", milliseconds(50)));
+  EXPECT_TRUE(fs.rescheduleFunction("delayed", milliseconds(50)));
+  EXPECT_TRUE(ran.try_wait_for(std::chrono::seconds(2)));
+  ran.reset();
+  EXPECT_TRUE(fs.resetFunctionTimer("delayed"));
+  EXPECT_FALSE(ran.try_wait_for(milliseconds(100)));
+  EXPECT_TRUE(fs.cancelFunction("delayed"));
+  EXPECT_FALSE(fs.rescheduleFunction("delayed", milliseconds(50)));
+  fs.shutdown();
+}
+
+TEST(FunctionScheduler, RescheduleRunningFunction) {
+  FunctionScheduler fs;
+  folly::Baton<> ranAgain;
+  steady_clock::time_point rescheduledAt;
+  int calls = 0;
+  fs.addFunction(
+      [&] {
+        if (++calls == 1) {
+          rescheduledAt = steady_clock::now();
+          EXPECT_TRUE(fs.rescheduleFunction("refresh", milliseconds(100)));
+        } else {
+          EXPECT_GE(steady_clock::now() - rescheduledAt, milliseconds(100));
+          fs.cancelFunction("refresh");
+          ranAgain.post();
+        }
+      },
+      std::chrono::hours(1),
+      "refresh");
+  fs.setSteady(true);
+  fs.start();
+  EXPECT_TRUE(ranAgain.try_wait_for(std::chrono::seconds(2)));
+  fs.shutdown();
+  EXPECT_EQ(calls, 2);
+}
+
+TEST(FunctionScheduler, RescheduleDoesNotResurrectCanceledFunction) {
+  FunctionScheduler fs;
+  folly::Baton<> entered;
+  folly::Baton<> released;
+  folly::Baton<> completed;
+  int calls = 0;
+  fs.addFunction(
+      [&] {
+        ++calls;
+        entered.post();
+        released.wait();
+        EXPECT_FALSE(fs.rescheduleFunction("canceled", milliseconds(0)));
+        completed.post();
+      },
+      milliseconds(1),
+      "canceled");
+  fs.start();
+  EXPECT_TRUE(entered.try_wait_for(std::chrono::seconds(2)));
+  EXPECT_TRUE(fs.cancelFunction("canceled"));
+  released.post();
+  EXPECT_TRUE(completed.try_wait_for(std::chrono::seconds(2)));
+  EXPECT_FALSE(fs.rescheduleFunction("canceled", milliseconds(0)));
+  fs.shutdown();
+  EXPECT_EQ(calls, 1);
+}
+
+TEST(FunctionScheduler, RescheduleActiveRunOnceIsRejected) {
+  FunctionScheduler fs;
+  folly::Baton<> ran;
+  fs.addFunctionOnce(
+      [&] {
+        EXPECT_FALSE(fs.rescheduleFunction("once", milliseconds(0)));
+        ran.post();
+      },
+      "once");
+  fs.start();
+  EXPECT_TRUE(ran.try_wait_for(std::chrono::seconds(2)));
+  fs.shutdown();
+}
+
 TEST(FunctionScheduler, AddInvalid) {
   atomic<int> total{0};
   FunctionScheduler fs;

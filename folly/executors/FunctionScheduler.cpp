@@ -373,19 +373,43 @@ void FunctionScheduler::cancelAllFunctionsAndWait() {
 }
 
 bool FunctionScheduler::resetFunctionTimer(StringPiece nameID) {
+  return resetFunctionTimerImpl(nameID, std::nullopt);
+}
+
+bool FunctionScheduler::rescheduleFunction(
+    StringPiece nameID, microseconds delay) {
+  if (delay < microseconds::zero()) {
+    throw std::invalid_argument("FunctionScheduler: negative delay");
+  }
+  return resetFunctionTimerImpl(nameID, delay);
+}
+
+bool FunctionScheduler::resetFunctionTimerImpl(
+    StringPiece nameID, std::optional<microseconds> delay) {
   std::unique_lock l(mutex_);
+  if (delay && !running_) {
+    return false;
+  }
+  const auto resetNextRunTime = [delay](RepeatFunc& func) {
+    const auto now = steady_clock::now();
+    if (delay) {
+      func.nextRunTime = now + *delay;
+    } else {
+      func.resetNextRunTime(now);
+    }
+  };
   if (currentFunction_ && currentFunction_->name == nameID) {
     if (cancellingCurrentFunction_ || currentFunction_->runOnce) {
       return false;
     }
-    currentFunction_->resetNextRunTime(steady_clock::now());
+    resetNextRunTime(*currentFunction_);
     return true;
   }
 
   auto it = functionsMap_.find(nameID);
   if (it != functionsMap_.end()) {
     if (running_) {
-      it->second->resetNextRunTime(steady_clock::now());
+      resetNextRunTime(*it->second);
       functions_.update(it->second);
       runningCondvar_.notify_one();
     }

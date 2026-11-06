@@ -19,6 +19,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <thread>
 
 #include <folly/Function.h>
@@ -219,6 +220,14 @@ class FunctionScheduler {
   bool resetFunctionTimer(StringPiece nameID);
 
   /**
+   * Reschedules a function on a running scheduler to run after delay from now,
+   * including from within its callback. Does not change its interval or
+   * startDelay. Returns false if stopped, canceled, missing, or currently
+   * executing a run-once function. Throws if delay is negative.
+   */
+  bool rescheduleFunction(StringPiece nameID, std::chrono::microseconds delay);
+
+  /**
    * Starts the scheduler.
    *
    * Returns false if the scheduler was already running.
@@ -308,6 +317,9 @@ class FunctionScheduler {
       nextRunTime = curTime + startDelay;
     }
   };
+
+  bool resetFunctionTimerImpl(
+      StringPiece nameID, std::optional<std::chrono::microseconds> delay);
 
   void run();
   void runOneFunction(
