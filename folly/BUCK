@@ -582,7 +582,6 @@ fb_dirsync_cpp_library(
         ":c_portability",
         ":conv",
         ":expected",
-        ":format",
         ":function",
         ":json_pointer",
         ":likely",

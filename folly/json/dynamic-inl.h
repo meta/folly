@@ -17,13 +17,17 @@
 #pragma once
 
 #include <functional>
+#include <stdexcept>
 
 #include <folly/CPortability.h>
 #include <folly/Conv.h>
-#include <folly/Format.h>
 #include <folly/Likely.h>
 #include <folly/Portability.h>
+// TODO(T296850232): remove once manifold impl_prod (mbs_client VCR) includes
+// folly/String.h directly.
+#include <folly/String.h>
 #include <folly/detail/Iterators.h>
+#include <folly/hash/Hash.h>
 #include <folly/lang/Exception.h>
 
 namespace folly {
@@ -1383,89 +1387,6 @@ template <typename Stringish, typename>
 inline std::string dynamic_view::move_string_or(Stringish&& val) {
   return get_move<std::string>(val.begin(), val.end());
 }
-
-//////////////////////////////////////////////////////////////////////
-
-// Specialization of FormatValue so dynamic objects can be formatted
-template <>
-class FormatValue<dynamic> {
- public:
-  explicit FormatValue(const dynamic& val) : val_(val) {}
-
-  template <class FormatCallback>
-  void format(FormatArg& arg, FormatCallback& cb) const {
-    switch (val_.type()) {
-      case dynamic::NULLT:
-        FormatValue<std::nullptr_t>(nullptr).format(arg, cb);
-        break;
-      case dynamic::BOOL:
-        FormatValue<bool>(val_.asBool()).format(arg, cb);
-        break;
-      case dynamic::INT64:
-        FormatValue<int64_t>(val_.asInt()).format(arg, cb);
-        break;
-      case dynamic::STRING:
-        FormatValue<std::string>(val_.asString()).format(arg, cb);
-        break;
-      case dynamic::DOUBLE:
-        FormatValue<double>(val_.asDouble()).format(arg, cb);
-        break;
-      case dynamic::ARRAY:
-        FormatValue(val_.at(arg.splitIntKey())).format(arg, cb);
-        break;
-      case dynamic::OBJECT:
-        FormatValue(val_.at(arg.splitKey().toString())).format(arg, cb);
-        break;
-      default:
-        folly::assume_unreachable();
-    }
-  }
-
- private:
-  const dynamic& val_;
-};
-
-template <class V>
-class FormatValue<detail::DefaultValueWrapper<dynamic, V>> {
- public:
-  explicit FormatValue(const detail::DefaultValueWrapper<dynamic, V>& val)
-      : val_(val) {}
-
-  template <class FormatCallback>
-  void format(FormatArg& arg, FormatCallback& cb) const {
-    auto& c = val_.container;
-    switch (c.type()) {
-      case dynamic::NULLT:
-      case dynamic::BOOL:
-      case dynamic::INT64:
-      case dynamic::STRING:
-      case dynamic::DOUBLE:
-        FormatValue<dynamic>(c).format(arg, cb);
-        break;
-      case dynamic::ARRAY: {
-        int key = arg.splitIntKey();
-        if (key >= 0 && size_t(key) < c.size()) {
-          FormatValue<dynamic>(c.at(key)).format(arg, cb);
-        } else {
-          FormatValue<V>(val_.defaultValue).format(arg, cb);
-        }
-        break;
-      }
-      case dynamic::OBJECT: {
-        auto pos = c.find(arg.splitKey());
-        if (pos != c.items().end()) {
-          FormatValue<dynamic>(pos->second).format(arg, cb);
-        } else {
-          FormatValue<V>(val_.defaultValue).format(arg, cb);
-        }
-        break;
-      }
-    }
-  }
-
- private:
-  const detail::DefaultValueWrapper<dynamic, V>& val_;
-};
 
 } // namespace folly
 

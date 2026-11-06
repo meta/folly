@@ -28,7 +28,6 @@ folly_add_library(
     ${GLOG_LIBRARIES}
     fmt::fmt
     folly_container_enumerate
-    folly_hash_hash
     folly_lang_assume
     folly_lang_bits
     folly_unicode
@@ -40,14 +39,15 @@ folly_add_library(
     folly_cpp_attributes
     folly_detail_iterators
     folly_expected
-    folly_format
     folly_function
+    folly_hash_hash
     folly_json_pointer
     folly_lang_exception
     folly_likely
     folly_optional
     folly_portability
     folly_range
+    folly_string
     folly_traits
     folly_utility
 )

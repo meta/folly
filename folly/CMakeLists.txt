@@ -347,7 +347,6 @@ folly_add_library(
     folly_conv
     folly_detail_iterators
     folly_expected
-    folly_format
     folly_function
     folly_hash_hash
     folly_json_dynamic
