@@ -9,15 +9,14 @@ libunwind
 [debs.not(distro=ubuntu)]
 libunwind-dev
 
-# The current libunwind v1.8.1 release has compiler issues with aarch64 (https://github.com/libunwind/libunwind/issues/702).
-# This more recent libunwind version (based on the latest commit, not a release version) got it fixed.
+# libunwind before v1.8.2 release has compiler issues with aarch64 (https://github.com/libunwind/libunwind/issues/702).
 [download]
-url = https://github.com/libunwind/libunwind/archive/f081cf42917bdd5c428b77850b473f31f81767cf.tar.gz
-sha256 = 4ff5c335c02d225491d6c885db827fb5fa505fee4e68b4d7e866efc0087e7264
+url = https://github.com/libunwind/libunwind/releases/download/v1.8.3/libunwind-1.8.3.tar.gz
+sha256 = be30d910e67f58d82e753231f1357f326a1a088acf126b21ff77e60aab19b90b
 
 [build]
 builder = autoconf
-subdir = libunwind-f081cf42917bdd5c428b77850b473f31f81767cf
+subdir = libunwind-1.8.3
 
 [autoconf.args]
 --with-pic
