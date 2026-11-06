@@ -2,7 +2,7 @@
 *.lo
 *.la
 .dirstamp
-Makefile
+/Makefile
 Makefile.in
 .libs
 .deps
@@ -12,7 +12,7 @@ _configs.sed
 aclocal.m4
 autom4te.cache
 build-aux
-libtool
+/libtool
 folly/test/gtest
 folly/folly-config.h
 folly/**/test/*_benchmark
