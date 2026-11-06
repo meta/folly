@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include <folly/Conv.h>
@@ -29,8 +30,8 @@ namespace folly {
 
 class NamedThreadFactory : public ThreadFactory {
  public:
-  explicit NamedThreadFactory(folly::StringPiece prefix)
-      : prefix_(prefix.str()), suffix_(0) {}
+  explicit NamedThreadFactory(std::string_view prefix)
+      : prefix_(prefix), suffix_(0) {}
 
   std::thread newThread(Func&& func) override {
     auto name = folly::to<std::string>(prefix_, suffix_++);
@@ -41,7 +42,7 @@ class NamedThreadFactory : public ThreadFactory {
         });
   }
 
-  void setNamePrefix(folly::StringPiece prefix) { prefix_ = prefix.str(); }
+  void setNamePrefix(std::string_view prefix) { prefix_ = prefix; }
 
   const std::string& getNamePrefix() const override { return prefix_; }
 

@@ -160,7 +160,8 @@ SetThreadDescriptionFn getSetThreadDescription() {
   return reinterpret_cast<SetThreadDescriptionFn>(proc);
 }
 
-bool setThreadNameWindowsViaDescription(DWORD id, StringPiece name) noexcept {
+bool setThreadNameWindowsViaDescription(
+    DWORD id, std::string_view name) noexcept {
   // This whole function is noexcept.
 
   static const auto setThreadDescription = getSetThreadDescription();
@@ -186,7 +187,7 @@ bool setThreadNameWindowsViaDescription(DWORD id, StringPiece name) noexcept {
   // should be plenty.
   constexpr size_t kMaximumThreadNameLength = 64;
   if (name.size() > kMaximumThreadNameLength) {
-    name = name.subpiece(0, kMaximumThreadNameLength);
+    name = name.substr(0, kMaximumThreadNameLength);
   }
 
   // For valid UTF-8, code points in [0, 0xFFFF] fit in one UTF-16 code unit.
@@ -210,7 +211,7 @@ bool setThreadNameWindowsViaDescription(DWORD id, StringPiece name) noexcept {
 
   return true;
 }
-bool setThreadNameWindowsViaDebugger(DWORD id, StringPiece name) noexcept {
+bool setThreadNameWindowsViaDebugger(DWORD id, std::string_view name) noexcept {
 // http://msdn.microsoft.com/en-us/library/xcb2z8hs.aspx
 #pragma pack(push, 8)
   struct THREADNAME_INFO {
@@ -250,7 +251,7 @@ bool setThreadNameWindowsViaDebugger(DWORD id, StringPiece name) noexcept {
   return true;
 }
 
-bool setThreadNameWindows(std::thread::id tid, StringPiece name) {
+bool setThreadNameWindows(std::thread::id tid, std::string_view name) {
   static_assert(
       sizeof(DWORD) == sizeof(std::thread::id),
       "This assumes std::thread::id is a thin wrapper around "
@@ -274,7 +275,7 @@ bool setThreadNameWindows(std::thread::id tid, StringPiece name) {
 #endif
 } // namespace
 
-bool setThreadName(std::thread::id tid, StringPiece name) {
+bool setThreadName(std::thread::id tid, std::string_view name) {
 #ifdef _WIN32
   return setThreadNameWindows(tid, name);
 #else
@@ -282,7 +283,7 @@ bool setThreadName(std::thread::id tid, StringPiece name) {
 #endif
 }
 
-bool setThreadName(pthread_t pid, StringPiece name) {
+bool setThreadName(pthread_t pid, std::string_view name) {
 #ifdef _WIN32
   static_assert(
       sizeof(unsigned int) == sizeof(std::thread::id),
@@ -296,7 +297,7 @@ bool setThreadName(pthread_t pid, StringPiece name) {
   std::memcpy(&id, &tid, sizeof(id));
   return setThreadName(id, name);
 #else
-  name = name.subpiece(0, kMaxThreadNameLength - 1);
+  name = name.substr(0, kMaxThreadNameLength - 1);
   char buf[kMaxThreadNameLength] = {};
   std::memcpy(buf, name.data(), name.size());
 #if FOLLY_HAS_PTHREAD_SETNAME_NP_THREAD_NAME
@@ -323,7 +324,7 @@ bool setThreadName(pthread_t pid, StringPiece name) {
 #endif // !_WIN32
 }
 
-bool setThreadName(StringPiece name) {
+bool setThreadName(std::string_view name) {
 #if FOLLY_HAVE_PTHREAD
   return setThreadName(pthread_self(), name);
 #else

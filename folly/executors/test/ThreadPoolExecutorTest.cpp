@@ -18,6 +18,7 @@
 #include <barrier>
 #include <memory>
 #include <stdexcept>
+#include <string_view>
 #include <thread>
 
 #include <folly/CPortability.h>
@@ -1464,7 +1465,7 @@ TYPED_TEST(ThreadPoolExecutorTypedTest, VirtualExecutor) {
 
 // Test use of guard inside executors
 template <class TPE>
-static void currentThreadTest(folly::StringPiece executorName) {
+static void currentThreadTest(std::string_view executorName) {
   folly::Optional<ExecutorBlockingContext> ctx{};
   TPE tpe(1, std::make_shared<NamedThreadFactory>(executorName));
   tpe.add([&ctx]() { ctx = getExecutorBlockingContext(); });
@@ -1474,7 +1475,7 @@ static void currentThreadTest(folly::StringPiece executorName) {
 
 // Test the nesting of the permit guard
 template <class TPE>
-static void currentThreadTestDisabled(folly::StringPiece executorName) {
+static void currentThreadTestDisabled(std::string_view executorName) {
   folly::Optional<ExecutorBlockingContext> ctxPermit{};
   folly::Optional<ExecutorBlockingContext> ctxForbid{};
   TPE tpe(1, std::make_shared<NamedThreadFactory>(executorName));

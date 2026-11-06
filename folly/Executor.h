@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cassert>
 #include <climits>
+#include <string_view>
 #include <utility>
 
 #include <folly/Function.h>
@@ -463,7 +464,7 @@ struct ExecutorBlockingContext {
   bool forbid;
   bool allowTerminationOnBlocking;
   Executor* ex = nullptr;
-  StringPiece tag;
+  std::string_view tag;
 };
 static_assert(
     std::is_standard_layout<ExecutorBlockingContext>::value,
@@ -488,9 +489,9 @@ class ExecutorBlockingGuard {
 
   explicit ExecutorBlockingGuard(PermitTag) noexcept;
   explicit ExecutorBlockingGuard(
-      TrackTag, Executor* ex, StringPiece tag) noexcept;
+      TrackTag, Executor* ex, std::string_view tag) noexcept;
   explicit ExecutorBlockingGuard(
-      ProhibitTag, Executor* ex, StringPiece tag) noexcept;
+      ProhibitTag, Executor* ex, std::string_view tag) noexcept;
 
   ExecutorBlockingGuard(ExecutorBlockingGuard&&) = delete;
   ExecutorBlockingGuard(ExecutorBlockingGuard const&) = delete;

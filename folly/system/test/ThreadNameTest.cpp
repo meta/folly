@@ -16,6 +16,7 @@
 
 #include <folly/system/ThreadName.h>
 
+#include <string_view>
 #include <thread>
 
 #include <folly/ScopeGuard.h>
@@ -29,7 +30,7 @@ namespace {
 
 const bool expectedSetOtherThreadNameResult = folly::canSetOtherThreadName();
 const bool expectedSetSelfThreadNameResult = folly::canSetCurrentThreadName();
-constexpr StringPiece kThreadName{"rockin-thread"};
+constexpr std::string_view kThreadName{"rockin-thread"};
 
 } // namespace
 
@@ -37,7 +38,7 @@ TEST(ThreadName, getCurrentThreadName) {
   thread th([] {
     EXPECT_EQ(expectedSetSelfThreadNameResult, setThreadName(kThreadName));
     if (expectedSetSelfThreadNameResult) {
-      EXPECT_EQ(kThreadName.toString(), *getCurrentThreadName());
+      EXPECT_EQ(std::string(kThreadName), *getCurrentThreadName());
     }
   });
   SCOPE_EXIT {

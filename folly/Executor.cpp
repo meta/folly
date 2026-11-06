@@ -77,7 +77,7 @@ ExecutorBlockingGuard::ExecutorBlockingGuard(PermitTag) noexcept {
 }
 
 ExecutorBlockingGuard::ExecutorBlockingGuard(
-    TrackTag, Executor* ex, StringPiece tag) noexcept {
+    TrackTag, Executor* ex, std::string_view tag) noexcept {
   if (!kIsMobile) {
     list_ = *executor_blocking_list;
     list_.prev = executor_blocking_list;
@@ -93,7 +93,7 @@ ExecutorBlockingGuard::ExecutorBlockingGuard(
 }
 
 ExecutorBlockingGuard::ExecutorBlockingGuard(
-    ProhibitTag, Executor* ex, StringPiece tag) noexcept {
+    ProhibitTag, Executor* ex, std::string_view tag) noexcept {
   if (!kIsMobile) {
     list_ = *executor_blocking_list;
     list_.prev = executor_blocking_list;

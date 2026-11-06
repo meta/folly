@@ -17,6 +17,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include <folly/Optional.h>
@@ -60,13 +61,13 @@ Optional<std::string> getCurrentThreadName();
  * @param tid Thread id
  * @param name Name to set
  */
-bool setThreadName(std::thread::id tid, StringPiece name);
-bool setThreadName(pthread_t pid, StringPiece name);
+bool setThreadName(std::thread::id tid, std::string_view name);
+bool setThreadName(pthread_t pid, std::string_view name);
 
 /**
  * Equivalent to setThreadName(std::this_thread::get_id(), name);
  *
  * @param name Name to set
  */
-bool setThreadName(StringPiece name);
+bool setThreadName(std::string_view name);
 } // namespace folly
