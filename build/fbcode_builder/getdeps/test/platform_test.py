@@ -73,15 +73,41 @@ class OsReleaseTest(unittest.TestCase):
         self.assertEqual(host.get_package_manager(), "deb")
 
     def test_bare_debian_maps_to_debian_family(self) -> None:
-        # Debian's NAME carries extra words that survive normalization
-        # ("Debian GNU/Linux" becomes "debian_gnu/"); it must still map to
-        # the debian family (and the deb package manager) as before.
+        # GNU/Linux is removed from NAME while preserving the Debian family.
         self.assertEqual(
-            self.parse("Debian GNU/Linux", "12"), ("linux", "debian_gnu/", "12")
+            self.parse("Debian GNU/Linux", "12"), ("linux", "debian", "12")
         )
-        host = HostType("linux", "debian_gnu/", "12")
+        host = HostType("linux", "debian", "12")
         self.assertEqual(host.distro_family, "debian")
         self.assertEqual(host.get_package_manager(), "deb")
+
+    def test_kali(self) -> None:
+        data = """\
+NAME="Kali GNU/Linux"
+VERSION_ID="2026.3"
+ID=kali
+ID_LIKE=debian
+"""
+        self.assertEqual(
+            parse_os_release(data),
+            ("linux", "kali", "2026.3"),
+        )
+        host = HostType("linux", "kali", "2026.3")
+        self.assertEqual(host.distro_family, "debian")
+        self.assertEqual(host.get_package_manager(), "deb")
+
+    def test_name_preserves_existing_identifiers(self) -> None:
+        for name, distro_id, expected, version, family, manager in (
+            ("Pop!_OS", "pop", "pop!_os", "22.04", "debian", "deb"),
+            ("CentOS Stream", "centos", "centos_stream", "9", "rhel", "rpm"),
+        ):
+            with self.subTest(name=name):
+                data = f'NAME="{name}"\nID={distro_id}\nVERSION_ID="{version}"\n'
+                result = parse_os_release(data)
+                self.assertEqual(result, ("linux", expected, version))
+                host = HostType(*result)
+                self.assertEqual(host.distro_family, family)
+                self.assertEqual(host.get_package_manager(), manager)
 
     def test_unknown_distro_has_no_family(self) -> None:
         host = HostType("linux", "gentoo", None)

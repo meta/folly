@@ -26,7 +26,7 @@ def is_windows() -> bool:
 DISTRO_FAMILIES: dict[str, tuple[str, ...]] = {
     "rhel": ("rhel", "centos", "centos_stream", "alma", "rocky"),
     "fedora": ("fedora",),
-    "debian": ("debian", "ubuntu", "pop!_os", "mint"),
+    "debian": ("debian", "ubuntu", "pop!_os", "mint", "kali"),
     "arch": ("arch",),
 }
 
@@ -39,7 +39,7 @@ def distro_family(distro: str | None) -> str | None:
             return family
     # Fall back to prefix matching: distro names are normalized from free
     # text, so an exact table miss can still belong to a known family
-    # (Debian's NAME="Debian GNU/Linux" normalizes to "debian_gnu/").
+    # (for example, a distribution name with a release-specific suffix).
     # This preserves the pre-refactor startswith tolerance.
     for family, members in DISTRO_FAMILIES.items():
         if distro.startswith(members):
@@ -74,7 +74,7 @@ def parse_os_release(data: str) -> tuple[str, str | None, str | None]:
     name = os_vars.get("NAME")
     if name:
         name = name.lower()
-        name = re.sub("linux", "", name)
+        name = re.sub(r"(?:gnu/)?linux", "", name)
         name = name.strip().replace(" ", "_")
 
     version_id = os_vars.get("VERSION_ID")
