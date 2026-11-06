@@ -112,7 +112,7 @@ class AsyncReader {
     }
 
     /**
-     * readDataAvailable() will be invoked when data has been successfully read
+     * readDataAvailable() will be invoked when data has been successfuly read
      * into the buffer(s) returned by the last call to
      * getReadBuffer()/getReadBuffers()
      *
