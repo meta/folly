@@ -198,6 +198,35 @@ class IntrusiveListIterator {
   IntrusiveListNode* node_ = nullptr;
 };
 
+// Returns the offset of the data member that member points to within Class.
+template <typename Member, typename Class>
+std::ptrdiff_t memberOffset(Member Class::* member) noexcept {
+  // The Itanium ABI represents a pointer to a data member as its offset. MSVC
+  // does too, as an int, for a class without virtual bases; its larger forms
+  // aren't plain offsets.
+#ifdef _MSC_VER
+  using Offset = int;
+#else
+  using Offset = std::ptrdiff_t;
+#endif
+  static_assert(
+      sizeof(member) == sizeof(Offset),
+      "unsupported pointer-to-member representation");
+  Offset offset;
+  std::memcpy(&offset, &member, sizeof(offset));
+  return offset;
+}
+
+// Returns the object whose data member at ptr is *member, like
+// boost::intrusive::get_parent_from_member. member must point to that data
+// member of a live, non-const Class object, and ptr must have a form that
+// memberOffset accepts.
+template <typename Class, typename Member>
+Class* parentFromMember(Member* member, Member Class::* ptr) noexcept {
+  return reinterpret_cast<Class*>(
+      reinterpret_cast<char*>(member) - memberOffset(ptr));
+}
+
 template <typename MemberPointer>
 struct IntrusiveListMember;
 
@@ -241,24 +270,7 @@ class IntrusiveListImpl : private IntrusiveListSize<ConstantTimeSize> {
       // node_ is the only member of the hook, so the node and the hook share
       // an address.
       return reinterpret_cast<T*>(
-          reinterpret_cast<char*>(node) - memberOffset());
-    }
-    static std::ptrdiff_t memberOffset() noexcept {
-      // The Itanium ABI represents a pointer to a data member as its offset.
-      // MSVC does too, as an int, for a class without virtual bases; its
-      // larger forms aren't plain offsets.
-      auto member = Member;
-#ifdef _MSC_VER
-      using Offset = int;
-#else
-      using Offset = std::ptrdiff_t;
-#endif
-      static_assert(
-          sizeof(member) == sizeof(Offset),
-          "unsupported pointer-to-member representation");
-      Offset offset;
-      std::memcpy(&offset, &member, sizeof(offset));
-      return offset;
+          reinterpret_cast<char*>(node) - memberOffset(Member));
     }
   };
 

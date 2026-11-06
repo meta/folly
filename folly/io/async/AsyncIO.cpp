@@ -21,13 +21,13 @@
 #include <stdexcept>
 #include <string>
 
-#include <boost/intrusive/parent_from_member.hpp>
 #include <fmt/ostream.h>
 #include <glog/logging.h>
 
 #include <folly/Exception.h>
 #include <folly/Likely.h>
 #include <folly/String.h>
+#include <folly/container/detail/IntrusiveList.h>
 #include <folly/portability/Unistd.h>
 #include <folly/small_vector.h>
 
@@ -297,8 +297,7 @@ Range<AsyncBase::Op**> AsyncIO::doWait(
   result.clear();
   for (size_t i = 0; i < count; ++i) {
     CHECK(events[i].obj);
-    Op* op = boost::intrusive::get_parent_from_member(
-        events[i].obj, &AsyncIOOp::iocb_);
+    Op* op = detail::parentFromMember(events[i].obj, &AsyncIOOp::iocb_);
     decrementPending();
     switch (type) {
       case WaitType::COMPLETE:

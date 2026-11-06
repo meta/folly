@@ -199,7 +199,7 @@ folly_add_library(
   HEADERS IntrusiveHeap.h
   EXPORTED_DEPS
     ${GLOG_LIBRARIES}
-    Boost::headers
+    folly_container_detail_intrusive_list
     folly_lang_builtin
     folly_portability
 )

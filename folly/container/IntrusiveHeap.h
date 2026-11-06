@@ -27,9 +27,9 @@
 #include <functional>
 #include <utility>
 
-#include <boost/intrusive/parent_from_member.hpp>
 #include <glog/logging.h>
 #include <folly/Portability.h>
+#include <folly/container/detail/IntrusiveList.h>
 #include <folly/lang/Builtin.h>
 
 namespace folly {
@@ -85,7 +85,7 @@ template <class T, class Tag, IntrusiveHeapNode<Tag> T::* PtrToMember>
 struct MemberNodeTraits {
   static IntrusiveHeapNode<Tag>* asNode(T* x) { return &(x->*PtrToMember); }
   static T* asT(IntrusiveHeapNode<Tag>* n) {
-    return boost::intrusive::get_parent_from_member(n, PtrToMember);
+    return detail::parentFromMember(n, PtrToMember);
   }
 };
 

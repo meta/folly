@@ -119,8 +119,8 @@ folly_add_library(
   HEADERS AsyncIO.h
   DEPS
     ${GLOG_LIBRARIES}
-    Boost::headers
     fmt::fmt
+    folly_container_detail_intrusive_list
     folly_exception
     folly_likely
     folly_portability_unistd

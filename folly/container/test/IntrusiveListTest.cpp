@@ -189,3 +189,18 @@ TEST(IntrusiveList, countedSize) {
   EXPECT_EQ(disposed, (std::vector<int>{0, 2, 1, 3}));
   EXPECT_FALSE(items[1].safeHook.is_linked());
 }
+
+TEST(IntrusiveList, parentFromMember) {
+  struct Base {
+    virtual ~Base() = default;
+    int x = 0;
+  };
+  struct Derived : Base {
+    int y = 0;
+  };
+  Item item(1);
+  Derived derived;
+  EXPECT_EQ(
+      folly::detail::parentFromMember(&item.safeHook, &Item::safeHook), &item);
+  EXPECT_EQ(folly::detail::parentFromMember(&derived.y, &Derived::y), &derived);
+}
