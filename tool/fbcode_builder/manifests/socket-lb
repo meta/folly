@@ -42,6 +42,8 @@ clang
 llvm
 
 [shipit.pathmap]
+fbcode/socket-lb/CODE_OF_CONDUCT.md = CODE_OF_CONDUCT.md
+fbcode/socket-lb/CONTRIBUTING.md = CONTRIBUTING.md
 fbcode/socket-lb/README.md = README.md
 fbcode/socket-lb/LICENSE = LICENSE
 fbcode/socket-lb/VERIFICATION.md = VERIFICATION.md
