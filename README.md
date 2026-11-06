@@ -15,11 +15,11 @@ in mind. **Folly contains a variety of core library components used extensively
 at Meta**. In particular, it's often a dependency of Meta's other
 open source C++ efforts and place where those projects can share code.
 
-It builds on `std` and fills its gaps. We add a component when `std`
-doesn't provide it, or doesn't meet the performance, scalability or
-interface Meta's code needs. When `std` provides an equivalent, we move
-folly and its users to the standard one and keep the folly name only as
-long as users need it.
+It builds on the C++ standard library and fills its gaps. We add a
+component when the standard library doesn't provide it, or doesn't meet
+the performance, scalability or interface Meta's code needs. When the
+standard library provides an equivalent, we move folly and its users to
+the standard one and keep the folly name only as long as users need it.
 
 Performance concerns permeate much of Folly, sometimes leading to
 designs that are more idiosyncratic than they would otherwise be (see
@@ -45,7 +45,7 @@ in those namespaces.
 # Physical Design
 
 The sources live in the `folly/` directory, so headers are included
-with the library name as a prefix, e.g. `#include <folly/FBString.h>`.
+with the library name as a prefix, e.g. `#include <folly/Conv.h>`.
 
 The directory structure is flat (mimicking the namespace structure),
 i.e. we don't have an elaborate directory hierarchy (it is possible
