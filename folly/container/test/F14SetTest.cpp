@@ -40,6 +40,7 @@ FOLLY_GNU_DISABLE_WARNING("-Wdeprecated-declarations")
 #include <folly/container/test/F14TestUtil.h>
 #include <folly/container/test/TrackingTypes.h>
 #include <folly/lang/Keep.h>
+#include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 #include <folly/test/TestUtils.h>
 
@@ -496,6 +497,67 @@ void runEraseWhileIterating() {
   }
 }
 
+struct EraseRangeCase {
+  int size;
+  std::size_t firstPos;
+  std::size_t lastPos;
+};
+
+template <typename T>
+void checkEraseRange(EraseRangeCase c) {
+  using Value = typename T::value_type;
+  T h;
+  for (int k = 0; k < c.size; ++k) {
+    h.emplace(k);
+  }
+  auto first = std::next(h.cbegin(), c.firstPos);
+  auto last = std::next(h.cbegin(), c.lastPos);
+  std::vector<Value> expectedBefore(h.cbegin(), first);
+  std::vector<Value> expectedAfter(last, h.cend());
+
+  auto result = h.erase(first, last);
+
+  EXPECT_EQ(c.firstPos, std::distance(h.begin(), result));
+  // Order within each half may change, but elements must not cross between the
+  // halves, so that iterating while erasing visits every element exactly once.
+  EXPECT_THAT(
+      std::vector<Value>(h.begin(), result),
+      ::testing::UnorderedElementsAreArray(expectedBefore));
+  EXPECT_THAT(
+      std::vector<Value>(result, h.end()),
+      ::testing::UnorderedElementsAreArray(expectedAfter));
+}
+
+template <typename T>
+void runEraseRange() {
+  constexpr EraseRangeCase kCases[] = {
+      {0, 0, 0},
+      {5, 0, 0},
+      {5, 5, 5},
+      {5, 0, 5},
+      {5, 0, 2},
+      {5, 3, 5},
+      {5, 1, 4},
+      {5, 2, 3},
+      {5, 4, 5},
+  };
+  for (auto c : kCases) {
+    checkEraseRange<T>(c);
+  }
+
+  std::mt19937 rng(0);
+  for (int i = 0; i < 1000; ++i) {
+    int size = std::uniform_int_distribution<int>(0, 100)(rng);
+    std::uniform_int_distribution<std::size_t> pos(0, size);
+    auto firstPos = pos(rng);
+    auto lastPos = pos(rng);
+    if (firstPos > lastPos) {
+      std::swap(firstPos, lastPos);
+    }
+    checkEraseRange<T>({size, firstPos, lastPos});
+  }
+}
+
 template <typename T>
 void runRehash() {
   unsigned n = 10000;
@@ -896,6 +958,23 @@ TEST(F14NodeSet, eraseWhileIterating) {
 
 TEST(F14VectorSet, eraseWhileIterating) {
   runEraseWhileIterating<F14VectorSet<int>>();
+}
+
+TEST(F14ValueSet, eraseRange) {
+  runEraseRange<F14ValueSet<int>>();
+}
+
+TEST(F14NodeSet, eraseRange) {
+  runEraseRange<F14NodeSet<int>>();
+}
+
+TEST(F14VectorSet, eraseRange) {
+  runEraseRange<F14VectorSet<int>>();
+}
+
+// Validates the erase range test facility against the standard container.
+TEST(StdUnorderedSet, eraseRange) {
+  runEraseRange<std::unordered_set<int>>();
 }
 
 TEST(F14ValueSet, rehash) {

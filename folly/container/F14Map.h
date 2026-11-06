@@ -1589,8 +1589,10 @@ class F14VectorMapImpl
     while (first != last) {
       first = eraseInto(first, beforeDestroy);
     }
-    auto index = this->table_.iterToIndex(first);
-    return index == 0 ? end() : this->table_.indexToIter(index - 1);
+    if (first == cend()) {
+      return end();
+    }
+    return this->table_.indexToIter(this->table_.iterToIndex(first));
   }
 
   /// Callback-erase a specific key.

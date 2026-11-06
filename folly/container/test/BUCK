@@ -607,6 +607,7 @@ fb_dirsync_cpp_unittest(
     ],
     deps = [
         "fbsource//third-party/glog:glog",
+        "fbsource//xplat/folly/portability:gmock",
         ":f14_test_util",
         ":tracking_types",
         "//folly:benchmark",
@@ -629,6 +630,7 @@ fb_dirsync_cpp_unittest(
     preprocessor_flags = ["-DFOLLY_F14_FORCE_FALLBACK=1"],
     deps = [
         "fbsource//third-party/glog:glog",
+        "fbsource//xplat/folly/portability:gmock",
         ":f14_test_util",
         ":tracking_types",
         "//folly:benchmark",
@@ -663,6 +665,7 @@ fb_dirsync_cpp_unittest(
     ],
     deps = [
         "fbsource//third-party/glog:glog",
+        "fbsource//xplat/folly/portability:gmock",
         ":f14_test_util",
         ":tracking_types",
         "//folly:benchmark",
@@ -685,6 +688,7 @@ fb_dirsync_cpp_unittest(
     preprocessor_flags = ["-DFOLLY_F14_FORCE_FALLBACK=1"],
     deps = [
         "fbsource//third-party/glog:glog",
+        "fbsource//xplat/folly/portability:gmock",
         ":f14_test_util",
         ":tracking_types",
         "//folly:benchmark",
