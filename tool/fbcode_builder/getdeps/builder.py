@@ -948,6 +948,20 @@ if __name__ == "__main__":
             defines["CMAKE_POLICY_DEFAULT_CMP0141"] = "NEW"
 
         defines.update(self.defines)
+
+        if self.build_opts.is_darwin() and not self.build_opts.allow_system_packages:
+            # CMake searches Homebrew's prefix on Apple Silicon. A library found
+            # there brings -I/opt/homebrew/include, which puts every Homebrew
+            # header ahead of the copies getdeps built.
+            ignored = [
+                p
+                for p in (defines.get("CMAKE_IGNORE_PREFIX_PATH") or "").split(";")
+                if p
+            ]
+            if "/opt/homebrew" not in ignored:
+                ignored.append("/opt/homebrew")
+            defines["CMAKE_IGNORE_PREFIX_PATH"] = ";".join(ignored)
+
         define_args = ["-D%s=%s" % (k, v) for (k, v) in defines.items()]
 
         # if self.build_opts.is_windows():

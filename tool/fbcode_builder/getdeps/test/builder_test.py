@@ -29,6 +29,7 @@ def make_cmake_builder() -> CMakeBuilder:
     build_opts = MagicMock()
     build_opts.is_windows.return_value = False
     build_opts.is_darwin.return_value = False
+    build_opts.allow_system_packages = False
     build_opts.shared_lib = False
     build_opts.build_type = "RelWithDebInfo"
     return CMakeBuilder(
@@ -229,3 +230,25 @@ class CMakeBuilderCompilerCacheTest(unittest.TestCase):
             define_args = builder._compute_cmake_define_args(env)
 
         self.assertIn("-DOPENSSL_ROOT_DIR=/getdeps/installed/openssl-abc", define_args)
+
+    def test_ignore_homebrew_prefix_on_darwin(self) -> None:
+        def ignore_args(is_darwin: bool, allow_system_packages: bool) -> list[str]:
+            builder = make_cmake_builder()
+            # pyrefly: ignore [missing-attribute]
+            builder.build_opts.is_darwin.return_value = is_darwin
+            builder.build_opts.allow_system_packages = allow_system_packages
+            builder.defines["CMAKE_IGNORE_PREFIX_PATH"] = "/opt/local"
+            with patch.object(builder_module, "path_search", return_value=None):
+                define_args = builder._compute_cmake_define_args(Env())
+            return [a for a in define_args if "CMAKE_IGNORE_PREFIX_PATH" in a]
+
+        self.assertEqual(
+            ignore_args(True, False),
+            ["-DCMAKE_IGNORE_PREFIX_PATH=/opt/local;/opt/homebrew"],
+        )
+        self.assertEqual(
+            ignore_args(False, False), ["-DCMAKE_IGNORE_PREFIX_PATH=/opt/local"]
+        )
+        self.assertEqual(
+            ignore_args(True, True), ["-DCMAKE_IGNORE_PREFIX_PATH=/opt/local"]
+        )
