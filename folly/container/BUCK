@@ -70,6 +70,21 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
+    name = "hive",
+    headers = ["Hive.h"],
+    use_raw_headers = True,
+    exported_deps = [
+        ":range_traits",
+        "//folly:c_portability",
+        "//folly:constexpr_math",
+        "//folly:scope_guard",
+        "//folly:utility",
+        "//folly/lang:exception",
+        "//folly/memory:memory_resource",
+    ],
+)
+
+fb_dirsync_cpp_library(
     name = "heterogeneous_access",
     headers = [
         "HeterogeneousAccess.h",

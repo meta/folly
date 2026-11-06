@@ -703,6 +703,14 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     SOURCES
     F14SetTest.cpp
     BENCHMARK
+    container_hive_bench
+    SOURCES
+    HiveBench.cpp
+    TEST
+    container_hive_test
+    SOURCES
+    HiveTest.cpp
+    BENCHMARK
     container_fbvector_benchmark
     SOURCES
     FBVectorBenchmark.cpp

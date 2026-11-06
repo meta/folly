@@ -182,6 +182,19 @@ folly_add_library(
 )
 
 folly_add_library(
+  NAME hive
+  HEADERS Hive.h
+  EXPORTED_DEPS
+    folly_c_portability
+    folly_constexpr_math
+    folly_container_range_traits
+    folly_lang_exception
+    folly_memory_memory_resource
+    folly_scope_guard
+    folly_utility
+)
+
+folly_add_library(
   NAME intrusive_heap
   HEADERS IntrusiveHeap.h
   EXPORTED_DEPS

@@ -41,6 +41,28 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
+fb_dirsync_cpp_benchmark(
+    name = "hive_bench",
+    srcs = ["HiveBench.cpp"],
+    deps = [
+        "fbsource//third-party/fmt:fmt",
+        "//folly:benchmark",
+        "//folly/container:hive",
+        "//folly/portability:gflags",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
+    name = "hive_test",
+    srcs = ["HiveTest.cpp"],
+    deps = [
+        "//folly:conv",
+        "//folly:scope_guard",
+        "//folly/container:hive",
+        "//folly/portability:gtest",
+    ],
+)
+
 fb_dirsync_cpp_unittest(
     name = "f14_set-test",
     srcs = [
