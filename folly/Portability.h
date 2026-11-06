@@ -698,12 +698,6 @@ constexpr auto kCpplibVer = 0;
 #define FOLLY_STORAGE_CONSTEXPR constexpr
 #endif
 
-//  FOLLY_CXX20_CONSTEXPR
-//
-//  C++20 permits more cases to be marked constexpr, including destructors and,
-//  by extension, the types owning them.
-#define FOLLY_CXX20_CONSTEXPR constexpr
-
 //  FOLLY_CXX23_CONSTEXPR
 //
 //  C++23 permits more cases to be marked constexpr, including definitions of
