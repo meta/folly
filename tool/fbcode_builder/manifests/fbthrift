@@ -64,7 +64,6 @@ zlib
 # THRIFT_RPC=ON.
 [dependencies.feature_rpc=on]
 fizz
-libsodium
 wangle
 mvfst
 

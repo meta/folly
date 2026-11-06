@@ -39,7 +39,6 @@ fizz-python
 fmt-python
 folly-python
 googletest
-libsodium
 wangle-python
 zstd-python
 mvfst-python
