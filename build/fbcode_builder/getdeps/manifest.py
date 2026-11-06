@@ -53,11 +53,11 @@ OPTIONAL: str = "OPTIONAL"
 
 # Where ShipIt puts fbcode_builder in a project's repo, by the manifest's
 # shipit_fbcode_builder_layout. Pinned revisions sit in ../deps/github_hashes
-# from there, where BuildOptions finds them. "tools" keeps build/ free for build
+# from there, where BuildOptions finds them. "tool" keeps build/ free for build
 # output, as in `cmake -B build`.
 FBCODE_BUILDER_LAYOUT_DIRS: dict[str, str] = {
     "build": "build/fbcode_builder",
-    "tools": "tools/fbcode_builder",
+    "tool": "tool/fbcode_builder",
 }
 
 SCHEMA: dict[str, dict[str, object]] = {

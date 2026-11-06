@@ -3,7 +3,7 @@
 include(CMakePushCheckState)
 
 # getdeps' manifests sit next to this module, in fbsource and in the
-# build/fbcode_builder or tools/fbcode_builder of each project that ships it.
+# build/fbcode_builder or tool/fbcode_builder of each project that ships it.
 get_filename_component(
   _FB_FETCH_FBCODE_BUILDER_DIR "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY
 )

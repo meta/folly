@@ -17,8 +17,8 @@ source repositories.  Any change made to code in this directory will be
 automatically be replicated by our open source tooling into all GitHub hosted
 repositories that use `fbcode_builder`.  Typically this directory is copied
 into the open source repositories as `build/fbcode_builder/`, or as
-`tools/fbcode_builder/` for a project whose manifest sets
-`shipit_fbcode_builder_layout = tools`.
+`tool/fbcode_builder/` for a project whose manifest sets
+`shipit_fbcode_builder_layout = tool`.
 
 
 ## Vendoring dependencies for offline builds

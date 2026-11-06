@@ -34,15 +34,15 @@ class FbcodeBuilderLayoutTest(unittest.TestCase):
     def test_default_layout_is_build(self) -> None:
         self.assertEqual(_manifest().shipit_fbcode_builder_dir, "build/fbcode_builder")
 
-    def test_tools_layout(self) -> None:
+    def test_tool_layout(self) -> None:
         self.assertEqual(
-            _manifest("shipit_fbcode_builder_layout = tools").shipit_fbcode_builder_dir,
-            "tools/fbcode_builder",
+            _manifest("shipit_fbcode_builder_layout = tool").shipit_fbcode_builder_dir,
+            "tool/fbcode_builder",
         )
 
     def test_unknown_layout_is_rejected(self) -> None:
-        with self.assertRaisesRegex(Exception, "shipit_fbcode_builder_layout=tool;"):
-            _manifest("shipit_fbcode_builder_layout = tool")
+        with self.assertRaisesRegex(Exception, "shipit_fbcode_builder_layout=tools;"):
+            _manifest("shipit_fbcode_builder_layout = tools")
 
     def test_shipit_mirror_uses_layout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -59,7 +59,7 @@ class FbcodeBuilderLayoutTest(unittest.TestCase):
             opts.fbsource_dir = os.fspath(fbsource)
             fetcher = SimpleShipitTransformerFetcher(
                 opts,
-                _manifest("shipit_fbcode_builder_layout = tools"),
+                _manifest("shipit_fbcode_builder_layout = tool"),
                 ManifestContext(
                     {
                         "os": "linux",
@@ -76,14 +76,14 @@ class FbcodeBuilderLayoutTest(unittest.TestCase):
             fetcher.update()
 
             src = Path(fetcher.get_src_dir())
-            self.assertTrue(Path(src, "tools/fbcode_builder/getdeps.py").is_file())
+            self.assertTrue(Path(src, "tool/fbcode_builder/getdeps.py").is_file())
             self.assertFalse(Path(src, "build").exists())
 
-    def test_pins_found_next_to_tools_fbcode_builder(self) -> None:
+    def test_pins_found_next_to_tool_fbcode_builder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            fbcode_builder = Path(tmp, "tools/fbcode_builder")
+            fbcode_builder = Path(tmp, "tool/fbcode_builder")
             fbcode_builder.mkdir(parents=True)
-            Path(tmp, "tools/deps/github_hashes").mkdir(parents=True)
+            Path(tmp, "tool/deps/github_hashes").mkdir(parents=True)
 
             opts = BuildOptions(
                 fbcode_builder_dir=os.fspath(fbcode_builder),
@@ -93,5 +93,5 @@ class FbcodeBuilderLayoutTest(unittest.TestCase):
 
             self.assertEqual(
                 Path(opts.project_hashes or "").resolve(),
-                Path(tmp, "tools/deps/github_hashes").resolve(),
+                Path(tmp, "tool/deps/github_hashes").resolve(),
             )
