@@ -150,6 +150,17 @@ def validate_symbolizer_dwp(name, binary, mode = "fbcode//mode/opt", modifiers =
         if "fbcode//mode/opt" in drop_modes:
             ci_labels.append(ci.remove(ci.linux(ci.opt())))
         ci_labels.append(ci.remove(*[ci.linux(ci.mode(m)) for m in drop_modes]))
+        # The binary is further pinned to its validation mode by an opt-only
+        # constraint, so the remaining default schedules can only record
+        # omit noise; drop those too.
+        ci_labels.append(
+            ci.remove(
+                ci.linux(ci.dev()),
+                ci.linux(ci.mode("fbcode//mode/dev-nosan")),
+                ci.linux(ci.mode("fbcode//mode/dev-tsan")),
+                ci.linux(ci.mode("fbcode//mode/libcxx")),
+            )
+        )
     custom_unittest(
         name = name,
         command = [
