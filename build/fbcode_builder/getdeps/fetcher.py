@@ -791,7 +791,8 @@ class SimpleShipitTransformerFetcher(Fetcher):
             mapping.add_mapping(src, dest)
         if self.manifest.shipit_fbcode_builder:
             mapping.add_mapping(
-                "fbcode/opensource/fbcode_builder", "build/fbcode_builder"
+                "fbcode/opensource/fbcode_builder",
+                self.manifest.shipit_fbcode_builder_dir,
             )
         for pattern in self.manifest.get_section_as_args("shipit.strip", self.ctx):
             mapping.add_exclusion(pattern)

@@ -166,7 +166,7 @@ class GenerateGitHubActionsCmd(ProjectCmdBase):
         run_on: str,
         job_name: str,
     ) -> dict:
-        getdepscmd = f"{py3} build/fbcode_builder/getdeps.py"
+        getdepscmd = f"{py3} {manifest.shipit_fbcode_builder_dir}/getdeps.py"
 
         env_lines = []
         if build_opts.is_darwin():

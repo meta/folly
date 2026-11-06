@@ -51,6 +51,15 @@ if typing.TYPE_CHECKING:
 REQUIRED: str = "REQUIRED"
 OPTIONAL: str = "OPTIONAL"
 
+# Where ShipIt puts fbcode_builder in a project's repo, by the manifest's
+# shipit_fbcode_builder_layout. Pinned revisions sit in ../deps/github_hashes
+# from there, where BuildOptions finds them. "tools" keeps build/ free for build
+# output, as in `cmake -B build`.
+FBCODE_BUILDER_LAYOUT_DIRS: dict[str, str] = {
+    "build": "build/fbcode_builder",
+    "tools": "tools/fbcode_builder",
+}
+
 SCHEMA: dict[str, dict[str, object]] = {
     "manifest": {
         "optional_section": False,
@@ -59,6 +68,7 @@ SCHEMA: dict[str, dict[str, object]] = {
             "fbsource_path": OPTIONAL,
             "shipit_project": OPTIONAL,
             "shipit_fbcode_builder": OPTIONAL,
+            "shipit_fbcode_builder_layout": OPTIONAL,
             "use_shipit": OPTIONAL,
             "shipit_external_branch": OPTIONAL,
             "shipit_strip_marker": OPTIONAL,
@@ -329,6 +339,13 @@ class ManifestParser:
         self.shipit_fbcode_builder: str | None = self.get(
             "manifest", "shipit_fbcode_builder"
         )
+        layout = self.get("manifest", "shipit_fbcode_builder_layout") or "build"
+        if layout not in FBCODE_BUILDER_LAYOUT_DIRS:
+            raise Exception(
+                "manifest %s has shipit_fbcode_builder_layout=%s; use one of %s"
+                % (file_name, layout, ", ".join(sorted(FBCODE_BUILDER_LAYOUT_DIRS)))
+            )
+        self.shipit_fbcode_builder_dir: str = FBCODE_BUILDER_LAYOUT_DIRS[layout]
         self.resolved_system_packages: dict[str, str] = {}
         self.shipit_strip_marker: str | None = self.get(
             "manifest", "shipit_strip_marker", defval="@fb-only"

@@ -3,14 +3,14 @@
 include(CMakePushCheckState)
 
 # getdeps' manifests sit next to this module, in fbsource and in the
-# build/fbcode_builder of each project that ships it.
+# build/fbcode_builder or tools/fbcode_builder of each project that ships it.
 get_filename_component(
   _FB_FETCH_FBCODE_BUILDER_DIR "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY
 )
 
 # For CI that builds against its dependencies' code on main rather than their
 # pins. ShipIt exports the projects within minutes of each other, but
-# build/deps/github_hashes is refreshed about once a day, so a change that
+# deps/github_hashes is refreshed about once a day, so a change that
 # spans projects can break a pinned build until then. ShipIt also dates each
 # exported commit with the time its fbsource commit landed, the same in every
 # project, so a project's commit time picks out the dependencies it was
@@ -18,7 +18,7 @@ get_filename_component(
 set(
   FB_FETCH_AS_OF ""
   CACHE STRING
-  "Fetch git dependencies' branches as they were at this time, such as git log -1 --format=%cI or now, ignoring build/deps/github_hashes"
+  "Fetch git dependencies' branches as they were at this time, such as git log -1 --format=%cI or now, ignoring deps/github_hashes"
 )
 
 # Sets <out> to <key> in the first [<section>] or [<section>.<condition>] of
@@ -95,7 +95,7 @@ endfunction()
 # so that it can't drift from the one getdeps builds: the [download] archive,
 # or the [git] repo_url at the revision getdeps picks, built from the [build]
 # subdir. Like getdeps, that's the manifest's rev, else the one that
-# build/deps/github_hashes or build/project_hashes records, else the
+# deps/github_hashes or project_hashes next to fbcode_builder records, else the
 # manifest's branch, else main, with a warning. FB_FETCH_AS_OF skips the
 # recorded revision and the warning, and takes the branch's commit at that
 # time. Further arguments go to FetchContent_Declare().
@@ -129,8 +129,8 @@ function(fb_fetch_from_manifest name manifest)
           message(
             WARNING
             "getdeps pins no ${name} revision: its ${manifest} manifest has no "
-            "rev or branch, and neither build/deps/github_hashes nor "
-            "build/project_hashes has ${rev_file}. Fetching ${name}'s main "
+            "rev or branch, and neither deps/github_hashes nor project_hashes "
+            "next to fbcode_builder has ${rev_file}. Fetching ${name}'s main "
             "instead."
           )
         endif()
