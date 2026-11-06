@@ -25,10 +25,9 @@
 #include <cstring>
 
 #include <algorithm>
+#include <optional>
 #include <stdexcept>
 #include <system_error>
-
-#include <boost/regex.hpp>
 
 #include <folly/Conv.h>
 #include <folly/Exception.h>
@@ -43,64 +42,45 @@ namespace folly {
 
 namespace {
 
-// Get the default huge page size
-size_t getDefaultHugePageSize() {
-  // We need to parse /proc/meminfo
-  static const boost::regex regex(R"!(Hugepagesize:\s*(\d+)\s*kB)!");
-  size_t pageSize = 0;
-  boost::cmatch match;
-
-  bool error = gen::byLine("/proc/meminfo") | [&](StringPiece line) -> bool {
-    if (boost::regex_match(line.begin(), line.end(), match, regex)) {
-      StringPiece numStr(
-          line.begin() + match.position(1), size_t(match.length(1)));
-      pageSize = to<size_t>(numStr) * 1024; // in KiB
-      return false; // stop
-    }
-    return true;
-  };
-
-  if (error) {
-    throw std::runtime_error("Can't find default huge page size");
-  }
-  return pageSize;
+bool isAsciiSpace(char c) {
+  return c == ' ' || (c >= '\t' && c <= '\r');
 }
 
-// Get raw huge page sizes (without mount points, they'll be filled later)
-HugePageSizeVec readRawHugePageSizes() {
-  // We need to parse file names from /sys/kernel/mm/hugepages
-  static const boost::regex regex(R"!(hugepages-(\d+)kB)!");
-  boost::smatch match;
-  HugePageSizeVec vec;
-  fs::path path("/sys/kernel/mm/hugepages");
-  if (fs::exists(path)) {
-    for (fs::directory_iterator it(path); it != fs::directory_iterator();
-         ++it) {
-      std::string filename(it->path().filename().string());
-      if (boost::regex_match(filename, match, regex)) {
-        StringPiece numStr(
-            filename.data() + match.position(1), size_t(match.length(1)));
-        vec.emplace_back(to<size_t>(numStr) * 1024);
-      }
-    }
-  }
-  return vec;
+bool isAsciiDigit(char c) {
+  return c >= '0' && c <= '9';
 }
 
-// Parse the value of a pagesize mount option
-// Format: number, optional K/M/G/T suffix, trailing junk allowed
+StringPiece trimAsciiSpace(StringPiece s) {
+  while (!s.empty() && isAsciiSpace(s.front())) {
+    s.pop_front();
+  }
+  while (!s.empty() && isAsciiSpace(s.back())) {
+    s.pop_back();
+  }
+  return s;
+}
+
+// Converts a nonempty string of decimal digits in KiB to bytes.
+std::optional<size_t> parseKiB(StringPiece digits) {
+  if (digits.empty() ||
+      !std::all_of(digits.begin(), digits.end(), isAsciiDigit)) {
+    return std::nullopt;
+  }
+  return to<size_t>(digits) * 1024;
+}
+
+// Parses the value of a hugetlbfs pagesize mount option: decimal digits, an
+// optional case-insensitive K/M/G/T suffix, and any trailing text.
 size_t parsePageSizeValue(StringPiece value) {
-  static const boost::regex regex(R"!((\d+)([kmgt])?.*)!", boost::regex::icase);
-  boost::cmatch match;
-  if (!boost::regex_match(value.begin(), value.end(), match, regex)) {
+  auto const digitsEnd =
+      std::find_if_not(value.begin(), value.end(), isAsciiDigit);
+  if (digitsEnd == value.begin()) {
     throw std::runtime_error("Invalid pagesize option");
   }
-  char c = '\0';
-  if (match.length(2) != 0) {
-    c = char(tolower(value[size_t(match.position(2))]));
-  }
-  StringPiece numStr(value.data() + match.position(1), size_t(match.length(1)));
-  auto const size = to<size_t>(numStr);
+  auto const size = to<size_t>(StringPiece(value.begin(), digitsEnd));
+  char const c = digitsEnd == value.end()
+      ? '\0'
+      : char(std::tolower(static_cast<unsigned char>(*digitsEnd)));
   auto const mult = [c] {
     switch (c) {
       case 't':
@@ -116,6 +96,49 @@ size_t parsePageSizeValue(StringPiece value) {
     }
   }();
   return size * mult;
+}
+
+// Get the default huge page size
+size_t getDefaultHugePageSize() {
+  // We need to parse /proc/meminfo
+  size_t pageSize = 0;
+
+  bool error = gen::byLine("/proc/meminfo") | [&](StringPiece line) -> bool {
+    if (!line.removePrefix("Hugepagesize:") || !line.removeSuffix("kB")) {
+      return true;
+    }
+    if (auto size = parseKiB(trimAsciiSpace(line))) {
+      pageSize = *size;
+      return false; // stop
+    }
+    return true;
+  };
+
+  if (error) {
+    throw std::runtime_error("Can't find default huge page size");
+  }
+  return pageSize;
+}
+
+// Get raw huge page sizes (without mount points, they'll be filled later)
+HugePageSizeVec readRawHugePageSizes() {
+  // We need to parse file names from /sys/kernel/mm/hugepages
+  HugePageSizeVec vec;
+  fs::path path("/sys/kernel/mm/hugepages");
+  if (fs::exists(path)) {
+    for (fs::directory_iterator it(path); it != fs::directory_iterator();
+         ++it) {
+      std::string filename(it->path().filename().string());
+      StringPiece name(filename);
+      if (!name.removePrefix("hugepages-") || !name.removeSuffix("kB")) {
+        continue;
+      }
+      if (auto size = parseKiB(name)) {
+        vec.emplace_back(*size);
+      }
+    }
+  }
+  return vec;
 }
 
 /**

@@ -40,7 +40,6 @@ folly_add_library(
   HEADERS HugePages.h
   DEPS
     Boost::headers
-    Boost::regex
     folly_conv
     folly_exception
     folly_gen_base
@@ -53,7 +52,6 @@ folly_add_library(
     folly_portability_unistd
     folly_range
 )
-set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS Boost::regex)
 
 folly_add_library(
   NAME iobuf
