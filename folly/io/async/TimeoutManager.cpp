@@ -16,12 +16,13 @@
 
 #include <folly/io/async/TimeoutManager.h>
 
-#include <boost/intrusive/list.hpp>
 #include <glog/logging.h>
 
 #include <chrono>
+#include <memory>
+
 #include <folly/Exception.h>
-#include <folly/Memory.h>
+#include <folly/container/IntrusiveList.h>
 #include <folly/io/async/AsyncTimeout.h>
 
 namespace folly {
@@ -55,13 +56,8 @@ struct TimeoutManager::CobTimeouts {
     Func cob_;
 
    public:
-    using ListHook = boost::intrusive::list_member_hook<
-        boost::intrusive::link_mode<boost::intrusive::auto_unlink>>;
-    ListHook hook;
-    using List = boost::intrusive::list<
-        CobTimeout,
-        boost::intrusive::member_hook<CobTimeout, ListHook, &CobTimeout::hook>,
-        boost::intrusive::constant_time_size<false>>;
+    IntrusiveListHook hook;
+    using List = IntrusiveList<CobTimeout, &CobTimeout::hook>;
   };
 
   CobTimeout::List list;

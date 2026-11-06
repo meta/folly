@@ -43,6 +43,7 @@ fb_dirsync_cpp_library(
         "//folly:chrono",
         "//folly:string",
         "//folly/container:bit_iterator",
+        "//folly/container:intrusive_list",
         "//folly/lang:assume",
         "//folly/lang:bits",
         "//folly/synchronization:event_count",

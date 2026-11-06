@@ -42,6 +42,7 @@ folly_add_library(
   DEPS
     folly_chrono
     folly_container_bit_iterator
+    folly_container_intrusive_list
     folly_lang_assume
     folly_lang_bits
     folly_string
