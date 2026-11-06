@@ -2112,9 +2112,6 @@ fb_dirsync_cpp_library(
         ":portability",
         "//folly/detail:fingerprint_polynomial",
     ],
-    exported_deps = [
-        ":range",
-    ],
 )
 
 fb_dirsync_cpp_library(

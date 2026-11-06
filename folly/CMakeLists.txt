@@ -515,7 +515,6 @@ folly_add_library(
   DEPS
     folly_detail_fingerprint_polynomial
     folly_portability
-  EXPORTED_DEPS folly_range
 )
 
 folly_add_library(

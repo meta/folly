@@ -42,9 +42,9 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
-
-#include <folly/Range.h>
+#include <string_view>
 
 namespace folly {
 
@@ -137,7 +137,7 @@ class Fingerprint {
     return *this;
   }
 
-  Fingerprint& update(StringPiece str) {
+  Fingerprint& update(std::string_view str) {
     // TODO(tudorb): We could be smart and do update64 or update32 if aligned
     for (auto c : str) {
       update8(uint8_t(c));
@@ -187,7 +187,7 @@ class Fingerprint {
 /**
  * Return the 64-bit Rabin fingerprint of a string.
  */
-inline uint64_t fingerprint64(StringPiece str) {
+inline uint64_t fingerprint64(std::string_view str) {
   uint64_t fp;
   Fingerprint<64>().update(str).write(&fp);
   return fp;
@@ -198,7 +198,7 @@ inline uint64_t fingerprint64(StringPiece str) {
  * Return the 64 most significant bits in *msb, and the 32 least significant
  * bits in *lsb.
  */
-inline void fingerprint96(StringPiece str, uint64_t* msb, uint32_t* lsb) {
+inline void fingerprint96(std::string_view str, uint64_t* msb, uint32_t* lsb) {
   uint64_t fp[2];
   Fingerprint<96>().update(str).write(fp);
   *msb = fp[0];
@@ -210,7 +210,7 @@ inline void fingerprint96(StringPiece str, uint64_t* msb, uint32_t* lsb) {
  * Return the 64 most significant bits in *msb, and the 64 least significant
  * bits in *lsb.
  */
-inline void fingerprint128(StringPiece str, uint64_t* msb, uint64_t* lsb) {
+inline void fingerprint128(std::string_view str, uint64_t* msb, uint64_t* lsb) {
   uint64_t fp[2];
   Fingerprint<128>().update(str).write(fp);
   *msb = fp[0];

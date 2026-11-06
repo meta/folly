@@ -217,7 +217,6 @@ fb_dirsync_cpp_library(
     exported_deps = [
         ":fingerprint_polynomial",
         "//folly:fingerprint",
-        "//folly:range",
     ],
 )
 

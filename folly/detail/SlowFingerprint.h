@@ -16,8 +16,9 @@
 
 #pragma once
 
+#include <string_view>
+
 #include <folly/Fingerprint.h>
-#include <folly/Range.h>
 #include <folly/detail/FingerprintPolynomial.h>
 
 namespace folly {
@@ -52,8 +53,8 @@ class SlowFingerprint {
     return *this;
   }
 
-  SlowFingerprint& update(const folly::StringPiece str) {
-    const char* p = str.start();
+  SlowFingerprint& update(const std::string_view str) {
+    const char* p = str.data();
     for (int i = str.size(); i != 0; p++, i--) {
       update8(static_cast<uint8_t>(*p));
     }

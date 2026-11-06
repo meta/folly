@@ -16,6 +16,8 @@
 
 #include <folly/Fingerprint.h>
 
+#include <string_view>
+
 #include <glog/logging.h>
 
 #include <folly/Benchmark.h>
@@ -51,7 +53,7 @@ TEST(Fingerprint, BroderOptimization) {
 
 TEST(Fingerprint, MultiByteUpdate) {
   // Test that the multi-byte update functions (update32, update64,
-  // update(StringPiece)) produce the same result as calling update8
+  // update(std::string_view)) produce the same result as calling update8
   // repeatedly.
   uint64_t val_a = 0xfaceb00cdeadbeefULL;
   uint64_t val_b = 0x1234567890abcdefULL;
@@ -62,13 +64,13 @@ TEST(Fingerprint, MultiByteUpdate) {
   for (int i = 0; i < 8; i++) {
     bytes[i + 8] = (val_b >> (8 * (7 - i))) & 0xff;
   }
-  StringPiece sp((const char*)bytes, 16);
+  std::string_view sv((const char*)bytes, 16);
 
   uint64_t u8[2]; // updating 8 bits at a time
   uint64_t u32[2]; // updating 32 bits at a time
   uint64_t u64[2]; // updating 64 bits at a time
-  uint64_t usp[2]; // update(StringPiece)
-  uint64_t uconv[2]; // convenience function (fingerprint*(StringPiece))
+  uint64_t usp[2]; // update(std::string_view)
+  uint64_t uconv[2]; // convenience function (fingerprint*(std::string_view))
 
   {
     Fingerprint<64> fp;
@@ -84,8 +86,8 @@ TEST(Fingerprint, MultiByteUpdate) {
       .update32(val_b & 0xffffffff)
       .write(u32);
   Fingerprint<64>().update64(val_a).update64(val_b).write(u64);
-  Fingerprint<64>().update(sp).write(usp);
-  uconv[0] = fingerprint64(sp);
+  Fingerprint<64>().update(sv).write(usp);
+  uconv[0] = fingerprint64(sv);
 
   EXPECT_EQ(u8[0], u32[0]);
   EXPECT_EQ(u8[0], u64[0]);
@@ -106,9 +108,9 @@ TEST(Fingerprint, MultiByteUpdate) {
       .update32(val_b & 0xffffffff)
       .write(u32);
   Fingerprint<96>().update64(val_a).update64(val_b).write(u64);
-  Fingerprint<96>().update(sp).write(usp);
+  Fingerprint<96>().update(sv).write(usp);
   uint32_t uconv_lsb;
-  fingerprint96(sp, &(uconv[0]), &uconv_lsb);
+  fingerprint96(sv, &(uconv[0]), &uconv_lsb);
   uconv[1] = (uint64_t)uconv_lsb << 32;
 
   EXPECT_EQ(u8[0], u32[0]);
@@ -134,8 +136,8 @@ TEST(Fingerprint, MultiByteUpdate) {
       .update32(val_b & 0xffffffff)
       .write(u32);
   Fingerprint<128>().update64(val_a).update64(val_b).write(u64);
-  Fingerprint<128>().update(sp).write(usp);
-  fingerprint128(sp, &(uconv[0]), &(uconv[1]));
+  Fingerprint<128>().update(sv).write(usp);
+  fingerprint128(sv, &(uconv[0]), &(uconv[1]));
 
   EXPECT_EQ(u8[0], u32[0]);
   EXPECT_EQ(u8[1], u32[1]);
@@ -153,7 +155,7 @@ TEST(Fingerprint, Alignment) {
   int len = sizeof(test_str) - 1;
   std::unique_ptr<char[]> str(new char[len + 8]);
   uint64_t ref_fp;
-  SlowFingerprint<64>().update(StringPiece(test_str, len)).write(&ref_fp);
+  SlowFingerprint<64>().update(std::string_view(test_str, len)).write(&ref_fp);
   for (int i = 0; i < 8; i++) {
     char* p = str.get();
     char* q;
@@ -170,7 +172,7 @@ TEST(Fingerprint, Alignment) {
     }
 
     uint64_t fp;
-    Fingerprint<64>().update(StringPiece(q, len)).write(&fp);
+    Fingerprint<64>().update(std::string_view(q, len)).write(&fp);
     EXPECT_EQ(ref_fp, fp);
   }
 }

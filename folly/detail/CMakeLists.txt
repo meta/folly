@@ -227,7 +227,6 @@ folly_add_library(
   EXPORTED_DEPS
     folly_detail_fingerprint_polynomial
     folly_fingerprint
-    folly_range
 )
 
 folly_add_library(
