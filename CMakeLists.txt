@@ -41,7 +41,9 @@ endif ()
 set(CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/CMake" # for in-fbsource builds
     "${CMAKE_CURRENT_SOURCE_DIR}/../opensource/fbcode_builder/CMake"
-    # For shipit-transformed builds
+    # For shipit-transformed builds: the GitHub export puts fbcode_builder in
+    # tool/, while other source layouts, such as conda's, use build/.
+    "${CMAKE_CURRENT_SOURCE_DIR}/tool/fbcode_builder/CMake"
     "${CMAKE_CURRENT_SOURCE_DIR}/build/fbcode_builder/CMake"
     ${CMAKE_MODULE_PATH}
 )

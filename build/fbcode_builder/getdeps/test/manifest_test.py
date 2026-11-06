@@ -225,6 +225,20 @@ foo = bar
         manifests = load_all_manifests(None)
         self.assertNotEqual(0, len(manifests), msg="parsed some number of manifests")
 
+    def test_shipit_project_has_one_fbcode_builder_layout(self) -> None:
+        # ShipIt exports fbcode_builder once per GitHub repo, so the manifests
+        # of one shipit_project must agree on where it goes.
+        patch_loader(__name__)
+        manifests = load_all_manifests(MagicMock(spec=BuildOptions))
+        dirs_by_project: dict[str, set[str]] = {}
+        for m in manifests.values():
+            if m.shipit_project and m.shipit_fbcode_builder:
+                dirs_by_project.setdefault(m.shipit_project, set()).add(
+                    m.shipit_fbcode_builder_dir
+                )
+        self.assertEqual(dirs_by_project["folly"], {"tool/fbcode_builder"})
+        self.assertEqual({p: d for p, d in dirs_by_project.items() if len(d) > 1}, {})
+
     def test_shared_folly_link_inputs(self) -> None:
         # Shared libfolly.so links third-party static archives. Those archives
         # must be position-independent, and libaio must install a shared

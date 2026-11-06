@@ -3,6 +3,7 @@ name = folly
 fbsource_path = xplat/folly
 shipit_project = folly
 shipit_fbcode_builder = true
+shipit_fbcode_builder_layout = tool
 
 [git]
 repo_url = https://github.com/facebook/folly.git

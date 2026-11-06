@@ -115,7 +115,7 @@ clone and two commands are enough:
 Anything already on the system is used as-is. Alternatively, install the system
 packages first:
 
-    sudo build/fbcode_builder/getdeps.py install-system-deps --recursive
+    sudo tool/fbcode_builder/getdeps.py install-system-deps --recursive
 
 Tests are not part of the `all` target. Configure with `-DBUILD_TESTS=ON` to
 build them, which also fetches googletest and gflags if they are not installed
@@ -160,7 +160,7 @@ This script is used by many of Meta's OSS tools.  It will download and build all
 
 It's written in python so you'll need python3.6 or later on your PATH.  It works on Linux, macOS and Windows.
 
-The settings for folly's cmake build are held in its getdeps manifest `build/fbcode_builder/manifests/folly`, which you can edit locally if desired.
+The settings for folly's cmake build are held in its getdeps manifest `tool/fbcode_builder/manifests/folly`, which you can edit locally if desired.
 
 ### Dependencies
 
@@ -170,11 +170,11 @@ If on Linux or MacOS (with homebrew installed) you can install system dependenci
     git clone https://github.com/meta/folly
     # Install dependencies
     cd folly
-    sudo build/fbcode_builder/getdeps.py install-system-deps --recursive
+    sudo tool/fbcode_builder/getdeps.py install-system-deps --recursive
 
 If you'd like to see the packages before installing them:
 
-    build/fbcode_builder/getdeps.py install-system-deps --dry-run --recursive
+    tool/fbcode_builder/getdeps.py install-system-deps --dry-run --recursive
 
 On other platforms or if on Linux and without system dependencies `getdeps.py` will mostly download and build them for you during the build step.
 
@@ -189,14 +189,14 @@ Some of the dependencies `getdeps.py` uses and installs are:
     git clone https://github.com/meta/folly
     cd folly
     # Build, using system dependencies if available
-    python3 build/fbcode_builder/getdeps.py --allow-system-packages build
+    python3 tool/fbcode_builder/getdeps.py --allow-system-packages build
 
 It puts output in its scratch area:
 
   * `installed/folly/lib/libfolly.a`: Library
 
 You can also specify a `--scratch-path` argument to control
-the location of the scratch directory used for the build. You can find the default scratch install location from logs or with `python3 build/fbcode_builder/getdeps.py show-inst-dir`.
+the location of the scratch directory used for the build. You can find the default scratch install location from logs or with `python3 tool/fbcode_builder/getdeps.py show-inst-dir`.
 
 There are also
 `--install-dir` and `--install-prefix` arguments to provide some more
@@ -212,20 +212,20 @@ building your project.
 By default `getdeps.py` will build the tests for folly. To run them:
 
     cd folly
-    python3 build/fbcode_builder/getdeps.py --allow-system-packages test
+    python3 tool/fbcode_builder/getdeps.py --allow-system-packages test
 
 ### Iterating on a `getdeps.py` build
 
-To invoke `cmake` again against a build getdeps made, there is a helpful `run_cmake.py` script output in the scratch-path build directory. You can find the scratch build directory from logs or with `python3 build/fbcode_builder/getdeps.py show-build-dir`.
+To invoke `cmake` again against a build getdeps made, there is a helpful `run_cmake.py` script output in the scratch-path build directory. You can find the scratch build directory from logs or with `python3 tool/fbcode_builder/getdeps.py show-build-dir`.
 
 Running tests with ctests also works if you cd to the build dir, e.g.
-`(cd $(python3 build/fbcode_builder/getdeps.py show-build-dir) && ctest)`
+`(cd $(python3 tool/fbcode_builder/getdeps.py show-build-dir) && ctest)`
 
 ## Ubuntu LTS, CentOS Stream, Fedora
 
 Either build approach works. We test in CI on Ubuntu LTS, and occasionally on other distros.
 
-If you find the set of system packages is not quite right for your chosen distro, you can specify distro version specific overrides in the dependency manifests (e.g. https://github.com/meta/folly/blob/main/build/fbcode_builder/manifests/boost ). You could probably make it work on most recent Ubuntu/Debian or Fedora/Redhat derived distributions.
+If you find the set of system packages is not quite right for your chosen distro, you can specify distro version specific overrides in the dependency manifests (e.g. https://github.com/meta/folly/blob/main/tool/fbcode_builder/manifests/boost ). You could probably make it work on most recent Ubuntu/Debian or Fedora/Redhat derived distributions.
 
 ## Windows (Vcpkg)
 
