@@ -16,10 +16,12 @@
 
 #include <folly/FBVector.h>
 
+#include <cstdint>
 #include <list>
 #include <map>
 #include <memory>
 #include <numeric>
+#include <vector>
 
 #include <ranges>
 #include <folly/FBString.h>
@@ -323,6 +325,52 @@ TEST(FBVector, overflowAssign) {
       vec.assign(SIZE_MAX / sizeof(std::string) + 1, "hello"),
       std::length_error);
 }
+
+namespace {
+struct alignas(128) AlignedTrivial {
+  int value = 0;
+};
+
+struct alignas(256) AlignedNontrivial {
+  int value = 0;
+  std::unique_ptr<int> owned = std::make_unique<int>(42);
+};
+
+template <typename T>
+class FBVectorAlignment : public testing::Test {};
+
+using AlignedTypes = testing::Types<AlignedTrivial, AlignedNontrivial>;
+TYPED_TEST_SUITE(FBVectorAlignment, AlignedTypes);
+
+TYPED_TEST(FBVectorAlignment, PreservesAlignmentAcrossCapacityChanges) {
+  // Retain allocations so repeated attempts do not merely reuse one lucky address.
+  std::vector<fbvector<TypeParam>> allocations;
+  for (size_t attempt = 0; attempt < 32; ++attempt) {
+    SCOPED_TRACE(attempt);
+    fbvector<TypeParam> values;
+    values.reserve(5 + attempt);
+    ASSERT_EQ(0, reinterpret_cast<uintptr_t>(values.data()) % alignof(TypeParam));
+    values.resize(5);
+    for (size_t i = 0; i < values.size(); ++i) {
+      values[i].value = static_cast<int>(i + 1);
+    }
+
+    values.reserve(64 + attempt);
+    ASSERT_EQ(0, reinterpret_cast<uintptr_t>(values.data()) % alignof(TypeParam));
+    values.resize(values.capacity());
+    values.emplace_back();
+    ASSERT_EQ(0, reinterpret_cast<uintptr_t>(values.data()) % alignof(TypeParam));
+
+    values.resize(33);
+    values.shrink_to_fit();
+    ASSERT_EQ(0, reinterpret_cast<uintptr_t>(values.data()) % alignof(TypeParam));
+    for (size_t i = 0; i < 5; ++i) {
+      EXPECT_EQ(static_cast<int>(i + 1), values[i].value);
+    }
+    allocations.push_back(std::move(values));
+  }
+}
+} // namespace
 
 #ifndef _MSC_VER
 TEST(FBVector, zeroInit) {
