@@ -86,7 +86,7 @@ a and b are always vectors, i and j are always external iterators, etc. These
 bindings are used in the STL_TEST - if you need a vector and an int, have
 parameters a and n.
 
-There is a list (BOOST_PP_SEQ) of test types and interface types. If the
+There is a list of test types and interface types. If the
 type passes the restriction, then the test body is instantiated with that
 type as its template parameter. Instantiation ensures that the contractual
 elements of the standard are satisfied.  Only the test types, however, and
@@ -176,11 +176,9 @@ THOUGHTS:
 #include <string>
 #include <type_traits>
 
-#include <boost/iterator/iterator_adaptor.hpp>
-#include <boost/preprocessor.hpp>
-
 #include <folly/Conv.h>
 #include <folly/Portability.h>
+#include <folly/Preprocessor.h>
 #include <folly/ScopeGuard.h>
 #include <folly/chrono/Hardware.h>
 #include <folly/lang/Pretty.h>
@@ -841,27 +839,26 @@ uint64_t ReadTSC() {
 }
 
 //-----------------------------------------------------------------------------
-// New Boost
+// Preprocessor helpers
 
 // clang-format off
-#define IBOOST_PP_VARIADIC_SIZE(...) IBOOST_PP_VARIADIC_SIZE_I(__VA_ARGS__,   \
-  64, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, \
-  45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, \
-  26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8,   \
-  7, 6, 5, 4, 3, 2, 1,)
-#define IBOOST_PP_VARIADIC_SIZE_I(e0, e1, e2, e3, e4, e5, e6, e7, e8, e9,     \
-  e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24,  \
-  e25, e26, e27, e28, e29, e30, e31, e32, e33, e34, e35, e36, e37, e38, e39,  \
-  e40, e41, e42, e43, e44, e45, e46, e47, e48, e49, e50, e51, e52, e53, e54,  \
-  e55, e56, e57, e58, e59, e60, e61, e62, e63, size, ...) size
+#define STL_PP_VARIADIC_SIZE(...) STL_PP_VARIADIC_SIZE_I(__VA_ARGS__, 6, 5, 4, 3, 2, 1,)
+#define STL_PP_VARIADIC_SIZE_I(e0, e1, e2, e3, e4, e5, size, ...) size
 // clang-format on
-#define IBOOST_PP_VARIADIC_TO_SEQ(...) \
-  BOOST_PP_TUPLE_TO_SEQ(IBOOST_PP_VARIADIC_SIZE(__VA_ARGS__), (__VA_ARGS__))
+
+#define STL_PP_REVERSE(...) \
+  FB_CONCATENATE(           \
+      STL_PP_REVERSE_, STL_PP_VARIADIC_SIZE(__VA_ARGS__))(__VA_ARGS__)
+#define STL_PP_REVERSE_2(a, b) b, a
+#define STL_PP_REVERSE_3(a, b, c) c, b, a
+#define STL_PP_REVERSE_4(a, b, c, d) d, c, b, a
+#define STL_PP_REVERSE_5(a, b, c, d, e) e, d, c, b, a
+#define STL_PP_REVERSE_6(a, b, c, d, e, f) f, e, d, c, b, a
 
 //-----------------------------------------------------------------------------
 // STL_TEST
 
-#define GEN_TEST(r, name, type)                                   \
+#define GEN_TEST(name, type)                                      \
   {                                                               \
     string atype = PrettyType<typename type::allocator_type>()(); \
     string ptype = PrettyType<typename type::value_type>()();     \
@@ -875,34 +872,36 @@ uint64_t ReadTSC() {
       }                                                           \
     }                                                             \
   }
-#define GEN_TYPE_TEST(r, name, type) \
-  if (0)                             \
+#define GEN_TYPE_TEST(name, type) \
+  if (0)                          \
     test_I_##name##3 < type>();
-#define GEN_RUNNABLE_TEST(r, name, type) \
-  one = test_I_##name##3 < type>() || one;
+#define GEN_RUNNABLE_TEST(name, type) one = test_I_##name##3 < type>() || one;
 
-#define GEN_LOOPER(r, d, arg) BOOST_PP_CAT(LOOPER_, arg)
-#define GEN_VMAKER(r, d, arg) \
-  {                           \
-    BOOST_PP_CAT(VMAKER_, arg) {
-#define GEN_UMAKER(r, d, arg) \
-  }                           \
-  BOOST_PP_CAT(UMAKER_, arg)  \
+#define GEN_LOOPER(arg) FB_CONCATENATE(LOOPER_, arg)
+#define GEN_VMAKER(arg) \
+  {                     \
+    FB_CONCATENATE(VMAKER_, arg) {
+#define GEN_UMAKER(arg)        \
+  }                            \
+  FB_CONCATENATE(UMAKER_, arg) \
   }
-#define GEN_CLOSER(r, d, arg) BOOST_PP_CAT(CLOSER_, arg)
+#define GEN_CLOSER(arg) FB_CONCATENATE(CLOSER_, arg)
 
-#define TYPIFY(r, d, name) BOOST_PP_CAT(TYPIFY_, name)
-#define ARGIFY(r, d, name) TYPIFY(r, d, name) name
+#define TYPIFY(name) FB_CONCATENATE(TYPIFY_, name)
+#define ARGIFY(name) TYPIFY(name) name
+#define ARGIFY_WITH_COMMA(name) , ARGIFY(name)
+#define ENUM_ARGIFY(first, ...) \
+  ARGIFY(first) FOLLY_PP_FOR_EACH(ARGIFY_WITH_COMMA, __VA_ARGS__)
 
 // clang-format off
-#define MAKE_TEST(ref, name, types, restriction, argseq, ...)              \
+#define MAKE_TEST(ref, name, types, restriction, ...)                      \
   template <class Vector> void test_ ## name ## 2 (std::false_type) {}     \
   template <class Vector> void test_ ## name ## 2 (std::true_type) {       \
-    BOOST_PP_SEQ_FOR_EACH(GEN_LOOPER, _, argseq)                           \
+    FOLLY_PP_FOR_EACH(GEN_LOOPER, __VA_ARGS__)                             \
     {                                                                      \
       SETUP                                                                \
       {                                                                    \
-        BOOST_PP_SEQ_FOR_EACH(GEN_VMAKER, _, argseq)                       \
+        FOLLY_PP_FOR_EACH(GEN_VMAKER, __VA_ARGS__)                         \
         {                                                                  \
           test_ ## name <Vector, typename Vector::value_type,              \
             typename Vector::allocator_type> ( __VA_ARGS__ );              \
@@ -910,11 +909,11 @@ uint64_t ReadTSC() {
             return;                                                        \
           }                                                                \
         }                                                                  \
-        BOOST_PP_SEQ_FOR_EACH(GEN_UMAKER, _, BOOST_PP_SEQ_REVERSE(argseq)) \
+        FOLLY_PP_FOR_EACH(GEN_UMAKER, STL_PP_REVERSE(__VA_ARGS__))         \
       }                                                                    \
       TEARDOWN                                                             \
     }                                                                      \
-    BOOST_PP_SEQ_FOR_EACH(GEN_CLOSER, _, BOOST_PP_SEQ_REVERSE(argseq))     \
+    FOLLY_PP_FOR_EACH(GEN_CLOSER, STL_PP_REVERSE(__VA_ARGS__))             \
   }                                                                        \
   template <class Vector> void test_ ## name ## 3 () {                     \
     test_ ## name ## 2 <Vector> (std::bool_constant<                            \
@@ -940,30 +939,23 @@ uint64_t ReadTSC() {
                                                                            \
   TEST(FBVector, name) {                                                   \
     SCOPED_TRACE("N3337 reference: " ref);                                 \
-    BOOST_PP_SEQ_FOR_EACH(GEN_TEST, name, types)                           \
-    BOOST_PP_SEQ_FOR_EACH(GEN_TYPE_TEST, name, INTERFACE_TYPES)            \
+    FOLLY_PP_FOR_EACH_WITH(GEN_TEST, name, types)                          \
+    FOLLY_PP_FOR_EACH_WITH(GEN_TYPE_TEST, name, INTERFACE_TYPES)           \
     bool one = false;                                                      \
-    BOOST_PP_SEQ_FOR_EACH(GEN_RUNNABLE_TEST, name, types)                  \
+    FOLLY_PP_FOR_EACH_WITH(GEN_RUNNABLE_TEST, name, types)                 \
     if (!one) {                                                            \
        FAIL() << "No tests qualified to run";                              \
     }                                                                      \
   }
 // clang-format on
 
-#define DECL(name, ...)                                      \
-  template <class Vector, typename T, typename Allocator>    \
-  void test_##name(BOOST_PP_SEQ_ENUM(BOOST_PP_SEQ_TRANSFORM( \
-      ARGIFY, _, IBOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))))
+#define DECL(name, ...)                                   \
+  template <class Vector, typename T, typename Allocator> \
+  void test_##name(ENUM_ARGIFY(__VA_ARGS__))
 
-#define STL_TEST_I(ref, name, restriction, ...) \
-  DECL(name, __VA_ARGS__);                      \
-  MAKE_TEST(                                    \
-      ref,                                      \
-      name,                                     \
-      TEST_TYPES,                               \
-      restriction,                              \
-      IBOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__),   \
-      __VA_ARGS__)                              \
+#define STL_TEST_I(ref, name, restriction, ...)              \
+  DECL(name, __VA_ARGS__);                                   \
+  MAKE_TEST(ref, name, TEST_TYPES, restriction, __VA_ARGS__) \
   DECL(name, __VA_ARGS__)
 
 #define STL_TEST(ref, name, restriction, ...) \
@@ -996,7 +988,7 @@ using _TP2 = VECTOR_<EP2, Alloc<EP2>>;
 using _TP3 = VECTOR_<EP3, Alloc<EP3>>;
 
 #define TEST_TYPES \
-  (_TVIS)(_TVI)(_TV1)(_TV2)(_TV3)(_TV4)(_TV5v1)(_TV5)(_TP1)(_TP2)(_TP3)
+  _TVIS, _TVI, _TV1, _TV2, _TV3, _TV4, _TV5v1, _TV5, _TP1, _TP2, _TP3
 
 using DD1 = Data<ALL_DELETE>; // unoperable
 using DD2 = Data<DC_DELETE | CC_DELETE | MC_DELETE>; // unconstructible
@@ -1011,9 +1003,9 @@ using _TSpecialMA = VECTOR_<DDSMA, Alloc<DDSMA>>;
 
 // clang-format off
 #define INTERFACE_TYPES \
-  (_TVI)(VECTOR_<DD1>)(VECTOR_<DD2>)(VECTOR_<DD3>) \
-  (VECTOR_<DD4>)(VECTOR_<DD5>)(VECTOR_<DD6>) \
-  (VECTOR_<DD7>)(_TSpecialMA)
+  _TVI, VECTOR_<DD1>, VECTOR_<DD2>, VECTOR_<DD3>, \
+  VECTOR_<DD4>, VECTOR_<DD5>, VECTOR_<DD6>, \
+  VECTOR_<DD7>, _TSpecialMA
 // clang-format on
 
 //-----------------------------------------------------------------------------
@@ -1569,26 +1561,43 @@ class DataState {
 
 // downgrade iterators
 template <typename It, class tag>
-class Transformer
-    : public boost::iterator_adaptor<
-          Transformer<It, tag>,
-          It,
-          typename iterator_traits<It>::value_type,
-          tag> {
-  friend class boost::iterator_core_access;
+class Transformer {
+  It it_;
   shared_ptr<set<It>> dereferenced;
 
  public:
-  explicit Transformer(const It& it)
-      : Transformer::iterator_adaptor_(it), dereferenced(new set<It>()) {}
+  using iterator_category = tag;
+  using value_type = typename iterator_traits<It>::value_type;
+  using difference_type = typename iterator_traits<It>::difference_type;
+  using pointer = value_type*;
+  using reference = value_type&;
 
-  typename iterator_traits<It>::value_type& dereference() const {
-    if (dereferenced->find(this->base_reference()) != dereferenced->end()) {
+  explicit Transformer(const It& it) : it_(it), dereferenced(new set<It>()) {}
+
+  reference operator*() const {
+    if (dereferenced->find(it_) != dereferenced->end()) {
       cerr << "iterator dereferenced more than once" << endl;
       exit(1);
     }
-    dereferenced->insert(this->base_reference());
-    return *this->base_reference();
+    dereferenced->insert(it_);
+    return *it_;
+  }
+
+  pointer operator->() const { return &**this; }
+
+  Transformer& operator++() {
+    ++it_;
+    return *this;
+  }
+
+  Transformer operator++(int) {
+    auto copy = *this;
+    ++it_;
+    return copy;
+  }
+
+  friend bool operator==(const Transformer& a, const Transformer& b) {
+    return a.it_ == b.it_;
   }
 };
 
