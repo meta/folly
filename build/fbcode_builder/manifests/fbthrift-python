@@ -35,7 +35,6 @@ THRIFT_TESTS=OFF
 THRIFT_PYTHON=ON
 
 [dependencies]
-benchmark
 fizz-python
 fmt-python
 folly-python

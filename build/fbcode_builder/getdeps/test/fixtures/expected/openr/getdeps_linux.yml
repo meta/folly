@@ -53,9 +53,6 @@ jobs:
     - name: Fetch glog
       if: ${{ steps.paths.outputs.glog_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests glog
-    - name: Fetch benchmark
-      if: ${{ steps.paths.outputs.benchmark_SOURCE }}
-      run: python3 build/fbcode_builder/getdeps.py fetch --no-tests benchmark
     - name: Fetch fmt
       if: ${{ steps.paths.outputs.fmt_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests fmt
