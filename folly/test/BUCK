@@ -361,10 +361,10 @@ fb_dirsync_cpp_benchmark(
     name = "conv_benchmark",
     srcs = ["ConvBenchmark.cpp"],
     deps = [
-        "fbsource//third-party/boost:boost_lexical_cast",  # @manual
         "//folly:benchmark",
         "//folly:conv",
         "//folly/container:irange",
+        "//folly/lang:hint",
         "//folly/lang:to_ascii",
     ],
 )

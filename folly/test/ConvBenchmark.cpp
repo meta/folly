@@ -17,13 +17,13 @@
 #include <folly/Conv.h>
 
 #include <array>
+#include <charconv>
 #include <limits>
 #include <stdexcept>
 
-#include <boost/lexical_cast.hpp>
-
 #include <folly/Benchmark.h>
 #include <folly/container/irange.h>
+#include <folly/lang/Hint.h>
 #include <folly/lang/ToAscii.h>
 
 using namespace std;
@@ -304,6 +304,7 @@ static StringPiece pc1 = "1234567890123456789";
 void handwrittenAtoiMeasure(unsigned int n, unsigned int digits) {
   auto p = pc1.subpiece(pc1.size() - digits, digits);
   for ([[maybe_unused]] const auto i : folly::irange(n)) {
+    compiler_must_not_predict(p);
     doNotOptimizeAway(handwrittenAtoi(p.begin(), p.end()));
   }
 }
@@ -311,6 +312,7 @@ void handwrittenAtoiMeasure(unsigned int n, unsigned int digits) {
 void follyAtoiMeasure(unsigned int n, unsigned int digits) {
   auto p = pc1.subpiece(pc1.size() - digits, digits);
   for ([[maybe_unused]] const auto i : folly::irange(n)) {
+    compiler_must_not_predict(p);
     doNotOptimizeAway(folly::to<int64_t>(p.begin(), p.end()));
   }
 }
@@ -319,15 +321,18 @@ void clibAtoiMeasure(unsigned int n, unsigned int digits) {
   auto p = pc1.subpiece(pc1.size() - digits, digits);
   assert(*p.end() == 0);
   for ([[maybe_unused]] const auto i : folly::irange(n)) {
+    compiler_must_not_predict(p);
     doNotOptimizeAway(atoll(p.begin()));
   }
 }
 
-void lexicalCastMeasure(unsigned int n, unsigned int digits) {
+void fromCharsMeasure(unsigned int n, unsigned int digits) {
   auto p = pc1.subpiece(pc1.size() - digits, digits);
-  assert(*p.end() == 0);
   for ([[maybe_unused]] const auto i : folly::irange(n)) {
-    doNotOptimizeAway(boost::lexical_cast<uint64_t>(p.begin()));
+    compiler_must_not_predict(p);
+    uint64_t value = 0;
+    std::from_chars(p.begin(), p.end(), value);
+    doNotOptimizeAway(value);
   }
 }
 
@@ -867,7 +872,7 @@ BENCHMARK_DRAW_LINE();
 
 #define DEFINE_BENCHMARK_GROUP(n)                     \
   BENCHMARK_PARAM(clibAtoiMeasure, n)                 \
-  BENCHMARK_RELATIVE_PARAM(lexicalCastMeasure, n)     \
+  BENCHMARK_RELATIVE_PARAM(fromCharsMeasure, n)       \
   BENCHMARK_RELATIVE_PARAM(handwrittenAtoiMeasure, n) \
   BENCHMARK_RELATIVE_PARAM(follyAtoiMeasure, n)       \
   BENCHMARK_DRAW_LINE()
