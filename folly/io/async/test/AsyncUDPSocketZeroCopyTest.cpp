@@ -156,8 +156,24 @@ TEST_F(AsyncUDPSocketZeroCopyTest, Writev_ZerocopyTrue_ProducesZeroCopyCmsg) {
       AsyncUDPSocket::WriteOptions(0 /*gso*/, true /*zerocopy*/));
   ASSERT_GT(ret, 0) << "writev failed: errno=" << errno;
 
+  // Read the datagram back out of the receiver before waiting for the
+  // completion. On kernels that perform real (non-copy) loopback zerocopy,
+  // the sender-side completion is generated only once the skb is released,
+  // which never happens while the packet sits in an unread receiver queue;
+  // the copy-fallback path completes synchronously, so this is a no-op
+  // there.
+  const int rfd = receiver_->getNetworkSocket().toFd();
+  struct pollfd rpfd{};
+  rpfd.fd = rfd;
+  rpfd.events = POLLIN;
+  ASSERT_GT(::poll(&rpfd, 1, 5000), 0)
+      << "packet never arrived: errno=" << errno;
+  char rbuf[65536];
+  ASSERT_GT(::recv(rfd, rbuf, sizeof(rbuf), MSG_DONTWAIT), 0)
+      << "receiver read failed: errno=" << errno;
+
   EXPECT_TRUE(waitForZeroCopyCmsg(
-      sender_->getNetworkSocket().toFd(), std::chrono::milliseconds(500)));
+      sender_->getNetworkSocket().toFd(), std::chrono::milliseconds(5000)));
 }
 
 // Negative control: with zerocopy=false the kernel must NOT emit a ZC
