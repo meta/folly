@@ -628,7 +628,9 @@ Map field(FieldType Class::* field) {
   return Map(Field(field));
 }
 
-template <class Predicate = Identity, class Filter = detail::Filter<Predicate>>
+template <
+    class Predicate = std::identity,
+    class Filter = detail::Filter<Predicate>>
 Filter filter(Predicate pred = Predicate()) {
   return Filter(std::move(pred));
 }
@@ -638,20 +640,22 @@ Visit visit(Visitor visitor = Visitor()) {
   return Visit(std::move(visitor));
 }
 
-template <class Predicate = Identity, class Until = detail::Until<Predicate>>
+template <
+    class Predicate = std::identity,
+    class Until = detail::Until<Predicate>>
 Until until(Predicate pred = Predicate()) {
   return Until(std::move(pred));
 }
 
 template <
-    class Predicate = Identity,
+    class Predicate = std::identity,
     class TakeWhile = detail::Until<Negate<Predicate>>>
 TakeWhile takeWhile(Predicate pred = Predicate()) {
   return TakeWhile(Negate<Predicate>(std::move(pred)));
 }
 
 template <
-    class Selector = Identity,
+    class Selector = std::identity,
     class Comparer = Less,
     class Order = detail::Order<Selector, Comparer>>
 Order orderBy(Selector selector = Selector(), Comparer comparer = Comparer()) {
@@ -659,26 +663,28 @@ Order orderBy(Selector selector = Selector(), Comparer comparer = Comparer()) {
 }
 
 template <
-    class Selector = Identity,
+    class Selector = std::identity,
     class Order = detail::Order<Selector, Greater>>
 Order orderByDescending(Selector selector = Selector()) {
   return Order(std::move(selector));
 }
 
-template <class Selector = Identity, class GroupBy = detail::GroupBy<Selector>>
+template <
+    class Selector = std::identity,
+    class GroupBy = detail::GroupBy<Selector>>
 GroupBy groupBy(Selector selector = Selector()) {
   return GroupBy(std::move(selector));
 }
 
 template <
-    class Selector = Identity,
+    class Selector = std::identity,
     class GroupByAdjacent = detail::GroupByAdjacent<Selector>>
 GroupByAdjacent groupByAdjacent(Selector selector = Selector()) {
   return GroupByAdjacent(std::move(selector));
 }
 
 template <
-    class Selector = Identity,
+    class Selector = std::identity,
     class Distinct = detail::Distinct<Selector>>
 Distinct distinctBy(Selector selector = Selector()) {
   return Distinct(std::move(selector));
@@ -737,7 +743,7 @@ detail::TypeAssertion<Value> assert_type() {
  */
 
 template <
-    class Predicate = Identity,
+    class Predicate = std::identity,
     class Filter = detail::Filter<Predicate>,
     class NotEmpty = detail::IsEmpty<false>,
     class Composed = detail::Composed<Filter, NotEmpty>>
@@ -765,7 +771,7 @@ Composed any(Predicate pred = Predicate()) {
  *   from(source) | all(pred) == from(source) | filter(negate(pred)) | isEmpty
  */
 template <
-    class Predicate = Identity,
+    class Predicate = std::identity,
     class Filter = detail::Filter<Negate<Predicate>>,
     class IsEmpty = detail::IsEmpty<true>,
     class Composed = detail::Composed<Filter, IsEmpty>>
@@ -783,7 +789,9 @@ Reduce reduce(Reducer reducer = Reducer()) {
   return Reduce(std::move(reducer));
 }
 
-template <class Selector = Identity, class Min = detail::Min<Selector, Less>>
+template <
+    class Selector = std::identity,
+    class Min = detail::Min<Selector, Less>>
 Min minBy(Selector selector = Selector()) {
   return Min(std::move(selector));
 }

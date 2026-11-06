@@ -16,6 +16,7 @@
 
 #include <folly/concurrency/memory/ReadMostlySharedPtr.h>
 
+#include <functional>
 #include <iostream>
 #include <thread>
 
@@ -52,7 +53,7 @@ void benchmark(size_t n) {
 template <template <typename> class MainPtr>
 void constructorBenchmark(size_t n) {
   folly::BenchmarkSuspender braces;
-  using deleter_fn = folly::identity_fn; // noop deleter
+  using deleter_fn = std::identity; // noop deleter
   using uptr = std::unique_ptr<int, deleter_fn>;
   int data = 42;
   std::vector<MainPtr<int>> ptrs;
@@ -70,7 +71,7 @@ template <template <typename> class MainPtr>
 void destructorBenchmark(size_t n) {
   folly::BenchmarkSuspender braces;
   std::vector<MainPtr<int>> ptrs;
-  using deleter_fn = folly::identity_fn; // noop deleter
+  using deleter_fn = std::identity; // noop deleter
   using uptr = std::unique_ptr<int, deleter_fn>;
   int data = 42;
 

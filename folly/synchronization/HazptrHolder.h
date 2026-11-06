@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <functional>
 #include <type_traits>
 #include <utility>
 
@@ -111,7 +112,7 @@ class hazptr_holder {
   /** Hazard pointer operations */
 
   /** try_protect */
-  template <typename T, typename Src, typename Func = identity_fn>
+  template <typename T, typename Src, typename Func = std::identity>
     requires std::is_nothrow_invocable_r_v<T*, Src&> &&
       std::is_nothrow_invocable_r_v<T*, Func&, T*> &&
       (!std::is_member_pointer_v<Func>)
@@ -129,7 +130,7 @@ class hazptr_holder {
     return true;
   }
 
-  template <typename T, typename Func = identity_fn>
+  template <typename T, typename Func = std::identity>
     requires std::is_nothrow_invocable_r_v<T*, Func&, T*> &&
       (!std::is_member_pointer_v<Func>)
   FOLLY_ALWAYS_INLINE bool try_protect(
@@ -141,7 +142,7 @@ class hazptr_holder {
   }
 
   /** protect */
-  template <typename T, typename Func = identity_fn>
+  template <typename T, typename Func = std::identity>
     requires std::is_nothrow_invocable_r_v<T*, Func&, T*> &&
       (!std::is_member_pointer_v<Func>)
   FOLLY_ALWAYS_INLINE T* protect(const Atom<T*>& src, Func f = {}) noexcept {

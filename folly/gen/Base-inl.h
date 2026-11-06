@@ -31,6 +31,8 @@
 #if FOLLY_DETAIL_GEN_BASE_HAS_RANGEV3
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
+
+#include <functional>
 #endif
 
 // Ignore shadowing warnings within this file, so includers can use -Wshadow.
@@ -2699,13 +2701,13 @@ constexpr detail::IsEmpty<true> isEmpty{};
 
 constexpr detail::IsEmpty<false> notEmpty{};
 
-constexpr detail::Min<Identity, Less> min{};
+constexpr detail::Min<std::identity, Less> min{};
 
-constexpr detail::Min<Identity, Greater> max{};
+constexpr detail::Min<std::identity, Greater> max{};
 
-constexpr detail::Order<Identity> order{};
+constexpr detail::Order<std::identity> order{};
 
-constexpr detail::Distinct<Identity> distinct{};
+constexpr detail::Distinct<std::identity> distinct{};
 
 constexpr detail::Map<Move> move{};
 

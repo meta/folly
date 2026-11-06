@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 
 #include <folly/CPortability.h>
 #include <folly/Utility.h>
@@ -135,7 +136,7 @@ bool demangle_build_has_liberty() noexcept {
       to_bool(liberty_cplus_demangle),
       to_bool(liberty_rust_demangle),
   };
-  return std::all_of(std::begin(vals), std::end(vals), folly::identity);
+  return std::all_of(std::begin(vals), std::end(vals), std::identity{});
 }
 
 namespace {

@@ -365,7 +365,7 @@ template <
     class RandomIt,
     class T,
     class Comp = std::less<>,
-    class Proj = identity_fn>
+    class Proj = std::identity>
 [[nodiscard]] constexpr RandomIt gallop_lower_bound(
     RandomIt first,
     RandomIt last,
@@ -382,7 +382,7 @@ template <
     class RandomIt,
     class T,
     class Comp = std::less<>,
-    class Proj = identity_fn>
+    class Proj = std::identity>
 [[nodiscard]] constexpr RandomIt gallop_lower_bound(
     RandomIt first,
     RandomIt hint,
@@ -402,7 +402,7 @@ template <
     class RandomIt,
     class T,
     class Comp = std::less<>,
-    class Proj = identity_fn>
+    class Proj = std::identity>
 [[nodiscard]] constexpr RandomIt gallop_upper_bound(
     RandomIt first,
     RandomIt last,
@@ -419,7 +419,7 @@ template <
     class RandomIt,
     class T,
     class Comp = std::less<>,
-    class Proj = identity_fn>
+    class Proj = std::identity>
 [[nodiscard]] constexpr RandomIt gallop_upper_bound(
     RandomIt first,
     RandomIt hint,

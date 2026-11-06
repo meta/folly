@@ -16,6 +16,7 @@
 
 #include <folly/random/hash.h>
 
+#include <functional>
 #include <numeric>
 
 #include <folly/portability/GTest.h>
@@ -23,7 +24,7 @@
 struct HashCounterEngineTest : testing::Test {};
 
 TEST_F(HashCounterEngineTest, identity) {
-  using engine = folly::hash_counter_engine<folly::identity_fn, uint64_t>;
+  using engine = folly::hash_counter_engine<std::identity, uint64_t>;
   static_assert(std::is_trivially_destructible_v<engine>);
 
   engine rng{345};

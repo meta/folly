@@ -114,6 +114,7 @@
 #include <climits>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -1169,9 +1170,10 @@ typename std::enable_if< //
     is_integral_v<Tgt> && !std::is_same<Tgt, bool>::value,
     Tgt>::type
 to(const char* b, const char* e) {
-  return tryTo<Tgt>(b, e).thenOrThrow(identity, [=](ConversionCode code) {
-    return makeConversionError(code, StringPiece(b, e));
-  });
+  return tryTo<Tgt>(b, e).thenOrThrow(
+      std::identity{}, [=](ConversionCode code) {
+        return makeConversionError(code, StringPiece(b, e));
+      });
 }
 
 /**
@@ -1367,7 +1369,7 @@ tryTo(const Src& value) noexcept {
 template <typename Tgt, typename Src>
 typename std::enable_if<detail::IsArithToArith<Tgt, Src>::value, Tgt>::type to(
     const Src& value) {
-  return tryTo<Tgt>(value).thenOrThrow(identity, [&](ConversionCode e) {
+  return tryTo<Tgt>(value).thenOrThrow(std::identity{}, [&](ConversionCode e) {
     return makeConversionError(e, detail::errorValue<Tgt>(value));
   });
 }

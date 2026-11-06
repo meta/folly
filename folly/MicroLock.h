@@ -18,6 +18,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <functional>
 
 #include <folly/Optional.h>
 #include <folly/Portability.h>
@@ -200,7 +201,7 @@ inline void MicroLockCore::unlockAndStore(uint8_t value) noexcept {
 }
 
 inline void MicroLockCore::unlock() noexcept {
-  unlockAndStoreWithModifier(identity);
+  unlockAndStoreWithModifier(std::identity{});
 }
 
 template <unsigned MaxSpins = 1000, unsigned MaxYields = 0>

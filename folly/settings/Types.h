@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <functional>
 #include <string_view>
 #include <type_traits>
 
@@ -143,7 +144,7 @@ template <typename T>
 T to(const SettingValueAndMetadata& src) {
   using ErrorCode = ExpectedErrorType<decltype(tryTo<T>(
       std::declval<const SettingValueAndMetadata&>()))>;
-  return tryTo<T>(src).thenOrThrow(identity, [&](const ErrorCode& e) {
+  return tryTo<T>(src).thenOrThrow(std::identity{}, [&](const ErrorCode& e) {
     throw_exception(makeConversionError(e, src.value));
   });
 }

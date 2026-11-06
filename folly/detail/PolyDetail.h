@@ -182,7 +182,7 @@ struct IsInstanceOf<U<Ts...>, U> : std::true_type {};
 
 template <class Then>
 decltype(auto) if_constexpr(std::true_type, Then then) {
-  return then(Identity{});
+  return then(std::identity{});
 }
 
 template <class Then>
@@ -190,12 +190,12 @@ void if_constexpr(std::false_type, Then) {}
 
 template <class Then, class Else>
 decltype(auto) if_constexpr(std::true_type, Then then, Else) {
-  return then(Identity{});
+  return then(std::identity{});
 }
 
 template <class Then, class Else>
 decltype(auto) if_constexpr(std::false_type, Then, Else else_) {
-  return else_(Identity{});
+  return else_(std::identity{});
 }
 
 enum class Op : short { eNuke, eMove, eCopy, eType, eAddr, eRefr };

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -1372,7 +1373,7 @@ class VectorContainerPolicy
       std::size_t size,
       std::size_t /*capacity*/,
       VectorContainerPolicy const& rhs) {
-    return beforeBuildImpl(size, rhs, folly::identity);
+    return beforeBuildImpl(size, rhs, std::identity{});
   }
 
   bool beforeBuild(

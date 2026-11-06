@@ -31,6 +31,7 @@
 #define FOLLY_ATOMICHASHARRAY_H_
 
 #include <atomic>
+#include <functional>
 
 #include <folly/ThreadCachedInt.h>
 #include <folly/Utility.h>
@@ -83,7 +84,7 @@ template <
     class EqualFcn = std::equal_to<KeyT>,
     class Allocator = std::allocator<char>,
     class ProbeFcn = AtomicHashArrayLinearProbeFcn,
-    class KeyConvertFcn = Identity>
+    class KeyConvertFcn = std::identity>
 class AtomicHashMap;
 
 template <
@@ -93,7 +94,7 @@ template <
     class EqualFcn = std::equal_to<KeyT>,
     class Allocator = std::allocator<char>,
     class ProbeFcn = AtomicHashArrayLinearProbeFcn,
-    class KeyConvertFcn = Identity>
+    class KeyConvertFcn = std::identity>
 class AtomicHashArray {
   static_assert(
       (std::is_convertible<KeyT, int32_t>::value ||
@@ -345,7 +346,7 @@ class AtomicHashArray {
       typename LookupKeyT = key_type,
       typename LookupHashFcn = hasher,
       typename LookupEqualFcn = key_equal,
-      typename LookupKeyToKeyFcn = Identity,
+      typename LookupKeyToKeyFcn = std::identity,
       typename... ArgTs>
   SimpleRetT insertInternal(LookupKeyT key, ArgTs&&... vCtorArgs);
 
