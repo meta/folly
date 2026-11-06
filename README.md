@@ -109,8 +109,8 @@ clone and two commands are enough:
 
     git clone https://github.com/meta/folly
     cd folly
-    cmake -B _build
-    cmake --build _build
+    cmake -B build
+    cmake --build build
 
 Anything already on the system is used as-is. Alternatively, install the system
 packages first:
@@ -121,9 +121,9 @@ Tests are not part of the `all` target. Configure with `-DBUILD_TESTS=ON` to
 build them, which also fetches googletest and gflags if they are not installed
 (the library itself uses gflags only if it is installed):
 
-    cmake -B _build -DBUILD_TESTS=ON
-    cmake --build _build
-    (cd _build && ctest)
+    cmake -B build -DBUILD_TESTS=ON
+    cmake --build build
+    (cd build && ctest)
 
 Whether folly uses gflags is decided when folly is built and recorded in the
 installed `folly/folly-config.h`; linking gflags into a program later does not
@@ -251,4 +251,4 @@ You may also use `folly/build/bootstrap-osx-homebrew.sh` to build against `main`
   folly/build/bootstrap-osx-homebrew.sh
 ```
 
-This will create a build directory `_build` in the top-level.
+This will create a build directory `build` in the top-level.

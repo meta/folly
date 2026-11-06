@@ -19,7 +19,7 @@
 # fail fast
 set -e
 
-BUILD_DIR=${BUILD_DIR:-_build}
+BUILD_DIR=${BUILD_DIR:-build}
 
 # brew install alias
 brew_install() {

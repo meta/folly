@@ -62,7 +62,7 @@ jobs:
     # CMP0141 enables the setting; folly's cmake_minimum_required predates it.
     - name: Configure
       run: >
-        cmake -B _build -G Ninja
+        cmake -B build -G Ninja
         -DFOLLY_BUILD_OPENSSL=ON
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DBUILD_TESTS=ON
@@ -76,10 +76,10 @@ jobs:
     # template-heavy files, and a cold cache can exhaust memory and lose the
     # runner.
     - name: Build
-      run: cmake --build _build -j 4
+      run: cmake --build build -j 4
 
     - name: Test
-      run: ctest --test-dir _build --output-on-failure
+      run: ctest --test-dir build --output-on-failure
 
     - name: Show sccache stats
       if: always()
