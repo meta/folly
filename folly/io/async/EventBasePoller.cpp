@@ -486,7 +486,7 @@ EventBasePoller::Handle::~Handle() = default;
 EventBasePoller::~EventBasePoller() = default;
 
 /* static */ std::unique_ptr<EventBasePoller> EventBasePoller::create(
-    Options options) {
+    [[maybe_unused]] Options options) {
 #if FOLLY_HAS_EPOLL
   if (options.backend == Options::Backend::kEpoll) {
     if (options.epollMaxEvents == 0 ||
