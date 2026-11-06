@@ -59,6 +59,7 @@ fb_dirsync_cpp_unittest(
         "//folly/portability:gtest",
         "//folly/portability:sys_resource",
         "//folly/portability:unistd",
+        "//folly/system:thread_id",
         "//folly/test:test_utils",
         "//folly/testing:test_util",
     ],

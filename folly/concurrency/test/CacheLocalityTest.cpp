@@ -26,6 +26,7 @@
 #include <folly/portability/GTest.h>
 #include <folly/portability/SysResource.h>
 #include <folly/portability/Unistd.h>
+#include <folly/system/ThreadId.h>
 #include <folly/test/TestUtils.h>
 #include <folly/testing/TestUtil.h>
 
@@ -1106,6 +1107,7 @@ TEST(Getcpu, VdsoGetcpu) {
 #endif
 
 TEST(ThreadId, SimpleTls) {
+  EXPECT_EQ(folly::get_unique_thread_id(), SequentialThreadId::get());
   unsigned cpu = 0;
   auto rv =
       folly::FallbackGetcpu<SequentialThreadId>::getcpu(&cpu, nullptr, nullptr);
@@ -1114,6 +1116,17 @@ TEST(ThreadId, SimpleTls) {
   unsigned again;
   folly::FallbackGetcpu<SequentialThreadId>::getcpu(&again, nullptr, nullptr);
   EXPECT_EQ(cpu, again);
+}
+
+TEST(ThreadId, WideFallback) {
+  struct WideThreadId {
+    static uint64_t get() { return (uint64_t{1} << 40) | 123; }
+  };
+  unsigned cpu = 0;
+  unsigned node = 0;
+  EXPECT_EQ(0, FallbackGetcpu<WideThreadId>::getcpu(&cpu, &node, nullptr));
+  EXPECT_EQ(123, cpu);
+  EXPECT_EQ(123, node);
 }
 
 TEST(ThreadId, SimplePthread) {

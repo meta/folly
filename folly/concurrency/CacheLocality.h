@@ -20,6 +20,7 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <string>
@@ -153,7 +154,7 @@ struct Getcpu {
 };
 
 struct SequentialThreadId {
-  static unsigned get();
+  static uint64_t get();
 };
 
 struct HashingThreadId {
@@ -169,7 +170,7 @@ struct FallbackGetcpu {
   /// are non-null).  This method is intended to act like getcpu when a
   /// fast-enough form of getcpu isn't available or isn't desired
   static int getcpu(unsigned* cpu, unsigned* node, void* /* unused */) {
-    auto id = ThreadId::get();
+    const auto id = static_cast<unsigned>(ThreadId::get());
     if (cpu) {
       *cpu = id;
     }

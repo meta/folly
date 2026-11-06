@@ -434,10 +434,8 @@ Getcpu::Func Getcpu::resolveVdsoFunc() {
 }
 
 /////////////// SequentialThreadId
-unsigned SequentialThreadId::get() {
-  static std::atomic<unsigned> global{0};
-  static thread_local unsigned local{0};
-  return FOLLY_LIKELY(local) ? local : (local = ++global);
+uint64_t SequentialThreadId::get() {
+  return get_unique_thread_id();
 }
 
 /////////////// HashingThreadId

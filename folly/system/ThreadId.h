@@ -21,6 +21,18 @@
 namespace folly {
 
 /**
+ * Get a nonzero, process-specific identifier for the current thread.
+ *
+ * The identifier is assigned lazily and remains stable for the thread's
+ * lifetime. Identifiers are never reused, including after a thread exits.
+ *
+ * This is not an operating-system thread ID and is not unique across processes.
+ * After fork(), the surviving thread retains its identifier and new threads
+ * receive identifiers from the inherited counter.
+ */
+uint64_t get_unique_thread_id();
+
+/**
  * Get a process-specific identifier for the current thread.
  *
  * The return value will uniquely identify the thread within the current

@@ -16,14 +16,16 @@
 
 #include <folly/system/ThreadId.h>
 
+#include <algorithm>
+#include <array>
 #include <thread>
 
 #include <folly/Benchmark.h>
 #include <folly/portability/GTest.h>
+#include <folly/portability/Unistd.h>
 
 #ifndef _WIN32
 #include <sys/wait.h>
-#include <folly/portability/Unistd.h>
 #endif
 
 namespace folly {
@@ -46,6 +48,42 @@ void testUnique(F&& f) {
 }
 
 } // namespace
+
+TEST(ThreadId, getUniqueThreadIdStable) {
+  const auto id = folly::get_unique_thread_id();
+  EXPECT_NE(0, id);
+  EXPECT_EQ(id, folly::get_unique_thread_id());
+}
+
+TEST(ThreadId, getUniqueThreadIdConcurrent) {
+  std::array<uint64_t, 17> ids{};
+  ids[0] = folly::get_unique_thread_id();
+  std::array<std::thread, 16> threads;
+  for (size_t i = 0; i < threads.size(); ++i) {
+    threads[i] = std::thread{[&, i] {
+      ids[i + 1] = folly::get_unique_thread_id();
+      EXPECT_NE(0, ids[i + 1]);
+      EXPECT_EQ(ids[i + 1], folly::get_unique_thread_id());
+    }};
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  std::sort(ids.begin(), ids.end());
+  EXPECT_EQ(ids.end(), std::adjacent_find(ids.begin(), ids.end()));
+}
+
+TEST(ThreadId, getUniqueThreadIdAfterExit) {
+  std::array<uint64_t, 33> ids{};
+  ids[0] = folly::get_unique_thread_id();
+  for (size_t i = 1; i < ids.size(); ++i) {
+    std::thread thread{[&, i] { ids[i] = folly::get_unique_thread_id(); }};
+    thread.join();
+    EXPECT_NE(0, ids[i]);
+  }
+  std::sort(ids.begin(), ids.end());
+  EXPECT_EQ(ids.end(), std::adjacent_find(ids.begin(), ids.end()));
+}
 
 TEST(ThreadId, getCurrentID) {
   testUnique(folly::getCurrentThreadID);
@@ -86,6 +124,7 @@ TEST(ThreadId, getOSThreadIDCache) {
     }                                       \
   }
 
+BENCHMARK_FUN(get_unique_thread_id, get_unique_thread_id)
 BENCHMARK_FUN(getCurrentThreadID, getCurrentThreadID)
 BENCHMARK_FUN(getOSThreadID, getOSThreadID)
 BENCHMARK_FUN(getOSThreadIDSlow, detail::getOSThreadIDSlow)
