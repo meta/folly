@@ -25,6 +25,8 @@ namespace detail {
 
 struct FOLLY_EXPORT DefaultTag {};
 
+// Internal implementation detail, not a customization point; pass a custom Make
+// template argument to customize construction.
 template <typename T>
 struct DefaultMake {
   T operator()() const { return T(); }

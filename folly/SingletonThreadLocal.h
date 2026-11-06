@@ -75,6 +75,11 @@ struct SingletonThreadLocalState {
 /// ends, and they can also safely be used in an application that spawns many
 /// temporary threads throughout its life.
 ///
+/// To customize construction, pass a default-constructible callable type as the
+/// third template argument, Make; it is invoked with no arguments. Its result
+/// is stored, and a reference to it must be convertible to T&. Do not
+/// specialize detail::DefaultMake.
+///
 /// Example:
 ///
 ///   struct UsefulButHasExpensiveCtor {
