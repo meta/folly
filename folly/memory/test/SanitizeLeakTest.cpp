@@ -23,11 +23,25 @@
 
 namespace folly {
 
+namespace {
+FOLLY_NOINLINE int* leakInt(int value) {
+  return new int(value);
+}
+} // namespace
+
 TEST(SanitizeLeak, lsanIgnoreObject) {
   int* ptr = new int(5);
   EXPECT_EQ(*ptr, 5);
   lsan_ignore_object(ptr);
   EXPECT_EQ(*ptr, 5);
+}
+
+TEST(SanitizeLeak, lsanDisable) {
+  lsan_disable();
+  lsan_disable();
+  lsan_enable();
+  EXPECT_EQ(*leakInt(5), 5);
+  lsan_enable();
 }
 
 TEST(SanitizeLeak, ImplementationAlwaysWorks) {
