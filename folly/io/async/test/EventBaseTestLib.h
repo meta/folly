@@ -2360,10 +2360,14 @@ TYPED_TEST_P(EventBaseTest, LoopKeepAliveInLoop) {
 TYPED_TEST_P(EventBaseTest, LoopKeepAliveWithLoopForever) {
   auto evbPtr = this->makeEventBase();
 
-  bool done = false;
+  relaxed_atomic<bool> done{false};
+  Baton<> terminateReturned;
 
   std::thread evThread([&] {
     evbPtr->loopForever();
+    // Wait until terminateLoopSoon() has returned on the main thread, so
+    // the EventBase cannot be destroyed while it is still being used.
+    terminateReturned.wait();
     evbPtr.reset();
     done = true;
   });
@@ -2376,6 +2380,7 @@ TYPED_TEST_P(EventBaseTest, LoopKeepAliveWithLoopForever) {
     });
     ASSERT_FALSE(done) << "Loop finished before we asked it to";
     ev->terminateLoopSoon();
+    terminateReturned.post();
     /* sleep override */
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
     ASSERT_FALSE(done) << "Loop terminated early";
