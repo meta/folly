@@ -144,7 +144,7 @@ class VirtualEventBase
   std::future<void> destroy();
   void destroyImpl() noexcept;
 
-  using LoopCallbackList = EventBase::LoopCallback::List;
+  using LoopCallbackList = EventBase::LoopCallbackList;
 
   KeepAlive<EventBase> evb_;
 
@@ -154,6 +154,7 @@ class VirtualEventBase
   KeepAlive<VirtualEventBase> loopKeepAlive_{
       makeKeepAlive<VirtualEventBase>(this)};
 
-  Synchronized<EventBase::OnDestructionCallback::List> onDestructionCallbacks_;
+  using OnDestructionCallbackList = EventBase::OnDestructionCallbackList;
+  Synchronized<OnDestructionCallbackList> onDestructionCallbacks_;
 };
 } // namespace folly

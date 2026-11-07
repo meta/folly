@@ -42,7 +42,6 @@ folly_add_library(
   DEPS
     folly_chrono
     folly_container_bit_iterator
-    folly_container_intrusive_list
     folly_lang_assume
     folly_lang_bits
     folly_string
@@ -53,6 +52,7 @@ folly_add_library(
     ${GLOG_LIBRARIES}
     Boost::headers
     folly_container_f14_hash
+    folly_container_intrusive_list
     folly_exception
     folly_exception_string
     folly_executor

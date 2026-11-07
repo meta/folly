@@ -338,7 +338,7 @@ EventBase::~EventBase() {
   // Call all pre-destruction callbacks, before we start cleaning up our state
   // or apply any keepalives
   while (!preDestructionCallbacks_.rlock()->empty()) {
-    OnDestructionCallback::List callbacks;
+    OnDestructionCallbackList callbacks;
     preDestructionCallbacks_.swap(callbacks);
     while (!callbacks.empty()) {
       auto& callback = callbacks.front();
@@ -367,7 +367,7 @@ EventBase::~EventBase() {
 
   // Call all destruction callbacks, before we start cleaning up our state.
   while (!onDestructionCallbacks_.rlock()->empty()) {
-    OnDestructionCallback::List callbacks;
+    OnDestructionCallbackList callbacks;
     onDestructionCallbacks_.swap(callbacks);
     while (!callbacks.empty()) {
       auto& callback = callbacks.front();

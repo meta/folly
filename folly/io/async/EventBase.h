@@ -32,7 +32,6 @@
 #include <unordered_set>
 #include <utility>
 
-#include <boost/intrusive/list.hpp>
 #include <glog/logging.h>
 
 #include <folly/Executor.h>
@@ -43,6 +42,7 @@
 #include <folly/Synchronized.h>
 #include <folly/container/F14Map.h>
 #include <folly/container/F14Set.h>
+#include <folly/container/IntrusiveList.h>
 #include <folly/executors/DrivableExecutor.h>
 #include <folly/executors/ExecutionObserver.h>
 #include <folly/executors/IOExecutor.h>
@@ -156,23 +156,27 @@ class EventBase
    * If a LoopCallback object is destroyed while it is scheduled to be run in
    * the next loop iteration, it will automatically be cancelled.
    */
-  class LoopCallback
-      : public boost::intrusive::list_base_hook<
-            boost::intrusive::link_mode<boost::intrusive::auto_unlink>> {
+  class LoopCallback {
    public:
     virtual ~LoopCallback() = default;
 
     virtual void runLoopCallback() noexcept = 0;
     void cancelLoopCallback() {
       context_.reset();
-      unlink();
+      loopCallbackHook_.unlink();
     }
 
-    bool isLoopCallbackScheduled() const { return is_linked(); }
+    bool isLoopCallbackScheduled() const {
+      return loopCallbackHook_.is_linked();
+    }
+
+    // Operations of the list hook. Unlike cancelLoopCallback(), unlink() keeps
+    // the request context.
+    bool is_linked() const noexcept { return loopCallbackHook_.is_linked(); }
+    void unlink() noexcept { loopCallbackHook_.unlink(); }
 
    private:
-    using List = boost::intrusive::
-        list<LoopCallback, boost::intrusive::constant_time_size<false>>;
+    IntrusiveListHook loopCallbackHook_;
 
     // EventBase needs access to LoopCallbackList (and therefore to hook_)
     friend class EventBase;
@@ -182,7 +186,8 @@ class EventBase
 
   // List of loop callbacks for code that batches them, such as flush lists.
   // Folly owns the underlying type; name it only through this alias.
-  using LoopCallbackList = LoopCallback::List;
+  using LoopCallbackList =
+      IntrusiveList<LoopCallback, &LoopCallback::loopCallbackHook_>;
 
   class FunctionLoopCallback : public LoopCallback {
    public:
@@ -226,9 +231,7 @@ class EventBase
   //   - Users may safely cancel() from any thread. Multiple calls to cancel()
   //     may execute concurrently. The only caveat is that it is not safe to
   //     call cancel() within the onEventBaseDestruction() callback.
-  class OnDestructionCallback
-      : public boost::intrusive::list_base_hook<
-            boost::intrusive::link_mode<boost::intrusive::normal_link>> {
+  class OnDestructionCallback {
    public:
     OnDestructionCallback() = default;
     OnDestructionCallback(OnDestructionCallback&&) = default;
@@ -244,10 +247,9 @@ class EventBase
     virtual void onEventBaseDestruction() noexcept = 0;
 
    private:
+    SafeIntrusiveListHook onDestructionHook_;
     Function<void(OnDestructionCallback&)> eraser_;
     Synchronized<bool> scheduled_{std::in_place, false};
-
-    using List = boost::intrusive::list<OnDestructionCallback>;
 
     void schedule(
         Function<void(OnDestructionCallback&)> linker,
@@ -276,6 +278,10 @@ class EventBase
    private:
     Function<void()> f_;
   };
+
+  using OnDestructionCallbackList = SafeIntrusiveList<
+      OnDestructionCallback,
+      &OnDestructionCallback::onDestructionHook_>;
 
   struct Options {
     Options() {}
@@ -1092,8 +1098,8 @@ class EventBase
   LoopCallbackList loopCallbacks_;
   LoopCallbackList runBeforeLoopCallbacks_;
   LoopCallbackList runAfterLoopCallbacks_;
-  Synchronized<OnDestructionCallback::List> onDestructionCallbacks_;
-  Synchronized<OnDestructionCallback::List> preDestructionCallbacks_;
+  Synchronized<OnDestructionCallbackList> onDestructionCallbacks_;
+  Synchronized<OnDestructionCallbackList> preDestructionCallbacks_;
 
   // This will be null most of the time, but point to currentCallbacks
   // if we are in the middle of running loop callbacks, such that

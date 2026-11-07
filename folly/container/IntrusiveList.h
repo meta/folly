@@ -64,6 +64,10 @@ using IntrusiveListHook =
  *
  * The elements stored in the list must contain an IntrusiveListHook member
  * variable.
+ *
+ * If Foo declares virtual functions, name FooList after the definition of Foo,
+ * not inside it: MSVC and clang-cl give &Foo::listHook the wrong offset while
+ * Foo is incomplete.
  */
 template <typename T, IntrusiveListHook T::* PtrToMember>
 using IntrusiveList = detail::IntrusiveListImpl<T, PtrToMember, false>;

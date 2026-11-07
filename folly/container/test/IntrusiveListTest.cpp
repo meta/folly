@@ -204,3 +204,24 @@ TEST(IntrusiveList, parentFromMember) {
       folly::detail::parentFromMember(&item.safeHook, &Item::safeHook), &item);
   EXPECT_EQ(folly::detail::parentFromMember(&derived.y, &Derived::y), &derived);
 }
+
+namespace {
+
+struct Polymorphic {
+  virtual ~Polymorphic() = default;
+  AutoUnlinkHook hook;
+};
+
+using PolymorphicList = folly::IntrusiveList<Polymorphic, &Polymorphic::hook>;
+
+} // namespace
+
+TEST(IntrusiveList, polymorphic) {
+  Polymorphic a;
+  PolymorphicList list;
+  list.push_back(a);
+  EXPECT_EQ(
+      static_cast<void*>(PolymorphicList::s_iterator_to(a).node()),
+      static_cast<void*>(&a.hook));
+  EXPECT_EQ(&list.front(), &a);
+}

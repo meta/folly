@@ -40,7 +40,7 @@ void VirtualEventBase::destroyImpl() noexcept {
       while (!onDestructionCallbacks_.rlock()->empty()) {
         // To avoid potential deadlock, do not hold the mutex while invoking
         // user-supplied callbacks.
-        EventBase::OnDestructionCallback::List callbacks;
+        OnDestructionCallbackList callbacks;
         onDestructionCallbacks_.swap(callbacks);
         while (!callbacks.empty()) {
           auto& callback = callbacks.front();
