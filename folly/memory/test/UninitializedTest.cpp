@@ -16,7 +16,6 @@
 
 #include <folly/memory/Uninitialized.h>
 
-#include <array>
 #include <concepts>
 #include <deque>
 #include <forward_list>
