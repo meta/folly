@@ -43,6 +43,7 @@
 #include <folly/lang/Exception.h>
 #include <folly/lang/Hint.h>
 #include <folly/memory/Malloc.h>
+#include <folly/memory/Uninitialized.h>
 
 //=============================================================================
 // forward declaration
@@ -508,11 +509,7 @@ class fbvector {
   template <typename It>
   void D_uninitialized_copy_a(T* dest, It first, It last) {
     if constexpr (kUsingStdAllocator) {
-      if constexpr (std::is_trivially_copyable<T>::value) {
-        S_uninitialized_copy_bits(dest, first, last);
-      } else {
-        S_uninitialized_copy(dest, first, last);
-      }
+      S_uninitialized_copy(dest, first, last);
     } else {
       S_uninitialized_copy_a(impl_, dest, first, last);
     }
@@ -538,33 +535,20 @@ class fbvector {
   // optimized
   template <typename It>
   static void S_uninitialized_copy(T* dest, It first, It last) {
-    auto b = dest;
-    auto rollback = makeGuard([&] { S_destroy_range(dest, b); });
-    for (; first != last; ++first, ++b) {
-      S_construct(b, *first);
-    }
-    rollback.dismiss();
+    folly::uninitialized_copy(first, last, dest);
   }
 
-  static void S_uninitialized_copy_bits(
-      T* dest, const T* first, const T* last) {
-    if (last != first) {
-      std::memcpy((void*)dest, (void*)first, (last - first) * sizeof(T));
-    }
-  }
-
-  static void S_uninitialized_copy_bits(
+  static void S_uninitialized_copy(
       T* dest, std::move_iterator<T*> first, std::move_iterator<T*> last) {
-    T* bFirst = first.base();
-    T* bLast = last.base();
-    if (bLast != bFirst) {
-      std::memcpy((void*)dest, (void*)bFirst, (bLast - bFirst) * sizeof(T));
+    if constexpr (std::is_trivially_copyable<T>::value) {
+      T* bFirst = first.base();
+      T* bLast = last.base();
+      if (bLast != bFirst) {
+        std::memcpy((void*)dest, (void*)bFirst, (bLast - bFirst) * sizeof(T));
+      }
+    } else {
+      folly::uninitialized_copy(first, last, dest);
     }
-  }
-
-  template <typename It>
-  static void S_uninitialized_copy_bits(T* dest, It first, It last) {
-    S_uninitialized_copy(dest, first, last);
   }
 
   //---------------------------------------------------------------------------
