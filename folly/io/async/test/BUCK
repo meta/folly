@@ -1061,6 +1061,26 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
+fb_dirsync_cpp_library(
+    name = "async_io_uring_socket_test_helper",
+    headers = [
+        "AsyncIoUringSocketTestHelper.h",
+    ],
+    use_raw_headers = True,
+    exported_deps = [
+        ":async_socket_test_lib",
+        "//folly/futures:core",
+        "//folly/io/async:async_base",
+        "//folly/io/async:async_io_uring_socket",
+        "//folly/io/async:async_socket",
+        "//folly/io/async:io_uring_backend",
+        "//folly/io/async:io_uring_event",
+        "//folly/io/async:server_socket",
+        "//folly/portability:gtest",
+        "//folly/portability:sockets",
+    ],
+)
+
 fb_dirsync_cpp_unittest(
     name = "async_io_uring_socket_test",
     srcs = ["AsyncIoUringSocketTest.cpp"],
@@ -1068,6 +1088,7 @@ fb_dirsync_cpp_unittest(
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
+        ":async_io_uring_socket_test_helper",
         ":async_socket_test_lib",
         "//folly:file_util",
         "//folly:subprocess",
@@ -1084,6 +1105,22 @@ fb_dirsync_cpp_unittest(
         "//folly/portability:unistd",
         "//folly/system:shell",
         "//folly/test:socket_address_test_helper",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
+    name = "async_io_uring_socket_big_buffer_test",
+    srcs = ["AsyncIoUringSocketBigBufferTest.cpp"],
+    labels = [
+        tpx_labels.heavyweight8,
+        tpx_labels.serialize_test_cases,
+    ]
+    + fbcode_ci_default_labels(),
+    supports_static_listing = False,
+    target_compatible_with = ["ovr_config//runtime:fbcode"],
+    deps = [
+        ":async_io_uring_socket_test_helper",
+        "//folly/portability:gtest",
     ],
 )
 
