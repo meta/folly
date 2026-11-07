@@ -6,6 +6,6 @@ python_unittest(
     name = "test_float_format_python_json",
     srcs = ["test_float_format_python_json.py"],
     deps = [
-        "fbcode//folly/json/test:folly_json_serialize",
+        "fbsource//xplat/folly/json/test:folly_json_serialize",
     ],
 )

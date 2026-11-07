@@ -9,8 +9,8 @@ cpp_python_extension(
     srcs = ["folly_json_serialize.cpp"],
     types = ["folly_json_serialize.pyi"],
     deps = [
-        "fbcode//folly/json:dynamic",
         "fbsource//third-party/nanobind:nanobind",
+        "fbsource//xplat/folly/json:dynamic",
     ],
 )
 

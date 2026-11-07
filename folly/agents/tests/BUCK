@@ -15,9 +15,9 @@ python_library(
         "run_scenario.py",
     ],
     resources = {
-        "fbcode//folly/agents/scripts:apply_diffs": "folly/agents/scripts/apply_diffs",
+        "fbsource//xplat/folly/agents/scripts:apply_diffs": "folly/agents/scripts/apply_diffs",
     },
-    deps = ["fbcode//folly/agents/scripts:isolated_agent_lib"],
+    deps = ["fbsource//xplat/folly/agents/scripts:isolated_agent_lib"],
 )
 
 python_unittest(
@@ -75,7 +75,7 @@ python_unittest(
     srcs = ["test_isolated_agent.py"],
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
-    deps = ["fbcode//folly/agents/scripts:isolated_agent_lib"],
+    deps = ["fbsource//xplat/folly/agents/scripts:isolated_agent_lib"],
 )
 
 python_unittest(
@@ -83,5 +83,5 @@ python_unittest(
     srcs = ["test_isolated_codex.py"],
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
-    deps = ["fbcode//folly/agents/scripts:isolated_codex_cli_lib"],
+    deps = ["fbsource//xplat/folly/agents/scripts:isolated_codex_cli_lib"],
 )

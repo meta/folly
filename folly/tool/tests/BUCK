@@ -8,5 +8,5 @@ python_unittest(
     srcs = ["test_benchmark_ab.py"],
     network_access = network_access_utils.none(),
     resources = glob(["testdata/*"]),
-    deps = ["fbcode//folly/tool:benchmark_ab_lib"],
+    deps = ["fbsource//xplat/folly/tool:benchmark_ab_lib"],
 )

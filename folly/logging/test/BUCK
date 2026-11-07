@@ -76,7 +76,7 @@ fb_dirsync_rule(
     name = "fatal_test",
     srcs = ["fatal_test.py"],
     env = {
-        "FOLLY_FATAL_HELPER": "$(location fbcode//folly/logging/test/helpers:fatal_helper)",
+        "FOLLY_FATAL_HELPER": "$(location fbsource//xplat/folly/logging/test/helpers:fatal_helper)",
     },
     fbcode_rule = python_unittest,
 )
@@ -85,8 +85,8 @@ fb_dirsync_rule(
     name = "log_after_main",
     srcs = ["log_after_main.py"],
     env = {
-        "FOLLY_LOG_AFTER_MAIN_HELPER": "$(location fbcode//folly/logging/test/helpers:log_after_main)",
-        "FOLLY_LOG_AFTER_MAIN_NO_INIT_HELPER": "$(location fbcode//folly/logging/test/helpers:log_after_main_no_init)",
+        "FOLLY_LOG_AFTER_MAIN_HELPER": "$(location fbsource//xplat/folly/logging/test/helpers:log_after_main)",
+        "FOLLY_LOG_AFTER_MAIN_NO_INIT_HELPER": "$(location fbsource//xplat/folly/logging/test/helpers:log_after_main_no_init)",
     },
     fbcode_rule = python_unittest,
 )
