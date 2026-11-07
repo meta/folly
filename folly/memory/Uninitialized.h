@@ -64,9 +64,12 @@ ForwardIt uninitialized_copy(InputIt first, InputIt last, ForwardIt result) {
           std::to_address(first),
           sizeof(Destination) * count);
       return result + count;
+    } else {
+      return std::uninitialized_copy(first, last, result);
     }
+  } else {
+    return std::uninitialized_copy(first, last, result);
   }
-  return std::uninitialized_copy(first, last, result);
 }
 
 } // namespace folly
