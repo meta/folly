@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <array>
+#include <string_view>
 #include <system_error>
 #include <thread>
 
@@ -1560,7 +1561,8 @@ bool discardRead(int fd) {
 
 } // namespace
 
-std::pair<std::string, std::string> Subprocess::communicate(StringPiece input) {
+std::pair<std::string, std::string> Subprocess::communicate(
+    std::string_view input) {
   IOBufQueue inputQueue;
   inputQueue.wrapBuffer(input.data(), input.size());
 

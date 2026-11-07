@@ -108,6 +108,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -805,8 +806,7 @@ class Subprocess {
   std::pair<IOBufQueue, IOBufQueue> communicateIOBuf(
       IOBufQueue input = IOBufQueue());
 
-  std::pair<std::string, std::string> communicate(
-      StringPiece input = StringPiece());
+  std::pair<std::string, std::string> communicate(std::string_view input = {});
 
   /**
    * Communicate with the child until all pipes to/from the child are closed.
