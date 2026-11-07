@@ -1,4 +1,5 @@
 load("@fbcode_macros//build_defs:python_unittest.bzl", "python_unittest")
+load("@fbsource//tools/build_defs:fbsource_utils.bzl", "is_xplat")
 
 oncall("fbcode_entropy_wardens_folly")
 
@@ -6,6 +7,6 @@ python_unittest(
     name = "test_float_format_python_json",
     srcs = ["test_float_format_python_json.py"],
     deps = [
-        "fbsource//xplat/folly/json/test:folly_json_serialize",
+        "fbsource//xplat/folly/json/test:folly_json_serialize" if is_xplat() else "//folly/json/test:folly_json_serialize",
     ],
 )

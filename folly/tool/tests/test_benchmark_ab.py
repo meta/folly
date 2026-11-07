@@ -26,7 +26,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from folly.tool import benchmark_ab
+from .. import benchmark_ab
 
 
 def _write_fake_benchmark_output(

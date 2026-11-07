@@ -56,6 +56,7 @@ fb_dirsync_rule(
         "//folly/futures:core",
     ],
     fbcode_rule = cython_library,
+    package = "folly/python/test",
     deps = [
         "//folly/python:fibers",
         "//folly/python:futures",
@@ -123,6 +124,7 @@ fb_dirsync_rule(
         "//folly/coro:async_generator",
     ],
     fbcode_rule = cython_library,
+    package = "folly/python/test",
     deps = [
         "//folly/python:async_generator",
         "//folly/python:executor",
@@ -269,6 +271,7 @@ fb_dirsync_rule(
         ":test_set_executor_cpplib",
     ],
     fbcode_rule = cython_library,
+    package = "folly/python/test",
     deps = [
         "//folly/python:executor",
     ],

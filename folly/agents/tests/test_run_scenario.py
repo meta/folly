@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 from unittest import mock
 
-from folly.agents.tests import checkpoint, run_scenario as runner
+from . import checkpoint, run_scenario as runner
 
 REVISION = "a" * 40
 

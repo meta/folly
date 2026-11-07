@@ -21,7 +21,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from folly.agents.tests import checkpoint, directory_snapshot
+from . import checkpoint, directory_snapshot
 
 
 CHECKPOINT_KEY = bytes.fromhex("00112233445566778899aabbccddeeff")

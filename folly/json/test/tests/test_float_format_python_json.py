@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from folly.json.test.folly_json_serialize import FloatFormat, serialize_double
+from ..folly_json_serialize import FloatFormat, serialize_double
 
 # Doubles whose shortest repr has an integer mantissa in scientific notation.
 # fmt's {:#} alternate form produces "3.e-06" for these — RFC 8259 §6 requires

@@ -21,7 +21,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from folly.agents.scripts import isolated_codex
+from ..scripts import isolated_codex
 
 
 FAKE_CODEX = """import json

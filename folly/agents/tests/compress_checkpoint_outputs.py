@@ -84,7 +84,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence, TextIO
 
-from folly.agents.tests import directory_snapshot
+from . import directory_snapshot
 
 
 _STAGED_SCRIPTS = Path(__file__).parent / "folly/agents/scripts"

@@ -30,8 +30,7 @@ from datetime import date
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Sequence
 
-from folly.agents.scripts import isolated_agent
-
+from ..scripts import isolated_agent
 from . import checkpoint_accounting, directory_snapshot
 
 

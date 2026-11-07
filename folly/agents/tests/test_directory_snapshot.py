@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from folly.agents.tests import directory_snapshot
+from . import directory_snapshot
 
 
 def make_tree(

@@ -22,7 +22,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from folly.agents.tests import checkpoint, checkpoint_accounting, directory_snapshot
+from . import checkpoint, checkpoint_accounting, directory_snapshot
 
 
 THREAD_ID = "01a00000-0000-7000-8000-000000000000"

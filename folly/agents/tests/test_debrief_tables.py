@@ -17,7 +17,7 @@ from __future__ import annotations
 import unittest
 from typing import Any
 
-from folly.agents.tests import debrief_tables
+from . import debrief_tables
 
 
 def record(

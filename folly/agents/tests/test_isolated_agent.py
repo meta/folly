@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Mapping
 from unittest import mock
 
-from folly.agents.scripts import isolated_agent
+from ..scripts import isolated_agent
 
 
 class FakeImpl:

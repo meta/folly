@@ -1,5 +1,6 @@
 load("@fbcode_macros//build_defs:python_library.bzl", "python_library")
 load("@fbcode_macros//build_defs:python_unittest.bzl", "python_unittest")
+load("@fbsource//tools/build_defs:fbsource_utils.bzl", "is_xplat")
 load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -17,7 +18,7 @@ python_library(
     resources = {
         "fbsource//xplat/folly/agents/scripts:apply_diffs": "folly/agents/scripts/apply_diffs",
     },
-    deps = ["fbsource//xplat/folly/agents/scripts:isolated_agent_lib"],
+    deps = ["fbsource//xplat/folly/agents/scripts:isolated_agent_lib" if is_xplat() else "//folly/agents/scripts:isolated_agent_lib"],
 )
 
 python_unittest(
@@ -75,7 +76,7 @@ python_unittest(
     srcs = ["test_isolated_agent.py"],
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
-    deps = ["fbsource//xplat/folly/agents/scripts:isolated_agent_lib"],
+    deps = ["fbsource//xplat/folly/agents/scripts:isolated_agent_lib" if is_xplat() else "//folly/agents/scripts:isolated_agent_lib"],
 )
 
 python_unittest(
@@ -83,5 +84,5 @@ python_unittest(
     srcs = ["test_isolated_codex.py"],
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
-    deps = ["fbsource//xplat/folly/agents/scripts:isolated_codex_cli_lib"],
+    deps = ["fbsource//xplat/folly/agents/scripts:isolated_codex_cli_lib" if is_xplat() else "//folly/agents/scripts:isolated_codex_cli_lib"],
 )
