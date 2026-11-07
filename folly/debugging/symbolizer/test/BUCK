@@ -110,7 +110,10 @@ python_unittest(
     },
     labels = fbcode_ci_default_labels(python = True),
     network_access = network_access_utils.none(),
-    target_compatible_with = ["ovr_config//runtime:fbcode"],
+    target_compatible_with = [
+        "ovr_config//os:linux",
+        "ovr_config//runtime:fbcode",
+    ],
 )
 
 fb_dirsync_cpp_binary(
