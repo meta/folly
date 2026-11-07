@@ -230,6 +230,15 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
+fb_dirsync_cpp_unittest(
+    name = "dwarf_cursor_test",
+    srcs = ["DwarfCursorTest.cpp"],
+    deps = [
+        "//folly/debugging/symbolizer:dwarf_cursor",
+        "//folly/portability:gtest",
+    ],
+)
+
 buck_sh_binary(
     name = "gnu_debuglink_test.sh",
     labels = fbcode_ci_default_labels(),

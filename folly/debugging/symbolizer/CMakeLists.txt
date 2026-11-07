@@ -43,6 +43,14 @@ folly_add_library(
 )
 
 folly_add_library(
+  NAME dwarf_cursor
+  HEADERS DwarfCursor.h
+  EXPORTED_DEPS
+    folly_expected
+    folly_lang_cstring_view
+)
+
+folly_add_library(
   NAME elf
   SRCS Elf.cpp
   HEADERS

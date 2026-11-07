@@ -2598,6 +2598,7 @@ fb_dirsync_cpp_library(
     ] + select({
         "DEFAULT": [
             "debugging/symbolizer/Dwarf.h",
+            "debugging/symbolizer/DwarfCursor.h",
             "debugging/symbolizer/DwarfImpl.h",
             "debugging/symbolizer/DwarfLineNumberVM.h",
             "debugging/symbolizer/DwarfSection.h",

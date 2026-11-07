@@ -3,6 +3,15 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsy
 oncall("fbcode_entropy_wardens_folly")
 
 fb_dirsync_cpp_library(
+    name = "dwarf_cursor",
+    headers = ["DwarfCursor.h"],
+    exported_deps = [
+        "//folly:expected",
+        "//folly/lang:cstring_view",
+    ],
+)
+
+fb_dirsync_cpp_library(
     name = "dwarf",
     srcs = [
         "Dwarf.cpp",
