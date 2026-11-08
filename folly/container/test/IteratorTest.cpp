@@ -881,6 +881,9 @@ static_assert(kI0 <= kI1);
 static_assert(kI1 >= kI1);
 static_assert(kI1 >= kI0);
 static_assert(kI1 > kI0);
+static_assert((kI0 <=> kI1) < 0);
+static_assert((kI1 <=> kI0) > 0);
+static_assert((kI0 <=> kI0) == 0);
 
 static_assert(mutationsTest(kI0, kI1));
 static_assert(kI0 + 1 == kI1);

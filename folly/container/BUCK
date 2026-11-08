@@ -228,6 +228,7 @@ fb_dirsync_cpp_library(
         ":access",
         "//folly:traits",
         "//folly:utility",
+        "//folly/detail:iterators",
         "//folly/functional:invoke",
         "//folly/lang:rvalue_reference_wrapper",
     ],

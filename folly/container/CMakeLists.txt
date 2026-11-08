@@ -222,6 +222,7 @@ folly_add_library(
   HEADERS Iterator.h
   EXPORTED_DEPS
     folly_container_access
+    folly_detail_iterators
     folly_functional_invoke
     folly_lang_rvalue_reference_wrapper
     folly_traits

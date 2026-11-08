@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <concepts>
 #include <functional>
 #include <iterator>
@@ -27,6 +28,7 @@
 #include <folly/Traits.h>
 #include <folly/Utility.h>
 #include <folly/container/Access.h>
+#include <folly/detail/Iterators.h>
 #include <folly/functional/Invoke.h>
 #include <folly/lang/RValueReferenceWrapper.h>
 
@@ -619,17 +621,10 @@ back_emplace_iterator<Container, implicit_unpack> back_emplacer(Container& c) {
   return back_emplace_iterator<Container, implicit_unpack>(c);
 }
 
+template <typename Container>
+class index_iterator;
+
 namespace detail {
-
-// An accepted way to make operator-> work
-// https://quuxplusone.github.io/blog/2019/02/06/arrow-proxy/
-template <typename Ref>
-struct arrow_proxy {
-  Ref res;
-  Ref* operator->() { return &res; }
-
-  explicit arrow_proxy(Ref* ref) : res(*ref) {}
-};
 
 struct index_iterator_access_at {
   template <typename Container, typename Index>
@@ -644,6 +639,29 @@ struct index_iterator_access_at {
     }
   }
 };
+
+template <typename T>
+using index_iterator_size_type_t = typename std::remove_cv_t<T>::size_type;
+
+template <typename T>
+using index_iterator_difference_type_t =
+    typename std::remove_cv_t<T>::difference_type;
+
+template <typename Container>
+using index_iterator_size_t =
+    detected_or_t<std::size_t, index_iterator_size_type_t, Container>;
+
+template <typename Container>
+using index_iterator_reference_t = decltype(index_iterator_access_at{}(
+    FOLLY_DECLVAL(Container&), index_iterator_size_t<Container>{}));
+
+template <typename Container>
+using index_iterator_facade_t = IteratorFacade<
+    index_iterator<Container>,
+    typename std::remove_const_t<Container>::value_type,
+    std::random_access_iterator_tag,
+    index_iterator_reference_t<Container>,
+    detected_or_t<std::ptrdiff_t, index_iterator_difference_type_t, Container>>;
 
 } // namespace detail
 
@@ -692,38 +710,17 @@ FOLLY_DEFINE_CPO(detail::index_iterator_access_at, index_iterator_access_at)
  **/
 
 template <typename Container>
-class index_iterator {
-  template <typename T>
-  using get_size_type_t = typename std::remove_cv_t<T>::size_type;
-
-  template <typename T>
-  using get_difference_type_t = typename std::remove_cv_t<T>::difference_type;
-
-  template <typename IndexType>
-  constexpr static decltype(auto) get_reference_by_index(
-      Container& container, IndexType index) {
-    return index_iterator_access_at(container, index);
-  }
+class index_iterator : public detail::index_iterator_facade_t<Container> {
+  using facade = detail::index_iterator_facade_t<Container>;
+  friend facade;
 
  public:
   // index iterator specific types
 
   using container_type = Container;
-  using size_type = detected_or_t<std::size_t, get_size_type_t, Container>;
+  using size_type = detail::index_iterator_size_t<Container>;
 
-  // iterator types
-
-  using value_type = typename std::remove_const_t<container_type>::value_type;
-  using iterator_category = std::random_access_iterator_tag;
-  using reference = decltype(get_reference_by_index(
-      FOLLY_DECLVAL(container_type&), size_type{}));
-  using difference_type =
-      detected_or_t<std::ptrdiff_t, get_difference_type_t, Container>;
-
-  using pointer = std::conditional_t<
-      std::is_reference<reference>::value,
-      std::remove_reference_t<reference>*,
-      detail::arrow_proxy<reference>>;
+  using typename facade::difference_type;
 
   static_assert(
       std::is_signed<difference_type>::value, "difference_type must be signed");
@@ -750,119 +747,30 @@ class index_iterator {
   /* implicit */ constexpr index_iterator(index_iterator<OtherContainer> other)
       : container_(other.get_container()), index_(other.get_index()) {}
 
-  // access ---
-
-  constexpr reference operator*() const {
-    return get_reference_by_index(*container_, index_);
-  }
-
-  pointer operator->() const {
-    // It's equivalent to pointer{&**this} but compiler stops
-    // compilation on taking an address of a temporary.
-    // In this case `arrow_proxy` will copy the temporary and there is no
-    // issue.
-    auto&& ref = **this;
-    pointer res{&ref};
-    return res;
-  }
-
-  constexpr reference operator[](difference_type n) const {
-    return *(*this + n);
-  }
-
-  // operator++/--
-
-  constexpr index_iterator& operator++() {
-    ++index_;
-    return *this;
-  }
-
-  constexpr index_iterator operator++(int) {
-    auto tmp = *this;
-    ++*this;
-    return tmp;
-  }
-
-  constexpr index_iterator& operator--() {
-    --index_;
-    return *this;
-  }
-
-  constexpr index_iterator operator--(int) {
-    auto tmp = *this;
-    --*this;
-    return tmp;
-  }
-
-  // operator+/-
-
-  constexpr index_iterator& operator+=(difference_type n) {
-    auto signed_index = static_cast<difference_type>(index_) + n;
-    index_ = static_cast<size_type>(signed_index);
-    return *this;
-  }
-
-  constexpr index_iterator& operator-=(difference_type n) {
-    index_ += -n;
-    return *this;
-  }
-
-  constexpr friend index_iterator operator+(
-      index_iterator x, difference_type n) {
-    return x += n;
-  }
-
-  constexpr friend index_iterator operator+(
-      difference_type n, index_iterator x) {
-    return x + n;
-  }
-
-  constexpr friend index_iterator operator-(
-      index_iterator x, difference_type n) {
-    return x -= n;
-  }
-
-  constexpr friend difference_type operator-(
-      index_iterator x, index_iterator y) {
-    assert(x.container_ == y.container_);
-    return static_cast<difference_type>(x.index_) -
-        static_cast<difference_type>(y.index_);
-  }
-
-  // comparisons
-  friend constexpr bool operator==(
-      const index_iterator& x, const index_iterator& y) {
-    assert(x.container_ == y.container_);
-    return x.index_ == y.index_;
-  }
-
-  friend constexpr bool operator!=(
-      const index_iterator& x, const index_iterator& y) {
-    return !(x == y);
-  }
-
-  friend constexpr bool operator<(
-      const index_iterator& x, const index_iterator& y) {
-    assert(x.container_ == y.container_);
-    return x.index_ < y.index_;
-  }
-
-  friend constexpr bool operator<=(
-      const index_iterator& x, const index_iterator& y) {
-    return !(y < x);
-  }
-
-  friend constexpr bool operator>=(
-      const index_iterator& x, const index_iterator& y) {
-    return !(x < y);
-  }
-
-  friend constexpr bool operator>(
-      const index_iterator& x, const index_iterator& y) {
-    return y < x;
-  }
-
  private:
+  constexpr decltype(auto) dereference() const {
+    return index_iterator_access_at(*container_, index_);
+  }
+
+  constexpr bool equal(const index_iterator& rhs) const {
+    assert(container_ == rhs.container_);
+    return index_ == rhs.index_;
+  }
+
+  constexpr void increment() { ++index_; }
+
+  constexpr void decrement() { --index_; }
+
+  constexpr void advance(difference_type n) {
+    index_ = static_cast<size_type>(static_cast<difference_type>(index_) + n);
+  }
+
+  constexpr difference_type distance_to(const index_iterator& rhs) const {
+    assert(container_ == rhs.container_);
+    return static_cast<difference_type>(rhs.index_) -
+        static_cast<difference_type>(index_);
+  }
+
   container_type* container_ = nullptr;
   size_type index_ = 0;
 };
