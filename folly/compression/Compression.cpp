@@ -827,6 +827,8 @@ std::unique_ptr<IOBuf> LZ4FrameCodec::doUncompress(
         4 * std::max<uint64_t>(blockSize, in.size());
     growthSize = std::min(guessUncompressedLen, growthSize);
   }
+  // A tiny declared length must not force degenerate output buffers.
+  blockSize = std::max(blockSize, uint64_t{4} << 10);
   // Once LZ4_decompress() is called, the dctx_ cannot be reused until it
   // returns 0
   dirty_ = true;
@@ -848,6 +850,9 @@ std::unique_ptr<IOBuf> LZ4FrameCodec::doUncompress(
     }
     in.uncheckedAdvance(inSize);
     queue.postallocate(outSize);
+    if (uncompressedLength && queue.chainLength() > *uncompressedLength) {
+      throw std::runtime_error("LZ4Frame error: Invalid uncompressedLength");
+    }
   } while (code != 0);
   // At this point the decompression context can be reused
   dirty_ = false;
