@@ -779,28 +779,44 @@ class index_iterator : public detail::index_iterator_facade_t<Container> {
 //
 //  Like std::reverse_iterator, but trivial to destroy/copy when Iterator is.
 template <typename Iterator>
-class reverse_iterator {
+class reverse_iterator;
+
+namespace detail {
+
+template <typename Iterator>
+using reverse_iterator_facade_t = IteratorFacade<
+    reverse_iterator<Iterator>,
+    std::iter_value_t<Iterator>,
+    folly::conditional_t<
+        std::random_access_iterator<Iterator>,
+        std::random_access_iterator_tag,
+        std::bidirectional_iterator_tag>,
+    std::iter_reference_t<Iterator>,
+    std::iter_difference_t<Iterator>>;
+
+} // namespace detail
+
+template <typename Iterator>
+class reverse_iterator : public detail::reverse_iterator_facade_t<Iterator> {
   static_assert(std::bidirectional_iterator<Iterator>);
+
+  using facade = detail::reverse_iterator_facade_t<Iterator>;
+  friend facade;
 
  public:
   // types ----------------------------
   using iterator_type = Iterator;
-  // iterator concept cannot reuse iterator category, there
-  // are corner cases.
-  using iterator_category = std::conditional_t<
+  // To fully support std::ranges, these override the facade's: ranges
+  // iterators (e.g. iota_view's) can have a weaker category than concept.
+  using iterator_category = folly::conditional_t<
       std::derived_from<
           iterator_category_t<Iterator>,
           std::random_access_iterator_tag>,
       std::random_access_iterator_tag,
       iterator_category_t<Iterator>>;
-  using iterator_concept = std::conditional_t<
-      std::random_access_iterator<Iterator>,
-      std::random_access_iterator_tag,
-      std::bidirectional_iterator_tag>;
-  using value_type = std::iter_value_t<Iterator>;
-  using difference_type = std::iter_difference_t<Iterator>;
+  using iterator_concept = typename facade::iterator_category;
+  using typename facade::difference_type;
   using pointer = typename std::iterator_traits<Iterator>::pointer;
-  using reference = std::iter_reference_t<Iterator>;
 
   // constructors ----------------------
   reverse_iterator() = default;
@@ -827,11 +843,6 @@ class reverse_iterator {
 
   constexpr Iterator base() const { return current; }
 
-  constexpr reference operator*() const {
-    auto tmp = current;
-    return *--tmp;
-  }
-
   constexpr pointer operator->() const
     requires(
         std::is_pointer_v<Iterator> ||
@@ -844,108 +855,6 @@ class reverse_iterator {
     } else {
       return tmp.operator->();
     }
-  }
-
-  constexpr reference operator[](difference_type n) const {
-    return *(*this + n);
-  }
-
-  // + / -  -----------------------------
-
-  constexpr reverse_iterator& operator++() {
-    --current;
-    return *this;
-  }
-
-  constexpr reverse_iterator operator++(int) {
-    auto tmp = *this;
-    ++*this;
-    return tmp;
-  }
-
-  constexpr reverse_iterator& operator--() {
-    ++current;
-    return *this;
-  }
-
-  constexpr reverse_iterator operator--(int) {
-    auto tmp = *this;
-    --*this;
-    return tmp;
-  }
-
-  constexpr reverse_iterator operator+(difference_type n) const {
-    auto tmp = *this;
-    tmp += n;
-    return tmp;
-  }
-
-  friend constexpr reverse_iterator operator+(
-      difference_type n, const reverse_iterator& x) {
-    return x + n;
-  }
-
-  constexpr reverse_iterator& operator+=(difference_type n) {
-    current -= n;
-    return *this;
-  }
-
-  constexpr reverse_iterator operator-(difference_type n) const {
-    return *this + -n;
-  }
-
-  constexpr reverse_iterator& operator-=(difference_type n) {
-    return *this += -n;
-  }
-
-  template <std::sized_sentinel_for<Iterator> IteratorR>
-  friend constexpr auto operator-(
-      const reverse_iterator& x, const reverse_iterator<IteratorR>& y) {
-    return current_of(y) - x.current;
-  }
-
-  // ordering -----------------------
-
-  bool operator==(const reverse_iterator&) const = default;
-
-  template <std::equality_comparable_with<Iterator> IteratorR>
-  friend constexpr bool operator==(
-      const reverse_iterator& x, const reverse_iterator<IteratorR>& y) {
-    return x.current == current_of(y);
-  }
-
-  //  ordering is reversed, and not every iterator that has < also has <=>
-
-  template <typename IteratorR>
-  friend constexpr auto operator<=>(
-      const reverse_iterator& x, const reverse_iterator<IteratorR>& y)
-    requires std::three_way_comparable_with<Iterator, IteratorR>
-  {
-    return current_of(y) <=> x.current;
-  }
-
-  template <std::totally_ordered_with<Iterator> IteratorR>
-  friend constexpr bool operator<(
-      const reverse_iterator& x, const reverse_iterator<IteratorR>& y) {
-    return x.current > current_of(y);
-  }
-
-  template <std::totally_ordered_with<Iterator> IteratorR>
-  friend constexpr bool operator>(
-      const reverse_iterator& x, const reverse_iterator<IteratorR>& y) {
-    return y < x;
-  }
-
-  template <std::totally_ordered_with<Iterator> IteratorR>
-  friend constexpr bool operator<=(
-      const reverse_iterator& x, const reverse_iterator<IteratorR>& y) {
-    return !(y < x);
-  }
-
-  template <std::totally_ordered_with<Iterator> IteratorR>
-  friend constexpr bool operator>=(
-      const reverse_iterator& x, const reverse_iterator<IteratorR>& y) {
-    return !(x < y);
   }
 
   // ranges hooks -----------------------
@@ -977,6 +886,25 @@ class reverse_iterator {
  private:
   template <typename IteratorY>
   friend class reverse_iterator;
+
+  constexpr decltype(auto) dereference() const {
+    auto tmp = current;
+    return *--tmp;
+  }
+
+  constexpr bool equal(const reverse_iterator& rhs) const {
+    return current == rhs.current;
+  }
+
+  constexpr void increment() { --current; }
+
+  constexpr void decrement() { ++current; }
+
+  constexpr void advance(difference_type n) { current -= n; }
+
+  constexpr difference_type distance_to(const reverse_iterator& rhs) const {
+    return current - rhs.current;
+  }
 
   // CWG1699 - on gcc can't do y.current in a hidden friend function.
   template <typename IteratorY>
@@ -1088,14 +1016,3 @@ class wrap_iterator : public detail::wrap_iterator_facade_t<Iterator, Tag> {
 };
 
 } // namespace folly
-
-namespace std {
-
-// required by std ranges
-template <typename Iterator1, typename Iterator2>
-  requires(!sized_sentinel_for<Iterator1, Iterator2>)
-inline constexpr bool disable_sized_sentinel_for<
-    folly::reverse_iterator<Iterator1>,
-    folly::reverse_iterator<Iterator2>> = true;
-
-} // namespace std
