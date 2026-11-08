@@ -100,10 +100,10 @@ class Latch {
   /// caller.
   FOLLY_ALWAYS_INLINE void count_down(ptrdiff_t n = 1) noexcept {
     terminate_if(n < 0 || n > max());
-    if (FOLLY_LIKELY(n)) {
+    if (n) [[likely]] {
       const auto count = count_.fetch_sub(n, std::memory_order_acq_rel);
       terminate_if(count < n);
-      if (FOLLY_UNLIKELY(count == n)) {
+      if (count == n) [[unlikely]] {
         semaphore_.post();
       }
     }

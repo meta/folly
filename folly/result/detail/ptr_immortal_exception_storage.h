@@ -73,7 +73,7 @@ class ptr_immortal_exception_storage : immortal_exception_storage {
       std::lock_guard lock(ensure_created_mutex_);
       // Relaxed load ok -- the mutex synchronizes us with competing creators.
       auto* eptr = eptr_.load(std::memory_order_relaxed);
-      if (FOLLY_LIKELY(!eptr)) {
+      if (!eptr) [[likely]] {
         eptr = new (eptr_buf_) std::exception_ptr{make_exception_ptr_with(
             std::in_place_type<LeafRichError>,
             immortal_rich_error_private_t{},
@@ -89,7 +89,7 @@ class ptr_immortal_exception_storage : immortal_exception_storage {
    public:
     std::exception_ptr& get() const {
       auto* eptr = eptr_.load(std::memory_order_acquire);
-      if (FOLLY_UNLIKELY(!eptr)) {
+      if (!eptr) [[unlikely]] {
         eptr = ensure_created();
       }
       FOLLY_SAFE_DCHECK(eptr != nullptr);

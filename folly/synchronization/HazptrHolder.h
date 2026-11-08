@@ -85,11 +85,11 @@ class hazptr_holder {
 
   /** Destructor */
   FOLLY_ALWAYS_INLINE ~hazptr_holder() {
-    if (FOLLY_LIKELY(hprec_ != nullptr)) {
+    if (hprec_ != nullptr) [[likely]] {
       hprec_->reset_hazptr();
 #if FOLLY_HAZPTR_THR_LOCAL
-      if (FOLLY_LIKELY(hprec_->domain_is_default_domain())) {
-        if (FOLLY_LIKELY(hazptr_tc_tls<Atom>().try_put(hprec_))) {
+      if (hprec_->domain_is_default_domain()) [[likely]] {
+        if (hazptr_tc_tls<Atom>().try_put(hprec_)) [[likely]] {
           return;
         }
       }
@@ -101,7 +101,7 @@ class hazptr_holder {
   /** Move operator */
   FOLLY_ALWAYS_INLINE hazptr_holder& operator=(hazptr_holder&& rhs) noexcept {
     /* Self-move is a no-op.  */
-    if (FOLLY_LIKELY(this != &rhs)) {
+    if (this != &rhs) [[likely]] {
       this->~hazptr_holder();
       new (this) hazptr_holder(rhs.hprec_);
       rhs.hprec_ = nullptr;
@@ -123,7 +123,7 @@ class hazptr_holder {
     /*** Full fence ***/ folly::asymmetric_thread_fence_light(
         std::memory_order_seq_cst);
     ptr = src();
-    if (FOLLY_UNLIKELY(p != ptr)) {
+    if (p != ptr) [[unlikely]] {
       reset_protection();
       return false;
     }
@@ -196,7 +196,7 @@ FOLLY_ALWAYS_INLINE hazptr_holder<Atom> make_hazard_pointer() {
   //  The domain is known to be the default domain, so, unlike the overload
   //  taking a domain, there is no need to load is_default_domain.
   auto hprec = hazptr_tc_tls<Atom>().try_get();
-  if (FOLLY_LIKELY(hprec != nullptr)) {
+  if (hprec != nullptr) [[likely]] {
     return hazptr_holder<Atom>(hprec);
   }
 #endif
@@ -207,9 +207,9 @@ template <template <typename> class Atom>
 FOLLY_ALWAYS_INLINE hazptr_holder<Atom> make_hazard_pointer(
     hazptr_domain<Atom>& domain) {
 #if FOLLY_HAZPTR_THR_LOCAL
-  if (FOLLY_LIKELY(domain.is_default_domain())) {
+  if (domain.is_default_domain()) [[likely]] {
     auto hprec = hazptr_tc_tls<Atom>().try_get();
-    if (FOLLY_LIKELY(hprec != nullptr)) {
+    if (hprec != nullptr) [[likely]] {
       return hazptr_holder<Atom>(hprec);
     }
   }
@@ -276,7 +276,7 @@ class hazptr_array {
     auto& tc = hazptr_tc_tls<Atom>();
     auto count = tc.count();
     auto cap = hazptr_tc<Atom>::min_capacity();
-    if (FOLLY_UNLIKELY((M + count) > cap)) {
+    if ((M + count) > cap) [[unlikely]] {
       tc.evict((M + count) - cap);
       count = cap - M;
     }
@@ -336,7 +336,7 @@ class hazptr_array {
   /** Move operator */
   FOLLY_ALWAYS_INLINE hazptr_array& operator=(hazptr_array&& other) noexcept {
     /* Self-move is a no-op. */
-    if (FOLLY_UNLIKELY(this == &other)) {
+    if (this == &other) [[unlikely]] {
       return *this;
     }
     if (!empty_) {
@@ -374,7 +374,7 @@ FOLLY_ALWAYS_INLINE hazptr_array<M, Atom> make_hazard_pointer_array() {
       "M must be within the thread cache capacity.");
   auto& tc = hazptr_tc_tls<Atom>();
   auto count = tc.count();
-  if (FOLLY_UNLIKELY(M > count)) {
+  if (M > count) [[unlikely]] {
     tc.fill(M - count);
     count = M;
   }
@@ -429,7 +429,7 @@ class hazptr_local {
         "M must be <= hazptr_tc::min_capacity().");
     auto& tc = hazptr_tc_tls<Atom>();
     auto count = tc.count();
-    if (FOLLY_UNLIKELY(M > count)) {
+    if (M > count) [[unlikely]] {
       tc.fill(M - count);
     }
     if (kIsDebug) {

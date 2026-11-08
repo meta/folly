@@ -91,7 +91,7 @@ class SettingWrapper {
    */
   std::conditional_t<IsSmallPOD<T>, T, const T&>
   valueRegisterObserverDependency() {
-    if (FOLLY_UNLIKELY(observer_detail::ObserverManager::inManagerThread())) {
+    if (observer_detail::ObserverManager::inManagerThread()) [[unlikely]] {
       registerObserverDependency();
     }
     return operator*();
@@ -201,7 +201,7 @@ struct Accessor {
    */
   FOLLY_ALWAYS_INLINE SettingWrapper<T, TrivialPtr, Tag> operator()() {
     auto* core = CachedCore.load(std::memory_order_acquire);
-    if (FOLLY_UNLIKELY(!core)) {
+    if (!core) [[unlikely]] {
       core = &Func();
       CachedCore.store(core, std::memory_order_release);
     }

@@ -90,9 +90,10 @@
 ///       - `co_yield co_result(std::move(res))` completes with a `result<T>`.
 ///     * While you should strongly prefer to write `result<T>` coroutines,
 ///       propagation in non-coroutine `result<T>` functions is also easy:
-///         if (!res.has_value()) {
-///           return std::move(res).error_or_stopped();
+///         if (auto* value = res.get_pointer()) {
+///           return *value;
 ///         }
+///         return std::move(res).error_or_stopped();
 ///
 ///   - `result` is mainly used for return values -- implying single ownership.
 ///     It is copyable (when `T` is), but moves save ~7ns on the error path.
@@ -422,7 +423,7 @@ class result_crtp {
   template <typename ResultT>
   static Derived rewrapping_result_convert(ResultT&& rt) {
     static_assert(is_instantiation_of_v<result, std::remove_cvref_t<ResultT>>);
-    if (FOLLY_LIKELY(rt.has_value())) {
+    if (rt.has_value()) [[likely]] {
       // Implicitly convert `ResultT::value_type` to `Derived`.
       return {std::forward<ResultT>(rt).value_or_throw()};
     }
@@ -441,7 +442,7 @@ class result_crtp {
   explicit result_crtp(has_value_sigil_t s) : eos_{s} {}
 
   void throw_if_no_value() const {
-    if (FOLLY_UNLIKELY(!eos_.is_result_has_value())) {
+    if (!eos_.is_result_has_value()) [[unlikely]] {
       eos_.throw_exception();
     }
   }
@@ -517,7 +518,7 @@ class result_crtp {
   /// `result`, we could offer `set_error_or_stopped()` with different
   /// semantics.
   class error_or_stopped error_or_stopped() && noexcept {
-    if (FOLLY_LIKELY(!eos_.is_result_has_value())) {
+    if (!eos_.is_result_has_value()) [[likely]] {
       return std::move(eos_);
     }
     return detail::dfatal_get_bad_result_access_error();
@@ -525,7 +526,7 @@ class result_crtp {
   // noexcept: std::exception_ptr copy is non-throwing on all major platforms
   // (atomic refcount increment via Itanium ABI or MSVC shared_ptr-like impl).
   const class error_or_stopped& error_or_stopped() const& noexcept {
-    if (FOLLY_LIKELY(!eos_.is_result_has_value())) {
+    if (!eos_.is_result_has_value()) [[likely]] {
       return eos_;
     }
     return detail::dfatal_get_bad_result_access_error();
@@ -598,7 +599,7 @@ result final : public detail::result_crtp<result<T>, T> {
 
   template <typename Self>
   result& copy_assign_from(Self& that) {
-    if (FOLLY_LIKELY(this != &that)) {
+    if (this != &that) [[likely]] {
       const bool this_v = this->eos_.is_result_has_value();
       const bool that_v = that.eos_.is_result_has_value();
       if (this_v && that_v) {
@@ -662,7 +663,7 @@ result final : public detail::result_crtp<result<T>, T> {
         std::is_move_assignable_v<ref_wrapped_t> &&
         std::is_move_constructible_v<ref_wrapped_t>)
   {
-    if (FOLLY_LIKELY(this != &that)) {
+    if (this != &that) [[likely]] {
       const bool this_has_val = this->eos_.is_result_has_value();
       const bool that_has_val = that.eos_.is_result_has_value();
 
@@ -943,6 +944,11 @@ result final : public detail::result_crtp<result<T>, T> {
     return std::move(this->value_).get();
   }
 
+  /// Pointer to the contained value, or `nullptr` for error/stopped.
+  ///
+  /// Prefer this over `has_value()` + `value_or_throw()` when branching on an
+  /// lvalue `result`. Rvalue overloads are deleted to avoid pointers into
+  /// temporaries or single-use rvalue references.
   [[nodiscard]] auto get_pointer() const& noexcept
     requires(!std::is_rvalue_reference_v<T>)
   {
@@ -989,7 +995,7 @@ class [[nodiscard]] [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE]] result<void> final
   /// Movable
   result(result&& that) noexcept = default;
   result& operator=(result&& that) noexcept {
-    if (FOLLY_LIKELY(this != &that)) {
+    if (this != &that) [[likely]] {
       this->eos_ = std::move(that.eos_);
     }
     return *this;
@@ -998,7 +1004,7 @@ class [[nodiscard]] [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE]] result<void> final
   /// Copyable
   result(const result& that) : base{that} {}
   result& operator=(const result& that) {
-    if (FOLLY_LIKELY(this != &that)) {
+    if (this != &that) [[likely]] {
       this->eos_ = that.eos_;
     }
     return *this;

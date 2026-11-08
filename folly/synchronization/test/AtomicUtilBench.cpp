@@ -231,7 +231,7 @@ void accumulate(folly::BenchmarkSuspender& braces, size_t iters, what_, Op op) {
           break;
         case what::cond:
           sum = 0;
-          if (FOLLY_LIKELY(res)) {
+          if (res) [[likely]] {
             asm volatile("");
           }
           break;

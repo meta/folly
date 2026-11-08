@@ -343,7 +343,7 @@ class TypedSettingCore : public SettingCoreBase {
 
   FOLLY_ALWAYS_INLINE const std::shared_ptr<Contents>& tlValue() const {
     auto& value = getLocalValue();
-    if (FOLLY_LIKELY(value.first == *settingVersion_)) {
+    if (value.first == *settingVersion_) [[likely]] {
       sanitizeModeMaybeInvalidateThreadLocalReferences(value.second);
       return value.second;
     }

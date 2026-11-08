@@ -132,7 +132,7 @@ class HazptrObserver {
   }
 
   DefaultSnapshot getSnapshot() const {
-    if (FOLLY_UNLIKELY(observer_detail::ObserverManager::inManagerThread())) {
+    if (observer_detail::ObserverManager::inManagerThread()) [[unlikely]] {
       // Wait for updates
       updateObserver_.getSnapshot();
     }
@@ -140,7 +140,7 @@ class HazptrObserver {
   }
 
   LocalSnapshot getLocalSnapshot() const {
-    if (FOLLY_UNLIKELY(observer_detail::ObserverManager::inManagerThread())) {
+    if (observer_detail::ObserverManager::inManagerThread()) [[unlikely]] {
       // Wait for updates
       updateObserver_.getSnapshot();
     }

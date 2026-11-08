@@ -45,7 +45,7 @@ BufferedStat<DigestT, ClockT>::BufferedStat(
 
 template <typename DigestT, typename ClockT>
 void BufferedStat<DigestT, ClockT>::append(double value, TimePoint now) {
-  if (FOLLY_UNLIKELY(now > expiry_.load(std::memory_order_relaxed))) {
+  if (now > expiry_.load(std::memory_order_relaxed)) [[unlikely]] {
     std::unique_lock g(mutex_, std::try_to_lock_t());
     if (g.owns_lock()) {
       doUpdate(now, g, UpdateMode::OnExpiry);

@@ -98,7 +98,7 @@ static pthread_once_t initialiseTlsKeyFlag = PTHREAD_ONCE_INIT;
 static void ensureAsyncRootTlsKeyIsInitialised() noexcept {
   (void)pthread_once(&initialiseTlsKeyFlag, []() noexcept {
     int result = pthread_key_create(&folly_async_stack_root_tls_key, nullptr);
-    if (FOLLY_UNLIKELY(result != 0)) {
+    if (result != 0) [[unlikely]] {
       RAW_LOG(
           FATAL,
           "Failed to initialise folly_async_stack_root_tls_key: (error: %d)",
@@ -116,7 +116,7 @@ struct AsyncStackRootHolder {
     ensureAsyncRootTlsKeyIsInitialised();
     const int result =
         pthread_setspecific(folly_async_stack_root_tls_key, this);
-    if (FOLLY_UNLIKELY(result != 0)) {
+    if (result != 0) [[unlikely]] {
       RAW_LOG(
           FATAL,
           "Failed to set current thread's AsyncStackRoot: (error: %d)",

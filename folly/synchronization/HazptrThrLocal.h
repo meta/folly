@@ -134,17 +134,16 @@ class alignas(hardware_constructive_interference_size) hazptr_tc {
   }
 
   FOLLY_ALWAYS_INLINE Rec* try_get() noexcept {
-    if (FOLLY_LIKELY(count_ > 0)) {
+    if (count_ > 0) [[likely]] {
       return vec_[--count_].get();
     }
     return nullptr;
   }
 
   FOLLY_ALWAYS_INLINE bool try_put(Rec* hprec) noexcept {
-    if (FOLLY_LIKELY(count_ < vec_.size())) {
+    if (count_ < vec_.size()) [[likely]] {
       vec_[count_++].fill(hprec);
-      if (FOLLY_UNLIKELY(
-              count_ > kCapacity && ++put_tick_ >= kDecayThreshold)) {
+      if (count_ > kCapacity && ++put_tick_ >= kDecayThreshold) [[unlikely]] {
         decay();
       }
       return true;

@@ -174,7 +174,7 @@ class xoshiro256pp {
   }
 
   FOLLY_ALWAYS_INLINE result_type next() noexcept {
-    if (FOLLY_UNLIKELY(cur == ResultCount)) {
+    if (cur == ResultCount) [[unlikely]] {
       calc();
     }
     return res[cur++];

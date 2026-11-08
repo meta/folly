@@ -179,14 +179,12 @@ AtomicObserver<T>& AtomicObserver<T>::operator=(Observer<T> observer) {
 template <typename T>
 T AtomicObserver<T>::get() const {
   auto version = cachedVersion_.load(std::memory_order_acquire);
-  if (FOLLY_UNLIKELY(
-          observer_.needRefresh(version) ||
-          observer_detail::ObserverManager::inManagerThread())) {
+  if (observer_.needRefresh(version) ||
+      observer_detail::ObserverManager::inManagerThread()) [[unlikely]] {
     std::unique_lock guard{refreshLock_};
     version = cachedVersion_.load(std::memory_order_acquire);
-    if (FOLLY_LIKELY(
-            observer_.needRefresh(version) ||
-            observer_detail::ObserverManager::inManagerThread())) {
+    if (observer_.needRefresh(version) ||
+        observer_detail::ObserverManager::inManagerThread()) [[likely]] {
       auto snapshot = *observer_;
       cachedValue_.store(*snapshot, std::memory_order_relaxed);
       cachedVersion_.store(snapshot.getVersion(), std::memory_order_release);
@@ -209,7 +207,7 @@ TLObserver<T>::TLObserver(TLObserver<T>&& other) noexcept = default;
 template <typename T>
 const Snapshot<T>& TLObserver<T>::getSnapshotRef() const {
   Snapshot<T>* snapshot = snapshot_.get();
-  if (FOLLY_UNLIKELY(!snapshot)) {
+  if (!snapshot) [[unlikely]] {
     snapshot = new Snapshot<T>(observer_.getSnapshot());
     snapshot_.reset(snapshot);
   }
@@ -231,7 +229,7 @@ ReadMostlyAtomicObserver<T>::ReadMostlyAtomicObserver(Observer<T> observer)
 
 template <typename T>
 T ReadMostlyAtomicObserver<T>::get() const {
-  if (FOLLY_UNLIKELY(observer_detail::ObserverManager::inManagerThread())) {
+  if (observer_detail::ObserverManager::inManagerThread()) [[unlikely]] {
     return **observer_;
   }
   return cachedValue_.load(std::memory_order_relaxed);

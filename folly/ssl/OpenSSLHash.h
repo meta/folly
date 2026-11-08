@@ -340,7 +340,7 @@ class OpenSSLHash {
 
  private:
   static inline void check_out_size(size_t size, MutableByteRange out) {
-    if (FOLLY_LIKELY(size == out.size())) {
+    if (size == out.size()) [[likely]] {
       return;
     }
     check_out_size_throw(size, out);
@@ -349,7 +349,7 @@ class OpenSSLHash {
       size_t size, MutableByteRange out);
 
   static inline void check_libssl_result(int expected, int result) {
-    if (FOLLY_LIKELY(result == expected)) {
+    if (result == expected) [[likely]] {
       return;
     }
     throw_exception<std::runtime_error>("openssl crypto function failed");

@@ -212,7 +212,7 @@ class RWSpinLock {
     // fetch_add is considerably (100%) faster than compare_exchange,
     // so here we are optimizing for the common (lock success) case.
     int32_t value = bits_.fetch_add(SHARED, std::memory_order_acquire);
-    if (FOLLY_UNLIKELY(value & (EXCLUSIVE | UPGRADE))) {
+    if (value & (EXCLUSIVE | UPGRADE)) [[unlikely]] {
       bits_.fetch_add(-SHARED, std::memory_order_release);
       return false;
     }

@@ -141,7 +141,7 @@ inline void EventCount::notifyAll() noexcept {
 
 inline void EventCount::doNotify(int n) noexcept {
   uint64_t prev = val_.fetch_add(kAddEpoch, std::memory_order_acq_rel);
-  if (FOLLY_UNLIKELY(prev & kWaiterMask)) {
+  if (prev & kWaiterMask) [[unlikely]] {
     detail::futexWake(
         reinterpret_cast<detail::Futex<std::atomic>*>(&val_) + kEpochOffset, n);
   }

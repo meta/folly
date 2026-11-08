@@ -654,7 +654,7 @@ void throwIfExceptionOccurred(Request&, Waiter& waiter, bool exception) {
   // avoid leaks.  If we don't destroy the exception_ptr in storage, the
   // refcount for the internal exception will never hit zero, thereby leaking
   // memory
-  if (FOLLY_UNLIKELY(!folly::is_nothrow_invocable_v<const F&> && exception)) {
+  if (!folly::is_nothrow_invocable_v<const F&> && exception) [[unlikely]] {
     auto storage = &waiter.storage_;
     auto exc = std::launder(reinterpret_cast<std::exception_ptr*>(storage));
     auto copy = std::move(*exc);
@@ -1033,7 +1033,7 @@ inline void recordTimedWaiterAndClearTimedBit(
   // acquire the mutex
   DCHECK(previous != kTimedWaiter);
 
-  if (FOLLY_UNLIKELY(previous & kTimedWaiter)) {
+  if (previous & kTimedWaiter) [[unlikely]] {
     // record whether there was a timed waiter in the previous mutex state, and
     // clear the timed bit from the previous state
     timedWaiter = true;
@@ -1043,7 +1043,7 @@ inline void recordTimedWaiterAndClearTimedBit(
 
 template <typename Atomic>
 void wakeTimedWaiters(Atomic* state, bool timedWaiters) {
-  if (FOLLY_UNLIKELY(timedWaiters)) {
+  if (timedWaiters) [[unlikely]] {
     folly::atomic_notify_one(state); // evade ADL
   }
 }
@@ -1544,7 +1544,7 @@ bool tryUnlockClean(Atomic& state, Proxy& proxy, Sleepers sleepers) {
     // if we failed the compare_exchange_strong() above, we check to see if
     // the failure was because of the presence of a timed waiter.  If that
     // was the case then we try one more time with the kTimedWaiter bit set
-    if (FOLLY_UNLIKELY(expected == (proxy.expected_ | kTimedWaiter))) {
+    if (expected == (proxy.expected_ | kTimedWaiter)) [[unlikely]] {
       proxy.timedWaiters_ = true;
       continue;
     }
