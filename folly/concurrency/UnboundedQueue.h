@@ -288,7 +288,7 @@ class UnboundedQueue {
   /** try_dequeue */
   FOLLY_ALWAYS_INLINE bool try_dequeue(T& item) noexcept {
     auto o = try_dequeue();
-    if (FOLLY_LIKELY(o.has_value())) {
+    if (o.has_value()) [[likely]] {
       item = std::move(*o);
       return true;
     }
@@ -306,7 +306,7 @@ class UnboundedQueue {
       const std::chrono::time_point<Clock, Duration>& deadline) noexcept {
     folly::Optional<T> o = try_dequeue_until(deadline);
 
-    if (FOLLY_LIKELY(o.has_value())) {
+    if (o.has_value()) [[likely]] {
       item = std::move(*o);
       return true;
     }
@@ -326,7 +326,7 @@ class UnboundedQueue {
       T& item, const std::chrono::duration<Rep, Period>& duration) noexcept {
     folly::Optional<T> o = try_dequeue_for(duration);
 
-    if (FOLLY_LIKELY(o.has_value())) {
+    if (o.has_value()) [[likely]] {
       item = std::move(*o);
       return true;
     }
@@ -338,7 +338,7 @@ class UnboundedQueue {
   FOLLY_ALWAYS_INLINE folly::Optional<T> try_dequeue_for(
       const std::chrono::duration<Rep, Period>& duration) noexcept {
     folly::Optional<T> o = try_dequeue();
-    if (FOLLY_LIKELY(o.has_value())) {
+    if (o.has_value()) [[likely]] {
       return o;
     }
     return tryDequeueUntil(std::chrono::steady_clock::now() + duration);
@@ -456,7 +456,7 @@ class UnboundedQueue {
     DCHECK_LT(t, (s->minTicket() + SegmentSize));
     size_t idx = index(t);
     Entry& e = s->entry(idx);
-    if (FOLLY_UNLIKELY(!tryDequeueWaitElem(e, t, deadline))) {
+    if (!tryDequeueWaitElem(e, t, deadline)) [[unlikely]] {
       return folly::Optional<T>();
     }
     setConsumerTicket(t + 1);
@@ -474,14 +474,14 @@ class UnboundedQueue {
       const std::chrono::time_point<Clock, Duration>& deadline) noexcept {
     while (true) {
       Ticket t = consumerTicket();
-      if (FOLLY_UNLIKELY(t >= (s->minTicket() + SegmentSize))) {
+      if (t >= (s->minTicket() + SegmentSize)) [[unlikely]] {
         s = getAllocNextSegment(s, t);
         DCHECK(s);
         continue;
       }
       size_t idx = index(t);
       Entry& e = s->entry(idx);
-      if (FOLLY_UNLIKELY(!tryDequeueWaitElem(e, t, deadline))) {
+      if (!tryDequeueWaitElem(e, t, deadline)) [[unlikely]] {
         return folly::Optional<T>();
       }
       if (!c_.ticket.compare_exchange_weak(
@@ -502,7 +502,7 @@ class UnboundedQueue {
       Entry& e,
       Ticket t,
       const std::chrono::time_point<Clock, Duration>& deadline) noexcept {
-    if (FOLLY_LIKELY(e.tryWaitUntil(deadline))) {
+    if (e.tryWaitUntil(deadline)) [[likely]] {
       return true;
     }
     return t < producerTicket();
@@ -520,7 +520,7 @@ class UnboundedQueue {
     DCHECK_LT(t, (s->minTicket() + SegmentSize));
     size_t idx = index(t);
     Entry& e = s->entry(idx);
-    if (FOLLY_UNLIKELY(!tryDequeueWaitElem(e, t, deadline))) {
+    if (!tryDequeueWaitElem(e, t, deadline)) [[unlikely]] {
       return nullptr;
     }
     return e.peekItem();

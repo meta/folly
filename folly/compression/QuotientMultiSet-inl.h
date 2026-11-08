@@ -61,7 +61,7 @@ mul128(UInt64InverseType lowbits, uint64_t divisor) {
 
 FOLLY_ALWAYS_INLINE std::pair<uint64_t, uint64_t> getQuotientAndRemainder(
     uint64_t dividend, uint64_t divisor, UInt64InverseType inverse) {
-  if (FOLLY_UNLIKELY(divisor == 1)) {
+  if (divisor == 1) [[unlikely]] {
     return {dividend, 0};
   }
   auto quotient = mul128(inverse, dividend);
@@ -152,7 +152,7 @@ struct QuotientMultiSet<Instructions>::Block {
   void setRemainder(
       size_t offsetInBlock, size_t remainderBits, uint64_t remainder) {
     DCHECK_LT(offsetInBlock, kBlockSize);
-    if (FOLLY_UNLIKELY(remainderBits == 0)) {
+    if (remainderBits == 0) [[unlikely]] {
       return;
     }
     Bits<uint64_t>::set(
@@ -199,7 +199,7 @@ auto QuotientMultiSet<Instructions>::equalRange(uint64_t key) const
   const size_t blockIndex = quotient / kBlockSize;
   const size_t offsetInBlock = quotient % kBlockSize;
 
-  if (FOLLY_UNLIKELY(blockIndex >= numBlocks_)) {
+  if (blockIndex >= numBlocks_) [[unlikely]] {
     return {0, 0};
   }
 
@@ -235,7 +235,7 @@ auto QuotientMultiSet<Instructions>::equalRange(uint64_t key) const
       break;
     }
 
-    if (FOLLY_UNLIKELY(slot % kBlockSize == 0)) {
+    if (slot % kBlockSize == 0) [[unlikely]] {
       // Reached block start and the run starts from a prev block.
       size_t slotBlockIndex = slot / kBlockSize;
       if (slotBlockIndex > blockIndex) {
@@ -269,7 +269,7 @@ auto QuotientMultiSet<Instructions>::findRunend(
     DCHECK_LE(slotBlockIndex, numBlocks_);
 
     const size_t numRuns = Instructions::popcount(runendWord);
-    if (FOLLY_LIKELY(numRuns > occupiedRank)) {
+    if (numRuns > occupiedRank) [[likely]] {
       break;
     }
     occupiedRank -= numRuns;
@@ -335,7 +335,7 @@ bool QuotientMultiSet<Instructions>::Iterator::skipTo(uint64_t key) {
   occBlockIndex_ = quotient / kBlockSize;
   occOffsetInBlock_ = quotient % kBlockSize;
 
-  if (FOLLY_UNLIKELY(occBlockIndex_ >= qms_->numBlocks_)) {
+  if (occBlockIndex_ >= qms_->numBlocks_) [[unlikely]] {
     return setEnd();
   }
 
@@ -375,7 +375,7 @@ bool QuotientMultiSet<Instructions>::Iterator::skipTo(uint64_t key) {
     }
     pos_ = slot;
     nextRemainder = slotRemainder;
-    if (FOLLY_UNLIKELY(slotOffsetInBlock == 0)) {
+    if (slotOffsetInBlock == 0) [[unlikely]] {
       // Reached block start and the run starts from a prev block.
       if (slotBlockIndex > occBlockIndex_) {
         --slotBlockIndex;
@@ -401,7 +401,7 @@ bool QuotientMultiSet<Instructions>::Iterator::skipTo(uint64_t key) {
 template <class Instructions>
 bool QuotientMultiSet<Instructions>::Iterator::nextOccupied() {
   while (FOLLY_UNLIKELY(occWord_ == 0)) {
-    if (FOLLY_UNLIKELY(++occBlockIndex_ >= qms_->numBlocks_)) {
+    if (++occBlockIndex_ >= qms_->numBlocks_) [[unlikely]] {
       return false;
     }
     occBlock_ = qms_->getBlock(occBlockIndex_);

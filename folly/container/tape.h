@@ -179,7 +179,7 @@ class tape {
   }
 
   [[nodiscard]] const_reference at(size_type i) const {
-    if (FOLLY_UNLIKELY(i >= size())) {
+    if (i >= size()) [[unlikely]] {
       // libc++ doesn't provide index. This helps optimizations.
       throw std::out_of_range("tape");
     }
@@ -457,7 +457,7 @@ class tape<Container>::record_builder {
   }
 
   [[nodiscard]] reference at(size_type i) {
-    if (FOLLY_UNLIKELY(i >= size())) {
+    if (i >= size()) [[unlikely]] {
       // libc++ doesn't provide index. This helps optimizations.
       throw std::out_of_range("tape::scoped_record_builder");
     }
@@ -465,7 +465,7 @@ class tape<Container>::record_builder {
   }
 
   [[nodiscard]] const_reference at(size_type i) const {
-    if (FOLLY_UNLIKELY(i >= size())) {
+    if (i >= size()) [[unlikely]] {
       // libc++ doesn't provide index. This helps optimizations.
       throw std::out_of_range("tape::scoped_record_builder");
     }

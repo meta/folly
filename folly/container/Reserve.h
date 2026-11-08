@@ -58,7 +58,7 @@ struct grow_capacity_by_fn {
   constexpr void operator()(C& c, typename C::size_type const n) const {
     const size_t sz = c.size();
 
-    if (FOLLY_UNLIKELY(c.max_size() - sz < n)) {
+    if (c.max_size() - sz < n) [[unlikely]] {
       folly::throw_exception<std::length_error>("max_size exceeded");
     }
 

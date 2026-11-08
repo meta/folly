@@ -311,16 +311,16 @@ struct CheckOverflowToDuration {
     static_assert(
         SubsecondRatio::num == 1, "subsecond numerator should always be 1");
 
-    if (FOLLY_LIKELY(seconds >= 0)) {
+    if (seconds >= 0) [[likely]] {
       constexpr auto maxCount = std::numeric_limits<typename Tgt::rep>::max();
       constexpr auto maxSeconds = maxCount / Tgt::period::den;
 
       auto unsignedSeconds = to_unsigned(seconds);
-      if (FOLLY_LIKELY(unsignedSeconds < maxSeconds)) {
+      if (unsignedSeconds < maxSeconds) [[likely]] {
         return ConversionCode::SUCCESS;
       }
 
-      if (FOLLY_UNLIKELY(unsignedSeconds == maxSeconds)) {
+      if (unsignedSeconds == maxSeconds) [[unlikely]] {
         constexpr auto maxRemainder =
             maxCount - (maxSeconds * Tgt::period::den);
         constexpr auto maxSubseconds =
@@ -339,11 +339,11 @@ struct CheckOverflowToDuration {
       constexpr auto minCount =
           to_signed(std::numeric_limits<typename Tgt::rep>::lowest());
       constexpr auto minSeconds = (minCount / Tgt::period::den);
-      if (FOLLY_LIKELY(seconds >= minSeconds)) {
+      if (seconds >= minSeconds) [[likely]] {
         return ConversionCode::SUCCESS;
       }
 
-      if (FOLLY_UNLIKELY(seconds == minSeconds - 1)) {
+      if (seconds == minSeconds - 1) [[unlikely]] {
         constexpr auto maxRemainder =
             minCount - (minSeconds * Tgt::period::den) + Tgt::period::den;
         constexpr auto maxSubseconds =
@@ -430,9 +430,8 @@ auto posixTimeToDuration(
 
   // If the value is negative, we have to round up a non-zero subseconds value
   if (FOLLY_UNLIKELY(outputSeconds.value() < 0) && subseconds > 0) {
-    if (FOLLY_UNLIKELY(
-            outputSeconds.value() ==
-            std::numeric_limits<typename Tgt::rep>::lowest())) {
+    if (outputSeconds.value() ==
+        std::numeric_limits<typename Tgt::rep>::lowest()) [[unlikely]] {
       return makeUnexpected(ConversionCode::NEGATIVE_OVERFLOW);
     }
     return Tgt{outputSeconds.value() + 1};
@@ -469,7 +468,7 @@ auto posixTimeToDuration(
     return makeUnexpected(errorCode);
   }
 
-  if (FOLLY_LIKELY(seconds >= 0)) {
+  if (seconds >= 0) [[likely]] {
     return std::chrono::duration_cast<Tgt>(
                std::chrono::duration<typename Tgt::rep>{seconds}) +
         std::chrono::duration_cast<Tgt>(
@@ -510,7 +509,7 @@ auto posixTimeToDuration(
   if (FOLLY_UNLIKELY(seconds < 0) && subseconds > 0) {
     // Increment seconds by one to handle truncation of negative numbers
     // properly.
-    if (FOLLY_UNLIKELY(seconds == std::numeric_limits<Seconds>::lowest())) {
+    if (seconds == std::numeric_limits<Seconds>::lowest()) [[unlikely]] {
       return makeUnexpected(ConversionCode::NEGATIVE_OVERFLOW);
     }
     seconds += 1;
@@ -590,7 +589,7 @@ Expected<Tgt, ConversionCode> tryPosixTimeToDuration(
       SubsecondRatio::num == 1, "subsecond numerator should always be 1");
 
   // Normalize the input if required
-  if (FOLLY_UNLIKELY(subseconds < 0)) {
+  if (subseconds < 0) [[unlikely]] {
     const auto overflowSeconds = (subseconds / SubsecondRatio::den);
     const auto remainder = (subseconds % SubsecondRatio::den);
     if (std::numeric_limits<Seconds>::lowest() + 1 - overflowSeconds >
@@ -599,7 +598,7 @@ Expected<Tgt, ConversionCode> tryPosixTimeToDuration(
     }
     seconds = seconds - 1 + overflowSeconds;
     subseconds = to_narrow(remainder + SubsecondRatio::den);
-  } else if (FOLLY_UNLIKELY(subseconds >= SubsecondRatio::den)) {
+  } else if (subseconds >= SubsecondRatio::den) [[unlikely]] {
     const auto overflowSeconds = (subseconds / SubsecondRatio::den);
     const auto remainder = (subseconds % SubsecondRatio::den);
     if (std::numeric_limits<Seconds>::max() - overflowSeconds < seconds) {

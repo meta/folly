@@ -496,7 +496,7 @@ class DynamicBoundedQueue {
   FOLLY_ALWAYS_INLINE bool tryEnqueueUntilImpl(
       Arg&& v, const std::chrono::time_point<Clock, Duration>& deadline) {
     Weight weight = WeightFn()(std::forward<Arg>(v));
-    if (FOLLY_LIKELY(tryAddDebit(weight))) {
+    if (tryAddDebit(weight)) [[likely]] {
       q_.enqueue(std::forward<Arg>(v));
       return true;
     }
@@ -506,7 +506,7 @@ class DynamicBoundedQueue {
   template <typename Rep, typename Period, typename Arg>
   FOLLY_ALWAYS_INLINE bool tryEnqueueForImpl(
       Arg&& v, const std::chrono::duration<Rep, Period>& duration) {
-    if (FOLLY_LIKELY(tryEnqueueImpl(std::forward<Arg>(v)))) {
+    if (tryEnqueueImpl(std::forward<Arg>(v))) [[likely]] {
       return true;
     }
     auto deadline = std::chrono::steady_clock::now() + duration;
@@ -516,7 +516,7 @@ class DynamicBoundedQueue {
   FOLLY_ALWAYS_INLINE bool tryAddDebit(Weight weight) noexcept {
     Weight capacity = getCapacity();
     Weight before = fetchAddDebit(weight);
-    if (FOLLY_LIKELY(before + weight <= capacity)) {
+    if (before + weight <= capacity) [[likely]] {
       return true;
     } else {
       subDebit(weight);

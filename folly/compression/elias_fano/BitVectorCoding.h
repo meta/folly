@@ -293,7 +293,7 @@ class BitVectorReader
       return setDone();
     }
     // Small skip optimization.
-    if (FOLLY_LIKELY(n < kLinearScanThreshold)) {
+    if (n < kLinearScanThreshold) [[likely]] {
       for (size_t i = 0; i < n; ++i) {
         next();
       }

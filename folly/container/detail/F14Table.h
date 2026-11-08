@@ -1286,7 +1286,7 @@ class F14ItemIter {
     while (index_ > 0) {
       --index_;
       --itemPtr_;
-      if (FOLLY_LIKELY(c->occupied(index_))) {
+      if (c->occupied(index_)) [[likely]] {
         return;
       }
     }
@@ -1315,7 +1315,7 @@ class F14ItemIter {
     for (std::size_t i = 1; !likelyDead || i != 0; ++i) {
       if (checkEof) {
         // exhausted the current chunk
-        if (FOLLY_UNLIKELY(c->eof())) {
+        if (c->eof()) [[unlikely]] {
           FOLLY_SAFE_DCHECK(index_ == 0, "");
           itemPtr_ = nullptr;
           return;
@@ -1328,7 +1328,7 @@ class F14ItemIter {
       if (checkEof && !likelyDead) {
         prefetchAddr(Chunk::prevChunkRaw(&*c));
       }
-      if (FOLLY_LIKELY(last.hasIndex())) {
+      if (last.hasIndex()) [[likely]] {
         index_ = last.index();
         itemPtr_ = std::pointer_traits<ItemPtr>::pointer_to(c->item(index_));
         return;
@@ -1956,7 +1956,7 @@ class F14Table : public Policy {
       }
       ItemIter found{};
       if (chunk->forEachTagMatch(needleV, [&](unsigned i) {
-            if (FOLLY_LIKELY(this->keyMatchesItem(key, chunk->item(i)))) {
+            if (this->keyMatchesItem(key, chunk->item(i))) [[likely]] {
               // Tag match and key match were both successful.  The chance
               // of a false tag match is ~1/255 for each key in the chunk
               // (with a proper hash function).
@@ -1967,7 +1967,7 @@ class F14Table : public Policy {
           })) {
         return found;
       }
-      if (FOLLY_LIKELY(chunk->outboundOverflowCount() == 0)) {
+      if (chunk->outboundOverflowCount() == 0) [[likely]] {
         // No keys that wanted to be placed in this chunk were denied
         // entry, so our search is over.  This is the common case.
         break;
@@ -2062,8 +2062,8 @@ class F14Table : public Policy {
       }
       ItemIter found{};
       if (chunk->forEachTagMatch(needleV, [&](unsigned i) {
-            if (FOLLY_LIKELY(func(
-                    this->keyForValue(this->valueAtItem(chunk->item(i)))))) {
+            if (func(this->keyForValue(this->valueAtItem(chunk->item(i)))))
+                [[likely]] {
               found = ItemIter{chunk, i};
               return true;
             }
@@ -2071,7 +2071,7 @@ class F14Table : public Policy {
           })) {
         return found;
       }
-      if (FOLLY_LIKELY(chunk->outboundOverflowCount() == 0)) {
+      if (chunk->outboundOverflowCount() == 0) [[likely]] {
         break;
       }
       index += step;
@@ -2156,7 +2156,7 @@ class F14Table : public Policy {
     while (true) {
       index = moduloByChunkCount(index);
       chunk = chunkAt(index);
-      if (FOLLY_LIKELY(fullness[index] < Chunk::kCapacity)) {
+      if (fullness[index] < Chunk::kCapacity) [[likely]] {
         break;
       }
       chunk->incrOutboundOverflowCount();
@@ -2545,7 +2545,7 @@ class F14Table : public Policy {
       // this SCOPE_EXIT reverts chunks_ and chunkShift if necessary
       BytePtr finishedRawAllocation = nullptr;
       std::size_t finishedAllocSize = 0;
-      if (FOLLY_LIKELY(success)) {
+      if (success) [[likely]] {
         if (origCapacity > 0) {
           finishedRawAllocation = std::pointer_traits<BytePtr>::pointer_to(
               *static_cast<uint8_t*>(static_cast<void*>(&*origChunks)));
@@ -2578,7 +2578,7 @@ class F14Table : public Policy {
       std::size_t srcI = 0;
       std::size_t dstI = 0;
       while (dstI < origSize) {
-        if (FOLLY_LIKELY(srcChunk->occupied(srcI))) {
+        if (srcChunk->occupied(srcI)) [[likely]] {
           dstChunk->setTag(dstI, srcChunk->tag(srcI));
           this->moveItemDuringRehash(
               dstChunk->itemAddr(dstI), srcChunk->item(srcI));
@@ -2789,9 +2789,8 @@ class F14Table : public Policy {
       // Fast path for an absent key, the common case: if the home chunk holds
       // no matching tag and never turned anyone away, findImpl() would stop
       // after its first iteration, so skip it.
-      if (FOLLY_UNLIKELY(
-              chunk->tagMatchIter(word, loadNeedleV(hp.second)).second ||
-              chunk->outboundOverflowCount(word) != 0)) {
+      if (chunk->tagMatchIter(word, loadNeedleV(hp.second)).second ||
+          chunk->outboundOverflowCount(word) != 0) [[unlikely]] {
         auto existing = findImpl(hp, key, Prefetch::ENABLED);
         if (!existing.atEnd()) {
           return std::make_pair(existing, false);
@@ -2802,7 +2801,7 @@ class F14Table : public Policy {
     // A rehash moves the chunks, so anything loaded above is stale.
     const bool debugRehashed = debugModeBeforeInsert();
     const bool grew = reserveForInsert();
-    if (FOLLY_UNLIKELY(debugRehashed || grew)) {
+    if (debugRehashed || grew) [[unlikely]] {
       chunk = chunkAt(moduloByChunkCount(index));
       word = chunk->loadWord();
     }
@@ -2927,7 +2926,7 @@ class F14Table : public Policy {
 
   template <typename K, typename BeforeDestroy>
   std::size_t eraseKeyInto(K const& key, BeforeDestroy&& beforeDestroy) {
-    if (FOLLY_UNLIKELY(size() == 0)) {
+    if (size() == 0) [[unlikely]] {
       return 0;
     }
     auto hp = computeHash(key);

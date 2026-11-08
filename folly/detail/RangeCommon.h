@@ -77,7 +77,7 @@ size_t qfind_first_byte_of_byteset(
 
 inline size_t qfind_first_byte_of_nosimd(
     const StringPieceLite haystack, const StringPieceLite needles) {
-  if (FOLLY_UNLIKELY(needles.empty() || haystack.empty())) {
+  if (needles.empty() || haystack.empty()) [[unlikely]] {
     return std::string::npos;
   }
   // The thresholds below were empirically determined by benchmarking.

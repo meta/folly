@@ -116,7 +116,7 @@ SharedPromise<T>::SharedPromise(SharedPromise&& other) noexcept
 
 template <typename T>
 SharedPromise<T>& SharedPromise<T>::operator=(SharedPromise&& other) noexcept {
-  if (FOLLY_LIKELY(this != &other)) {
+  if (this != &other) [[likely]] {
     synchronized(
         [](auto self, auto other) { *self = std::exchange(*other, {}); },
         wlock(state_),

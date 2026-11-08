@@ -188,14 +188,14 @@ async_closure_outer_coro(
   // extra coro frame.
   (co_await std::move(reversed_noexcept_cleanups.get()), ...);
 
-  if (FOLLY_LIKELY(res.hasValue())) {
+  if (res.hasValue()) [[likely]] {
     if constexpr (std::is_void_v<ResultT>) {
       co_return;
     } else {
       co_return async_closure_outer_coro_result<AssertNoexcept>(
           priv, std::move(res).value());
     }
-  } else if (FOLLY_LIKELY(res.hasException())) {
+  } else if (res.hasException()) [[likely]] {
     co_yield co_error(std::move(inner_err));
   } else { // should never happen
     co_yield co_error(UsingUninitializedTry{});

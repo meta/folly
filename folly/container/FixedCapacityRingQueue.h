@@ -67,7 +67,7 @@ class FixedCapacityRingQueue {
   }
 
   bool push(T val) {
-    if (FOLLY_UNLIKELY(size() >= capacity())) {
+    if (size() >= capacity()) [[unlikely]] {
       return false;
     }
     buf_[tail_++ & mask_] = val;

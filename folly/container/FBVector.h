@@ -172,7 +172,7 @@ class fbvector {
     }
 
     void init(size_type n) {
-      if (FOLLY_UNLIKELY(n == 0)) {
+      if (n == 0) [[unlikely]] {
         b_ = e_ = z_ = nullptr;
       } else {
         size_type sz = folly::goodMallocSize(n * sizeof(T)) / sizeof(T);
@@ -446,7 +446,7 @@ class fbvector {
   // optimized
   static void S_uninitialized_fill_n(T* dest, size_type n) {
     if constexpr (folly::IsZeroInitializable<T>::value) {
-      if (FOLLY_LIKELY(n != 0)) {
+      if (n != 0) [[likely]] {
         T* sz = nullptr;
         if (!folly::checked_add(&sz, dest, n)) {
           throw_exception<std::length_error>("FBVector exceeded max size.");
@@ -747,7 +747,7 @@ class fbvector {
   ~fbvector() = default; // the cleanup occurs in impl_
 
   fbvector& operator=(const fbvector& other) {
-    if (FOLLY_UNLIKELY(this == &other)) {
+    if (this == &other) [[unlikely]] {
       return *this;
     }
 
@@ -766,7 +766,7 @@ class fbvector {
   }
 
   fbvector& operator=(fbvector&& other) {
-    if (FOLLY_UNLIKELY(this == &other)) {
+    if (this == &other) [[unlikely]] {
       return *this;
     }
     moveFrom(std::move(other), moveIsSwap());
@@ -1057,7 +1057,7 @@ class fbvector {
     return impl_.b_[n];
   }
   const_reference at(size_type n) const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
-    if (FOLLY_UNLIKELY(n >= size())) {
+    if (n >= size()) [[unlikely]] {
       throw_exception<std::out_of_range>(
           "fbvector: index is greater than size.");
     }

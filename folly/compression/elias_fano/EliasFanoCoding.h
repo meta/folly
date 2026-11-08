@@ -108,7 +108,7 @@ struct EliasFanoEncoder {
   static constexpr size_t forwardQuantum = kForwardQuantum;
 
   static uint8_t defaultNumLowerBits(size_t upperBound, size_t size) {
-    if (FOLLY_UNLIKELY(size == 0 || upperBound < size)) {
+    if (size == 0 || upperBound < size) [[unlikely]] {
       return 0;
     }
     // Result that should be returned is "floor(log(upperBound / size))".
@@ -453,7 +453,7 @@ class UpperBitsReader
 
     // Use forward pointer.
     if constexpr (Encoder::forwardQuantum > 0) {
-      if (FOLLY_UNLIKELY(n > Encoder::forwardQuantum)) {
+      if (n > Encoder::forwardQuantum) [[unlikely]] {
         const size_t steps = position_ / Encoder::forwardQuantum;
         const size_t dest = loadUnaligned<SkipValueType>(
             this->forwardPointers_ + (steps - 1) * sizeof(SkipValueType));
@@ -492,7 +492,7 @@ class UpperBitsReader
       // NOTE: The addition can overflow here, but that means value_ is within
       // skipQuantum_ distance from the maximum representable value, and thus
       // the last value, so the comparison is still correct.
-      if (FOLLY_UNLIKELY(v >= addT(value_, Encoder::skipQuantum))) {
+      if (v >= addT(value_, Encoder::skipQuantum)) [[unlikely]] {
         const size_t steps = v / Encoder::skipQuantum;
         const size_t dest = loadUnaligned<SkipValueType>(
             this->skipPointers_ + (steps - 1) * sizeof(SkipValueType));
@@ -529,7 +529,7 @@ class UpperBitsReader
       block_ = loadUnaligned<block_t>(start_ + outer_);
     }
 
-    if (FOLLY_LIKELY(skip)) {
+    if (skip) [[likely]] {
       auto inner = select64<Instructions>(~block_, skip - 1);
       position_ += inner - skip + 1;
       block_ &= block_t(-1) << inner;
@@ -720,7 +720,7 @@ class EliasFanoReader {
    * first element if there is no previous element.
    */
   bool previous() {
-    if (FOLLY_LIKELY(upper_.previous())) {
+    if (upper_.previous()) [[likely]] {
       return setValue(readCurrentValue());
     }
     reset();
@@ -732,7 +732,7 @@ class EliasFanoReader {
    * been reached.
    */
   bool next() {
-    if (FOLLY_LIKELY(upper_.next())) {
+    if (upper_.next()) [[likely]] {
       return setValue(readCurrentValue());
     }
     return false;
@@ -765,7 +765,7 @@ class EliasFanoReader {
     if (valid()) {
       if constexpr (kCanBeAtValue) {
         DCHECK_GE(value, value_);
-        if (FOLLY_UNLIKELY(value == value_)) {
+        if (value == value_) [[unlikely]] {
           return true;
         }
       } else {
@@ -775,7 +775,7 @@ class EliasFanoReader {
 
     ValueType upperValue = value >> numLowerBits_;
 
-    if (FOLLY_UNLIKELY(!upper_.skipToNext(upperValue))) {
+    if (!upper_.skipToNext(upperValue)) [[unlikely]] {
       return false;
     }
 
@@ -797,7 +797,7 @@ class EliasFanoReader {
     if (valid()) {
       if constexpr (kCanBeAtValue) {
         DCHECK_GE(value, value_);
-        if (FOLLY_UNLIKELY(value == value_)) {
+        if (value == value_) [[unlikely]] {
           return;
         }
       } else {
@@ -939,7 +939,7 @@ MutableCompressedList copyCompressedList(const MutableCompressedList& src) {
   // upper is last and needs kUpperTrailingBytes.
   const size_t extra = kUpperFirst ? kLowerTrailingBytes : kUpperTrailingBytes;
   uint8_t* buf = static_cast<uint8_t*>(std::malloc(dataSize + extra));
-  if (FOLLY_UNLIKELY(buf == nullptr)) {
+  if (buf == nullptr) [[unlikely]] {
     throw std::bad_alloc();
   }
   std::memcpy(buf, src.data.data(), dataSize);

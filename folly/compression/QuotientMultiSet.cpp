@@ -113,7 +113,7 @@ void QuotientMultiSetBuilder::setBlockPayload(uint64_t payload) {
 }
 
 void QuotientMultiSetBuilder::closePreviousRun() {
-  if (FOLLY_UNLIKELY(nextSlot_ == 0)) {
+  if (nextSlot_ == 0) [[unlikely]] {
     return;
   }
 

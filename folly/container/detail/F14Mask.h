@@ -128,7 +128,7 @@ class DenseMaskIter {
       count_ = 0;
     } else {
       count_ = popcount(static_cast<uint32_t>(((mask >> 32) << 2) | mask));
-      if (FOLLY_LIKELY((mask & 1) != 0)) {
+      if ((mask & 1) != 0) [[likely]] {
         index_ = 0;
       } else {
         index_ = findFirstSetNonZero(mask) / kMaskSpacing;
@@ -227,7 +227,7 @@ class DenseMaskIter {
 
   unsigned next() {
     FOLLY_SAFE_DCHECK(hasNext(), "");
-    if (FOLLY_LIKELY((mask_ & 1) != 0)) {
+    if ((mask_ & 1) != 0) [[likely]] {
       mask_ >>= kMaskSpacing;
       return index_++;
     } else {

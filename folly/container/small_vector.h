@@ -585,7 +585,7 @@ class small_vector
   ~small_vector() { destroy(); }
 
   small_vector& operator=(small_vector const& o) {
-    if (FOLLY_LIKELY(this != &o)) {
+    if (this != &o) [[likely]] {
       if constexpr (kShouldCopyWholeInlineStorageTrivial) {
         if (!this->isExtern() && !o.isExtern()) {
           copyWholeInlineStorageTrivial(o);
@@ -606,7 +606,7 @@ class small_vector
 
   small_vector& operator=(small_vector&& o) noexcept(
       std::is_nothrow_move_constructible<Value>::value) {
-    if (FOLLY_LIKELY(this != &o)) {
+    if (this != &o) [[likely]] {
       // If either is external, reduce to the default-constructed case for this,
       // since there is nothing that we can move in-place.
       if (this->isExtern() || o.isExtern()) {

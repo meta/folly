@@ -275,7 +275,7 @@ struct AccessSpreader : private detail::AccessSpreaderBase {
  public:
   FOLLY_EXPORT static GlobalState& state() {
     static constinit GlobalState state{};
-    if (FOLLY_UNLIKELY(!state.getcpu.load(std::memory_order_acquire))) {
+    if (!state.getcpu.load(std::memory_order_acquire)) [[unlikely]] {
       initialize(state);
     }
     return state;
@@ -344,7 +344,7 @@ struct AccessSpreader : private detail::AccessSpreaderBase {
   class CpuCache {
    public:
     unsigned cpu(GlobalState const& s) {
-      if (FOLLY_UNLIKELY(cachedCpuUses_-- == 0)) {
+      if (cachedCpuUses_-- == 0) [[unlikely]] {
         unsigned cpu;
         s.getcpu.load(std::memory_order_relaxed)(&cpu, nullptr, nullptr);
         cachedCpu_ = cpu % kMaxCpus;

@@ -156,7 +156,7 @@ inline Expected<uint64_t, DecodeVarintError> tryDecodeVarint(Range<T*>& data) {
   uint64_t val = 0;
 
   // end is always greater than or equal to begin, so this subtraction is safe
-  if (FOLLY_LIKELY(size_t(end - begin) >= kMaxVarintLength64)) { // fast path
+  if (size_t(end - begin) >= kMaxVarintLength64) [[likely]] { // fast path
     int64_t b;
     do {
       b = *p++;

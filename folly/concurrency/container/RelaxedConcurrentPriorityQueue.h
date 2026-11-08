@@ -641,12 +641,12 @@ class RelaxedConcurrentPriorityQueue {
     if (isRoot(pos)) {
       lockNode(pos);
       T nv = readValue(pos);
-      if (FOLLY_LIKELY(nv <= val)) {
+      if (nv <= val) [[likely]] {
         newNode->next = getList(pos);
         setTreeNode(pos, newNode);
         uint32_t sz = getElementSize(pos);
         setElementSize(pos, sz + 1);
-        if (FOLLY_UNLIKELY(sz > PruningSize)) {
+        if (sz > PruningSize) [[unlikely]] {
           startPruning(pos);
         } else {
           unlockNode(pos);
@@ -668,7 +668,7 @@ class RelaxedConcurrentPriorityQueue {
     }
     T pv = readValue(parent);
     T nv = readValue(pos);
-    if (FOLLY_LIKELY(pv > val && nv <= val)) {
+    if (pv > val && nv <= val) [[likely]] {
       // improve the accuracy by getting the node(R) with less priority than the
       // new value from parent level, insert the new node to the parent list
       // and insert R to the current list.
@@ -714,7 +714,7 @@ class RelaxedConcurrentPriorityQueue {
         setTreeNode(pos, newNode);
         setElementSize(pos, sz + 1);
       }
-      if (FOLLY_UNLIKELY(sz > PruningSize)) {
+      if (sz > PruningSize) [[unlikely]] {
         startPruning(pos);
       } else {
         unlockNode(pos);
@@ -782,7 +782,7 @@ class RelaxedConcurrentPriorityQueue {
       uint32_t sz = getElementSize(pos);
       // do not allow the new node to be the first one
       // do not allow the list size tooooo big
-      if (FOLLY_UNLIKELY(nv < val || sz >= ListTargetSize)) {
+      if (nv < val || sz >= ListTargetSize) [[unlikely]] {
         return false;
       }
 
@@ -840,7 +840,7 @@ class RelaxedConcurrentPriorityQueue {
       // chooice the right node to start
       cur = selectPosition(val, go_fast_path, seed, hptr);
       if (go_fast_path) {
-        if (FOLLY_LIKELY(forceInsert(cur, val, newNode))) {
+        if (forceInsert(cur, val, newNode)) [[likely]] {
           if (MayBlock) {
             blockingPushImpl();
           }
@@ -851,7 +851,7 @@ class RelaxedConcurrentPriorityQueue {
       }
 
       binarySearchPosition(cur, val, hptr);
-      if (FOLLY_LIKELY(regularInsert(cur, val, newNode))) {
+      if (regularInsert(cur, val, newNode)) [[likely]] {
         if (MayBlock) {
           blockingPushImpl();
         }
@@ -1006,13 +1006,13 @@ class RelaxedConcurrentPriorityQueue {
     }
 
     bool done = false;
-    if (FOLLY_LIKELY(sz == 0)) {
+    if (sz == 0) [[likely]] {
       done = deferSettingRootSize(pos);
     } else {
       setElementSize(pos, sz);
     }
 
-    if (FOLLY_LIKELY(!done)) {
+    if (!done) [[likely]] {
       mergeDown(pos);
     }
 
@@ -1028,9 +1028,9 @@ class RelaxedConcurrentPriorityQueue {
     while (true) {
       uint32_t ready = p << 1; // get the lower 31 bits
       // avoid the situation that push has larger ticket already set the value
-      if (FOLLY_UNLIKELY(
-              ready + 1 < curfutex ||
-              ((curfutex > ready) && (curfutex - ready > 0x40000000)))) {
+      if (ready + 1 < curfutex ||
+          ((curfutex > ready) && (curfutex - ready > 0x40000000)))
+          [[unlikely]] {
         return;
       }
 
@@ -1201,7 +1201,7 @@ class RelaxedConcurrentPriorityQueue {
     }
 
     while (true) {
-      if (FOLLY_LIKELY(tryPopFromMound(val))) {
+      if (tryPopFromMound(val)) [[likely]] {
         return;
       }
       tryWait(std::chrono::time_point<std::chrono::steady_clock>::max());
