@@ -29,12 +29,14 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 
+#include <folly/ConstexprMath.h>
 #include <folly/CppAttributes.h>
 #include <folly/Likely.h>
 #include <folly/ScopeGuard.h>
@@ -132,9 +134,41 @@ class fbvector {
 
     // allocation
     // note that 'allocate' and 'deallocate' are inherited from Allocator
+    static constexpr bool isOverAligned() noexcept {
+      return alignof(T) > alignof(std::max_align_t);
+    }
+
+    static constexpr int mallocxFlags() noexcept {
+      constexpr auto lgAlign = folly::constexpr_log2(alignof(T));
+      return isOverAligned() ? MALLOCX_LG_ALIGN(static_cast<int>(lgAlign)) : 0;
+    }
+
+    static std::size_t xallocxAligned(
+        void* p, std::size_t size, std::size_t extra) noexcept {
+      return xallocx(p, size, extra, mallocxFlags());
+    }
+
+    static size_type goodAllocationSize(size_type bytes) noexcept {
+      if constexpr (kUsingStdAllocator && isOverAligned()) {
+        if (bytes != 0 && usingJEMalloc()) {
+          const auto result = nallocx(bytes, mallocxFlags());
+          return result ? result : bytes;
+        }
+      }
+      return folly::goodMallocSize(bytes);
+    }
+
+    static std::size_t goodAllocationCount(std::size_t n) noexcept {
+      return goodAllocationSize(n * sizeof(T)) / sizeof(T);
+    }
+
     T* D_allocate(size_type n) {
       if constexpr (kUsingStdAllocator) {
-        return static_cast<T*>(checkedMalloc(n * sizeof(T)));
+        if constexpr (isOverAligned()) {
+          return checkedArrayMalloc<T>(n);
+        } else {
+          return static_cast<T*>(checkedMalloc(n * sizeof(T)));
+        }
       } else {
         return std::allocator_traits<Allocator>::allocate(*this, n);
       }
@@ -142,7 +176,16 @@ class fbvector {
 
     void D_deallocate(T* p, size_type n) noexcept {
       if constexpr (kUsingStdAllocator) {
-        free(p);
+        if constexpr (isOverAligned()) {
+          if (usingJEMalloc()) {
+            // capacity may exclude a partial trailing element
+            dallocx(p, 0);
+          } else {
+            sizedArrayFree(p, n);
+          }
+        } else {
+          free(p);
+        }
       } else {
         std::allocator_traits<Allocator>::deallocate(*this, p, n);
       }
@@ -175,7 +218,7 @@ class fbvector {
       if (n == 0) [[unlikely]] {
         b_ = e_ = z_ = nullptr;
       } else {
-        size_type sz = folly::goodMallocSize(n * sizeof(T)) / sizeof(T);
+        size_type sz = Impl::goodAllocationCount(n);
         b_ = D_allocate(sz);
         e_ = b_;
         z_ = b_ + sz;
@@ -965,7 +1008,7 @@ class fbvector {
       return;
     }
 
-    auto newCap = folly::goodMallocSize(n * sizeof(T)) / sizeof(T);
+    auto newCap = Impl::goodAllocationCount(n);
     auto newB = M_allocate(newCap);
     {
       auto rollback = makeGuard([&] { M_deallocate(newB, newCap); });
@@ -986,7 +1029,7 @@ class fbvector {
       return;
     }
 
-    auto const newCapacityBytes = folly::goodMallocSize(size() * sizeof(T));
+    auto const newCapacityBytes = Impl::goodAllocationSize(size() * sizeof(T));
     auto const newCap = newCapacityBytes / sizeof(T);
     auto const oldCap = capacity();
 
@@ -996,10 +1039,10 @@ class fbvector {
 
     void* p = impl_.b_;
     // xallocx() will shrink to precisely newCapacityBytes (which was generated
-    // by goodMallocSize()) if it successfully shrinks in place.
+    // by goodAllocationSize()) if it successfully shrinks in place.
     if ((usingJEMalloc() && kUsingStdAllocator) &&
         newCapacityBytes >= folly::jemallocMinInPlaceExpandable &&
-        xallocx(p, newCapacityBytes, 0, 0) == newCapacityBytes) {
+        Impl::xallocxAligned(p, newCapacityBytes, 0) == newCapacityBytes) {
       impl_.z_ += newCap - oldCap;
     } else {
       T* newB = static_cast<T*>(catch_exception(
@@ -1034,9 +1077,9 @@ class fbvector {
       return false;
     }
 
-    auto const newCapacityBytes = folly::goodMallocSize(n * sizeof(T));
+    auto const newCapacityBytes = Impl::goodAllocationSize(n * sizeof(T));
     void* p = impl_.b_;
-    if (xallocx(p, newCapacityBytes, 0, 0) == newCapacityBytes) {
+    if (Impl::xallocxAligned(p, newCapacityBytes, 0) == newCapacityBytes) {
       impl_.z_ = impl_.b_ + newCapacityBytes / sizeof(T);
       return true;
     }
@@ -1179,7 +1222,7 @@ class fbvector {
       size_type push_back_capacity,
       pointer& z,
       pointer b) {
-    byte_sz = folly::goodMallocSize(push_back_capacity * sizeof(T));
+    byte_sz = Impl::goodAllocationSize(push_back_capacity * sizeof(T));
     if (kUsingStdAllocator && usingJEMalloc() &&
         ((z - b) * sizeof(T) >= folly::jemallocMinInPlaceExpandable)) {
       // Try to reserve in place.
@@ -1194,14 +1237,14 @@ class fbvector {
       //  amount unless we cannot expand further. Hence we will not reallocate
       //  sub-optimally twice in a row (modulo the blocking memory being freed).
       size_type lower =
-          folly::goodMallocSize(sizeof(T) + current_size * sizeof(T));
+          Impl::goodAllocationSize(sizeof(T) + current_size * sizeof(T));
       size_type upper = byte_sz;
       size_type extra = upper - lower;
 
       void* p = b;
       size_t actual;
 
-      if ((actual = xallocx(p, lower, extra, 0)) >= lower) {
+      if ((actual = Impl::xallocxAligned(p, lower, extra)) >= lower) {
         z = b + actual / sizeof(T);
         return true;
       }
@@ -1298,7 +1341,7 @@ class fbvector {
 
   size_type computeInsertCapacity(size_type n) {
     size_type nc = std::max(computePushBackCapacity(), size() + n);
-    size_type ac = folly::goodMallocSize(nc * sizeof(T)) / sizeof(T);
+    size_type ac = Impl::goodAllocationCount(nc);
     return ac;
   }
 

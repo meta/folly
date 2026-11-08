@@ -1019,6 +1019,7 @@ fb_dirsync_cpp_unittest(
         "FBVectorTests.cpp.h",
     ],
     deps = [
+        "fbsource//xplat/folly/memory:malloc",
         "//folly:fbstring",
         "//folly:fbvector",
         "//folly:random",

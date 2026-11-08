@@ -16,16 +16,19 @@
 
 #include <folly/FBVector.h>
 
+#include <cstdint>
 #include <list>
 #include <map>
 #include <memory>
 #include <numeric>
+#include <vector>
 
 #include <ranges>
 #include <folly/FBString.h>
 #include <folly/Random.h>
 #include <folly/Traits.h>
 #include <folly/container/irange.h>
+#include <folly/memory/Malloc.h>
 #include <folly/portability/GTest.h>
 #include <folly/test/FBVectorTestUtil.h>
 
@@ -117,6 +120,105 @@ TEST(fbvector, selfReferentialType) {
   SelfReferentialUserDefinedType root;
   root.children.push_back(SelfReferentialUserDefinedType{});
   EXPECT_EQ(root.children.size(), 1);
+}
+
+namespace {
+template <size_t Alignment>
+struct alignas(Alignment) OverAlignedValue {
+  int value = 0;
+  char padding[2 * Alignment]{};
+};
+
+template <size_t Alignment>
+void testOverAlignedStorage() {
+  using Value = OverAlignedValue<Alignment>;
+  SCOPED_TRACE(Alignment);
+  const auto check = [](const fbvector<Value>& v, const vector<int>& expected) {
+    EXPECT_EQ(0u, reinterpret_cast<uintptr_t>(v.data()) % Alignment);
+    vector<int> actual;
+    for (const auto& element : v) {
+      actual.push_back(element.value);
+    }
+    EXPECT_EQ(expected, actual);
+  };
+
+  fbvector<Value> storage;
+  storage.reserve(1);
+  ASSERT_EQ(0u, reinterpret_cast<uintptr_t>(storage.data()) % Alignment);
+
+  const fbvector<Value> filled(3, Value{7});
+  check(filled, {7, 7, 7});
+
+  fbvector<Value> v{{3}, {1}, {4}};
+  vector<int> expected{3, 1, 4};
+  check(v, expected);
+  const auto copy = v;
+  check(copy, expected);
+  const auto moved = std::move(v);
+  check(moved, expected);
+  v = copy;
+  check(v, expected);
+
+  v.reserve(256);
+  check(v, expected);
+  const auto filledSize = v.capacity();
+  v.resize(filledSize, Value{9});
+  expected.resize(filledSize, 9);
+  check(v, expected);
+  v.push_back(Value{5});
+  expected.push_back(5);
+  check(v, expected);
+
+  const auto inserted = v.capacity() - v.size() + 1;
+  v.insert(v.begin() + 1, inserted, Value{6});
+  expected.insert(expected.begin() + 1, inserted, 6);
+  check(v, expected);
+
+  const auto assigned = v.capacity() + 1;
+  v.assign(assigned, Value{8});
+  expected.assign(assigned, 8);
+  check(v, expected);
+  v.resize(4);
+  expected.resize(4);
+  v.shrink_to_fit();
+  check(v, expected);
+  v.clear();
+  v.shrink_to_fit();
+  EXPECT_EQ(0u, v.capacity());
+
+  constexpr auto largeCount = 2 * 1024 * 1024 / sizeof(Value);
+  constexpr auto smallCount = largeCount / 2;
+  fbvector<Value> large(largeCount, Value{11});
+  large.resize(smallCount);
+  auto* const before = large.data();
+  large.shrink_to_fit();
+  if (usingJEMalloc()) {
+    EXPECT_EQ(before, large.data());
+    EXPECT_EQ(smallCount, large.capacity());
+  }
+  check(large, vector<int>(smallCount, 11));
+}
+
+struct alignas(64) OverAlignedSelfReferentialType {
+  fbvector<OverAlignedSelfReferentialType> children;
+};
+} // namespace
+
+TEST(fbvector, overAlignedStorage) {
+  testOverAlignedStorage<32>();
+  testOverAlignedStorage<256>();
+  testOverAlignedStorage<8192>();
+}
+
+TEST(fbvector, overAlignedSelfReferentialType) {
+  OverAlignedSelfReferentialType root;
+  root.children.emplace_back();
+  EXPECT_EQ(1u, root.children.size());
+  EXPECT_EQ(
+      0u,
+      reinterpret_cast<uintptr_t>(root.children.data()) %
+          alignof(OverAlignedSelfReferentialType));
+  EXPECT_TRUE(root.children.front().children.empty());
 }
 
 TEST(fbvector, moveConstruction) {
