@@ -302,7 +302,7 @@ class EventBasePollerEpoll final : public EventBasePollerImpl {
     int op = EPOLL_CTL_ADD;
     if (!event->isNotificationFd()) {
       ev.events |= EPOLLONESHOT;
-      if (FOLLY_UNLIKELY(!event->registered)) {
+      if (!event->registered) [[unlikely]] {
         event->registered = true;
       } else {
         op = EPOLL_CTL_MOD;

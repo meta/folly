@@ -608,7 +608,7 @@ ssize_t AsyncUDPSocket::writeGSOWithCmsgs(
   //   for a real use case.
   iovec vec[16];
   size_t iovec_len = buf->fillIov(vec, sizeof(vec) / sizeof(vec[0])).numIovecs;
-  if (FOLLY_UNLIKELY(iovec_len == 0)) {
+  if (iovec_len == 0) [[unlikely]] {
     buf->coalesce();
     vec[0].iov_base = const_cast<uint8_t*>(buf->data());
     vec[0].iov_len = buf->length();
@@ -686,7 +686,7 @@ ssize_t AsyncUDPSocket::writeChain(
   int msg_flags = options.zerocopy ? getZeroCopyFlags() : 0;
   iovec vec[16];
   size_t iovec_len = buf->fillIov(vec, sizeof(vec) / sizeof(vec[0])).numIovecs;
-  if (FOLLY_UNLIKELY(iovec_len == 0)) {
+  if (iovec_len == 0) [[unlikely]] {
     buf->coalesce();
     vec[0].iov_base = const_cast<uint8_t*>(buf->data());
     vec[0].iov_len = buf->length();
@@ -1669,7 +1669,7 @@ bool AsyncUDPSocket::setGSO(int val) {
 
 int AsyncUDPSocket::getGSO() {
   // check if we can return the cached value
-  if (FOLLY_UNLIKELY(!gso_.has_value())) {
+  if (!gso_.has_value()) [[unlikely]] {
 #if defined(FOLLY_HAVE_MSG_ERRQUEUE) || defined(_WIN32)
     int gso = -1;
     socklen_t optlen = sizeof(gso);
@@ -1708,7 +1708,7 @@ bool AsyncUDPSocket::setGRO(bool bVal) {
 // packet timestamping
 int AsyncUDPSocket::getTimestamping() {
   // check if we can return the cached value
-  if (FOLLY_UNLIKELY(!ts_.has_value())) {
+  if (!ts_.has_value()) [[unlikely]] {
 #ifdef FOLLY_HAVE_MSG_ERRQUEUE
     int ts = -1;
     socklen_t optlen = sizeof(ts);
@@ -1741,7 +1741,7 @@ bool AsyncUDPSocket::setTimestamping(int val) {
 
 int AsyncUDPSocket::getGRO() {
   // check if we can return the cached value
-  if (FOLLY_UNLIKELY(!gro_.has_value())) {
+  if (!gro_.has_value()) [[unlikely]] {
 #ifdef FOLLY_HAVE_MSG_ERRQUEUE
     int gro = -1;
     socklen_t optlen = sizeof(gro);
@@ -1760,7 +1760,7 @@ int AsyncUDPSocket::getGRO() {
 
 AsyncUDPSocket::TXTime AsyncUDPSocket::getTXTime() {
   // check if we can return the cached value
-  if (FOLLY_UNLIKELY(!txTime_.has_value())) {
+  if (!txTime_.has_value()) [[unlikely]] {
     TXTime txTime;
 #ifdef FOLLY_HAVE_MSG_ERRQUEUE
     folly::netops::sock_txtime val = {};

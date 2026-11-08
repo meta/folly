@@ -566,7 +566,7 @@ void IoUringZeroCopyBufferPoolImpl::refillBuffer(Buffer* buffer) noexcept {
 
 void IoUringZeroCopyBufferPoolImpl::returnBuffer(Buffer* buffer) noexcept {
   std::unique_lock lock{mutex_};
-  if (FOLLY_UNLIKELY(wantsShutdown_)) {
+  if (wantsShutdown_) [[unlikely]] {
     auto refs = --shutdownReferences_;
     lock.unlock();
     delayedDestroy(refs);
@@ -597,7 +597,7 @@ void IoUringZeroCopyBufferPoolImpl::returnBuffer(Buffer* buffer) noexcept {
     io_uring_smp_store_release(rqRing_.ktail, rqTail_);
     const bool shouldFlush = supportedFeatures_.flushRq &&
         (noDev_ || freeEntries <= rqEntries_ / kRefillFlushFreeEntriesDivisor);
-    if (FOLLY_UNLIKELY(shouldFlush)) {
+    if (shouldFlush) [[unlikely]] {
       requestRefillQueueFlush();
     }
   }
@@ -619,7 +619,7 @@ void IoUringZeroCopyBufferPoolImpl::flushRefillQueueIfNeeded(
     return;
   }
 
-  if (FOLLY_UNLIKELY(ring == nullptr)) {
+  if (ring == nullptr) [[unlikely]] {
     io_uring_smp_store_release(rqRing_.khead, rqTail_);
     return;
   }
@@ -629,7 +629,7 @@ void IoUringZeroCopyBufferPoolImpl::flushRefillQueueIfNeeded(
   ctrl.op = ZCRX_CTRL_FLUSH_RQ;
   const auto ret =
       io_uring_register(ring->ring_fd, IORING_REGISTER_ZCRX_CTRL, &ctrl, 0);
-  if (FOLLY_UNLIKELY(ret < 0)) {
+  if (ret < 0) [[unlikely]] {
     FB_LOG_EVERY_MS(WARNING, 60000)
         << "Zero copy receive refill queue flush failed: "
         << folly::errnoStr(-ret);

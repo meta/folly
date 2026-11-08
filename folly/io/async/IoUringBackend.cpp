@@ -352,7 +352,7 @@ int IoUringBackend::FdRegistry::init() {
 
 IoUringFdRegistrationRecord* IoUringBackend::FdRegistry::alloc(
     int fd) noexcept {
-  if (FOLLY_UNLIKELY(err_ || free_.empty())) {
+  if (err_ || free_.empty()) [[unlikely]] {
     return nullptr;
   }
 
@@ -905,7 +905,7 @@ void IoUringBackend::releaseIoSqe(IoUringBackend::IoSqe* aioIoSqe) noexcept {
     aioIoSqe->fdRecord_ = nullptr;
   }
 
-  if (FOLLY_LIKELY(aioIoSqe->poolAlloc_)) {
+  if (aioIoSqe->poolAlloc_) [[likely]] {
     aioIoSqe->event_ = nullptr;
     freeList_.push_front(*aioIoSqe);
   } else if (!aioIoSqe->persist_) {
@@ -1116,7 +1116,7 @@ IoUringZeroCopyBufferPool::ExportHandle IoUringBackend::exportZcBufferPool() {
 void IoUringBackend::delayedInit() {
   dCheckSubmitTid();
 
-  if (FOLLY_LIKELY(!needsDelayedInit_)) {
+  if (!needsDelayedInit_) [[likely]] {
     return;
   }
 
@@ -1554,7 +1554,7 @@ int IoUringBackend::doPeek(io_uring_cqe*& cqe) noexcept {
 size_t IoUringBackend::getActiveEvents(WaitForEventsMode waitForEvents) {
   io_uring_cqe* cqe = nullptr;
 
-  if (FOLLY_UNLIKELY(zcBufferPool_)) {
+  if (zcBufferPool_) [[unlikely]] {
     zcBufferPool_->flushRefillQueueIfNeeded();
   }
 
@@ -1620,7 +1620,7 @@ unsigned int IoUringBackend::internalProcessCqe(
     unsigned int maxGet, InternalProcessCqeMode mode) noexcept {
   io_uring_cqe* cqe;
 
-  if (FOLLY_UNLIKELY(zcBufferPool_)) {
+  if (zcBufferPool_) [[unlikely]] {
     zcBufferPool_->flushRefillQueueIfNeeded();
   }
 
@@ -1635,7 +1635,7 @@ unsigned int IoUringBackend::internalProcessCqe(
     unsigned int loop_count = 0;
     io_uring_for_each_cqe(&ioRing_, head, cqe) {
       loop_count++;
-      if (FOLLY_UNLIKELY(zcBufferPool_ && zcBufferPool_->cqeIsNotif(cqe))) {
+      if (zcBufferPool_ && zcBufferPool_->cqeIsNotif(cqe)) [[unlikely]] {
         zcBufferPool_->processNotificationCqe(cqe);
         continue;
       }
@@ -1656,7 +1656,7 @@ unsigned int IoUringBackend::internalProcessCqe(
           cqeStats_.zeroCopyNotifCopiedCount += !!(
               static_cast<uint32_t>(cqe->res) & IORING_NOTIF_USAGE_ZC_COPIED);
         }
-        if (FOLLY_UNLIKELY(mode == InternalProcessCqeMode::CANCEL_ALL)) {
+        if (mode == InternalProcessCqeMode::CANCEL_ALL) [[unlikely]] {
           sqe->markCancelled();
         }
         sqe->internalCallback(cqe);
@@ -1687,7 +1687,7 @@ unsigned int IoUringBackend::internalProcessCqe(
       }
     }
   } while (true);
-  if (FOLLY_UNLIKELY(zcBufferPool_)) {
+  if (zcBufferPool_) [[unlikely]] {
     zcBufferPool_->flushRefillQueueIfNeeded();
   }
   numInsertedEvents_ -= (count - count_more);

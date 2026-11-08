@@ -535,7 +535,7 @@ void IoUringDynamicProvidedBufferRing::decBufferState(
     area.outstanding.fetch_sub(1, std::memory_order_release);
   }
 
-  if (FOLLY_UNLIKELY(--bufferUsedCount_ == 0)) {
+  if (--bufferUsedCount_ == 0) [[unlikely]] {
     delayedDestroy();
   }
 }

@@ -29,7 +29,7 @@ class DecoratedAsyncTransportWrapper : public folly::AsyncTransport {
  public:
   explicit DecoratedAsyncTransportWrapper(typename T::UniquePtr transport)
       : transport_(std::move(transport)) {
-    if (FOLLY_LIKELY(nullptr != transport_)) {
+    if (nullptr != transport_) [[likely]] {
       transport_->decoratingTransport_ = this;
     }
   }

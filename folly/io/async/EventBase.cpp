@@ -97,7 +97,7 @@ EventBaseBackend::EventBaseBackend() {
 }
 
 EventBaseBackend::EventBaseBackend(event_base* evb) : evb_(evb) {
-  if (FOLLY_UNLIKELY(evb_ == nullptr)) {
+  if (evb_ == nullptr) [[unlikely]] {
     LOG(ERROR) << "EventBase(): Pass nullptr as event base.";
     throw std::invalid_argument("EventBase(): event base cannot be nullptr");
   }
@@ -792,7 +792,7 @@ void EventBase::setKeepAliveReleaseTraceCallback(KeepAliveTraceCallback cb) {
 bool EventBase::keepAliveAcquire() noexcept {
   loopKeepAliveCount_.fetch_add(1, std::memory_order_relaxed);
   auto cb = gKeepAliveAcquireTraceCallback.load(std::memory_order_relaxed);
-  if (FOLLY_UNLIKELY(cb != nullptr)) {
+  if (cb != nullptr) [[unlikely]] {
     cb(this);
   }
   return true;
@@ -800,7 +800,7 @@ bool EventBase::keepAliveAcquire() noexcept {
 
 void EventBase::keepAliveRelease() noexcept {
   auto cb = gKeepAliveReleaseTraceCallback.load(std::memory_order_relaxed);
-  if (FOLLY_UNLIKELY(cb != nullptr)) {
+  if (cb != nullptr) [[unlikely]] {
     cb(this);
   }
   size_t count = loopKeepAliveCount_.load(std::memory_order_relaxed);

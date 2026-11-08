@@ -292,9 +292,9 @@ bool receiveFdsFromCMSG(
 #if !defined(__linux__)
     int flags = ::fcntl(fd, F_GETFD);
     // On error, "fail open" by leaving the FD unmodified.
-    if (FOLLY_UNLIKELY(flags == -1)) {
+    if (flags == -1) [[unlikely]] {
       PLOG(ERROR) << "FdReadAncillaryDataCallback F_GETFD";
-    } else if (FOLLY_UNLIKELY(-1 == ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC))) {
+    } else if (-1 == ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC)) [[unlikely]] {
       PLOG(ERROR) << "FdReadAncillaryDataCallback F_SETFD";
     }
 #endif // !Linux
@@ -390,7 +390,7 @@ SocketFds::SeqNum AsyncFdSocket::injectSocketSeqNumIntoFdsToSend(
   (void)fds;
   return SocketFds::kNoSeqNum;
 #else
-  if (FOLLY_UNLIKELY(fds->empty())) {
+  if (fds->empty()) [[unlikely]] {
     LOG(DFATAL) << "Cannot inject sequence number into empty SocketFDs";
     return SocketFds::kNoSeqNum;
   }

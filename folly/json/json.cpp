@@ -1467,7 +1467,7 @@ FOLLY_ALWAYS_INLINE bool tryEscapeShortAscii(
     bad |= (u < 0x20) | (u >> 7) | (u == '"') | (u == '\\');
     buf[i + 1] = static_cast<char>(u);
   }
-  if (FOLLY_UNLIKELY(bad)) {
+  if (bad) [[unlikely]] {
     return false;
   }
   buf[n + 1] = '"';
@@ -1477,10 +1477,9 @@ FOLLY_ALWAYS_INLINE bool tryEscapeShortAscii(
 
 void escapeString(
     StringPiece input, std::string& out, const serialization_opts& opts) {
-  if (FOLLY_LIKELY(
-          opts.extra_ascii_to_escape_bitmap[0] == 0 &&
-          opts.extra_ascii_to_escape_bitmap[1] == 0 &&
-          !opts.encode_non_ascii)) {
+  if (opts.extra_ascii_to_escape_bitmap[0] == 0 &&
+      opts.extra_ascii_to_escape_bitmap[1] == 0 && !opts.encode_non_ascii)
+      [[likely]] {
     if (tryEscapeShortAscii(input, out)) {
       return;
     }
@@ -1518,7 +1517,7 @@ std::string stripComments(StringPiece jsonC) {
         break;
       case State::InString:
         if (s[0] == '\\') {
-          if (FOLLY_UNLIKELY(s.size() == 1)) {
+          if (s.size() == 1) [[unlikely]] {
             throw std::logic_error("Invalid JSONC: string is not terminated");
           }
           result.push_back(s[0]);

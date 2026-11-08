@@ -341,7 +341,7 @@ void IoUringProvidedBufferRing::decBufferState(uint16_t bufId) noexcept {
   std::unique_lock lock{mutex_};
   bufferReturnedCount++;
 
-  if (FOLLY_UNLIKELY(wantsShutdown_)) {
+  if (wantsShutdown_) [[unlikely]] {
     auto refs = --shutdownReferences_;
     lock.unlock();
     delayedDestroy(refs);

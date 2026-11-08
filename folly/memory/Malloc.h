@@ -77,7 +77,7 @@ class FastStaticBool {
   FOLLY_ALWAYS_INLINE static bool get(
       std::memory_order mo = std::memory_order_acquire) noexcept {
     auto f = flag_.load(mo);
-    if (FOLLY_LIKELY(f != 0)) {
+    if (f != 0) [[likely]] {
       return f > 0;
     }
     return getSlow(); // Tail call.
@@ -393,7 +393,7 @@ inline void sizedAlignedFree(void* ptr, size_t align, size_t size) {
 template <typename T>
 T* checkedArrayMalloc(size_t n) {
   size_t totalBytes;
-  if (FOLLY_UNLIKELY(!checked_mul(&totalBytes, n, sizeof(T)))) {
+  if (!checked_mul(&totalBytes, n, sizeof(T))) [[unlikely]] {
     throw_exception<std::bad_array_new_length>();
   }
   // checkedAlignedMalloc() requires align >= sizeof(void*); over-align if

@@ -156,7 +156,7 @@ class AlignedSysAllocator : private Align {
     auto const a = align()() < alignof(T) ? alignof(T) : align()();
     auto const p = aligned_malloc(sizeof(T) * count, a);
     if (!p) {
-      if (FOLLY_UNLIKELY(errno != ENOMEM)) {
+      if (errno != ENOMEM) [[unlikely]] {
         std::terminate();
       }
       throw_exception<std::bad_alloc>();

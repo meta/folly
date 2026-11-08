@@ -105,7 +105,7 @@ void RequestData::releaseRefDeleteOnly() {
 FOLLY_ALWAYS_INLINE
 void RequestData::releaseRefClearDelete() {
   auto rc = keepAliveCounter_.load(std::memory_order_acquire);
-  if (FOLLY_LIKELY(rc == kClearDeleteCounts)) {
+  if (rc == kClearDeleteCounts) [[likely]] {
     this->onClear();
     delete this;
     return;
@@ -899,7 +899,7 @@ void RequestContext::clearContextData(const RequestToken& val) {
   auto newCtx = std::move(newCtx_); // enforce that it is really moved-from
 
   auto& staticCtx = getStaticContext();
-  if (FOLLY_UNLIKELY(staticCtx.localControl() != nullptr)) {
+  if (staticCtx.localControl() != nullptr) [[unlikely]] {
     return setContextFromLocal(std::move(newCtx));
   }
   if (newCtx == staticCtx.requestContext) {
@@ -1096,7 +1096,7 @@ RequestContext::getWatcherRegistry() {
 
 /* static */ std::shared_ptr<RequestContext> RequestContext::saveContext() {
   auto* staticContext = tryGetStaticContext();
-  if (FOLLY_UNLIKELY(staticContext && staticContext->localControl())) {
+  if (staticContext && staticContext->localControl()) [[unlikely]] {
     return saveContextFromLocal(*staticContext);
   }
   return staticContext ? staticContext->requestContext : nullptr;

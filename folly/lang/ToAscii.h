@@ -158,7 +158,7 @@ FOLLY_ALWAYS_INLINE size_t to_ascii_size_imuls(uint64_t v) {
   using powers = to_ascii_powers<Base, uint64_t>;
   uint64_t p = 1;
   for (size_t i = 0u; i < powers::size; ++i, p *= Base) {
-    if (FOLLY_UNLIKELY(v < p)) {
+    if (v < p) [[unlikely]] {
       return i + size_t(i == 0);
     }
   }
@@ -179,7 +179,7 @@ template <uint64_t Base>
 FOLLY_ALWAYS_INLINE size_t to_ascii_size_array(uint64_t v) {
   using powers = to_ascii_powers<Base, uint64_t>;
   for (size_t i = 0u; i < powers::size; ++i) {
-    if (FOLLY_UNLIKELY(v < powers::data.data[i])) {
+    if (v < powers::data.data[i]) [[unlikely]] {
       return i + size_t(i == 0);
     }
   }
@@ -245,7 +245,7 @@ FOLLY_ALWAYS_INLINE size_t to_ascii_size_clzll(uint64_t v) {
   using powers = to_ascii_powers<Base, uint64_t>;
 
   //  clzll is undefined for 0; must special case this
-  if (FOLLY_UNLIKELY(!v)) {
+  if (!v) [[unlikely]] {
     return 1;
   }
 
@@ -370,7 +370,7 @@ template <uint64_t Base, typename Alphabet>
 FOLLY_ALWAYS_INLINE size_t
 to_ascii_with_route(char* outb, char const* oute, uint64_t v) {
   auto const size = to_ascii_size_route<Base>(v);
-  if (FOLLY_UNLIKELY(oute < outb || size_t(oute - outb) < size)) {
+  if (oute < outb || size_t(oute - outb) < size) [[unlikely]] {
     return 0;
   }
   to_ascii_with_route<Base, Alphabet>(outb, size, v);

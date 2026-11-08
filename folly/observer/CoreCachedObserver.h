@@ -70,7 +70,7 @@ class CoreCachedObserver {
   }
 
   CoreCachedSnapshot getSnapshot() const {
-    if (FOLLY_UNLIKELY(observer_detail::ObserverManager::inManagerThread())) {
+    if (observer_detail::ObserverManager::inManagerThread()) [[unlikely]] {
       return CoreCachedSnapshot{observer_.getSnapshot().getShared()};
     }
     return CoreCachedSnapshot{data_.get()};

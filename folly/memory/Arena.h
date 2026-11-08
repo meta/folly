@@ -90,7 +90,7 @@ class Arena {
     bytesUsed_ += size;
 
     assert(ptr_ <= end_);
-    if (FOLLY_LIKELY((size_t)(end_ - ptr_) >= size)) {
+    if ((size_t)(end_ - ptr_) >= size) [[likely]] {
       // Fast path: there's enough room in the current block
       char* r = ptr_;
       ptr_ += size;

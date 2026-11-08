@@ -427,7 +427,7 @@ class NotificationQueue {
     {
       std::unique_lock g(spinlock_);
 
-      if (FOLLY_UNLIKELY(queue_.empty())) {
+      if (queue_.empty()) [[unlikely]] {
         return false;
       }
 
@@ -460,7 +460,7 @@ class NotificationQueue {
    * code, and crash before signalling the parent process.
    */
   void checkPid() const {
-    if (FOLLY_UNLIKELY(pid_ != folly::get_cached_pid())) {
+    if (pid_ != folly::get_cached_pid()) [[unlikely]] {
       checkPidFail();
     }
   }
@@ -484,7 +484,7 @@ class NotificationQueue {
   }
 
   inline bool checkDraining(bool throws = true) {
-    if (FOLLY_UNLIKELY(draining_ && throws)) {
+    if (draining_ && throws) [[unlikely]] {
       throw std::runtime_error("queue is draining, cannot add message");
     }
     return draining_;
@@ -690,7 +690,7 @@ void NotificationQueue<MessageT>::Consumer::consumeMessages(
     bool locked = true;
 
     try {
-      if (FOLLY_UNLIKELY(queue_->queue_.empty())) {
+      if (queue_->queue_.empty()) [[unlikely]] {
         // If there is no message, we've reached the end of the queue, return.
         setActive(false);
         queue_->spinlock_.unlock();
@@ -848,7 +848,7 @@ void NotificationQueue<MessageT>::SimpleConsumer::consume(F&& foreach) {
   {
     std::unique_lock g(queue_.spinlock_);
 
-    if (FOLLY_UNLIKELY(queue_.queue_.empty())) {
+    if (queue_.queue_.empty()) [[unlikely]] {
       return;
     }
 

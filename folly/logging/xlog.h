@@ -721,7 +721,7 @@ std::unique_ptr<std::string> XCheckOpImpl(
     const Arg1& arg1,
     const Arg2& arg2,
     CmpFn&& cmp_fn) {
-  if (FOLLY_LIKELY(cmp_fn(arg1, arg2))) {
+  if (cmp_fn(arg1, arg2)) [[likely]] {
     return nullptr;
   }
   return std::make_unique<std::string>(folly::to<std::string>(
@@ -847,7 +847,7 @@ class XlogLevelInfo {
     // we disabled debug statements to be cheap.  If the log message is
     // enabled then this check will still be minimal perf overhead compared to
     // the overall cost of logging it.
-    if (FOLLY_LIKELY(levelToCheck < level_.load(std::memory_order_relaxed))) {
+    if (levelToCheck < level_.load(std::memory_order_relaxed)) [[likely]] {
       return false;
     }
 
@@ -909,9 +909,8 @@ class XlogLevelInfo<false> {
       XlogFileScopeInfo* fileScopeInfo) {
     // As above in the non-specialized XlogFileScopeInfo code, do a simple
     // relaxed check first.
-    if (FOLLY_LIKELY(
-            levelToCheck <
-            fileScopeInfo->level.load(::std::memory_order_relaxed))) {
+    if (levelToCheck < fileScopeInfo->level.load(::std::memory_order_relaxed))
+        [[likely]] {
       return false;
     }
 

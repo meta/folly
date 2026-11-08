@@ -178,8 +178,7 @@ void CustomLogFormatter::parseFormatString(StringPiece input) {
               varName,
               [](const auto& a, const auto& b) { return a.key < b; });
 
-          if (FOLLY_UNLIKELY(
-                  item == formatKeys.end() || item->key != varName)) {
+          if (item == formatKeys.end() || item->key != varName) [[unlikely]] {
             throw std::runtime_error(
                 folly::to<std::string>(
                     "unknown format argument \"", varName, "\""));

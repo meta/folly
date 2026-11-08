@@ -36,7 +36,7 @@ void TimerFDTimeoutManager::scheduleTimeout(
   cancelTimeout(callback);
   // Non-positive timeouts should fire as soon as possible. A zero timeout
   // disarms timerfd, while a negative timeout is rejected with EINVAL.
-  if (FOLLY_UNLIKELY(timeout.count() <= 0)) {
+  if (timeout.count() <= 0) [[unlikely]] {
     timeout = std::chrono::microseconds(1);
   }
   auto expirationTime = getCurTime() + timeout;

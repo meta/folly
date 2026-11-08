@@ -306,7 +306,7 @@ void EventBaseAtomicNotificationQueue<Task, Consumer>::activateEvent() {
 
 template <typename Task, typename Consumer>
 void EventBaseAtomicNotificationQueue<Task, Consumer>::checkPid() const {
-  if (FOLLY_UNLIKELY(pid_ != get_cached_pid())) {
+  if (pid_ != get_cached_pid()) [[unlikely]] {
     checkPidFail();
   }
 }
