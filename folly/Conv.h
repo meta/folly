@@ -228,8 +228,8 @@ namespace detail {
 /**
  * Enforce that the suffix following a number is made up only of whitespace.
  */
-inline ConversionCode enforceWhitespaceErr(StringPiece sp) {
-  for (auto c : sp) {
+inline ConversionCode enforceWhitespaceErr(std::string_view sv) {
+  for (auto c : sv) {
     if (!std::isspace(c)) [[unlikely]] {
       return ConversionCode::NON_WHITESPACE_AFTER_END;
     }
@@ -237,13 +237,10 @@ inline ConversionCode enforceWhitespaceErr(StringPiece sp) {
   return ConversionCode::SUCCESS;
 }
 
-/**
- * Keep this implementation around for prettyToDouble().
- */
-inline void enforceWhitespace(StringPiece sp) {
-  auto err = enforceWhitespaceErr(sp);
+inline void enforceWhitespace(std::string_view sv) {
+  auto err = enforceWhitespaceErr(sv);
   if (err != ConversionCode::SUCCESS) {
-    throw_exception(makeConversionError(err, sp));
+    throw_exception(makeConversionError(err, sv));
   }
 }
 } // namespace detail
@@ -1016,6 +1013,7 @@ Tgt toDelim(const Delim& delim, const Ts&... vs) {
 
 namespace detail {
 
+Expected<bool, ConversionCode> str_to_bool(std::string_view* src) noexcept;
 Expected<bool, ConversionCode> str_to_bool(StringPiece* src) noexcept;
 
 template <typename T>
@@ -1031,12 +1029,21 @@ extern template Expected<double, ConversionCode> str_to_floating<double>(
 /// so a branching declaration would not match Conv.cpp's definition.
 template <typename T>
 Expected<T, ConversionCode> str_to_floating_from_chars(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 
 extern template Expected<float, ConversionCode>
-str_to_floating_from_chars<float>(StringPiece* src) noexcept;
+str_to_floating_from_chars<float>(std::string_view* src) noexcept;
 extern template Expected<double, ConversionCode>
-str_to_floating_from_chars<double>(StringPiece* src) noexcept;
+str_to_floating_from_chars<double>(std::string_view* src) noexcept;
+
+template <typename T>
+inline Expected<T, ConversionCode> str_to_floating_from_chars(
+    StringPiece* src) noexcept {
+  auto view = std::string_view(src->data(), src->size());
+  auto result = str_to_floating_from_chars<T>(&view);
+  src->assign(view.data(), src->end());
+  return result;
+}
 
 #if FOLLY_HAVE_STD_FLOAT_FROM_CHARS
 
@@ -1045,12 +1052,21 @@ str_to_floating_from_chars<double>(StringPiece* src) noexcept;
 /// Prefer `str_to_floating_from_chars`.
 template <typename T>
 Expected<T, ConversionCode> str_to_floating_std_from_chars(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 
 extern template Expected<float, ConversionCode>
-str_to_floating_std_from_chars<float>(StringPiece* src) noexcept;
+str_to_floating_std_from_chars<float>(std::string_view* src) noexcept;
 extern template Expected<double, ConversionCode>
-str_to_floating_std_from_chars<double>(StringPiece* src) noexcept;
+str_to_floating_std_from_chars<double>(std::string_view* src) noexcept;
+
+template <typename T>
+inline Expected<T, ConversionCode> str_to_floating_std_from_chars(
+    StringPiece* src) noexcept {
+  auto view = std::string_view(src->data(), src->size());
+  auto result = str_to_floating_std_from_chars<T>(&view);
+  src->assign(view.data(), src->end());
+  return result;
+}
 
 #endif
 
@@ -1092,46 +1108,53 @@ digits_to<unsigned __int128>(const char*, const char*) noexcept;
 #endif
 
 template <class T>
-Expected<T, ConversionCode> str_to_integral(StringPiece* src) noexcept;
+Expected<T, ConversionCode> str_to_integral(std::string_view* src) noexcept;
 
 extern template Expected<char, ConversionCode> str_to_integral<char>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 extern template Expected<signed char, ConversionCode>
-str_to_integral<signed char>(StringPiece* src) noexcept;
+str_to_integral<signed char>(std::string_view* src) noexcept;
 extern template Expected<unsigned char, ConversionCode>
-str_to_integral<unsigned char>(StringPiece* src) noexcept;
+str_to_integral<unsigned char>(std::string_view* src) noexcept;
 
 extern template Expected<short, ConversionCode> str_to_integral<short>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 extern template Expected<unsigned short, ConversionCode>
-str_to_integral<unsigned short>(StringPiece* src) noexcept;
+str_to_integral<unsigned short>(std::string_view* src) noexcept;
 
 extern template Expected<int, ConversionCode> str_to_integral<int>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 extern template Expected<unsigned int, ConversionCode>
-str_to_integral<unsigned int>(StringPiece* src) noexcept;
+str_to_integral<unsigned int>(std::string_view* src) noexcept;
 
 extern template Expected<long, ConversionCode> str_to_integral<long>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 extern template Expected<unsigned long, ConversionCode>
-str_to_integral<unsigned long>(StringPiece* src) noexcept;
+str_to_integral<unsigned long>(std::string_view* src) noexcept;
 
 extern template Expected<long long, ConversionCode> str_to_integral<long long>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 extern template Expected<unsigned long long, ConversionCode>
-str_to_integral<unsigned long long>(StringPiece* src) noexcept;
+str_to_integral<unsigned long long>(std::string_view* src) noexcept;
 
 #if FOLLY_HAVE_INT128_T
 extern template Expected<__int128, ConversionCode> str_to_integral<__int128>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 extern template Expected<unsigned __int128, ConversionCode>
-str_to_integral<unsigned __int128>(StringPiece* src) noexcept;
+str_to_integral<unsigned __int128>(std::string_view* src) noexcept;
 #endif
 
+template <class T>
+inline Expected<T, ConversionCode> str_to_integral(StringPiece* src) noexcept {
+  auto view = std::string_view(src->data(), src->size());
+  auto result = str_to_integral<T>(&view);
+  src->assign(view.data(), src->end());
+  return result;
+}
+
 template <typename T>
-typename std::enable_if<
-    std::is_same<T, bool>::value,
-    Expected<T, ConversionCode>>::type convertTo(StringPiece* src) noexcept {
+  requires std::is_same<T, bool>::value
+Expected<T, ConversionCode> convertTo(StringPiece* src) noexcept {
   return str_to_bool(src);
 }
 
@@ -1148,6 +1171,24 @@ typename std::enable_if<
     is_integral_v<T> && !std::is_same<T, bool>::value,
     Expected<T, ConversionCode>>::type
 convertTo(StringPiece* src) noexcept {
+  return str_to_integral<T>(src);
+}
+
+template <typename T>
+  requires std::is_same_v<T, bool>
+Expected<T, ConversionCode> convertTo(std::string_view* src) noexcept {
+  return str_to_bool(src);
+}
+
+template <typename T>
+  requires std::is_floating_point_v<T>
+Expected<T, ConversionCode> convertTo(std::string_view* src) noexcept {
+  return str_to_floating_from_chars<T>(src);
+}
+
+template <typename T>
+  requires(is_integral_v<T> && !std::is_same_v<T, bool>)
+Expected<T, ConversionCode> convertTo(std::string_view* src) noexcept {
   return str_to_integral<T>(src);
 }
 
@@ -1512,10 +1553,11 @@ tryTo(StringPiece src) noexcept {
 }
 
 template <class Tgt, class Src>
-inline typename std::enable_if<
-    IsSomeString<Src>::value && !std::is_same<StringPiece, Tgt>::value,
-    Tgt>::type
-to(Src const& src) {
+  requires(
+      (IsSomeString<Src>::value && !std::is_same_v<StringPiece, Tgt>) ||
+      (std::is_same_v<std::string_view, Src> &&
+       std::is_same_v<StringPiece, Tgt>))
+inline Tgt to(Src const& src) {
   return to<Tgt>(StringPiece(src.data(), src.size()));
 }
 
@@ -1576,21 +1618,32 @@ Tgt to(StringPiece* src) {
 template <class Tgt, class Src>
   requires(std::is_same_v<Src, std::string_view> && !std::is_same_v<Tgt, Src*>)
 Expected<Tgt, detail::ParseToError<Tgt>> tryTo(Src* src) noexcept {
-  StringPiece piece(*src);
-  auto result = tryTo<Tgt>(&piece);
-  if (result.hasValue()) {
-    *src = std::string_view(piece);
+  if constexpr (is_arithmetic_v<Tgt>) {
+    return detail::convertTo<Tgt>(src);
+  } else {
+    StringPiece piece(*src);
+    auto result = tryTo<Tgt>(&piece);
+    if (result.hasValue()) {
+      *src = std::string_view(piece);
+    }
+    return result;
   }
-  return result;
 }
 
 template <class Tgt, class Src>
   requires(std::is_same_v<Src, std::string_view> && !std::is_same_v<Tgt, Src*>)
 Tgt to(Src* src) {
-  StringPiece piece(*src);
-  auto result = to<Tgt>(&piece);
-  *src = std::string_view(piece);
-  return result;
+  if constexpr (is_arithmetic_v<Tgt>) {
+    return detail::convertTo<Tgt>(src).thenOrThrow(
+        std::identity{}, [src](ConversionCode code) {
+          return makeConversionError(code, StringPiece(*src));
+        });
+  } else {
+    StringPiece piece(*src);
+    auto result = to<Tgt>(&piece);
+    *src = std::string_view(piece);
+    return result;
+  }
 }
 
 /**

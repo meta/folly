@@ -307,8 +307,8 @@ inline bool bool_str_cmp(const char** b, size_t len, const char* value) {
 
 } // namespace
 
-Expected<bool, ConversionCode> str_to_bool(StringPiece* src) noexcept {
-  auto b = src->begin(), e = src->end();
+Expected<bool, ConversionCode> str_to_bool(std::string_view* src) noexcept {
+  auto b = src->data(), e = src->data() + src->size();
   for (;; ++b) {
     if (b >= e) {
       return makeUnexpected(ConversionCode::EMPTY_INPUT_STRING);
@@ -374,8 +374,15 @@ Expected<bool, ConversionCode> str_to_bool(StringPiece* src) noexcept {
       return makeUnexpected(ConversionCode::BOOL_INVALID_VALUE);
   }
 
-  src->assign(b, e);
+  src->remove_prefix(size_t(b - src->data()));
 
+  return result;
+}
+
+Expected<bool, ConversionCode> str_to_bool(StringPiece* src) noexcept {
+  auto view = std::string_view(src->data(), src->size());
+  auto result = str_to_bool(&view);
+  src->assign(view.data(), src->end());
   return result;
 }
 
@@ -472,9 +479,9 @@ Tgt out_of_range_value(const char* b, const char* e) noexcept {
 /// build has fast_float, so that the tests cover it either way.
 template <class Tgt>
 Expected<Tgt, ConversionCode> str_to_floating_std_from_chars(
-    StringPiece* src) noexcept {
-  auto* e = src->end();
-  auto* b = skip_leading_space(src->begin(), e);
+    std::string_view* src) noexcept {
+  auto* e = src->data() + src->size();
+  auto* b = skip_leading_space(src->data(), e);
   if (b == e) {
     return makeUnexpected(ConversionCode::EMPTY_INPUT_STRING);
   }
@@ -496,14 +503,14 @@ Expected<Tgt, ConversionCode> str_to_floating_std_from_chars(
     return makeUnexpected(ConversionCode::STRING_TO_FLOAT_ERROR);
   }
 
-  src->advance(ptr - src->data());
+  src->remove_prefix(size_t(ptr - src->data()));
   return result;
 }
 
 template Expected<float, ConversionCode> str_to_floating_std_from_chars<float>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<double, ConversionCode>
-str_to_floating_std_from_chars<double>(StringPiece* src) noexcept;
+str_to_floating_std_from_chars<double>(std::string_view* src) noexcept;
 
 #endif // FOLLY_HAVE_STD_FLOAT_FROM_CHARS
 
@@ -513,10 +520,10 @@ str_to_floating_std_from_chars<double>(StringPiece* src) noexcept;
 
 template <class Tgt>
 Expected<Tgt, ConversionCode> str_to_floating_from_chars(
-    StringPiece* src) noexcept {
+    std::string_view* src) noexcept {
 #if FOLLY_USE_FAST_FLOAT
-  auto* e = src->end();
-  auto* b = skip_leading_space(src->begin(), e);
+  auto* e = src->data() + src->size();
+  auto* b = skip_leading_space(src->data(), e);
   if (b == e) {
     return makeUnexpected(ConversionCode::EMPTY_INPUT_STRING);
   }
@@ -532,7 +539,7 @@ Expected<Tgt, ConversionCode> str_to_floating_from_chars(
     return makeUnexpected(ConversionCode::STRING_TO_FLOAT_ERROR);
   }
 
-  src->advance(ptr - src->data());
+  src->remove_prefix(size_t(ptr - src->data()));
   return result;
 #else
   return str_to_floating_std_from_chars<Tgt>(src);
@@ -540,9 +547,9 @@ Expected<Tgt, ConversionCode> str_to_floating_from_chars(
 }
 
 template Expected<float, ConversionCode> str_to_floating_from_chars<float>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<double, ConversionCode> str_to_floating_from_chars<double>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 
 /**
  * StringPiece to double, with progress information. Alters the
@@ -772,11 +779,11 @@ digits_to<unsigned __int128>(const char*, const char*) noexcept;
 #endif
 
 /**
- * StringPiece to integrals, with progress information. Alters the
- * StringPiece parameter to munch the already-parsed characters.
+ * String view to integrals, with progress information. Alters the
+ * view parameter to munch the already-parsed characters.
  */
 template <class Tgt>
-Expected<Tgt, ConversionCode> str_to_integral(StringPiece* src) noexcept {
+Expected<Tgt, ConversionCode> str_to_integral(std::string_view* src) noexcept {
   using UT = make_unsigned_t<Tgt>;
 
   auto b = src->data(), past = src->data() + src->size();
@@ -817,44 +824,44 @@ Expected<Tgt, ConversionCode> str_to_integral(StringPiece* src) noexcept {
   auto res = sgn.finalize(tmp.value());
 
   if (res.hasValue()) {
-    src->advance(size_t(m - src->data()));
+    src->remove_prefix(size_t(m - src->data()));
   }
 
   return res;
 }
 
 template Expected<char, ConversionCode> str_to_integral<char>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<signed char, ConversionCode> str_to_integral<signed char>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<unsigned char, ConversionCode> str_to_integral<unsigned char>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 
 template Expected<short, ConversionCode> str_to_integral<short>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<unsigned short, ConversionCode>
-str_to_integral<unsigned short>(StringPiece* src) noexcept;
+str_to_integral<unsigned short>(std::string_view* src) noexcept;
 
 template Expected<int, ConversionCode> str_to_integral<int>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<unsigned int, ConversionCode> str_to_integral<unsigned int>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 
 template Expected<long, ConversionCode> str_to_integral<long>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<unsigned long, ConversionCode> str_to_integral<unsigned long>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 
 template Expected<long long, ConversionCode> str_to_integral<long long>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<unsigned long long, ConversionCode>
-str_to_integral<unsigned long long>(StringPiece* src) noexcept;
+str_to_integral<unsigned long long>(std::string_view* src) noexcept;
 
 #if FOLLY_HAVE_INT128_T
 template Expected<__int128, ConversionCode> str_to_integral<__int128>(
-    StringPiece* src) noexcept;
+    std::string_view* src) noexcept;
 template Expected<unsigned __int128, ConversionCode>
-str_to_integral<unsigned __int128>(StringPiece* src) noexcept;
+str_to_integral<unsigned __int128>(std::string_view* src) noexcept;
 #endif
 size_t formatDouble(double value, char* buf, size_t bufSize) {
   auto result = fmt::format_to_n(buf, bufSize, "{}", value);
