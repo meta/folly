@@ -3642,7 +3642,7 @@ AsyncSocket::ReadCode AsyncSocket::processNormalRead() {
         return failRead(__func__, ancillaryDataRes.error());
       }
 
-      if (FOLLY_UNLIKELY(readCallback_ != prevReadCallback)) {
+      if (readCallback_ != prevReadCallback) [[unlikely]] {
         // The `ancillaryData` callback is allowed to close the socket,
         // but otherwise is not allowed to change/replace the read callback.
         CHECK_EQ((shutdownFlags_ & SHUT_READ), SHUT_READ);

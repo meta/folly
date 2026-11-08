@@ -221,7 +221,7 @@ class IOBufQueue {
       // This can happen only if somebody is misusing the interface.
       // E.g. calling append after touching IOBufQueue or without checking
       // the length().
-      if (FOLLY_LIKELY(data_.cachedRange.first != nullptr)) {
+      if (data_.cachedRange.first != nullptr) [[likely]] {
         DCHECK_LE(n, length());
         data_.cachedRange.first += n;
       } else {
@@ -405,7 +405,7 @@ class IOBufQueue {
       std::size_t max = std::numeric_limits<std::size_t>::max()) {
     dcheckCacheIntegrity();
 
-    if (FOLLY_LIKELY(writableTail() != nullptr && tailroom() >= min)) {
+    if (writableTail() != nullptr && tailroom() >= min) [[likely]] {
       return std::make_pair(
           writableTail(), std::min<std::size_t>(max, tailroom()));
     }
@@ -579,7 +579,7 @@ class IOBufQueue {
    * constructor.
    */
   size_t chainLength() const {
-    if (FOLLY_UNLIKELY(!options_.cacheChainLength)) {
+    if (!options_.cacheChainLength) [[unlikely]] {
       folly::throw_exception<std::invalid_argument>(
           "IOBufQueue: chain length not cached");
     }
@@ -760,9 +760,9 @@ class IOBufQueue {
    * Update cached writable tail range. Called by updateGuard()
    */
   void updateWritableTailCache() noexcept {
-    if (FOLLY_LIKELY(head_ != nullptr)) {
+    if (head_ != nullptr) [[likely]] {
       IOBuf* buf = head_->prev();
-      if (FOLLY_LIKELY(!buf->isSharedOne())) {
+      if (!buf->isSharedOne()) [[likely]] {
         tailStart_ = buf->writableTail();
         cachePtr_->cachedRange = std::pair<uint8_t*, uint8_t*>(
             tailStart_, tailStart_ + buf->tailroom());

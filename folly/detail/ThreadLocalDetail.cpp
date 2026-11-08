@@ -279,7 +279,7 @@ ThreadEntryList* StaticMetaBase::getThreadEntryList() {
   ThreadEntryList* threadEntryList =
       static_cast<ThreadEntryList*>(pthread_getspecific(instance.get()));
 
-  if (FOLLY_UNLIKELY(!threadEntryList)) {
+  if (!threadEntryList) [[unlikely]] {
     auto uptr = std::make_unique<ThreadEntryList>();
     int ret = pthread_setspecific(instance.get(), uptr.get());
     checkPosixError(ret, "pthread_setspecific failed");

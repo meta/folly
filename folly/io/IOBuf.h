@@ -1456,11 +1456,11 @@ class IOBuf {
    */
   bool isSharedOne() const noexcept {
     // If this is a user-owned buffer, it is always considered shared
-    if (FOLLY_UNLIKELY(!sharedInfo_)) {
+    if (!sharedInfo_) [[unlikely]] {
       return true;
     }
 
-    if (FOLLY_UNLIKELY(sharedInfo_->externallyShared)) {
+    if (sharedInfo_->externallyShared) [[unlikely]] {
       return true;
     }
 

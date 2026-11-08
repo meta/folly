@@ -321,7 +321,7 @@ unique_ptr<IOBuf> IOBufQueue::split(
   auto guard = updateGuard();
   unique_ptr<IOBuf> result;
   while (n != 0) {
-    if (FOLLY_UNLIKELY(head_ == nullptr)) {
+    if (head_ == nullptr) [[unlikely]] {
       if (throwOnUnderflow) {
         throw std::underflow_error(
             "Attempt to remove more bytes than are present in IOBufQueue");
@@ -343,7 +343,7 @@ unique_ptr<IOBuf> IOBufQueue::split(
       break;
     }
   }
-  if (FOLLY_UNLIKELY(result == nullptr)) {
+  if (result == nullptr) [[unlikely]] {
     return createBuf(0);
   }
   return result;

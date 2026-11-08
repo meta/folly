@@ -78,7 +78,7 @@ void Fiber::init(bool recordStackUsed) {
 // the fiber's stack.
 #ifndef FOLLY_SANITIZE_ADDRESS
   recordStackUsed_ = recordStackUsed;
-  if (FOLLY_UNLIKELY(recordStackUsed_ && !stackFilledWithMagic_)) {
+  if (recordStackUsed_ && !stackFilledWithMagic_) [[unlikely]] {
     CHECK_EQ(
         reinterpret_cast<intptr_t>(fiberStackLimit_) % sizeof(uint64_t), 0u);
     CHECK_EQ(fiberStackSize_ % sizeof(uint64_t), 0u);
@@ -159,7 +159,7 @@ void Fiber::recordStackPosition() {
           current_exception(), "running Fiber func_/resultFunc_");
     }
 
-    if (FOLLY_UNLIKELY(recordStackUsed_)) {
+    if (recordStackUsed_) [[unlikely]] {
       auto currentPosition = nonMagicInBytes(fiberStackLimit_, fiberStackSize_);
       fiberStackHighWatermark_ =
           std::max(fiberStackHighWatermark_, currentPosition);

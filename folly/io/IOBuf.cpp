@@ -313,7 +313,7 @@ template <class StorageType>
 #else
     compiler_may_unsafely_assume_unreachable();
 #endif /* FOLLY_HAS_MEMORY_RESOURCE */
-  } else if (FOLLY_LIKELY(size)) {
+  } else if (size) [[likely]] {
     if (io_buf_free_cb) {
       io_buf_free_cb(storage, size);
     }
@@ -1179,7 +1179,7 @@ void IOBuf::reserveSlow(std::size_t minHeadroom, std::size_t minTailroom) {
       size_t copySlack = capacity() - length_;
       if (copySlack * 2 <= length_) {
         void* p = realloc(buf_, newAllocatedCapacity);
-        if (FOLLY_UNLIKELY(p == nullptr)) {
+        if (p == nullptr) [[unlikely]] {
           throw_exception<std::bad_alloc>();
         }
         newBuffer = static_cast<uint8_t*>(p);
@@ -1439,7 +1439,7 @@ std::unique_ptr<IOBuf> IOBuf::takeOwnershipIov(
       }
     }
   }
-  if (FOLLY_UNLIKELY(result == nullptr)) {
+  if (result == nullptr) [[unlikely]] {
     return create(0);
   }
   return result;
@@ -1466,7 +1466,7 @@ IOBuf::FillIovResult IOBuf::fillIov(struct iovec* iov, size_t len) const {
 }
 
 uint32_t IOBuf::approximateShareCountOne() const noexcept {
-  if (FOLLY_UNLIKELY(!sharedInfo_)) {
+  if (!sharedInfo_) [[unlikely]] {
     return 1U;
   }
   return sharedInfo_->refcount.load(std::memory_order_acquire);

@@ -160,7 +160,7 @@ size_t qfind_first_byte_of_sse42(
 
 size_t qfind_first_byte_of_sse42(
     const StringPieceLite haystack, const StringPieceLite needles) {
-  if (FOLLY_UNLIKELY(needles.empty() || haystack.empty())) {
+  if (needles.empty() || haystack.empty()) [[unlikely]] {
     return std::string::npos;
   } else if (needles.size() <= 16) {
     // we can save some unnecessary load instructions by optimizing for

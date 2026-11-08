@@ -47,7 +47,7 @@ void TimekeeperScheduledExecutor::scheduleAt(
       t - std::chrono::steady_clock::now());
   if (delay.count() > 0) {
     auto tk = getTimekeeper_();
-    if (FOLLY_UNLIKELY(!tk)) {
+    if (!tk) [[unlikely]] {
       throw TimekeeperScheduledExecutorNoTimekeeper();
     }
     tk->after(delay)

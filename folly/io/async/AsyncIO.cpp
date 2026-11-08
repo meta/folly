@@ -216,7 +216,7 @@ int AsyncIO::drainPollFd() {
   do {
     rc = fileops::read(pollFd_, &numEvents, 8);
   } while (rc == -1 && errno == EINTR);
-  if (FOLLY_UNLIKELY(rc == -1 && errno == EAGAIN)) {
+  if (rc == -1 && errno == EAGAIN) [[unlikely]] {
     return 0;
   }
   checkUnixError(rc, "AsyncIO: read from event fd failed");

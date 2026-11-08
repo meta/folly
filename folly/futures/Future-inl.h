@@ -2195,12 +2195,12 @@ SemiFuture<T> SemiFuture<T>::within(
   };
 
   std::shared_ptr<Timekeeper> tks;
-  if (FOLLY_LIKELY(!tk)) {
+  if (!tk) [[likely]] {
     tks = folly::detail::getTimekeeperSingleton();
     tk = tks.get();
   }
 
-  if (FOLLY_UNLIKELY(!tk)) {
+  if (!tk) [[unlikely]] {
     return makeSemiFuture<T>(FutureNoTimekeeper());
   }
 

@@ -391,7 +391,7 @@ TimedRWMutexImpl<ReaderPriority, BatonType>::shouldReadersWait(uint64_t state) {
 template <bool ReaderPriority, typename BatonType>
 bool TimedRWMutexImpl<ReaderPriority, BatonType>::try_lock_shared_fast() {
   return StateLock::tryMutate(state_, [](uint64_t& state) {
-    if (FOLLY_UNLIKELY(shouldReadersWait(state))) {
+    if (shouldReadersWait(state)) [[unlikely]] {
       return false;
     }
     state += kReadersInc;
@@ -404,7 +404,7 @@ bool TimedRWMutexImpl<ReaderPriority, BatonType>::try_unlock_shared_fast() {
   return StateLock::tryMutate(state_, [](uint64_t& state) {
     auto numReaders = state >> kReadersShift;
     assert(!(state & kWriteLocked) && numReaders > 0);
-    if (FOLLY_UNLIKELY(numReaders == 1 && (state & kHasWriteWaiters))) {
+    if (numReaders == 1 && (state & kHasWriteWaiters)) [[unlikely]] {
       return false; // We may need to wake up a writer.
     }
     state -= kReadersInc;

@@ -80,9 +80,8 @@ bool Baton::timedWaitThread(
       std::chrono::duration_cast<std::chrono::milliseconds>(
           deadline - Clock::now()));
 
-  if (FOLLY_LIKELY(
-          waiter == NO_WAITER &&
-          waiter_.compare_exchange_strong(waiter, THREAD_WAITING))) {
+  if (waiter == NO_WAITER &&
+      waiter_.compare_exchange_strong(waiter, THREAD_WAITING)) [[likely]] {
     do {
       auto* futex = &futex_.futex;
       const auto wait_rv = folly::detail::futexWaitUntil(
@@ -94,7 +93,7 @@ bool Baton::timedWaitThread(
     } while (waiter == THREAD_WAITING);
   }
 
-  if (FOLLY_LIKELY(waiter == POSTED)) {
+  if (waiter == POSTED) [[likely]] {
     return true;
   }
 

@@ -905,7 +905,7 @@ void AsyncIoUringSocket::ReadSqe::sendReadBuf(
   VLOG(5) << "AsyncIoUringSocket::ReadSqe::sendReadBuf "
           << hexlify(buf->coalesce());
   while (readCallback_) {
-    if (FOLLY_LIKELY(readCallback_->isBufferMovable())) {
+    if (readCallback_->isBufferMovable()) [[likely]] {
       readCallback_->readBufferAvailable(std::move(buf));
       return;
     }
@@ -918,7 +918,7 @@ void AsyncIoUringSocket::ReadSqe::sendReadBuf(
       size_t took = std::min<size_t>(sz, buf->length());
       VLOG(1) << "... inner sz=" << sz << "  len=" << buf->length();
 
-      if (FOLLY_LIKELY(took)) {
+      if (took) [[likely]] {
         memcpy(b, buf->data(), took);
 
         readCallback_->readDataAvailable(took);

@@ -636,7 +636,7 @@ struct FOLLY_EXPORT StaticMeta final : StaticMetaBase {
     // cached fast path, leaving only one branch here and one indirection below.
     uint32_t id = ent->getOrInvalid();
     auto& cache = getLocalCache();
-    if (FOLLY_UNLIKELY(cache.capacity <= id)) {
+    if (cache.capacity <= id) [[unlikely]] {
       getSlowReserveAndCache(ent, cache);
     }
     return cache.threadEntry;
@@ -654,7 +654,7 @@ struct FOLLY_EXPORT StaticMeta final : StaticMetaBase {
 
     auto& inst = instance();
     auto threadEntry = inst.threadEntry_();
-    if (FOLLY_UNLIKELY(threadEntry->getElementsCapacity() <= id)) {
+    if (threadEntry->getElementsCapacity() <= id) [[unlikely]] {
       inst.reserve(ent);
       id = ent->getOrInvalid();
     }

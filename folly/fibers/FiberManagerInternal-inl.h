@@ -229,7 +229,7 @@ inline void FiberManager::loopUntilNoReady() {
 
 template <typename LoopFunc>
 void FiberManager::runFibersHelper(LoopFunc&& loopFunc) {
-  if (FOLLY_UNLIKELY(!alternateSignalStackRegistered_)) {
+  if (!alternateSignalStackRegistered_) [[unlikely]] {
     maybeRegisterAlternateSignalStack();
   }
 
@@ -547,7 +547,7 @@ void FiberManager::addTaskFinallyEager(F&& func, G&& finally) {
 
 template <typename F>
 std::invoke_result_t<F> FiberManager::runInMainContext(F&& func) {
-  if (FOLLY_UNLIKELY(activeFiber_ == nullptr)) {
+  if (activeFiber_ == nullptr) [[unlikely]] {
     return detail::runNoInline(std::forward<F>(func));
   }
 
@@ -636,7 +636,7 @@ typename FirstArgOf<F>::type::value_type inline await_async(F&& func) {
 template <typename F>
 std::invoke_result_t<F> inline runInMainContext(F&& func) {
   auto fm = FiberManager::getFiberManagerUnsafe();
-  if (FOLLY_UNLIKELY(fm == nullptr)) {
+  if (fm == nullptr) [[unlikely]] {
     return detail::runNoInline(std::forward<F>(func));
   }
   return fm->runInMainContext(std::forward<F>(func));

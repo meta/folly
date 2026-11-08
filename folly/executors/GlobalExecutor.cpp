@@ -247,7 +247,7 @@ void setIOExecutor(std::weak_ptr<IOExecutor> executor) {
 
 EventBase* getUnsafeMutableGlobalEventBase() {
   auto executor = getUnsafeMutableGlobalIOExecutor();
-  if (FOLLY_LIKELY(!!executor)) {
+  if (!!executor) [[likely]] {
     return executor->getEventBase();
   }
 
