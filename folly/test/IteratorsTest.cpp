@@ -301,3 +301,85 @@ TEST(IteratorsTest, ProxyReference) {
   EXPECT_EQ(3, begin[1].get());
   EXPECT_TRUE(begin < end);
 }
+
+// C++20 iterators don't need a pointer member, but
+// std::reverse_iterator<It>::operator-> returns
+// std::iterator_traits<It>::pointer, so IteratorFacade keeps declaring pointer.
+TEST(IteratorsTest, StdReverseIteratorArrow) {
+  std::vector<int> v{40, 41, 42};
+  std::reverse_iterator<IntVectorIter> rv(IntVectorIter(v.end()));
+  EXPECT_EQ(&v[2], rv.operator->());
+
+  int a[] = {1, 2, 3};
+  std::reverse_iterator<ProxyIter> rp(ProxyIter(a + 3));
+  EXPECT_EQ(3, rp->get());
+}
+
+namespace {
+template <class I>
+concept PreDecrementable = requires(I it) { --it; };
+
+template <class I>
+concept PostDecrementable = requires(I it) { it--; };
+} // namespace
+
+TEST(IteratorsTest, DecrementOnlyForBidirectional) {
+  static_assert(!PreDecrementable<IntArrayIterator>);
+  static_assert(!PostDecrementable<IntArrayIterator>);
+  static_assert(!PreDecrementable<IntPointerIter>);
+  static_assert(!PostDecrementable<IntPointerIter>);
+  static_assert(PreDecrementable<IntVectorIter>);
+  static_assert(PostDecrementable<IntVectorIter>);
+  static_assert(PreDecrementable<ProxyIter>);
+  static_assert(PostDecrementable<ProxyIter>);
+}
+
+namespace {
+struct ConstexprIter
+    : IteratorAdaptor<
+          ConstexprIter,
+          int const*,
+          int const,
+          std::random_access_iterator_tag> {
+  using Super = IteratorAdaptor<
+      ConstexprIter,
+      int const*,
+      int const,
+      std::random_access_iterator_tag>;
+  constexpr explicit ConstexprIter(int const* ptr) : Super(ptr) {}
+};
+
+constexpr int kConstexprArray[] = {40, 41, 42, 43};
+} // namespace
+
+TEST(IteratorsTest, ConstexprOperators) {
+  constexpr ConstexprIter begin(kConstexprArray);
+  constexpr ConstexprIter end(kConstexprArray + 4);
+  static_assert(*begin == 40);
+  static_assert(*begin.operator->() == 40);
+  static_assert(begin == ConstexprIter(kConstexprArray));
+  static_assert(begin != end);
+  static_assert(begin[2] == 42);
+  static_assert(*(begin + 3) == 43);
+  static_assert(*(3 + begin) == 43);
+  static_assert(*(end - 1) == 43);
+  static_assert(end - begin == 4);
+  static_assert((begin <=> end) == std::strong_ordering::less);
+  static_assert(begin < end);
+  static_assert([] {
+    ConstexprIter it(kConstexprArray);
+    ++it;
+    return *it++ == 41 && *it == 42;
+  }());
+  static_assert([] {
+    ConstexprIter it(kConstexprArray + 4);
+    --it;
+    return *it-- == 43 && *it == 42;
+  }());
+  static_assert([] {
+    ConstexprIter it(kConstexprArray);
+    it += 3;
+    it -= 1;
+    return *it == 42;
+  }());
+}

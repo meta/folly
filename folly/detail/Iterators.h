@@ -73,14 +73,16 @@ template <
     class R = V&,
     class Diff = std::ptrdiff_t>
 class IteratorFacade {
+  static constexpr bool kBidirectional =
+      std::is_base_of_v<std::bidirectional_iterator_tag, Tag>;
   static constexpr bool kRandomAccess =
       std::is_base_of_v<std::random_access_iterator_tag, Tag>;
 
   // What operator-> returns when R is a proxy rather than a reference.
   class ArrowProxy {
    public:
-    explicit ArrowProxy(R ref) : ref_(std::move(ref)) {}
-    R* operator->() { return std::addressof(ref_); }
+    constexpr explicit ArrowProxy(R ref) : ref_(std::move(ref)) {}
+    constexpr R* operator->() { return std::addressof(ref_); }
 
    private:
     R ref_;
@@ -94,13 +96,17 @@ class IteratorFacade {
   using difference_type = Diff;
   using iterator_category = Tag;
 
-  friend bool operator==(D const& lhs, D const& rhs) { return equal(lhs, rhs); }
+  friend constexpr bool operator==(D const& lhs, D const& rhs) {
+    return equal(lhs, rhs);
+  }
 
-  friend bool operator!=(D const& lhs, D const& rhs) { return !(lhs == rhs); }
+  friend constexpr bool operator!=(D const& lhs, D const& rhs) {
+    return !(lhs == rhs);
+  }
 
-  R operator*() const { return asDerivedConst().dereference(); }
+  constexpr R operator*() const { return asDerivedConst().dereference(); }
 
-  pointer operator->() const {
+  constexpr pointer operator->() const {
     if constexpr (std::is_reference_v<R>) {
       return std::addressof(operator*());
     } else {
@@ -108,43 +114,47 @@ class IteratorFacade {
     }
   }
 
-  D& operator++() {
+  constexpr D& operator++() {
     asDerived().increment();
     return asDerived();
   }
 
-  D operator++(int) {
+  constexpr D operator++(int) {
     auto ret = asDerived(); // copy
     asDerived().increment();
     return ret;
   }
 
-  D& operator--() {
+  constexpr D& operator--()
+    requires kBidirectional
+  {
     asDerived().decrement();
     return asDerived();
   }
 
-  D operator--(int) {
+  constexpr D operator--(int)
+    requires kBidirectional
+  {
     auto ret = asDerived(); // copy
     asDerived().decrement();
     return ret;
   }
 
-  D& operator+=(Diff n)
+  constexpr D& operator+=(Diff n)
     requires kRandomAccess
   {
     asDerived().advance(n);
     return asDerived();
   }
 
-  D& operator-=(Diff n)
+  constexpr D& operator-=(Diff n)
     requires kRandomAccess
   {
     asDerived().advance(-n);
     return asDerived();
   }
 
-  R operator[](Diff n) const
+  constexpr R operator[](Diff n) const
     requires kRandomAccess
   {
     D it = asDerivedConst();
@@ -152,44 +162,48 @@ class IteratorFacade {
     return *it;
   }
 
-  friend D operator+(D it, Diff n)
+  friend constexpr D operator+(D it, Diff n)
     requires kRandomAccess
   {
     return it += n;
   }
 
-  friend D operator+(Diff n, D it)
+  friend constexpr D operator+(Diff n, D it)
     requires kRandomAccess
   {
     return it += n;
   }
 
-  friend D operator-(D it, Diff n)
+  friend constexpr D operator-(D it, Diff n)
     requires kRandomAccess
   {
     return it -= n;
   }
 
-  friend Diff operator-(D const& lhs, D const& rhs)
+  friend constexpr Diff operator-(D const& lhs, D const& rhs)
     requires kRandomAccess
   {
     return -distance(lhs, rhs);
   }
 
-  friend std::strong_ordering operator<=>(D const& lhs, D const& rhs)
+  friend constexpr std::strong_ordering operator<=>(D const& lhs, D const& rhs)
     requires kRandomAccess
   {
     return Diff(0) <=> distance(lhs, rhs);
   }
 
  private:
-  D& asDerived() { return static_cast<D&>(*this); }
+  constexpr D& asDerived() { return static_cast<D&>(*this); }
 
-  D const& asDerivedConst() const { return static_cast<D const&>(*this); }
+  constexpr D const& asDerivedConst() const {
+    return static_cast<D const&>(*this);
+  }
 
-  static bool equal(D const& lhs, D const& rhs) { return lhs.equal(rhs); }
+  static constexpr bool equal(D const& lhs, D const& rhs) {
+    return lhs.equal(rhs);
+  }
 
-  static Diff distance(D const& lhs, D const& rhs) {
+  static constexpr Diff distance(D const& lhs, D const& rhs) {
     return lhs.distance_to(rhs);
   }
 };
@@ -222,26 +236,26 @@ class IteratorAdaptor : public IteratorFacade<D, V, Tag, R, Diff> {
   using base_type = I;
 
   IteratorAdaptor() = default;
-  explicit IteratorAdaptor(I base) : base_(std::move(base)) {}
+  constexpr explicit IteratorAdaptor(I base) : base_(std::move(base)) {}
 
-  void increment() { ++base_; }
+  constexpr void increment() { ++base_; }
 
-  void decrement() { --base_; }
+  constexpr void decrement() { --base_; }
 
-  void advance(Diff n) { base_ += n; }
+  constexpr void advance(Diff n) { base_ += n; }
 
-  R dereference() const { return *base_; }
+  constexpr R dereference() const { return *base_; }
 
-  bool equal(D const& rhs) const { return base_ == rhs.base_; }
+  constexpr bool equal(D const& rhs) const { return base_ == rhs.base_; }
 
-  Diff distance_to(D const& rhs) const { return rhs.base_ - base_; }
+  constexpr Diff distance_to(D const& rhs) const { return rhs.base_ - base_; }
 
-  I const& base() const { return base_; }
-  I& base() { return base_; }
+  constexpr I const& base() const { return base_; }
+  constexpr I& base() { return base_; }
 
  protected:
-  I const& base_reference() const { return base_; }
-  I& base_reference() { return base_; }
+  constexpr I const& base_reference() const { return base_; }
+  constexpr I& base_reference() { return base_; }
 
  private:
   I base_;
