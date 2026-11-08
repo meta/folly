@@ -230,7 +230,7 @@ namespace detail {
  */
 inline ConversionCode enforceWhitespaceErr(StringPiece sp) {
   for (auto c : sp) {
-    if (FOLLY_UNLIKELY(!std::isspace(c))) {
+    if (!std::isspace(c)) [[unlikely]] {
       return ConversionCode::NON_WHITESPACE_AFTER_END;
     }
   }
@@ -1251,7 +1251,7 @@ typename std::enable_if<
         !std::is_same<Tgt, Src>::value,
     Expected<Tgt, ConversionCode>>::type
 convertTo(const Src& value) noexcept {
-  if (FOLLY_UNLIKELY(std::isinf(value))) {
+  if (std::isinf(value)) [[unlikely]] {
     return static_cast<Tgt>(value);
   }
   if constexpr (
@@ -1334,11 +1334,11 @@ typename std::enable_if<
         (std::is_floating_point<Src>::value && is_integral_v<Tgt>),
     Expected<Tgt, ConversionCode>>::type
 convertTo(const Src& value) noexcept {
-  if (FOLLY_LIKELY(checkConversion<Tgt>(value))) {
+  if (checkConversion<Tgt>(value)) [[likely]] {
     Tgt result = static_cast<Tgt>(value);
-    if (FOLLY_LIKELY(checkConversion<Src>(result))) {
+    if (checkConversion<Src>(result)) [[likely]] {
       Src witness = static_cast<Src>(result);
-      if (FOLLY_LIKELY(value == witness)) {
+      if (value == witness) [[likely]] {
         return result;
       }
     }
@@ -1450,7 +1450,7 @@ using ParseToResult = decltype(parseTo(StringPiece{}, std::declval<Tgt&>()));
 struct CheckTrailingSpace {
   Expected<Unit, ConversionCode> operator()(StringPiece sp) const {
     auto e = enforceWhitespaceErr(sp);
-    if (FOLLY_UNLIKELY(e != ConversionCode::SUCCESS)) {
+    if (e != ConversionCode::SUCCESS) [[unlikely]] {
       return makeUnexpected(e);
     }
     return unit;

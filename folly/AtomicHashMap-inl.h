@@ -305,7 +305,7 @@ AtomicHashMap<
   typename SubMap::SimpleRetT ret =
       primaryMap
           ->template findInternal<LookupKeyT, LookupHashFcn, LookupEqualFcn>(k);
-  if (FOLLY_LIKELY(ret.idx != primaryMap->capacity_)) {
+  if (ret.idx != primaryMap->capacity_) [[likely]] {
     return SimpleRetT(0, ret.idx, ret.success);
   }
   const unsigned int numMaps =
@@ -317,7 +317,7 @@ AtomicHashMap<
         thisMap
             ->template findInternal<LookupKeyT, LookupHashFcn, LookupEqualFcn>(
                 k);
-    if (FOLLY_LIKELY(ret.idx != thisMap->capacity_)) {
+    if (ret.idx != thisMap->capacity_) [[likely]] {
       return SimpleRetT(i, ret.idx, ret.success);
     }
   }

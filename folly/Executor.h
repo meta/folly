@@ -117,7 +117,7 @@ inline void traceKeepAliveObjAcquire(
     [[maybe_unused]] Executor* target) noexcept {
 #if FOLLY_ENABLE_KEEPALIVE_OBJ_TRACE
   auto hook = keepAliveObjAcquireHook().load(std::memory_order_relaxed);
-  if (FOLLY_UNLIKELY(hook != nullptr)) {
+  if (hook != nullptr) [[unlikely]] {
     hook(obj, target);
   }
 #endif
@@ -128,7 +128,7 @@ inline void traceKeepAliveObjRelease(
     [[maybe_unused]] Executor* target) noexcept {
 #if FOLLY_ENABLE_KEEPALIVE_OBJ_TRACE
   auto hook = keepAliveObjReleaseHook().load(std::memory_order_relaxed);
-  if (FOLLY_UNLIKELY(hook != nullptr)) {
+  if (hook != nullptr) [[unlikely]] {
     hook(obj, target);
   }
 #endif
@@ -139,7 +139,7 @@ inline void traceKeepAliveObjMove(
     [[maybe_unused]] const void* to) noexcept {
 #if FOLLY_ENABLE_KEEPALIVE_OBJ_TRACE
   auto hook = keepAliveObjMoveHook().load(std::memory_order_relaxed);
-  if (FOLLY_UNLIKELY(hook != nullptr)) {
+  if (hook != nullptr) [[unlikely]] {
     hook(from, to);
   }
 #endif

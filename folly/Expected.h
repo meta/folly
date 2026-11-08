@@ -677,7 +677,7 @@ struct ExpectedHelper {
       T::template return_<E>(
           (std::declval<Fn>()(std::declval<This>().value()), unit)),
       std::declval<Fns>()...)) {
-    if (FOLLY_LIKELY(ex.which_ == expected_detail::Which::eValue)) {
+    if (ex.which_ == expected_detail::Which::eValue) [[likely]] {
       return T::then_(
           T::template return_<E>(
               // Uses the comma operator defined above IFF the lambda
@@ -696,7 +696,7 @@ struct ExpectedHelper {
       class Err = decltype(std::declval<No>()(std::declval<This>().error()))
           FOLLY_REQUIRES_TRAILING(!std::is_void<Err>::value)>
   static Ret thenOrThrow_(This&& ex, Yes&& yes, No&& no) {
-    if (FOLLY_LIKELY(ex.which_ == expected_detail::Which::eValue)) {
+    if (ex.which_ == expected_detail::Which::eValue) [[likely]] {
       return Ret(static_cast<Yes&&>(yes)(static_cast<This&&>(ex).value()));
     }
     throw_exception(static_cast<No&&>(no)(static_cast<This&&>(ex).error()));
@@ -710,7 +710,7 @@ struct ExpectedHelper {
       class Err = decltype(std::declval<No>()(std::declval<This&>().error()))
           FOLLY_REQUIRES_TRAILING(std::is_void<Err>::value)>
   static Ret thenOrThrow_(This&& ex, Yes&& yes, No&& no) {
-    if (FOLLY_LIKELY(ex.which_ == expected_detail::Which::eValue)) {
+    if (ex.which_ == expected_detail::Which::eValue) [[likely]] {
       return Ret(static_cast<Yes&&>(yes)(static_cast<This&&>(ex).value()));
     }
     static_cast<No&&>(no)(ex.error());
@@ -744,7 +744,7 @@ struct ExpectedHelper {
   static auto orElse_(This&& ex, No&& no, AndFns&&... fns) -> Expected<V, E> {
     // Note - this basically decays into then_ once the first type (No) is
     // called for the error.
-    if (FOLLY_LIKELY(ex.which_ == expected_detail::Which::eValue)) {
+    if (ex.which_ == expected_detail::Which::eValue) [[likely]] {
       return T::template return_<E>((T::then_(
           T::template return_<E>(
               // Uses the comma operator defined above IFF the lambda
@@ -809,7 +809,7 @@ struct ExpectedHelper {
       class Err = decltype(std::declval<No>()(std::declval<This&>().error()))
           FOLLY_REQUIRES_TRAILING(std::is_void<Err>::value)>
   static auto orElse_(This&& ex, No&& no, AndFns&&...) -> Expected<V, E> {
-    if (FOLLY_LIKELY(ex.which_ == expected_detail::Which::eValue)) {
+    if (ex.which_ == expected_detail::Which::eValue) [[likely]] {
       return return_<E>(static_cast<decltype(ex)&&>(ex).value());
     }
     static_cast<No&&>(no)(static_cast<This&&>(ex).error());
@@ -1226,7 +1226,7 @@ class Expected final : expected_detail::ExpectedStorage<Value, Error> {
   // Return a copy of the value if set, or a given default if not.
   template <class U>
   Value value_or(U&& dflt) const& {
-    if (FOLLY_LIKELY(this->which_ == expected_detail::Which::eValue)) {
+    if (this->which_ == expected_detail::Which::eValue) [[likely]] {
       return this->value_;
     }
     return static_cast<U&&>(dflt);
@@ -1234,7 +1234,7 @@ class Expected final : expected_detail::ExpectedStorage<Value, Error> {
 
   template <class U>
   Value value_or(U&& dflt) && {
-    if (FOLLY_LIKELY(this->which_ == expected_detail::Which::eValue)) {
+    if (this->which_ == expected_detail::Which::eValue) [[likely]] {
       return std::move(this->value_);
     }
     return static_cast<U&&>(dflt);
@@ -1423,8 +1423,8 @@ class Expected final : expected_detail::ExpectedStorage<Value, Error> {
   }
 
   void requireValue() const {
-    if (FOLLY_UNLIKELY(!hasValue())) {
-      if (FOLLY_LIKELY(hasError())) {
+    if (!hasValue()) [[unlikely]] {
+      if (hasError()) [[likely]] {
         throw_exception<BadExpectedAccess<Error>>(this->error_);
       }
       throw_exception<BadExpectedAccess<void>>();
@@ -1433,8 +1433,8 @@ class Expected final : expected_detail::ExpectedStorage<Value, Error> {
 
   template <typename Self>
   static void requireValueMove(Self& self) {
-    if (FOLLY_UNLIKELY(!self.hasValue())) {
-      if (FOLLY_LIKELY(self.hasError())) {
+    if (!self.hasValue()) [[unlikely]] {
+      if (self.hasError()) [[likely]] {
         throw_exception<BadExpectedAccess<Error>>(std::move(self.error_));
       }
       throw_exception<BadExpectedAccess<void>>();
@@ -1445,7 +1445,7 @@ class Expected final : expected_detail::ExpectedStorage<Value, Error> {
   void requireValueMove() const { return requireValueMove(*this); }
 
   void requireError() const {
-    if (FOLLY_UNLIKELY(!hasError())) {
+    if (!hasError()) [[unlikely]] {
       throw_exception<BadExpectedAccess<void>>();
     }
   }
@@ -1457,13 +1457,13 @@ template <class Value, class Error>
 inline typename std::enable_if<IsEqualityComparable<Value>::value, bool>::type
 operator==(
     const Expected<Value, Error>& lhs, const Expected<Value, Error>& rhs) {
-  if (FOLLY_UNLIKELY(lhs.uninitializedByException())) {
+  if (lhs.uninitializedByException()) [[unlikely]] {
     throw_exception<BadExpectedAccess<void>>();
   }
-  if (FOLLY_UNLIKELY(lhs.which_ != rhs.which_)) {
+  if (lhs.which_ != rhs.which_) [[unlikely]] {
     return false;
   }
-  if (FOLLY_UNLIKELY(lhs.hasError())) {
+  if (lhs.hasError()) [[unlikely]] {
     return true; // All error states are considered equal
   }
   return lhs.value_ == rhs.value_;
@@ -1481,14 +1481,14 @@ template <class Value, class Error>
 inline typename std::enable_if<IsLessThanComparable<Value>::value, bool>::type
 operator<(
     const Expected<Value, Error>& lhs, const Expected<Value, Error>& rhs) {
-  if (FOLLY_UNLIKELY(
-          lhs.uninitializedByException() || rhs.uninitializedByException())) {
+  if (lhs.uninitializedByException() || rhs.uninitializedByException())
+      [[unlikely]] {
     throw_exception<BadExpectedAccess<void>>();
   }
-  if (FOLLY_UNLIKELY(lhs.hasError())) {
+  if (lhs.hasError()) [[unlikely]] {
     return !rhs.hasError();
   }
-  if (FOLLY_UNLIKELY(rhs.hasError())) {
+  if (rhs.hasError()) [[unlikely]] {
     return false;
   }
   return lhs.value_ < rhs.value_;

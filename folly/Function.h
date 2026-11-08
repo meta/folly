@@ -820,7 +820,7 @@ class Function final : private detail::function::FunctionTraits<FunctionType> {
    */
   Function& operator=(Function&& that) noexcept {
     exec(Op::NUKE, &data_, nullptr);
-    if (FOLLY_LIKELY(this != &that)) {
+    if (this != &that) [[likely]] {
       that.exec(Op::MOVE, &that.data_, &data_);
       exec_ = that.exec_;
       call_ = that.call_;

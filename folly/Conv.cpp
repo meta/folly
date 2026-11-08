@@ -575,7 +575,7 @@ class SignedValueHandler<T, true> {
     if (!std::isdigit(*b)) {
       if (*b == '-') {
         negative_ = true;
-      } else if (FOLLY_UNLIKELY(*b != '+')) {
+      } else if (*b != '+') [[unlikely]] {
         return ConversionCode::INVALID_LEADING_CHAR;
       }
       ++b;
@@ -601,12 +601,12 @@ class SignedValueHandler<T, true> {
 
       FOLLY_POP_WARNING
 
-      if (FOLLY_UNLIKELY(rv > 0)) {
+      if (rv > 0) [[unlikely]] {
         return makeUnexpected(ConversionCode::NEGATIVE_OVERFLOW);
       }
     } else {
       rv = T(value);
-      if (FOLLY_UNLIKELY(rv < 0)) {
+      if (rv < 0) [[unlikely]] {
         return makeUnexpected(ConversionCode::POSITIVE_OVERFLOW);
       }
     }
@@ -646,7 +646,7 @@ inline Expected<Tgt, ConversionCode> digits_to(
   SignedValueHandler<Tgt> sgn;
 
   auto err = sgn.init(b);
-  if (FOLLY_UNLIKELY(err != ConversionCode::SUCCESS)) {
+  if (err != ConversionCode::SUCCESS) [[unlikely]] {
     return makeUnexpected(err);
   }
 
@@ -782,7 +782,7 @@ Expected<Tgt, ConversionCode> str_to_integral(StringPiece* src) noexcept {
   auto b = src->data(), past = src->data() + src->size();
 
   for (;; ++b) {
-    if (FOLLY_UNLIKELY(b >= past)) {
+    if (b >= past) [[unlikely]] {
       return makeUnexpected(ConversionCode::EMPTY_INPUT_STRING);
     }
     if ((*b < '\t' || *b > '\r') && *b != ' ') {
@@ -793,13 +793,13 @@ Expected<Tgt, ConversionCode> str_to_integral(StringPiece* src) noexcept {
   SignedValueHandler<Tgt> sgn;
   auto err = sgn.init(b);
 
-  if (FOLLY_UNLIKELY(err != ConversionCode::SUCCESS)) {
+  if (err != ConversionCode::SUCCESS) [[unlikely]] {
     return makeUnexpected(err);
   }
   if (is_signed_v<Tgt> && FOLLY_UNLIKELY(b >= past)) {
     return makeUnexpected(ConversionCode::NO_DIGITS);
   }
-  if (FOLLY_UNLIKELY(!isdigit(*b))) {
+  if (!isdigit(*b)) [[unlikely]] {
     return makeUnexpected(ConversionCode::NON_DIGIT_CHAR);
   }
 
@@ -807,7 +807,7 @@ Expected<Tgt, ConversionCode> str_to_integral(StringPiece* src) noexcept {
 
   auto tmp = digits_to<UT>(b, m);
 
-  if (FOLLY_UNLIKELY(!tmp.hasValue())) {
+  if (!tmp.hasValue()) [[unlikely]] {
     return makeUnexpected(
         tmp.error() == ConversionCode::POSITIVE_OVERFLOW
             ? sgn.overflow()

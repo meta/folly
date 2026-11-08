@@ -282,7 +282,7 @@ class IPAddress {
    * a valid V4 instance.
    */
   const IPAddressV4& asV4() const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
-    if (FOLLY_UNLIKELY(!isV4())) {
+    if (!isV4()) [[unlikely]] {
       asV4Throw();
     }
     return addr_.ipV4Addr;
@@ -295,7 +295,7 @@ class IPAddress {
    * a valid V6 instance.
    */
   const IPAddressV6& asV6() const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
-    if (FOLLY_UNLIKELY(!isV6())) {
+    if (!isV6()) [[unlikely]] {
       asV6Throw();
     }
     return addr_.ipV6Addr;

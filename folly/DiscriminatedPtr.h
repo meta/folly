@@ -108,7 +108,7 @@ class DiscriminatedPtr {
    */
   template <typename T>
   T* get() {
-    if (FOLLY_UNLIKELY(!hasType<T>())) {
+    if (!hasType<T>()) [[unlikely]] {
       throw std::invalid_argument("Invalid type");
     }
     return static_cast<T*>(ptr());
@@ -116,7 +116,7 @@ class DiscriminatedPtr {
 
   template <typename T>
   const T* get() const {
-    if (FOLLY_UNLIKELY(!hasType<T>())) {
+    if (!hasType<T>()) [[unlikely]] {
       throw std::invalid_argument("Invalid type");
     }
     return static_cast<const T*>(ptr());

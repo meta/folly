@@ -588,7 +588,7 @@ allocate_unique(Alloc const& alloc, Args&&... args) {
     TAlloc& copy;
     T* p;
     ~DeferCondDeallocate() {
-      if (FOLLY_UNLIKELY(!cond)) {
+      if (!cond) [[unlikely]] {
         traits::deallocate(copy, p, 1);
       }
     }

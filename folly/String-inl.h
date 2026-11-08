@@ -180,7 +180,7 @@ void uriEscape(StringPiece str, String& out, UriEscapeMode mode) {
     char c = *p;
     unsigned char v = static_cast<unsigned char>(c);
     unsigned char discriminator = detail::uriEscapeTable[v];
-    if (FOLLY_LIKELY(discriminator <= minEncode)) {
+    if (discriminator <= minEncode) [[likely]] {
       ++p;
     } else if (mode == UriEscapeMode::QUERY && discriminator == 3) {
       out.append(&*last, size_t(p - last));
@@ -210,12 +210,12 @@ bool tryUriUnescape(StringPiece str, String& out, UriEscapeMode mode) {
     char c = *p;
     switch (c) {
       case '%': {
-        if (FOLLY_UNLIKELY(std::distance(p, str.end()) < 3)) {
+        if (std::distance(p, str.end()) < 3) [[unlikely]] {
           return false;
         }
         auto h1 = detail::hexTable[static_cast<unsigned char>(p[1])];
         auto h2 = detail::hexTable[static_cast<unsigned char>(p[2])];
-        if (FOLLY_UNLIKELY(h1 == 16 || h2 == 16)) {
+        if (h1 == 16 || h2 == 16) [[unlikely]] {
           return false;
         }
         out.append(&*last, size_t(p - last));
@@ -402,13 +402,13 @@ bool splitFixed(
     OutputType& outHead,
     OutputTypes&... outTail) {
   size_t cut = input.find(delimiter);
-  if (FOLLY_UNLIKELY(cut == std::string::npos)) {
+  if (cut == std::string::npos) [[unlikely]] {
     return false;
   }
   StringPiece head(input.begin(), input.begin() + cut);
   StringPiece tail(
       input.begin() + cut + detail::delimSize(delimiter), input.end());
-  if (FOLLY_LIKELY(splitFixed<exact>(delimiter, tail, outTail...))) {
+  if (splitFixed<exact>(delimiter, tail, outTail...)) [[likely]] {
     toOrIgnore(head, outHead);
     return true;
   }

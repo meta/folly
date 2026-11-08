@@ -523,7 +523,7 @@ class fbstring_core {
     static RefCounted* create(const Char* data, size_t* size) {
       const size_t effectiveSize = *size;
       auto result = create(size);
-      if (FOLLY_LIKELY(effectiveSize > 0)) {
+      if (effectiveSize > 0) [[likely]] {
         fbstring_detail::podCopy(data, data + effectiveSize, result->data_);
       }
       return result;
@@ -721,7 +721,7 @@ FOLLY_NOINLINE void fbstring_core<Char>::initMedium(
   // allocate one extra Char for the terminating null.
   auto const allocSize = goodMallocSize((1 + size) * sizeof(Char));
   ml_.data_ = static_cast<Char*>(checkedMalloc(allocSize));
-  if (FOLLY_LIKELY(size > 0)) {
+  if (size > 0) [[likely]] {
     fbstring_detail::podCopy(data, data + size, ml_.data_);
   }
   ml_.size_ = size;
@@ -874,7 +874,7 @@ inline Char* fbstring_core<Char>::expandNoinit(
   } else {
     sz = ml_.size_;
     newSz = sz + delta;
-    if (FOLLY_UNLIKELY(newSz > capacity())) {
+    if (newSz > capacity()) [[unlikely]] {
       // ensures not shared
       reserve(expGrowth ? std::max(newSz, 1 + capacity() * 3 / 2) : newSz);
     }
@@ -1814,7 +1814,7 @@ inline basic_fbstring<E, T, A, S>& basic_fbstring<E, T, A, S>::operator=(
     const basic_fbstring& lhs) {
   Invariant checker(*this);
 
-  if (FOLLY_UNLIKELY(&lhs == this)) {
+  if (&lhs == this) [[unlikely]] {
     return *this;
   }
 
@@ -1825,7 +1825,7 @@ inline basic_fbstring<E, T, A, S>& basic_fbstring<E, T, A, S>::operator=(
 template <typename E, class T, class A, class S>
 inline basic_fbstring<E, T, A, S>& basic_fbstring<E, T, A, S>::operator=(
     basic_fbstring&& goner) noexcept {
-  if (FOLLY_UNLIKELY(&goner == this)) {
+  if (&goner == this) [[unlikely]] {
     // Compatibility with std::basic_string<>,
     // C++11 21.4.2 [string.cons] / 23 requires self-move-assignment support.
     return *this;
@@ -1915,7 +1915,7 @@ FOLLY_NOINLINE basic_fbstring<E, T, A, S>& basic_fbstring<E, T, A, S>::append(
     const value_type* s, size_type n) {
   Invariant checker(*this);
 
-  if (FOLLY_UNLIKELY(!n)) {
+  if (!n) [[unlikely]] {
     // Unlikely but must be done
     return *this;
   }
@@ -1930,7 +1930,7 @@ FOLLY_NOINLINE basic_fbstring<E, T, A, S>& basic_fbstring<E, T, A, S>::append(
   // over pointers. See discussion at http://goo.gl/Cy2ya for more
   // info.
   std::less_equal<const value_type*> le;
-  if (FOLLY_UNLIKELY(le(oldData, s) && !le(oldData + oldSize, s))) {
+  if (le(oldData, s) && !le(oldData + oldSize, s)) [[unlikely]] {
     assert(le(s + n, oldData + oldSize));
     // expandNoinit() could have moved the storage, restore the source.
     s = data() + (s - oldData);

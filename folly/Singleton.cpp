@@ -412,7 +412,7 @@ void SingletonVault::doEagerInit() {
   {
     auto state = state_.rlock();
     state->check(detail::SingletonVaultState::Type::Running);
-    if (FOLLY_UNLIKELY(!state->registrationComplete)) {
+    if (!state->registrationComplete) [[unlikely]] {
       throw std::logic_error("registrationComplete() not yet called");
     }
   }
@@ -427,7 +427,7 @@ void SingletonVault::doEagerInitVia(Executor& exe, folly::Baton<>* done) {
   {
     auto state = state_.rlock();
     state->check(detail::SingletonVaultState::Type::Running);
-    if (FOLLY_UNLIKELY(!state->registrationComplete)) {
+    if (!state->registrationComplete) [[unlikely]] {
       throw std::logic_error("registrationComplete() not yet called");
     }
   }

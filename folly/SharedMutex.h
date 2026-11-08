@@ -398,7 +398,7 @@ class SharedMutexImpl
   ~SharedMutexImpl() {
     invokeHook(HookEvent::BeforeDestroy);
     auto state = state_.load(std::memory_order_acquire);
-    if (FOLLY_UNLIKELY((state & (kReleaseInProgress | kHasS)) != 0)) {
+    if ((state & (kReleaseInProgress | kHasS)) != 0) [[unlikely]] {
       state = prepareForDestroySlow(state);
     }
 
@@ -919,7 +919,7 @@ class SharedMutexImpl
     assert((state & kHasU) != 0);
 
     if constexpr (atomic_fetch_bitwise_is_native_v<Futex>) {
-      if (FOLLY_LIKELY((state & (kWakeMask | kReleaseInProgress)) == 0)) {
+      if ((state & (kWakeMask | kReleaseInProgress)) == 0) [[likely]] {
         auto* const futex = &state_;
         // Fast path where value-returning fetch_and is not a CAS loop.
         auto previous =
@@ -1293,9 +1293,9 @@ class SharedMutexImpl
   template <class WaitContext>
   bool lockExclusiveImpl(uint32_t preconditionGoalMask, WaitContext& ctx) {
     uint32_t state = state_.load(std::memory_order_acquire);
-    if (FOLLY_LIKELY(
-            (state & (preconditionGoalMask | kMayDefer | kHasS)) == 0 &&
-            state_.compare_exchange_strong(state, (state | kHasE) & ~kHasU))) {
+    if ((state & (preconditionGoalMask | kMayDefer | kHasS)) == 0 &&
+        state_.compare_exchange_strong(state, (state | kHasE) & ~kHasU))
+        [[likely]] {
       return true;
     } else {
       return lockExclusiveImpl(state, preconditionGoalMask, ctx);
@@ -1337,7 +1337,7 @@ class SharedMutexImpl
         // Readers are responsible for rechecking state_ after recording
         // a deferred read to avoid atomicity problems between the state_
         // CAS and applyDeferredReader's reads of deferredReaders[].
-        if (FOLLY_UNLIKELY((before & kMayDefer) != 0)) {
+        if ((before & kMayDefer) != 0) [[unlikely]] {
           const auto slot = spinForDeferredReaders();
           if (slot != shared_mutex_detail::kMaxDeferredReadersAllocated) {
             applyDeferredReaders(state, ctx, slot);
@@ -1382,7 +1382,7 @@ class SharedMutexImpl
       const uint64_t elapsed = hardware_timestamp() - start;
       // NOTE: This is also true if hardware_timestamp() goes back in time, as
       // elapsed underflows.
-      if (FOLLY_UNLIKELY(elapsed >= kMaxSpinCycles)) {
+      if (elapsed >= kMaxSpinCycles) [[unlikely]] {
         return ctx.canBlock() &&
             yieldWaitForZeroBits(state, goal, waitMask, ctx);
       }
@@ -1465,7 +1465,7 @@ class SharedMutexImpl
   // awaiting bits for anybody that was awoken.  Tries to perform direct
   // single wakeup of an exclusive waiter if appropriate
   void wakeRegisteredWaiters(uint32_t& state, uint32_t wakeMask) {
-    if (FOLLY_UNLIKELY((state & wakeMask) != 0)) {
+    if ((state & wakeMask) != 0) [[unlikely]] {
       wakeRegisteredWaitersImpl(state, wakeMask);
     }
   }
@@ -1536,7 +1536,7 @@ class SharedMutexImpl
       const uint64_t elapsed = hardware_timestamp() - start;
       // NOTE: This is also true if hardware_timestamp() goes back in time, as
       // elapsed underflows.
-      if (FOLLY_UNLIKELY(elapsed >= kMaxSpinCycles)) {
+      if (elapsed >= kMaxSpinCycles) [[unlikely]] {
         return slot;
       }
       asm_volatile_pause();
@@ -1975,7 +1975,7 @@ class shared_lock<
   }
 
   void unlock() {
-    if (FOLLY_UNLIKELY(!owns_lock())) {
+    if (!owns_lock()) [[unlikely]] {
       ::folly::shared_mutex_detail::throwOperationNotPermitted();
     }
     mutex_->unlock_shared(token_);
@@ -2005,10 +2005,10 @@ class shared_lock<
 
  private:
   void error_if_not_lockable() const {
-    if (FOLLY_UNLIKELY(mutex_ == nullptr)) {
+    if (mutex_ == nullptr) [[unlikely]] {
       ::folly::shared_mutex_detail::throwOperationNotPermitted();
     }
-    if (FOLLY_UNLIKELY(owns_lock())) {
+    if (owns_lock()) [[unlikely]] {
       ::folly::shared_mutex_detail::throwDeadlockWouldOccur();
     }
   }

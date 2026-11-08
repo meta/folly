@@ -127,7 +127,7 @@ template <class... Args>
 // on error.
 template <class... Args>
 void checkPosixError(int err, Args&&... args) {
-  if (FOLLY_UNLIKELY(err != 0)) {
+  if (err != 0) [[unlikely]] {
     throwSystemErrorExplicit(err, std::forward<Args>(args)...);
   }
 }
@@ -136,7 +136,7 @@ void checkPosixError(int err, Args&&... args) {
 // number on error), throw on error.
 template <class... Args>
 void checkKernelError(ssize_t ret, Args&&... args) {
-  if (FOLLY_UNLIKELY(ret < 0)) {
+  if (ret < 0) [[unlikely]] {
     throwSystemErrorExplicit(int(-ret), std::forward<Args>(args)...);
   }
 }
@@ -145,14 +145,14 @@ void checkKernelError(ssize_t ret, Args&&... args) {
 // on error.
 template <class... Args>
 void checkUnixError(ssize_t ret, Args&&... args) {
-  if (FOLLY_UNLIKELY(ret == -1)) {
+  if (ret == -1) [[unlikely]] {
     throwSystemError(std::forward<Args>(args)...);
   }
 }
 
 template <class... Args>
 void checkUnixErrorExplicit(ssize_t ret, int savedErrno, Args&&... args) {
-  if (FOLLY_UNLIKELY(ret == -1)) {
+  if (ret == -1) [[unlikely]] {
     throwSystemErrorExplicit(savedErrno, std::forward<Args>(args)...);
   }
 }
@@ -162,14 +162,14 @@ void checkUnixErrorExplicit(ssize_t ret, int savedErrno, Args&&... args) {
 // freopen, tmpfile, etc.
 template <class... Args>
 void checkFopenError(FILE* fp, Args&&... args) {
-  if (FOLLY_UNLIKELY(!fp)) {
+  if (!fp) [[unlikely]] {
     throwSystemError(std::forward<Args>(args)...);
   }
 }
 
 template <class... Args>
 void checkFopenErrorExplicit(FILE* fp, int savedErrno, Args&&... args) {
-  if (FOLLY_UNLIKELY(!fp)) {
+  if (!fp) [[unlikely]] {
     throwSystemErrorExplicit(savedErrno, std::forward<Args>(args)...);
   }
 }

@@ -770,7 +770,7 @@ constexpr T constexpr_add_overflow_clamped(T a, T b) {
   if (!std::is_constant_evaluated()) {
     if constexpr (std::is_integral_v<T>) {
       T ret{};
-      if (FOLLY_UNLIKELY(!checked_add(&ret, a, b))) {
+      if (!checked_add(&ret, a, b)) [[unlikely]] {
         if constexpr (std::is_signed_v<T>) {
           // Could be either overflow or underflow for signed types.
           // Can only be underflow if both inputs are negative.

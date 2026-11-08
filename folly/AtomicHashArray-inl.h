@@ -105,17 +105,17 @@ AtomicHashArray<
        ;
        idx = ProbeFcn()(idx, numProbes, capacity_)) {
     const KeyT key = acquireLoadKey(cells_[idx]);
-    if (FOLLY_LIKELY(LookupEqualFcn()(key, key_in))) {
+    if (LookupEqualFcn()(key, key_in)) [[likely]] {
       return SimpleRetT(idx, true);
     }
-    if (FOLLY_UNLIKELY(key == kEmptyKey_)) {
+    if (key == kEmptyKey_) [[unlikely]] {
       // if we hit an empty element, this key does not exist
       return SimpleRetT(capacity_, false);
     }
     // NOTE: the way we count numProbes must be same in find(), insert(),
     // and erase(). Otherwise it may break probing.
     ++numProbes;
-    if (FOLLY_UNLIKELY(numProbes >= capacity_)) {
+    if (numProbes >= capacity_) [[unlikely]] {
       // probed every cell...fail
       return SimpleRetT(capacity_, false);
     }
@@ -265,7 +265,7 @@ AtomicHashArray<
     // NOTE: the way we count numProbes must be same in find(),
     // insert(), and erase(). Otherwise it may break probing.
     ++numProbes;
-    if (FOLLY_UNLIKELY(numProbes >= capacity_)) {
+    if (numProbes >= capacity_) [[unlikely]] {
       // probed every cell...fail
       return SimpleRetT(capacity_, false);
     }
@@ -334,7 +334,7 @@ size_t AtomicHashArray<
     // NOTE: the way we count numProbes must be same in find(), insert(),
     // and erase(). Otherwise it may break probing.
     ++numProbes;
-    if (FOLLY_UNLIKELY(numProbes >= capacity_)) {
+    if (numProbes >= capacity_) [[unlikely]] {
       // probed every cell...fail
       return 0;
     }

@@ -102,9 +102,8 @@ void SingletonHolder<T>::registerSingletonMock(CreateFunc c, TeardownFunc t) {
 
 template <typename T>
 T* SingletonHolder<T>::get() {
-  if (FOLLY_LIKELY(
-          state_.load(std::memory_order_acquire) ==
-          SingletonHolderState::Living)) {
+  if (state_.load(std::memory_order_acquire) == SingletonHolderState::Living)
+      [[likely]] {
     return instance_ptr_;
   }
   createInstance();
@@ -118,9 +117,8 @@ T* SingletonHolder<T>::get() {
 
 template <typename T>
 std::weak_ptr<T> SingletonHolder<T>::get_weak() {
-  if (FOLLY_UNLIKELY(
-          state_.load(std::memory_order_acquire) !=
-          SingletonHolderState::Living)) {
+  if (state_.load(std::memory_order_acquire) != SingletonHolderState::Living)
+      [[unlikely]] {
     createInstance();
   }
 
@@ -129,9 +127,8 @@ std::weak_ptr<T> SingletonHolder<T>::get_weak() {
 
 template <typename T>
 std::shared_ptr<T> SingletonHolder<T>::try_get() {
-  if (FOLLY_UNLIKELY(
-          state_.load(std::memory_order_acquire) !=
-          SingletonHolderState::Living)) {
+  if (state_.load(std::memory_order_acquire) != SingletonHolderState::Living)
+      [[unlikely]] {
     createInstance();
   }
 
@@ -140,9 +137,8 @@ std::shared_ptr<T> SingletonHolder<T>::try_get() {
 
 template <typename T>
 folly::ReadMostlySharedPtr<T> SingletonHolder<T>::try_get_fast() {
-  if (FOLLY_UNLIKELY(
-          state_.load(std::memory_order_acquire) !=
-          SingletonHolderState::Living)) {
+  if (state_.load(std::memory_order_acquire) != SingletonHolderState::Living)
+      [[unlikely]] {
     createInstance();
   }
 
@@ -157,9 +153,8 @@ invoke_result_t<Func, T*> detail::SingletonHolder<T>::apply(Func f) {
 
 template <typename T>
 void SingletonHolder<T>::vivify() {
-  if (FOLLY_UNLIKELY(
-          state_.load(std::memory_order_relaxed) !=
-          SingletonHolderState::Living)) {
+  if (state_.load(std::memory_order_relaxed) != SingletonHolderState::Living)
+      [[unlikely]] {
     createInstance();
   }
 }

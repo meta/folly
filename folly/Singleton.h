@@ -888,7 +888,7 @@ class LeakySingleton {
     // A pointer captured before make_mock() remains valid because old
     // LeakySingleton instances are never destroyed.
     auto* ptr = entry.ptr.load(std::memory_order_acquire);
-    if (FOLLY_UNLIKELY(ptr == nullptr)) {
+    if (ptr == nullptr) [[unlikely]] {
       ptr = createInstance();
     }
 

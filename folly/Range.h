@@ -333,7 +333,7 @@ class Range {
       class T = Iter,
       typename detail::IsCharPointer<T>::const_type = 0>
   Range(const string<Alloc>& str, typename string<Alloc>::size_type startFrom) {
-    if (FOLLY_UNLIKELY(startFrom > str.size())) {
+    if (startFrom > str.size()) [[unlikely]] {
       throw_exception<std::out_of_range>("index out of range");
     }
     b_ = str.data() + startFrom;
@@ -348,7 +348,7 @@ class Range {
       const string<Alloc>& str,
       typename string<Alloc>::size_type startFrom,
       typename string<Alloc>::size_type size) {
-    if (FOLLY_UNLIKELY(startFrom > str.size())) {
+    if (startFrom > str.size()) [[unlikely]] {
       throw_exception<std::out_of_range>("index out of range");
     }
     b_ = str.data() + startFrom;
@@ -386,7 +386,7 @@ class Range {
   Range(Container const& container, typename Container::size_type startFrom) {
     auto const cdata = container.data();
     auto const csize = container.size();
-    if (FOLLY_UNLIKELY(startFrom > csize)) {
+    if (startFrom > csize) [[unlikely]] {
       throw_exception<std::out_of_range>("index out of range");
     }
     b_ = cdata + startFrom;
@@ -408,7 +408,7 @@ class Range {
       typename Container::size_type size) {
     auto const cdata = container.data();
     auto const csize = container.size();
-    if (FOLLY_UNLIKELY(startFrom > csize)) {
+    if (startFrom > csize) [[unlikely]] {
       throw_exception<std::out_of_range>("index out of range");
     }
     b_ = cdata + startFrom;
@@ -806,14 +806,14 @@ class Range {
   }
 
   void advance(size_type n) {
-    if (FOLLY_UNLIKELY(n > size())) {
+    if (n > size()) [[unlikely]] {
       throw_exception<std::out_of_range>("index out of range");
     }
     b_ += n;
   }
 
   void subtract(size_type n) {
-    if (FOLLY_UNLIKELY(n > size())) {
+    if (n > size()) [[unlikely]] {
       throw_exception<std::out_of_range>("index out of range");
     }
     e_ -= n;
@@ -823,7 +823,7 @@ class Range {
   // length characters (or until the end of the current range, whichever comes
   // first). Throws if first is past the end of the current range.
   Range subpiece(size_type first, size_type length = npos) const {
-    if (FOLLY_UNLIKELY(first > size())) {
+    if (first > size()) [[unlikely]] {
       throw_exception<std::out_of_range>("index out of range");
     }
 

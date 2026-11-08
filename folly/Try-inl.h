@@ -113,9 +113,9 @@ TryBase<T>& TryBase<T>::operator=(const TryBase<T>& t) noexcept(
 template <class T>
 void TryBase<T>::destroy() noexcept {
   auto oldContains = std::exchange(contains_, Contains::NOTHING);
-  if (FOLLY_LIKELY(oldContains == Contains::VALUE)) {
+  if (oldContains == Contains::VALUE) [[likely]] {
     value_.~T();
-  } else if (FOLLY_UNLIKELY(oldContains == Contains::EXCEPTION)) {
+  } else if (oldContains == Contains::EXCEPTION) [[unlikely]] {
     e_.~exception_wrapper();
   }
 }
@@ -137,9 +137,9 @@ TryBase<T>::TryBase(
 
 template <class T>
 TryBase<T>::~TryBase() {
-  if (FOLLY_LIKELY(contains_ == Contains::VALUE)) {
+  if (contains_ == Contains::VALUE) [[likely]] {
     value_.~T();
-  } else if (FOLLY_UNLIKELY(contains_ == Contains::EXCEPTION)) {
+  } else if (contains_ == Contains::EXCEPTION) [[unlikely]] {
     e_.~exception_wrapper();
   }
 }
