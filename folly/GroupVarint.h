@@ -16,13 +16,16 @@
 
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
+#include <string_view>
 
 #include <glog/logging.h>
 
 #include <folly/Portability.h>
-#include <folly/Range.h>
 #include <folly/detail/GroupVarintDetail.h>
 #include <folly/lang/Bits.h>
 #include <folly/portability/Builtins.h>
@@ -451,7 +454,7 @@ using GroupVarint64 = GroupVarint<uint64_t>;
  * and an incomplete last chunk.
  *
  * Output is a function object that accepts character ranges:
- * out(StringPiece) appends the given character range to the output.
+ * out(std::string_view) appends the given character range to the output.
  */
 template <class T, class Output>
 class GroupVarintEncoder {
@@ -470,7 +473,7 @@ class GroupVarintEncoder {
     buf_[count_++] = val;
     if (count_ == Base::kGroupSize) {
       char* p = Base::encode(tmp_, buf_);
-      out_(StringPiece(tmp_, p));
+      out_(std::string_view(tmp_, p));
       count_ = 0;
     }
   }
@@ -489,7 +492,7 @@ class GroupVarintEncoder {
         buf_[i] = 0;
       }
       Base::encode(tmp_, buf_);
-      out_(StringPiece(tmp_, Base::partialSize(buf_, count_)));
+      out_(std::string_view(tmp_, Base::partialSize(buf_, count_)));
       count_ = 0;
     }
   }
@@ -526,19 +529,20 @@ class GroupVarintDecoder {
 
   GroupVarintDecoder() = default;
 
-  explicit GroupVarintDecoder(StringPiece data, size_t maxCount = (size_t)-1)
-      : rrest_(data.end()),
+  explicit GroupVarintDecoder(
+      std::string_view data, size_t maxCount = (size_t)-1)
+      : rrest_(data.data() + data.size()),
         p_(data.data()),
-        end_(data.end()),
+        end_(data.data() + data.size()),
         limit_(end_),
         pos_(0),
         count_(0),
         remaining_(maxCount) {}
 
-  void reset(StringPiece data, size_t maxCount = (size_t)-1) {
-    rrest_ = data.end();
+  void reset(std::string_view data, size_t maxCount = (size_t)-1) {
+    rrest_ = data.data() + data.size();
     p_ = data.data();
-    end_ = data.end();
+    end_ = data.data() + data.size();
     limit_ = end_;
     pos_ = 0;
     count_ = 0;
@@ -601,13 +605,13 @@ class GroupVarintDecoder {
     return true;
   }
 
-  StringPiece rest() const {
+  std::string_view rest() const {
     // This is only valid after next() returned false
     CHECK(pos_ == count_ && (p_ == end_ || remaining_ == 0));
     // p_ may point to the internal buffer (tmp_), but we want
     // to return subpiece of the original data
     size_t size = size_t(end_ - p_);
-    return StringPiece(rrest_ - size, rrest_);
+    return std::string_view(rrest_ - size, rrest_);
   }
 
  private:

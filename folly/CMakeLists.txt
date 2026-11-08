@@ -586,7 +586,6 @@ folly_add_library(
     folly_lang_bits
     folly_portability
     folly_portability_builtins
-    folly_range
 )
 
 folly_add_library(

@@ -18,11 +18,14 @@
 
 #include <algorithm>
 #include <cstdarg>
+#include <string>
+#include <string_view>
+#include <vector>
 
 // On platforms where it's not supported, GroupVarint will be compiled out.
 #if FOLLY_HAVE_GROUP_VARINT
 
-#include <folly/portability/GTest.h>
+#include <folly/portability/GTest.h> // @manual=//folly/portability:gtest
 
 using namespace folly;
 
@@ -31,7 +34,7 @@ namespace {
 class StringAppender {
  public:
   /* implicit */ StringAppender(std::string& s) : s_(s) {}
-  void operator()(StringPiece sp) { s_.append(sp.data(), sp.size()); }
+  void operator()(std::string_view sv) { s_.append(sv.data(), sv.size()); }
 
  private:
   std::string& s_;
@@ -197,7 +200,7 @@ TEST(GroupVarint, GroupVarintDecoder) {
   {
     std::string s("\x00\x00", 2);
     s += padding;
-    StringPiece p(s.data(), 2);
+    std::string_view p(s.data(), 2);
 
     GroupVarint32Decoder gv(p);
     uint32_t v;
@@ -210,7 +213,7 @@ TEST(GroupVarint, GroupVarintDecoder) {
   {
     std::string s("\x00\x01\x02\x03\x04\x01\x02\x03\x04", 9);
     s += padding;
-    StringPiece p(s.data(), 9);
+    std::string_view p(s.data(), 9);
 
     GroupVarint32Decoder gv(p);
     uint32_t v;
@@ -234,7 +237,7 @@ TEST(GroupVarint, GroupVarintDecoder) {
     // Limit max count when reading a full block
     std::string s("\x00\x01\x02\x03\x04\x01\x02\x03\x04", 9);
     s += padding;
-    StringPiece p(s.data(), 9);
+    std::string_view p(s.data(), 9);
 
     GroupVarint32Decoder gv(p, 3);
     uint32_t v;
@@ -245,14 +248,14 @@ TEST(GroupVarint, GroupVarintDecoder) {
     EXPECT_TRUE(gv.next(&v));
     EXPECT_EQ(3, v);
     EXPECT_FALSE(gv.next(&v));
-    EXPECT_EQ(std::string("\x04\x01\x02\x03\x04", 5), gv.rest().toString());
+    EXPECT_EQ(std::string("\x04\x01\x02\x03\x04", 5), std::string(gv.rest()));
   }
 
   {
     // Limit max count when reading a partial block
     std::string s("\x00\x01\x02\x03\x04\x01\x02\x03\x04", 9);
     s += padding;
-    StringPiece p(s.data(), 9);
+    std::string_view p(s.data(), 9);
 
     GroupVarint32Decoder gv(p, 5);
     uint32_t v;
@@ -267,7 +270,7 @@ TEST(GroupVarint, GroupVarintDecoder) {
     EXPECT_TRUE(gv.next(&v));
     EXPECT_EQ(0x0302, v);
     EXPECT_FALSE(gv.next(&v));
-    EXPECT_EQ(std::string("\x04", 1), gv.rest().toString());
+    EXPECT_EQ(std::string("\x04", 1), std::string(gv.rest()));
   }
 }
 

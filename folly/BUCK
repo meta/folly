@@ -2103,7 +2103,6 @@ fb_dirsync_cpp_library(
     exported_deps = [
         "fbsource//third-party/glog:glog",
         ":portability",
-        ":range",
         "//folly/detail:group_varint_detail",
         "//folly/lang:bits",
         "//folly/portability:builtins",
