@@ -1095,9 +1095,7 @@ constexpr void check_traits_match() {
       std::sized_sentinel_for<It, It> ==
       std::sized_sentinel_for<Reference, Reference>);
   static_assert(
-      std::three_way_comparable<It> == std::three_way_comparable<Reference> ||
-      (std::random_access_iterator<It> &&
-       !std::three_way_comparable<Reference>));
+      std::three_way_comparable<It> == std::random_access_iterator<It>);
   static_assert(std::totally_ordered<It> == std::totally_ordered<Reference>);
   static_assert(std::forward_iterator<It> == std::forward_iterator<Reference>);
   static_assert(
@@ -1108,6 +1106,18 @@ constexpr void check_traits_match() {
       std::random_access_iterator<Reference>);
   static_assert(
       std::contiguous_iterator<It> == std::contiguous_iterator<Reference>);
+  if constexpr (!std::bidirectional_iterator<It>) {
+    static_assert(!requires(It it) { --it; });
+    static_assert(!requires(It it) { it--; });
+  }
+  if constexpr (!std::random_access_iterator<It>) {
+    static_assert(!requires(It it, std::iter_difference_t<It> n) { it += n; });
+    static_assert(!requires(It it, std::iter_difference_t<It> n) { it -= n; });
+    static_assert(!requires(It it, std::iter_difference_t<It> n) { it + n; });
+    static_assert(!requires(It it, std::iter_difference_t<It> n) { n + it; });
+    static_assert(!requires(It it, std::iter_difference_t<It> n) { it - n; });
+    static_assert(!requires(It it, std::iter_difference_t<It> n) { it[n]; });
+  }
 }
 
 template <typename A, typename B>
