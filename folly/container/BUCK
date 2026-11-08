@@ -404,7 +404,6 @@ fb_dirsync_cpp_library(
     compiler_flags = ["-fno-omit-frame-pointer"],
     use_raw_headers = True,
     exported_deps = [
-        "//folly:constexpr_math",
         "//folly:likely",
         "//folly:scope_guard",
         "//folly:traits",

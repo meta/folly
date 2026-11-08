@@ -105,7 +105,6 @@ folly_add_library(
   NAME fbvector
   HEADERS FBVector.h
   EXPORTED_DEPS
-    folly_constexpr_math
     folly_lang_checked_math
     folly_lang_exception
     folly_lang_hint
