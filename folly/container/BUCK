@@ -412,7 +412,6 @@ fb_dirsync_cpp_library(
         "//folly/lang:exception",
         "//folly/lang:hint",
         "//folly/memory:malloc",
-        "//folly/memory:uninitialized",
     ],
 )
 

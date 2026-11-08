@@ -111,7 +111,6 @@ folly_add_library(
     folly_lang_hint
     folly_likely
     folly_memory_malloc
-    folly_memory_uninitialized
     folly_scope_guard
     folly_traits
 )
