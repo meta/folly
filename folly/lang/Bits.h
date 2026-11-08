@@ -415,13 +415,6 @@ struct EndianInt {
 
 class Endian {
  public:
-  enum class Order : uint8_t {
-    LITTLE,
-    BIG,
-  };
-
-  static constexpr Order order = kIsLittleEndian ? Order::LITTLE : Order::BIG;
-
   template <class T>
   static T swap(T x) {
     return folly::detail::EndianInt<T>::swap(x);
