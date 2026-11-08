@@ -1095,7 +1095,9 @@ constexpr void check_traits_match() {
       std::sized_sentinel_for<It, It> ==
       std::sized_sentinel_for<Reference, Reference>);
   static_assert(
-      std::three_way_comparable<It> == std::three_way_comparable<Reference>);
+      std::three_way_comparable<It> == std::three_way_comparable<Reference> ||
+      (std::random_access_iterator<It> &&
+       !std::three_way_comparable<Reference>));
   static_assert(std::totally_ordered<It> == std::totally_ordered<Reference>);
   static_assert(std::forward_iterator<It> == std::forward_iterator<Reference>);
   static_assert(
@@ -1482,6 +1484,9 @@ TEST(WrapIterator, Types) {
             typename folly::wrap_iterator<Iter, tag>::iterator_type,
             Iter>);
   });
+  check_traits_match<
+      folly::wrap_iterator<std::forward_list<int>::iterator, tag>,
+      std::forward_list<int>::iterator>();
 }
 
 TEST(WrapIterator, ConstructionAndAssignment) {
