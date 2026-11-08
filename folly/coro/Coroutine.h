@@ -44,10 +44,6 @@ struct AsyncStackFrame;
 
 namespace folly::coro {
 
-// RocksDB names `folly::coro::impl::coroutine_handle`. Remove this alias once
-// fbcode/rocksdb no longer does.
-namespace impl = std;
-
 using std::coroutine_handle;
 using std::coroutine_traits;
 using std::noop_coroutine;
