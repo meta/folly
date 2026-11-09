@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <bitset>
 #include <vector>
 
@@ -71,6 +72,17 @@ class ObserverContainerStoreBase {
    * @return             Whether observer found and removed from store.
    */
   virtual bool remove(MaybeManagedObserverPointer observer) = 0;
+
+  /**
+   * Find an observer in the store by pointer identity.
+   *
+   * Returns a copy of the stored pointer, retaining ownership if it is managed.
+   *
+   * @param observer     Observer to find.
+   * @return             Stored observer pointer, or nullptr if not found.
+   */
+  virtual MaybeManagedObserverPointer findObserver(
+      const Observer* observer) const = 0;
 
   /**
    * Get number of observers in store.
@@ -245,6 +257,26 @@ class ObserverContainerStore : public ObserverContainerStoreBase<Observer> {
    * @return             Number of observers in store.
    */
   size_t size() const override { return observers_.size(); }
+
+  /**
+   * Find an observer in the store by pointer identity.
+   *
+   * Returns a copy of the stored pointer, retaining ownership if it is managed.
+   *
+   * @param observer     Observer to find.
+   * @return             Stored observer pointer, or nullptr if not found.
+   */
+  std::shared_ptr<Observer> findObserver(
+      const Observer* observer) const override {
+    if (!observer) {
+      return nullptr;
+    }
+    const auto it = std::find_if(
+        observers_.begin(), observers_.end(), [observer](const auto& item) {
+          return item.get() == observer;
+        });
+    return it == observers_.end() ? nullptr : *it;
+  }
 
   /**
    * Invoke function for each observer in the store.
@@ -955,11 +987,12 @@ class ObserverContainer
    */
   bool removeObserver(std::shared_ptr<Observer> observer) override {
     CHECK_NOTNULL(observer.get());
-    if (getStore().remove(observer)) {
-      DestructorCheck::Safety dc(*observer);
-      observer->detached(obj_);
+    auto retainedObserver = getStore().findObserver(observer.get());
+    if (retainedObserver && getStore().remove(retainedObserver)) {
+      DestructorCheck::Safety dc(*retainedObserver);
+      retainedObserver->detached(obj_);
       if (!dc.destroyed()) {
-        observer->removedFromObserverContainer(this);
+        retainedObserver->removedFromObserverContainer(this);
       }
       return true;
     }

@@ -140,6 +140,93 @@ class MockTestSubjectManagedObserverSpecialized
 
 class ObserverContainerTest : public ::testing::Test {};
 
+struct RemovalTrackingState {
+  size_t detached{0};
+  size_t destroyed{0};
+  size_t detachedAtDestruction{0};
+  bool unobservingAtDestruction{false};
+};
+
+class RemovalTrackingObserver
+    : public TestSubject::ObserverContainer::ManagedObserver {
+ public:
+  explicit RemovalTrackingObserver(RemovalTrackingState& state)
+      : state_(state) {}
+
+  ~RemovalTrackingObserver() override {
+    state_.detachedAtDestruction = state_.detached;
+    state_.unobservingAtDestruction = getObservedObject() == nullptr;
+    ++state_.destroyed;
+  }
+
+ private:
+  void detached(TestSubject* obj) noexcept override {
+    ASSERT_EQ(0, state_.destroyed);
+    ASSERT_EQ(obj, getObservedObject());
+    ++state_.detached;
+  }
+
+  void broadcast(TestSubject* obj) noexcept override {
+    ASSERT_TRUE(obj->observerCtr.removeObserver(this));
+  }
+
+  RemovalTrackingState& state_;
+};
+
+TEST_F(ObserverContainerTest, RawRemovalRetainsStoreOwnedObserver) {
+  for (bool duringDispatch : {false, true}) {
+    SCOPED_TRACE(duringDispatch);
+    RemovalTrackingState state;
+    TestSubject subject;
+    auto observer = std::make_shared<RemovalTrackingObserver>(state);
+    auto* rawObserver = observer.get();
+    std::weak_ptr<RemovalTrackingObserver> weakObserver = observer;
+    subject.observerCtr.addObserver(observer);
+    observer.reset();
+
+    ASSERT_FALSE(weakObserver.expired());
+    if (duringDispatch) {
+      subject.doBroadcast();
+    } else {
+      ASSERT_TRUE(subject.observerCtr.removeObserver(rawObserver));
+    }
+
+    ASSERT_TRUE(weakObserver.expired());
+    ASSERT_EQ(1, state.detached);
+    ASSERT_EQ(1, state.destroyed);
+    ASSERT_EQ(1, state.detachedAtDestruction);
+    ASSERT_TRUE(state.unobservingAtDestruction);
+    ASSERT_EQ(0, subject.observerCtr.numObservers());
+  }
+}
+
+TEST_F(ObserverContainerTest, SharedRemovalRetainsRawRegisteredObserver) {
+  for (bool duringDispatch : {false, true}) {
+    SCOPED_TRACE(duringDispatch);
+    RemovalTrackingState state;
+    TestSubject subject;
+    auto observer = std::make_shared<RemovalTrackingObserver>(state);
+    std::weak_ptr<RemovalTrackingObserver> weakObserver = observer;
+    subject.observerCtr.addObserver(observer.get());
+
+    if (duringDispatch) {
+      subject.observerCtr.invokeInterfaceMethodAllObservers([&](auto*, auto*) {
+        ASSERT_TRUE(subject.observerCtr.removeObserver(std::move(observer)));
+      });
+    } else {
+      ASSERT_TRUE(subject.observerCtr.removeObserver(std::move(observer)));
+    }
+
+    ASSERT_EQ(nullptr, observer);
+    ASSERT_TRUE(weakObserver.expired());
+    ASSERT_EQ(1, state.detached);
+    ASSERT_EQ(1, state.destroyed);
+    ASSERT_EQ(1, state.detachedAtDestruction);
+    ASSERT_TRUE(state.unobservingAtDestruction);
+    ASSERT_EQ(0, subject.observerCtr.numObservers());
+  }
+}
+
 /**
  * Wrapping class for MockObserver managed with various smart pointers.
  *
