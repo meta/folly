@@ -35,7 +35,6 @@ fb_dirsync_cpp_library(
         "//folly:optional",
         "//folly:portability",
         "//folly:range",
-        "//folly:string",
         "//folly:traits",
         "//folly:utility",
         "//folly/container:access",
