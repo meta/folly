@@ -201,6 +201,16 @@ class IoUringRecvHandle::RecvRequest
   std::unique_ptr<IOBuf> fallbackBuffer_;
 };
 
+namespace {
+IoUringBackend* checkBackend(EventBase* evb) {
+  auto* backend = dynamic_cast<IoUringBackend*>(evb->getBackend());
+  if (backend && backend->canReceiveBuffer()) {
+    return backend;
+  }
+  return nullptr;
+}
+} // namespace
+
 /*
  * IoUringRecvHandle
  */
@@ -210,12 +220,8 @@ IoUringRecvHandle::UniquePtr IoUringRecvHandle::create(
     NetworkSocket fd,
     const SocketAddress& addr,
     IoUringRecvCallback* callback) {
-  auto* backend = dynamic_cast<IoUringBackend*>(evb->getBackend());
+  auto* backend = checkBackend(evb);
   if (!backend) {
-    return nullptr;
-  }
-
-  if (!backend->zcBufferPool() && !backend->hasBufferProvider()) {
     return nullptr;
   }
 
@@ -228,12 +234,8 @@ IoUringRecvHandle::UniquePtr IoUringRecvHandle::clone(
     const SocketAddress& addr,
     IoUringRecvCallback* callback,
     UniquePtr other) {
-  auto* backend = dynamic_cast<IoUringBackend*>(evb->getBackend());
+  auto* backend = checkBackend(evb);
   if (!backend) {
-    return nullptr;
-  }
-
-  if (!backend->zcBufferPool() && !backend->hasBufferProvider()) {
     return nullptr;
   }
 
