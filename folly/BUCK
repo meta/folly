@@ -1543,10 +1543,6 @@ non_fbcode_target(
         "-Wno-unused-private-field",
     ],
     fbandroid_compiler_flags = FBANDROID_CXXFLAGS,
-    fbandroid_cpu_suffixes = [
-        "64bit",
-        None,
-    ],
     fbobjc_compiler_flags = FBOBJC_CXXFLAGS
     + [
         "-Wno-format",
