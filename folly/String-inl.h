@@ -608,9 +608,9 @@ void internalJoin(
   }
   const size_t dsize = delimSize(delimiter);
   Iterator it = begin;
-  size_t size = it->size();
+  size_t size = (*it).size();
   while (++it != end) {
-    size += dsize + it->size();
+    size += dsize + (*it).size();
   }
   output.reserve(size);
   internalJoinAppend(delimiter, begin, end, output);

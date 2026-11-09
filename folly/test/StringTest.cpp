@@ -22,7 +22,9 @@
 
 #include <array>
 #include <cinttypes>
+#include <functional>
 #include <memory>
+#include <ranges>
 #include <set>
 #include <string_view>
 #include <tuple>
@@ -1469,6 +1471,9 @@ TEST(String, join) {
   EXPECT_EQ(output, "1:23:456:");
   output = join(':', input1);
   EXPECT_EQ(output, "1:23:456:");
+
+  const auto transformed = input1 | std::views::transform(std::identity{});
+  EXPECT_EQ("1:23:456:", join(':', transformed));
 
   auto input2 = {1, 23, 456};
   join("-*-", input2, output);
