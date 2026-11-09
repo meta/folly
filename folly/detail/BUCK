@@ -160,6 +160,12 @@ fb_dirsync_cpp_library(
     deps = [
         "fbsource//third-party/boost:boost_regex",
         "//folly:conv",
+        "//folly:file",
+        "//folly:file_util",
+        "//folly:utility",
+        "//folly/lang:cstring_view",
+        "//folly/portability:fcntl",
+        "//folly/portability:sys_stat",
         "//folly/system:pid",
         "//folly/testing:test_util",
     ] + select({

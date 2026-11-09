@@ -16,22 +16,21 @@
 
 #include <folly/detail/PerfScoped.h>
 
-#include <folly/Conv.h>
-
-#if FOLLY_PERF_IS_SUPPORTED
-#include <fcntl.h>
-#include <sys/stat.h>
-
 #include <fmt/core.h>
 
-#include <folly/File.h> // @manual
-#include <folly/FileUtil.h> // @manual
-#include <folly/Subprocess.h> // @manual
-#include <folly/Utility.h> // @manual
-#include <folly/lang/cstring_view.h> // @manual
+#include <folly/Conv.h>
+#include <folly/File.h>
+#include <folly/FileUtil.h>
+#include <folly/Utility.h>
+#include <folly/lang/cstring_view.h>
+#include <folly/portability/Fcntl.h>
 #include <folly/portability/Sockets.h>
+#include <folly/portability/SysStat.h>
 #include <folly/system/Pid.h>
 #include <folly/testing/TestUtil.h>
+
+#if FOLLY_PERF_IS_SUPPORTED
+#include <folly/Subprocess.h> // @manual
 #endif
 
 #include <algorithm>

@@ -153,8 +153,14 @@ folly_add_library(
   DEPS
     Boost::regex
     folly_conv
+    folly_file
+    folly_file_util
+    folly_lang_cstring_view
+    folly_portability_fcntl
+    folly_portability_sys_stat
     folly_system_pid
     folly_testing_test_util
+    folly_utility
     ${FOLLY_DETAIL_PERF_SCOPED_SELECT_DEPS}
 )
 set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS Boost::regex)
