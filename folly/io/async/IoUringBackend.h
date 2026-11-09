@@ -24,9 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/slist.hpp>
-
 #include <glog/logging.h>
 
 #include <folly/CPortability.h>
@@ -397,9 +394,7 @@ class IoUringBackend : public EventBaseBackendBase {
     std::vector<int> files_;
     uint32_t inUse_;
     std::vector<IoUringFdRegistrationRecord> records_;
-    boost::intrusive::
-        slist<IoUringFdRegistrationRecord, boost::intrusive::cache_last<false>>
-            free_;
+    IoUringFdRegistrationRecord::FreeList free_;
   };
 
   struct IoSqe : public IoSqeBase {
@@ -516,10 +511,7 @@ class IoUringBackend : public EventBaseBackendBase {
     }
   };
 
-  using IoSqeBaseList = boost::intrusive::
-      list<IoSqeBase, boost::intrusive::constant_time_size<false>>;
-  using IoSqeList = boost::intrusive::
-      list<IoSqe, boost::intrusive::constant_time_size<false>>;
+  using IoSqeBaseList = IntrusiveList<IoSqeBase, &IoSqeBase::ioSqeHook_>;
 
   struct FileOpIoSqe : public IoSqe {
     FileOpIoSqe(IoUringBackend* backend, int fd, FileOpCallback&& cb)
@@ -878,7 +870,8 @@ class IoUringBackend : public EventBaseBackendBase {
   uint32_t numEntries_;
   std::unique_ptr<IoSqe> timerEntry_;
   std::unique_ptr<IoSqe> signalReadEntry_;
-  IoSqeList freeList_;
+  // Holds only IoSqe objects.
+  IoSqeBaseList freeList_;
   bool usingDeferTaskrun_{false};
   int napiId_{-1};
 
@@ -904,7 +897,8 @@ class IoUringBackend : public EventBaseBackendBase {
   bool shuttingDown_{false};
   bool processTimers_{false};
   bool processSignals_{false};
-  IoSqeList activeEvents_;
+  // Holds only IoSqe objects.
+  IoSqeBaseList activeEvents_;
   uint32_t waitingToSubmit_{0};
   uint32_t numInsertedEvents_{0};
   uint32_t numInternalEvents_{0};

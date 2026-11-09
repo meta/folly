@@ -20,10 +20,9 @@
 #include <map>
 #include <memory>
 
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/slist.hpp>
 #include <folly/Optional.h>
 #include <folly/SocketAddress.h>
+#include <folly/container/IntrusiveList.h>
 #include <folly/futures/Future.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/IOBufIovecBuilder.h>
@@ -375,10 +374,7 @@ class AsyncIoUringSocket : public AsyncSocketTransport {
     AsyncIoUringSocket* parent_;
   };
 
-  struct write_sqe_tag;
-  using write_sqe_hook =
-      boost::intrusive::list_base_hook<boost::intrusive::tag<write_sqe_tag>>;
-  struct WriteSqe final : IoSqeBase, public write_sqe_hook {
+  struct WriteSqe final : IoSqeBase {
     struct ZeroCopyOptions {
       bool zeroCopy{false};
       bool fixedBuf{false};
@@ -401,7 +397,7 @@ class AsyncIoUringSocket : public AsyncSocketTransport {
         WriteSqe*>
     detachEventBase();
 
-    boost::intrusive::list_member_hook<> member_hook_;
+    SafeIntrusiveListHook writeQueueHook_;
     AsyncIoUringSocket* parent_;
     WriteCallback* callback_;
     std::unique_ptr<IOBuf> buf_;
@@ -415,10 +411,7 @@ class AsyncIoUringSocket : public AsyncSocketTransport {
     int refs_ = 1;
     folly::Function<bool(int, uint32_t)> detachedSignal_;
   };
-  using WriteSqeList = boost::intrusive::list<
-      WriteSqe,
-      boost::intrusive::base_hook<write_sqe_hook>,
-      boost::intrusive::constant_time_size<false>>;
+  using WriteSqeList = SafeIntrusiveList<WriteSqe, &WriteSqe::writeQueueHook_>;
 
   class WriteTimeout : public AsyncTimeout {
    public:

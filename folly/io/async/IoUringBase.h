@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/slist.hpp>
+#include <folly/container/IntrusiveList.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/DelayedDestruction.h>
 
@@ -29,9 +28,7 @@ namespace folly {
 class IoUringBackend;
 class EventBase;
 
-struct IoSqeBase
-    : boost::intrusive::list_base_hook<
-          boost::intrusive::link_mode<boost::intrusive::auto_unlink>> {
+struct IoSqeBase {
   enum class Type {
     Unknown,
     Read,
@@ -60,6 +57,9 @@ struct IoSqeBase
   void markCancelled() { cancelled_ = true; }
   void setEventBase(EventBase* evb) { evb_ = evb; }
 
+  bool is_linked() const noexcept { return ioSqeHook_.is_linked(); }
+  void unlink() noexcept { ioSqeHook_.unlink(); }
+
  protected:
   // This is used if you want to prepare this sqe for reuse, but will manage the
   // lifetime. For example for zerocopy send, you might want to reuse the sqe
@@ -72,15 +72,22 @@ struct IoSqeBase
   void internalSubmit(struct io_uring_sqe* sqe) noexcept;
   void internalCallback(const io_uring_cqe* cqe) noexcept;
 
+  IntrusiveListHook ioSqeHook_;
   bool inFlight_ = false;
   bool cancelled_ = false;
   EventBase* evb_ = nullptr;
   Type type_;
 };
 
-struct IoUringFdRegistrationRecord
-    : public boost::intrusive::slist_base_hook<
-          boost::intrusive::cache_last<false>> {
+struct IoUringFdRegistrationRecord {
+ private:
+  SafeIntrusiveListHook freeListHook_;
+
+ public:
+  using FreeList = SafeIntrusiveList<
+      IoUringFdRegistrationRecord,
+      &IoUringFdRegistrationRecord::freeListHook_>;
+
   int count_{0};
   int fd_{-1};
   int idx_{0};

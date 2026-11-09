@@ -637,7 +637,7 @@ void IoUringBackend::cleanup() {
 
   // release the active events
   while (!activeEvents_.empty()) {
-    auto* ioSqe = &activeEvents_.front();
+    auto* ioSqe = static_cast<IoSqe*>(&activeEvents_.front());
     activeEvents_.pop_front();
     releaseIoSqe(ioSqe);
   }
@@ -645,7 +645,9 @@ void IoUringBackend::cleanup() {
   // free the entries
   timerEntry_.reset();
   signalReadEntry_.reset();
-  freeList_.clear_and_dispose([](auto _) { delete _; });
+  freeList_.clear_and_dispose([](IoSqeBase* ioSqe) {
+    delete static_cast<IoSqe*>(ioSqe);
+  });
 
   int fd = ioRing_.ring_fd;
   SQGroupInfoRegistry::FDCloseFunc func = [&]() {
@@ -889,7 +891,7 @@ size_t IoUringBackend::processSignals() {
 IoUringBackend::IoSqe* IoUringBackend::allocIoSqe() {
   // try to allocate from the pool first
   if (!freeList_.empty()) {
-    auto* ret = &freeList_.front();
+    auto* ret = static_cast<IoSqe*>(&freeList_.front());
     freeList_.pop_front();
     return ret;
   }
@@ -958,7 +960,7 @@ size_t IoUringBackend::processActiveEvents() {
 
   while (!activeEvents_.empty() && !loopBreak_) {
     bool release = true;
-    ioSqe = &activeEvents_.front();
+    ioSqe = static_cast<IoSqe*>(&activeEvents_.front());
     activeEvents_.pop_front();
     ret++;
     auto* event = ioSqe->event_;

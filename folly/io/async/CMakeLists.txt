@@ -150,7 +150,7 @@ folly_add_library(
     folly_random
     folly_tracing_static_tracepoint
   EXPORTED_DEPS
-    Boost::headers
+    folly_container_intrusive_list
     folly_futures_core
     folly_io_async_async_base
     folly_io_async_async_socket
@@ -494,8 +494,8 @@ folly_add_library(
     folly_tracing_static_tracepoint
   EXPORTED_DEPS
     ${GLOG_LIBRARIES}
-    Boost::headers
     folly_c_portability
+    folly_container_intrusive_list
     folly_conv
     folly_cpp_attributes
     folly_exception_string
@@ -559,8 +559,8 @@ folly_add_library(
     folly_portability_sys_mman
     folly_string
   EXPORTED_DEPS
-    Boost::headers
     folly_concurrency_memory_tl_ref_count
+    folly_container_intrusive_list
     folly_io_async_delayed_destruction
     folly_io_async_liburing
     folly_io_iobuf
@@ -602,7 +602,7 @@ folly_add_library(
     folly_portability_sys_mman
     folly_string
   EXPORTED_DEPS
-    Boost::headers
+    folly_container_intrusive_list
     folly_io_async_delayed_destruction
     folly_io_async_liburing
     folly_io_iobuf

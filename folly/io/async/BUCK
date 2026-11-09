@@ -705,7 +705,6 @@ fb_dirsync_cpp_library(
         "//folly/tracing:static_tracepoint",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         ":async_base",
         ":async_socket",
         ":async_socket_exception",
@@ -716,6 +715,7 @@ fb_dirsync_cpp_library(
         "//folly:network_address",
         "//folly:optional",
         "//folly:small_vector",
+        "//folly/container:intrusive_list",
         "//folly/futures:core",
         "//folly/io:iobuf",
         "//folly/io:socket_option_map",
@@ -876,7 +876,6 @@ fb_dirsync_cpp_library(
         "//folly/tracing:static_tracepoint",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         "fbsource//third-party/glog:glog",
         ":async_base",
         ":delayed_destruction",
@@ -892,6 +891,7 @@ fb_dirsync_cpp_library(
         "//folly:optional",
         "//folly:range",
         "//folly:small_vector",
+        "//folly/container:intrusive_list",
         "//folly/io:iobuf",
         "//folly/lang:bits",
         "//folly/portability:asm",
@@ -916,9 +916,9 @@ fb_dirsync_cpp_library(
         "//folly/portability:sys_mman",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         ":delayed_destruction",
         ":liburing",
+        "//folly/container:intrusive_list",
         "//folly/io:iobuf",
         "//folly/synchronization:distributed_mutex",
     ],
@@ -942,10 +942,10 @@ fb_dirsync_cpp_library(
         "//folly/portability:sys_mman",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         ":delayed_destruction",
         ":liburing",
         "//folly/concurrency/memory:tl_ref_count",
+        "//folly/container:intrusive_list",
         "//folly/io:iobuf",
     ],
 )
