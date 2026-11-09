@@ -51,6 +51,7 @@ namespace {
 constexpr std::chrono::milliseconds kTerminateTimeout{500};
 constexpr std::chrono::milliseconds kAttachTimeout{30000};
 constexpr std::chrono::milliseconds kDetachTimeout{500};
+constexpr std::chrono::milliseconds kStopTimeout{10000};
 
 constexpr std::string_view kEnableCommand = "enable\n";
 constexpr std::string_view kDisableCommand = "disable\n";
@@ -160,7 +161,11 @@ class PerfScoped::PerfScopedImpl {
     try {
       if (proc_.returnCode().running()) {
         proc_.sendSignal(SIGINT);
-        proc_.wait();
+        if (proc_.waitTimeout(kStopTimeout).running()) {
+          // perf ignored SIGINT, do not hang the test.
+          proc_.kill();
+          proc_.wait();
+        }
       }
       if (output_) {
         readFile(outputFile_.fd(), *output_);
