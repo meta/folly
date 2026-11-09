@@ -27,6 +27,8 @@
 #include <folly/File.h> // @manual
 #include <folly/FileUtil.h> // @manual
 #include <folly/Subprocess.h> // @manual
+#include <folly/Utility.h> // @manual
+#include <folly/lang/cstring_view.h> // @manual
 #include <folly/portability/Sockets.h>
 #include <folly/system/Pid.h>
 #include <folly/testing/TestUtil.h>
@@ -48,10 +50,10 @@ namespace detail {
 
 namespace {
 
-constexpr std::chrono::milliseconds kTerminateTimeout{500};
 constexpr std::chrono::milliseconds kAttachTimeout{30000};
 constexpr std::chrono::milliseconds kDetachTimeout{500};
 constexpr std::chrono::milliseconds kStopTimeout{10000};
+constexpr std::chrono::milliseconds kKillTimeout{5000};
 
 constexpr std::string_view kEnableCommand = "enable\n";
 constexpr std::string_view kDisableCommand = "disable\n";
@@ -108,7 +110,9 @@ std::vector<std::string> buildArgs(
 
 Subprocess::Options subprocessOptions() {
   Subprocess::Options res;
-  res.terminateChildOnDestruction(kTerminateTimeout);
+  // ~Subprocess must never block: PerfScopedImpl performs its own bounded
+  // waits below and abandons an unkillable child instead of reaping it.
+  res.allowDestructionWhileProcessRunning(true);
   return res;
 }
 
@@ -124,6 +128,30 @@ File makeControlFifo(const std::string& path) {
         errno, std::generic_category(), "PerfScoped: opening fifo failed");
   }
   return File{fd, /* ownsFd */ true};
+}
+
+std::string readProcFile(cstring_view path) {
+  std::string out;
+  const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    return out;
+  }
+  File file{fd, /* ownsFd */ true};
+  char buffer[1024];
+  ssize_t bytes;
+  while ((bytes = readNoInt(file.fd(), buffer, sizeof(buffer))) > 0) {
+    out.append(buffer, to_unsigned(bytes));
+  }
+  return out;
+}
+
+void logAbandonedChild(pid_t pid) {
+  std::cerr
+      << "PerfScoped: perf (pid " << pid
+      << ") is still running after SIGINT and SIGKILL; abandoning it "
+         "so the test can proceed. Kernel stack:\n"
+      << readProcFile(fmt::format("/proc/{}/stack", pid)) << "wchan: "
+      << readProcFile(fmt::format("/proc/{}/wchan", pid)) << std::endl;
 }
 
 } // namespace
@@ -161,10 +189,18 @@ class PerfScoped::PerfScopedImpl {
     try {
       if (proc_.returnCode().running()) {
         proc_.sendSignal(SIGINT);
-        if (proc_.waitTimeout(kStopTimeout).running()) {
+        auto rc = proc_.waitTimeout(kStopTimeout);
+        if (rc.running()) {
           // perf ignored SIGINT, do not hang the test.
           proc_.kill();
-          proc_.wait();
+          rc = proc_.waitTimeout(kKillTimeout);
+        }
+        if (rc.running()) {
+          // perf survived SIGKILL (e.g. uninterruptible sleep); abandon it
+          // rather than hanging the test. allowDestructionWhileProcessRunning
+          // makes ~Subprocess leak it instead of blocking on waitpid.
+          logAbandonedChild(proc_.pid());
+          return;
         }
       }
       if (output_) {
