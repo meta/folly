@@ -66,7 +66,7 @@ folly_add_library(
   SRCS ExecutionObserver.cpp
   HEADERS ExecutionObserver.h
   DEPS folly_tracing_static_tracepoint
-  EXPORTED_DEPS Boost::headers
+  EXPORTED_DEPS folly_container_intrusive_list
 )
 
 folly_add_library(

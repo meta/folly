@@ -18,7 +18,7 @@
 
 #include <cstdint>
 
-#include <boost/intrusive/list.hpp>
+#include <folly/container/IntrusiveList.h>
 
 namespace folly {
 
@@ -27,9 +27,9 @@ namespace folly {
  * together. As a caveat, execution observers should not remove themselves from
  * the list of observers during execution
  */
-class ExecutionObserver
-    : public boost::intrusive::list_base_hook<
-          boost::intrusive::link_mode<boost::intrusive::auto_unlink>> {
+class ExecutionObserver {
+  IntrusiveListHook observerHook_;
+
  public:
   enum class CallbackType {
     // Owned by EventBase.
@@ -39,12 +39,14 @@ class ExecutionObserver
     // Owned by FiberManager.
     Fiber,
   };
-  // Constant time size = false to support auto_unlink behavior, options are
-  // mutually exclusive
-  using List = boost::intrusive::
-      list<ExecutionObserver, boost::intrusive::constant_time_size<false>>;
+  // Defined after ExecutionObserver, which must be complete when the list
+  // type names its hook.
+  class List;
 
   virtual ~ExecutionObserver() = default;
+
+  bool is_linked() const noexcept { return observerHook_.is_linked(); }
+  void unlink() noexcept { observerHook_.unlink(); }
 
   /**
    * Called when a task is about to start executing.
@@ -60,6 +62,11 @@ class ExecutionObserver
    */
   virtual void stopped(uintptr_t id, CallbackType callbackType) noexcept = 0;
 };
+
+class ExecutionObserver::List
+    : public IntrusiveList<
+          ExecutionObserver,
+          &ExecutionObserver::observerHook_> {};
 
 class ExecutionObserverScopeGuard {
  public:

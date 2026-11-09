@@ -491,7 +491,7 @@ fb_dirsync_cpp_library(
     deps = [
         "//folly/tracing:static_tracepoint",
     ],
-    exported_deps = ["fbsource//third-party/boost:boost"],
+    exported_deps = ["//folly/container:intrusive_list"],
 )
 
 # !!!! fbcode/folly/executors/TARGETS was merged into this file, see https://fburl.com/workplace/xl8l9yuo for more info !!!!
