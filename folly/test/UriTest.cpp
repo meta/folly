@@ -17,6 +17,7 @@
 #include <folly/Uri.h>
 
 #include <map>
+#include <ostream>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -462,39 +463,17 @@ struct ParseCase {
   std::string_view path = {};
   std::string_view query = {};
   std::string_view fragment = {};
+
+  bool operator==(const ParseCase&) const = default;
+
+  friend std::ostream& operator<<(std::ostream& os, const ParseCase& c) {
+    return os
+        << "{uri: " << c.uri << ", scheme: " << c.scheme
+        << ", username: " << c.username << ", password: " << c.password
+        << ", host: " << c.host << ", port: " << c.port << ", path: " << c.path
+        << ", query: " << c.query << ", fragment: " << c.fragment << "}";
+  }
 };
-
-auto fields(const ParseCase& c) {
-  return std::tuple(
-      c.scheme,
-      c.username,
-      c.password,
-      c.host,
-      c.port,
-      c.path,
-      c.query,
-      c.fragment);
-}
-
-auto fields(const Uri& u) {
-  return std::tuple<
-      std::string_view,
-      std::string_view,
-      std::string_view,
-      std::string_view,
-      uint16_t,
-      std::string_view,
-      std::string_view,
-      std::string_view>(
-      u.scheme(),
-      u.username(),
-      u.password(),
-      u.host(),
-      u.port(),
-      u.path(),
-      u.query(),
-      u.fragment());
-}
 
 } // namespace
 
@@ -620,7 +599,20 @@ TEST(Uri, Parse) {
   };
   for (const auto& c : cases) {
     SCOPED_TRACE(c.uri);
-    EXPECT_EQ(fields(c), fields(Uri(c.uri)));
+    Uri u(c.uri);
+    EXPECT_EQ(
+        c,
+        (ParseCase{
+            .uri = c.uri,
+            .scheme = u.scheme(),
+            .username = u.username(),
+            .password = u.password(),
+            .host = u.host(),
+            .port = u.port(),
+            .path = u.path(),
+            .query = u.query(),
+            .fragment = u.fragment(),
+        }));
   }
 }
 
