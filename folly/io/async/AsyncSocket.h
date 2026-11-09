@@ -86,14 +86,6 @@ class AsyncDetachFdCallback {
  * responding and no further progress can be made sending the data.
  */
 
-/**
- *This is a @deprecated approach to disabling TTLS and should be
- *removed after completing the migration to FOLLY_SO_TTLS_TRUSTED.
- */
-#if defined __linux__ && !defined FOLLY_SO_NO_TRANSPARENT_TLS
-#define FOLLY_SO_NO_TRANSPARENT_TLS 200
-#endif
-
 #if defined __linux__ && !defined FOLLY_SO_TTLS_TRUSTED
 #define FOLLY_SO_TTLS_TRUSTED 206
 #endif
