@@ -18,16 +18,87 @@
 
 #include <algorithm>
 #include <cctype>
-
-#include <boost/regex.hpp>
+#include <optional>
 
 namespace folly {
 
 namespace {
 
-std::string submatch(const boost::cmatch& m, int idx) {
-  const auto& sub = m[idx];
-  return std::string(sub.first, sub.second);
+bool isAlpha(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+bool isDigit(char c) {
+  return c >= '0' && c <= '9';
+}
+
+bool isSchemeChar(char c) {
+  return isAlpha(c) || isDigit(c) || c == '+' || c == '.' || c == '-';
+}
+
+// Parses `s` as a host, either an IP literal in brackets or a possibly empty
+// run of characters other than '[' and ':', optionally followed by ':' and a
+// possibly empty port.
+bool parseHostAndPort(StringPiece s, StringPiece& host, StringPiece& port) {
+  size_t hostSize = 0;
+  if (s.startsWith('[')) {
+    hostSize = s.find(']');
+    if (hostSize == StringPiece::npos) {
+      return false;
+    }
+    ++hostSize;
+  } else {
+    hostSize = std::min(s.find_first_of("[:"), s.size());
+  }
+  host = s.subpiece(0, hostSize);
+  port = s.subpiece(hostSize);
+  return port.empty() ||
+      (port.removePrefix(':') &&
+       std::all_of(port.begin(), port.end(), isDigit));
+}
+
+// Boost.Regex's default `^` and `$` also match at line breaks other than
+// between '\r' and '\n'.
+bool isLineBreak(char c) {
+  return c == '\n' || c == '\r' || c == '\f';
+}
+
+bool isCrLf(StringPiece s, size_t i) {
+  return i > 0 && i < s.size() && s[i - 1] == '\r' && s[i] == '\n';
+}
+
+bool isLineStart(StringPiece s, size_t i) {
+  return i == 0 || (isLineBreak(s[i - 1]) && !isCrLf(s, i));
+}
+
+bool isLineEnd(StringPiece s, size_t i) {
+  return i == s.size() || (isLineBreak(s[i]) && !isCrLf(s, i));
+}
+
+struct QueryParam {
+  size_t nameEnd;
+  size_t valueBegin;
+  size_t end;
+};
+
+// Matches `([^=&]*)=?([^=&]*)(?=&|$)` at `begin` the way Boost.Regex does,
+// trying the longest name and value first.
+std::optional<QueryParam> matchQueryParam(StringPiece query, size_t begin) {
+  auto findDelimiter = [&](size_t from) {
+    return std::min(query.find_first_of("=&", from), query.size());
+  };
+  size_t nameEnd = findDelimiter(begin);
+  size_t valueEnd = nameEnd < query.size() && query[nameEnd] == '='
+      ? findDelimiter(nameEnd + 1)
+      : nameEnd;
+  for (size_t end = valueEnd + 1; end-- > begin;) {
+    if (isLineEnd(query, end) || query[end] == '&') {
+      return end > nameEnd
+          ? QueryParam{nameEnd, nameEnd + 1, end}
+          : QueryParam{end, end, end};
+    }
+  }
+  return std::nullopt;
 }
 
 } // namespace
@@ -57,73 +128,65 @@ Expected<Uri, UriFormatError> Uri::tryFromString(
     std::string_view str) noexcept {
   Uri result;
 
-  static const auto& uriRegex = *new boost::regex(
-      "([a-zA-Z][a-zA-Z0-9+.-]*):" // scheme:
-      "([^?#]*)" // authority and path
-      "(?:\\?([^#]*))?" // ?query
-      "(?:#(.*))?"); // #fragment
-  static const auto& authorityAndPathRegex =
-      *new boost::regex("//([^/]*)(/.*)?");
-
-  boost::cmatch match;
-  if (!boost::regex_match(str.data(), str.data() + str.size(), match, uriRegex))
+  auto colon = str.find(':');
+  if (colon == std::string_view::npos || !isAlpha(str[0]) ||
+      !std::all_of(str.begin() + 1, str.begin() + colon, isSchemeChar))
       [[unlikely]] {
     return makeUnexpected(UriFormatError::INVALID_URI);
   }
 
-  result.scheme_ = submatch(match, 1);
+  result.scheme_ = std::string(str.substr(0, colon));
   std::transform(
       result.scheme_.begin(),
       result.scheme_.end(),
       result.scheme_.begin(),
       ::tolower);
 
-  std::string_view authorityAndPath(match[2].first, match[2].second);
-  boost::cmatch authorityAndPathMatch;
-  if (!boost::regex_match(
-          authorityAndPath.data(),
-          authorityAndPath.data() + authorityAndPath.size(),
-          authorityAndPathMatch,
-          authorityAndPathRegex)) {
-    // Does not start with //, doesn't have authority
-    result.hasAuthority_ = false;
-    result.path_ = std::string(authorityAndPath);
-  } else {
-    static const auto& authorityRegex = *new boost::regex(
-        "(?:([^@:]*)(?::([^@]*))?@)?" // username, password
-        "(\\[[^\\]]*\\]|[^\\[:]*)" // host (IP-literal (e.g. '['+IPv6+']',
-                                   // dotted-IPv4, or named host)
-        "(?::(\\d*))?"); // port
-
-    const auto authority = authorityAndPathMatch[1];
-    boost::cmatch authorityMatch;
-    if (!boost::regex_match(
-            authority.first,
-            authority.second,
-            authorityMatch,
-            authorityRegex)) {
-      return makeUnexpected(UriFormatError::INVALID_URI_AUTHORITY);
-    }
-
-    std::string_view port(authorityMatch[4].first, authorityMatch[4].second);
-    if (!port.empty()) {
-      try {
-        result.port_ = to<uint16_t>(port);
-      } catch (ConversionError const&) {
-        return makeUnexpected(UriFormatError::INVALID_URI_PORT);
-      }
-    }
-
-    result.hasAuthority_ = true;
-    result.username_ = submatch(authorityMatch, 1);
-    result.password_ = submatch(authorityMatch, 2);
-    result.host_ = submatch(authorityMatch, 3);
-    result.path_ = submatch(authorityAndPathMatch, 2);
+  StringPiece rest = str.substr(colon + 1);
+  auto hash = rest.find('#');
+  if (hash != StringPiece::npos) {
+    result.fragment_ = rest.subpiece(hash + 1).str();
+    rest = rest.subpiece(0, hash);
+  }
+  auto question = rest.find('?');
+  if (question != StringPiece::npos) {
+    result.query_ = rest.subpiece(question + 1).str();
+    rest = rest.subpiece(0, question);
   }
 
-  result.query_ = submatch(match, 3);
-  result.fragment_ = submatch(match, 4);
+  if (!rest.removePrefix("//")) {
+    // Does not start with //, doesn't have authority
+    result.path_ = rest.str();
+    return result;
+  }
 
+  StringPiece authority = rest.subpiece(0, rest.find('/'));
+  result.path_ = rest.subpiece(authority.size()).str();
+
+  // The userinfo ends at the first '@', but only if the rest is a valid host
+  // and port, otherwise the whole authority is the host and port.
+  StringPiece host;
+  StringPiece port;
+  auto at = authority.find('@');
+  if (at != StringPiece::npos &&
+      parseHostAndPort(authority.subpiece(at + 1), host, port)) {
+    StringPiece userinfo = authority.subpiece(0, at);
+    result.username_ = userinfo.split_step(':').str();
+    result.password_ = userinfo.str();
+  } else if (!parseHostAndPort(authority, host, port)) {
+    return makeUnexpected(UriFormatError::INVALID_URI_AUTHORITY);
+  }
+
+  if (!port.empty()) {
+    try {
+      result.port_ = to<uint16_t>(port);
+    } catch (ConversionError const&) {
+      return makeUnexpected(UriFormatError::INVALID_URI_PORT);
+    }
+  }
+
+  result.hasAuthority_ = true;
+  result.host_ = host.str();
   return result;
 }
 
@@ -157,7 +220,7 @@ std::string Uri::authority() const {
 std::string Uri::hostname() const {
   if (!host_.empty() && host_[0] == '[') {
     // If it starts with '[', then it should end with ']', this is ensured by
-    // regex
+    // the parser
     return host_.substr(1, host_.size() - 2);
   }
   return host_;
@@ -165,25 +228,35 @@ std::string Uri::hostname() const {
 
 const std::vector<std::pair<std::string, std::string>>& Uri::getQueryParams() {
   if (!query_.empty() && queryParams_.empty()) {
-    // Parse query string
-    static const auto& queryParamRegex = *new boost::regex(
-        "(^|&)" /*start of query or start of parameter "&"*/
-        "([^=&]*)=?" /*parameter name and "=" if value is expected*/
-        "([^=&]*)" /*parameter value*/
-        "(?=(&|$))" /*forward reference, next should be end of query or
-                      start of next parameter*/);
-    const boost::cregex_iterator paramBeginItr(
-        query_.data(), query_.data() + query_.size(), queryParamRegex);
-    boost::cregex_iterator paramEndItr;
-    for (auto itr = paramBeginItr; itr != paramEndItr; ++itr) {
-      if (itr->length(2) == 0) {
-        // key is empty, ignore it
+    // Finds successive matches of `(^|&)([^=&]*)=?([^=&]*)(?=&|$)` like
+    // Boost.Regex and skips parameters without a name.
+    StringPiece query(query_);
+    size_t start = 0;
+    while (start <= query.size()) {
+      size_t begin = start;
+      std::optional<QueryParam> param;
+      if (isLineStart(query, start)) {
+        param = matchQueryParam(query, begin);
+        if (param && param->end == start) {
+          // Boost rejects an empty match on the next search and tries '&'.
+          param.reset();
+        }
+      }
+      if (!param && start < query.size() && query[start] == '&') {
+        begin = start + 1;
+        param = matchQueryParam(query, begin);
+      }
+      if (!param) {
+        ++start;
         continue;
       }
-      queryParams_.emplace_back(
-          std::string((*itr)[2].first, (*itr)[2].second), // parameter name
-          std::string((*itr)[3].first, (*itr)[3].second) // parameter value
-      );
+      if (param->nameEnd > begin) {
+        queryParams_.emplace_back(
+            query.subpiece(begin, param->nameEnd - begin).str(),
+            query.subpiece(param->valueBegin, param->end - param->valueBegin)
+                .str());
+      }
+      start = param->end;
     }
   }
   return queryParams_;

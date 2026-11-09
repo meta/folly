@@ -443,6 +443,11 @@ TEST(Uri, Long) {
   ASSERT_EQ(5000, params.size());
   EXPECT_EQ("k4999", params.back().first);
   EXPECT_EQ("v", params.back().second);
+
+  // A parameter with a long name and more than one '=' is skipped.
+  Uri skipped("s:?" + std::string(100000, 'a') + "=b=c&d=e");
+  using Params = std::vector<std::pair<std::string, std::string>>;
+  EXPECT_EQ((Params{{"d", "e"}}), skipped.getQueryParams());
 }
 
 namespace {

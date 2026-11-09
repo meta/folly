@@ -1334,16 +1334,13 @@ folly_add_library(
   HEADERS
     Uri-inl.h
     Uri.h
-  DEPS
-    ${GLOG_LIBRARIES}
-    Boost::regex
+  DEPS ${GLOG_LIBRARIES}
   EXPORTED_DEPS
     folly_conv
     folly_expected
     folly_hash_hash
     folly_string
 )
-set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS Boost::regex)
 
 folly_add_library(
   NAME utf8_string
