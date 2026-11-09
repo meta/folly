@@ -23,10 +23,9 @@
 #include <type_traits>
 #include <utility>
 
-#include <boost/intrusive/list.hpp>
-
 #include <folly/Optional.h>
 #include <folly/ScopeGuard.h>
+#include <folly/container/IntrusiveList.h>
 #include <folly/lang/Exception.h>
 
 namespace folly {
@@ -202,12 +201,13 @@ class PolicySemaphore {
     std::condition_variable cv;
   };
 
-  struct Waiter : boost::intrusive::list_base_hook<> {
+  struct Waiter {
+    SafeIntrusiveListHook hook;
     bool protect_waiter_post_wait = false;
     Event wake_waiter;
     Event* wake_poster = nullptr;
   };
-  using WaiterList = boost::intrusive::list<Waiter>;
+  using WaiterList = SafeIntrusiveList<Waiter, &Waiter::hook>;
 
   class EmptyCallable {
    public:

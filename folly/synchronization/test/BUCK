@@ -377,11 +377,10 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_library(
     name = "semaphore",
     headers = ["Semaphore.h"],
-    deps = ["fbsource//third-party/boost:boost"],
     exported_deps = [
-        "fbsource//third-party/boost:boost",
         "//folly:optional",
         "//folly:scope_guard",
+        "//folly/container:intrusive_list",
         "//folly/lang:exception",
     ],
 )
