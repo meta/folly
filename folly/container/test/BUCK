@@ -437,8 +437,18 @@ fb_dirsync_cpp_unittest(
     srcs = ["IteratorTest.cpp"],
     headers = [],
     deps = [
+        ":iterator_test_util",
         "//folly/container:iterator",
         "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_library(
+    name = "iterator_test_util",
+    headers = ["IteratorTestUtil.h"],
+    exported_deps = [
+        "//folly:traits",
+        "//folly/container:iterator",
     ],
 )
 
