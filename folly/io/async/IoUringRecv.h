@@ -72,14 +72,18 @@ class IoUringRecvHandle : public DelayedDestruction {
       EventBase* evb,
       NetworkSocket fd,
       const SocketAddress& addr,
-      IoUringRecvCallback* callback);
+      IoUringRecvCallback* callback,
+      bool useRecvmsg = false,
+      size_t recvmsgControlLength = 0);
 
   static UniquePtr clone(
       EventBase* evb,
       NetworkSocket fd,
       const SocketAddress& addr,
       IoUringRecvCallback* callback,
-      UniquePtr old);
+      UniquePtr old,
+      bool useRecvmsg = false,
+      size_t recvmsgControlLength = 0);
 
   bool update(uint16_t eventFlags);
   void submit();
@@ -97,7 +101,9 @@ class IoUringRecvHandle : public DelayedDestruction {
       IoUringBackend* backend,
       NetworkSocket fd,
       const SocketAddress& addr,
-      IoUringRecvCallback* callback);
+      IoUringRecvCallback* callback,
+      bool useRecvmsg,
+      size_t recvmsgControlLength);
 
   explicit IoUringRecvHandle(
       EventBase* evb,
@@ -105,7 +111,9 @@ class IoUringRecvHandle : public DelayedDestruction {
       NetworkSocket fd,
       const SocketAddress& addr,
       IoUringRecvCallback* callback,
-      UniquePtr other);
+      UniquePtr other,
+      bool useRecvmsg,
+      size_t recvmsgControlLength);
 
   void setPendingRead(EventBase* evb, PendingReadDataFuture&& future);
   void processPendingRead();

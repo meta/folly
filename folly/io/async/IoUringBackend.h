@@ -234,7 +234,9 @@ class IoUringBackend : public EventBaseBackendBase {
     return IoUringZeroCopyBufferPool::kernelZeroCopyRxSupported();
   }
 
-  bool canReceiveBuffer() { return zcBufferPool() || hasBufferProvider(); }
+  bool canReceiveBuffer(bool useRecvmsg) {
+    return (!useRecvmsg && zcBufferPool()) || hasBufferProvider();
+  }
 
   struct CqeStats {
     uint64_t providedBufferCount{0};

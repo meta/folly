@@ -85,7 +85,9 @@ class IoUringRecvHandle::RecvRequest
       IoUringBackend* backend,
       NetworkSocket fd,
       const SocketAddress& addr,
-      IoUringRecvHandle* handle);
+      IoUringRecvHandle* handle,
+      bool useRecvmsg,
+      size_t recvmsgControlLength);
 
   explicit RecvRequest(
       IoUringBackend* backend,
@@ -97,8 +99,7 @@ class IoUringRecvHandle::RecvRequest
         (!addr.isLoopbackAddress() || backend->options().zcRxNoDev);
     if (zcRxUsable) {
       bufferPool_ = backend->zcBufferPool();
-    } else {
-      bufferRing_ = backend->bufferProvider();
+      bufferRing_ = nullptr;
     }
     useBundles_ = backend->useBundles();
   }
@@ -163,10 +164,12 @@ class IoUringRecvHandle::RecvRequest
   ~RecvRequest() override = default;
 
   explicit RecvRequest(
-      IoUringBackend* /*backend*/, NetworkSocket fd, IoUringRecvHandle* handle)
+      IoUringBackend* backend, NetworkSocket fd, IoUringRecvHandle* handle)
       : IoSqeBase(IoSqeBase::Type::Read),
         fd_(fd),
         handle_(handle),
+        bufferRing_(
+            backend->hasBufferProvider() ? backend->bufferProvider() : nullptr),
         handleGuard_(handle) {}
 
   virtual void prepRecvNormal(struct io_uring_sqe* sqe) {
@@ -206,6 +209,8 @@ class IoUringRecvHandle::RecvRequest
   std::unique_ptr<IOBuf> fallbackBuffer_;
 
  private:
+  class RecvmsgRequest;
+
   std::unique_ptr<IOBuf> getData(const struct io_uring_cqe* cqe) {
     if (fallbackBuffer_) {
       fallbackBuffer_->append(cqe->res);
@@ -224,19 +229,131 @@ class IoUringRecvHandle::RecvRequest
   IoUringZeroCopyBufferPool* bufferPool_{nullptr};
 };
 
+class IoUringRecvHandle::RecvRequest::RecvmsgRequest final
+    : public RecvRequest {
+ public:
+  explicit RecvmsgRequest(
+      IoUringBackend* backend,
+      NetworkSocket fd,
+      IoUringRecvHandle* handle,
+      size_t controlLength)
+      : RecvRequest(backend, fd, handle),
+        controlLength_(
+            controlLength == 0 ? kDefaultControlLength : controlLength) {
+    memset(&msgh_, 0, sizeof(msgh_));
+    msgh_.msg_namelen = 0;
+    msgh_.msg_controllen = controlLength_;
+  }
+
+ private:
+  void prepRecvNormal(struct io_uring_sqe* sqe) override {
+    ::io_uring_prep_recvmsg_multishot(sqe, fd_.toFd(), &msgh_, 0);
+    sqe->buf_group = bufferRing_->gid();
+    sqe->flags |= IOSQE_BUFFER_SELECT;
+  }
+
+  void prepRecvFallback(struct io_uring_sqe* sqe) override {
+    const auto size = goodMallocSize(16384);
+    fallbackBuffer_ = IOBuf::create(size);
+    fallbackIov_.iov_base = fallbackBuffer_->writableTail();
+    fallbackIov_.iov_len = fallbackBuffer_->tailroom();
+    fallbackControl_.assign(
+        (controlLength_ + sizeof(cmsghdr) - 1) / sizeof(cmsghdr), {});
+    memset(&fallbackMsgh_, 0, sizeof(fallbackMsgh_));
+    fallbackMsgh_.msg_iov = &fallbackIov_;
+    fallbackMsgh_.msg_iovlen = 1;
+    fallbackMsgh_.msg_control = fallbackControl_.data();
+    fallbackMsgh_.msg_controllen = controlLength_;
+    ::io_uring_prep_recvmsg(sqe, fd_.toFd(), &fallbackMsgh_, 0);
+  }
+
+  void completeRecv(const struct io_uring_cqe* cqe) override {
+    if (fallbackBuffer_) {
+      deliverFallbackRecvmsg(cqe);
+    } else {
+      deliverRecvmsg(cqe);
+    }
+  }
+
+  void deliverFallbackRecvmsg(const struct io_uring_cqe* cqe) {
+    if (cqe->res < 0) {
+      fallbackBuffer_.reset();
+      handle_->onRecvErr(-cqe->res);
+      return;
+    }
+
+    if (static_cast<size_t>(cqe->res) > fallbackBuffer_->tailroom() ||
+        (fallbackMsgh_.msg_flags & (MSG_TRUNC | MSG_CTRUNC))) {
+      fallbackBuffer_.reset();
+      handle_->onRecvErr(EBADMSG);
+      return;
+    }
+
+    detail::IoUringRecvmsgControl control;
+    if (!detail::parseCmsgs(
+            CMSG_FIRSTHDR(&fallbackMsgh_),
+            fallbackMsgh_.msg_controllen,
+            fallbackMsgh_.msg_flags,
+            control)) {
+      fallbackBuffer_.reset();
+      handle_->onRecvErr(EBADMSG);
+      return;
+    }
+
+    fallbackBuffer_->append(cqe->res);
+    handle_->onRecvCompleteWithCmsgs(
+        std::move(fallbackBuffer_), std::move(control));
+  }
+
+  void deliverRecvmsg(const struct io_uring_cqe* cqe) {
+    if (!(cqe->flags & IORING_CQE_F_BUFFER)) {
+      handle_->onRecvErr(EBADMSG);
+      return;
+    }
+
+    auto buf = bufferRing_->getIoBuf(cqe);
+    if (!buf) {
+      handle_->onRecvErr(EBADMSG);
+      return;
+    }
+
+    detail::IoUringRecvmsgControl control;
+    if (!detail::parseIoUringRecvmsg(
+            buf, cqe->res, msgh_.msg_namelen, msgh_.msg_controllen, control)) {
+      handle_->onRecvErr(EBADMSG);
+      return;
+    }
+
+    handle_->onRecvCompleteWithCmsgs(std::move(buf), std::move(control));
+  }
+
+  static constexpr size_t kDefaultControlLength = CMSG_SPACE(sizeof(uint8_t));
+  struct msghdr msgh_{};
+  size_t controlLength_{0};
+  struct iovec fallbackIov_{};
+  struct msghdr fallbackMsgh_{};
+  std::vector<cmsghdr> fallbackControl_;
+};
+
 IoUringRecvHandle::RecvRequest::UniquePtr
 IoUringRecvHandle::RecvRequest::create(
     IoUringBackend* backend,
     NetworkSocket fd,
     const SocketAddress& addr,
-    IoUringRecvHandle* handle) {
+    IoUringRecvHandle* handle,
+    bool useRecvmsg,
+    size_t recvmsgControlLength) {
+  if (useRecvmsg) {
+    return UniquePtr(
+        new RecvmsgRequest(backend, fd, handle, recvmsgControlLength));
+  }
   return UniquePtr(new RecvRequest(backend, fd, addr, handle));
 }
 
 namespace {
-IoUringBackend* checkBackend(EventBase* evb) {
+IoUringBackend* checkBackend(EventBase* evb, bool useRecvmsg) {
   auto* backend = dynamic_cast<IoUringBackend*>(evb->getBackend());
-  if (backend && backend->canReceiveBuffer()) {
+  if (backend && backend->canReceiveBuffer(useRecvmsg)) {
     return backend;
   }
   return nullptr;
@@ -251,13 +368,16 @@ IoUringRecvHandle::UniquePtr IoUringRecvHandle::create(
     EventBase* evb,
     NetworkSocket fd,
     const SocketAddress& addr,
-    IoUringRecvCallback* callback) {
-  auto* backend = checkBackend(evb);
+    IoUringRecvCallback* callback,
+    bool useRecvmsg,
+    size_t recvmsgControlLength) {
+  auto* backend = checkBackend(evb, useRecvmsg);
   if (!backend) {
     return nullptr;
   }
 
-  return UniquePtr(new IoUringRecvHandle(backend, fd, addr, callback));
+  return UniquePtr(new IoUringRecvHandle(
+      backend, fd, addr, callback, useRecvmsg, recvmsgControlLength));
 }
 
 IoUringRecvHandle::UniquePtr IoUringRecvHandle::clone(
@@ -265,24 +385,37 @@ IoUringRecvHandle::UniquePtr IoUringRecvHandle::clone(
     NetworkSocket fd,
     const SocketAddress& addr,
     IoUringRecvCallback* callback,
-    UniquePtr other) {
-  auto* backend = checkBackend(evb);
+    UniquePtr other,
+    bool useRecvmsg,
+    size_t recvmsgControlLength) {
+  auto* backend = checkBackend(evb, useRecvmsg);
   if (!backend) {
     return nullptr;
   }
 
   return UniquePtr(new IoUringRecvHandle(
-      evb, backend, fd, addr, callback, std::move(other)));
+      evb,
+      backend,
+      fd,
+      addr,
+      callback,
+      std::move(other),
+      useRecvmsg,
+      recvmsgControlLength));
 }
 
 IoUringRecvHandle::IoUringRecvHandle(
     IoUringBackend* backend,
     NetworkSocket fd,
     const SocketAddress& addr,
-    IoUringRecvCallback* callback)
+    IoUringRecvCallback* callback,
+    bool useRecvmsg,
+    size_t recvmsgControlLength)
     : backend_(backend),
       recvCallback_(callback),
-      request_(RecvRequest::create(backend, fd, addr, this)) {}
+      request_(
+          RecvRequest::create(
+              backend, fd, addr, this, useRecvmsg, recvmsgControlLength)) {}
 
 IoUringRecvHandle::IoUringRecvHandle(
     EventBase* evb,
@@ -290,10 +423,14 @@ IoUringRecvHandle::IoUringRecvHandle(
     NetworkSocket fd,
     const SocketAddress& addr,
     IoUringRecvCallback* callback,
-    UniquePtr other)
+    UniquePtr other,
+    bool useRecvmsg,
+    size_t recvmsgControlLength)
     : backend_(backend),
       recvCallback_(callback),
-      request_(RecvRequest::create(backend, fd, addr, this)),
+      request_(
+          RecvRequest::create(
+              backend, fd, addr, this, useRecvmsg, recvmsgControlLength)),
       queuedReceivedData_(std::move(other->queuedReceivedData_)),
       queuedCmsgReads_(std::move(other->queuedCmsgReads_)),
       queuedCmsgReadOffset_(std::exchange(other->queuedCmsgReadOffset_, 0)) {
@@ -565,7 +702,9 @@ IoUringRecvHandle::UniquePtr IoUringRecvHandle::create(
     EventBase* /*evb*/,
     NetworkSocket /*fd*/,
     const SocketAddress& /*addr*/,
-    IoUringRecvCallback* /*callback*/) {
+    IoUringRecvCallback* /*callback*/,
+    bool /*useRecvmsg*/,
+    size_t /*recvmsgControlLength*/) {
   folly::terminate_with<std::runtime_error>("io_uring not supported");
 }
 
@@ -574,7 +713,9 @@ IoUringRecvHandle::UniquePtr IoUringRecvHandle::clone(
     NetworkSocket /*fd*/,
     const SocketAddress& /*addr*/,
     IoUringRecvCallback* /*callback*/,
-    IoUringRecvHandle::UniquePtr /*old*/) {
+    IoUringRecvHandle::UniquePtr /*old*/,
+    bool /*useRecvmsg*/,
+    size_t /*recvmsgControlLength*/) {
   folly::terminate_with<std::runtime_error>("io_uring not supported");
 }
 
@@ -582,7 +723,9 @@ IoUringRecvHandle::IoUringRecvHandle(
     IoUringBackend* /*backend*/,
     NetworkSocket /*fd*/,
     const SocketAddress& /*addr*/,
-    IoUringRecvCallback* /*callback*/) {
+    IoUringRecvCallback* /*callback*/,
+    bool /*useRecvmsg*/,
+    size_t /*recvmsgControlLength*/) {
   (void)backend_;
   (void)recvCallback_;
   (void)request_;
@@ -597,7 +740,9 @@ IoUringRecvHandle::IoUringRecvHandle(
     NetworkSocket /*fd*/,
     const SocketAddress& /*addr*/,
     IoUringRecvCallback* /*callback*/,
-    UniquePtr /*other*/) {
+    UniquePtr /*other*/,
+    bool /*useRecvmsg*/,
+    size_t /*recvmsgControlLength*/) {
   (void)backend_;
   (void)recvCallback_;
   (void)request_;

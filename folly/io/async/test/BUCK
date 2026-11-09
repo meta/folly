@@ -1296,6 +1296,22 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "io_uring_recv_test",
+    srcs = ["IoUringRecvTest.cpp"],
+    labels = ["oss-broken"],
+    owner = "dmm@xmail.facebook.com",
+    supports_static_listing = False,
+    deps = [
+        ":io_uring_test_util",
+        "//folly:scope_guard",
+        "//folly/io/async:async_base",
+        "//folly/io/async:async_socket_exception",
+        "//folly/io/async:io_uring_recv",
+        "//folly/net:net_ops",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "cmsg_util_test",
     srcs = ["CmsgUtilTest.cpp"],
     supports_static_listing = False,
