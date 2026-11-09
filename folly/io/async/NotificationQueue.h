@@ -24,7 +24,6 @@
 #include <stdexcept>
 #include <utility>
 
-#include <boost/intrusive/slist.hpp>
 #include <glog/logging.h>
 
 #include <folly/Exception.h>
@@ -32,6 +31,7 @@
 #include <folly/Likely.h>
 #include <folly/ScopeGuard.h>
 #include <folly/SpinLock.h>
+#include <folly/container/IntrusiveList.h>
 #include <folly/io/async/DelayedDestruction.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
@@ -67,15 +67,15 @@ namespace folly {
  */
 template <typename MessageT>
 class NotificationQueue {
-  struct Node
-      : public boost::intrusive::slist_base_hook<
-            boost::intrusive::cache_last<true>> {
+  struct Node {
     template <typename MessageTT>
     Node(MessageTT&& msg, std::shared_ptr<RequestContext> ctx)
         : msg_(std::forward<MessageTT>(msg)), ctx_(std::move(ctx)) {}
+    SafeIntrusiveListHook hook_;
     MessageT msg_;
     std::shared_ptr<RequestContext> ctx_;
   };
+  using NodeList = CountedIntrusiveList<Node, &Node::hook_>;
 
  public:
   /**
@@ -593,7 +593,7 @@ class NotificationQueue {
       InputIteratorT first, InputIteratorT last, std::input_iterator_tag) {
     checkPid();
     bool signal = false;
-    boost::intrusive::slist<Node, boost::intrusive::cache_last<true>> q;
+    NodeList q;
     try {
       while (first != last) {
         auto data = std::make_unique<Node>(
@@ -633,7 +633,7 @@ class NotificationQueue {
   int pipeFds_[2]; // to fallback to on older/non-linux systems
   uint32_t advisoryMaxQueueSize_;
   pid_t pid_;
-  boost::intrusive::slist<Node, boost::intrusive::cache_last<true>> queue_;
+  NodeList queue_;
   int numConsumers_{0};
   std::atomic<int> numActiveConsumers_{0};
   bool draining_{false};
