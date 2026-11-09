@@ -863,6 +863,7 @@ folly_add_library(
     folly_file_util
     folly_io_async_event_util
   EXPORTED_DEPS
+    folly_container_intrusive_list
     folly_io_async_async_base
     folly_io_async_delayed_destruction
 )

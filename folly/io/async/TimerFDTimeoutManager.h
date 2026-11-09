@@ -18,6 +18,7 @@
 
 #include <map>
 
+#include <folly/container/IntrusiveList.h>
 #include <folly/io/async/DelayedDestruction.h>
 #include <folly/io/async/TimerFD.h>
 
@@ -29,9 +30,7 @@ class TimerFDTimeoutManager : public TimerFD {
   using SharedPtr = std::shared_ptr<TimerFDTimeoutManager>;
 
  public:
-  class Callback
-      : public boost::intrusive::list_base_hook<
-            boost::intrusive::link_mode<boost::intrusive::auto_unlink>> {
+  class Callback {
    public:
     Callback() = default;
     explicit Callback(TimerFDTimeoutManager* mgr) : mgr_(mgr) {}
@@ -75,7 +74,15 @@ class TimerFDTimeoutManager : public TimerFD {
 
     bool cancelTimeout() { return mgr_->cancelTimeout(this); }
 
+    // Operations of the list hook. Unlike cancelTimeout(), unlink() only
+    // removes the callback from its list and doesn't call callbackCanceled().
+    bool is_linked() const noexcept { return timerHook_.is_linked(); }
+    void unlink() noexcept { timerHook_.unlink(); }
+
    private:
+    friend class TimerFDTimeoutManager;
+
+    IntrusiveListHook timerHook_;
     TimerFDTimeoutManager* mgr_{nullptr};
     std::chrono::microseconds expirationTime_{0};
   };
@@ -126,8 +133,7 @@ class TimerFDTimeoutManager : public TimerFD {
   // we want to reschedule the timers once we're done with the processing
   bool processingExpired_{false};
 
-  using CallbackList = boost::intrusive::
-      list<Callback, boost::intrusive::constant_time_size<false>>;
+  using CallbackList = IntrusiveList<Callback, &Callback::timerHook_>;
   std::map<std::chrono::microseconds, CallbackList> callbacks_;
   CallbackList inProgressList_;
 };

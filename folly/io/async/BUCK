@@ -611,6 +611,7 @@ fb_dirsync_cpp_library(
         "//folly/io/async:event_util",
     ],
     exported_deps = [
+        "//folly/container:intrusive_list",
         "//folly/io/async:async_base",
         "//folly/io/async:delayed_destruction",
     ],
