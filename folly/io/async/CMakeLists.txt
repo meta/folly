@@ -611,11 +611,18 @@ folly_add_library(
 
 folly_add_library(
   NAME io_uring_recv
-  SRCS IoUringRecv.cpp
-  HEADERS IoUringRecv.h
+  SRCS
+    CmsgUtil.cpp
+    IoUringRecv.cpp
+  HEADERS
+    CmsgUtil.h
+    IoUringRecv.h
   DEPS
+    folly_c_portability
     folly_io_async_async_base
     folly_io_async_async_socket_exception
+    folly_io_async_liburing
+    folly_io_iobuf
   EXPORTED_DEPS
     folly_futures_core
     folly_io_async_async_transport

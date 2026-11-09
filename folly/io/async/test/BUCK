@@ -1296,6 +1296,18 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "cmsg_util_test",
+    srcs = ["CmsgUtilTest.cpp"],
+    supports_static_listing = False,
+    deps = [
+        "//folly/io:iobuf",
+        "//folly/io/async:io_uring_recv",
+        "//folly/io/async:liburing",
+        "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "io_uring_zero_copy_buffer_pool_test",
     srcs = ["IoUringZeroCopyBufferPoolTest.cpp"],
     labels = fbcode_ci_default_labels(),

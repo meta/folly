@@ -208,12 +208,21 @@ fb_dirsync_cpp_library(
 
 fb_dirsync_cpp_library(
     name = "io_uring_recv",
-    srcs = ["IoUringRecv.cpp"],
-    headers = ["IoUringRecv.h"],
+    srcs = [
+        "CmsgUtil.cpp",
+        "IoUringRecv.cpp",
+    ],
+    headers = [
+        "CmsgUtil.h",
+        "IoUringRecv.h",
+    ],
     use_raw_headers = True,
     deps = [
         ":async_base",
         ":async_socket_exception",
+        ":liburing",
+        "//folly:c_portability",
+        "//folly/io:iobuf",
     ],
     exported_deps = [
         ":async_transport",
