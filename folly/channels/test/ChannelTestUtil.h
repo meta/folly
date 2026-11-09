@@ -175,7 +175,7 @@ class StressTestConsumer : public ChannelConsumerBase<TValue> {
   }
 
   folly::Executor::KeepAlive<folly::SequencedExecutor> getExecutor() override {
-    return executor_->getEventBaseKeepAlive();
+    return executor_->getEventBase();
   }
 
   void onNext(Try<TValue> result) override {

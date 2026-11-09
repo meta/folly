@@ -25,14 +25,10 @@ namespace detail {
 using lsan_ignore_object_t = void(void const*);
 using lsan_register_root_region_t = void(void const*, std::size_t);
 using lsan_unregister_root_region_t = void(void const*, std::size_t);
-using lsan_disable_t = void();
-using lsan_enable_t = void();
 
 extern lsan_ignore_object_t* const lsan_ignore_object_v;
 extern lsan_register_root_region_t* const lsan_register_root_region_v;
 extern lsan_unregister_root_region_t* const lsan_unregister_root_region_v;
-extern lsan_disable_t* const lsan_disable_v;
-extern lsan_enable_t* const lsan_enable_v;
 
 void annotate_object_leaked_impl(void const* ptr);
 void annotate_object_collected_impl(void const* ptr);
@@ -66,24 +62,6 @@ size_t annotate_object_count_leaked_uncollected_impl();
     void const* const ptr, std::size_t const size) {
   auto fun = detail::lsan_unregister_root_region_v;
   return kIsSanitizeAddress && fun ? fun(ptr, size) : void();
-}
-
-//  lsan_disable
-//
-//  Leak Sanitizer does not report allocations the calling thread makes until
-//  the matching lsan_enable; they stay unreported after it. Calls may nest.
-[[maybe_unused]] FOLLY_ALWAYS_INLINE static void lsan_disable() {
-  auto fun = detail::lsan_disable_v;
-  return kIsSanitizeAddress && fun ? fun() : void();
-}
-
-//  lsan_enable
-//
-//  Ends the innermost lsan_disable scope of the calling thread. Allocations
-//  made after the outermost scope ends are reported as usual.
-[[maybe_unused]] FOLLY_ALWAYS_INLINE static void lsan_enable() {
-  auto fun = detail::lsan_enable_v;
-  return kIsSanitizeAddress && fun ? fun() : void();
 }
 
 /**
