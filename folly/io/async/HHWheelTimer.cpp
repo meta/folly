@@ -73,7 +73,7 @@ void HHWheelTimerBase<Duration>::Callback::cancelTimeoutImpl() {
     assert(wheel_->count_ == 0);
     wheel_->AsyncTimeout::cancelTimeout();
   }
-  unlink();
+  timerHook_.unlink();
   if ((-1 != bucket_) && (wheel_->buckets_[0][bucket_].empty())) {
     auto bi = makeBitIterator(wheel_->bitmap_.begin());
     *(bi + bucket_) = false;

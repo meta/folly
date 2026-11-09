@@ -21,11 +21,11 @@
 #include <cstddef>
 #include <memory>
 
-#include <boost/intrusive/list.hpp>
 #include <glog/logging.h>
 
 #include <folly/ExceptionString.h>
 #include <folly/Optional.h>
+#include <folly/container/IntrusiveList.h>
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/DelayedDestruction.h>
 #include <folly/io/async/HHWheelTimer-fwd.h>
@@ -142,9 +142,7 @@ class HHWheelTimerBase
   /**
    * A callback to be notified when a timeout has expired.
    */
-  class Callback
-      : public boost::intrusive::list_base_hook<
-            boost::intrusive::link_mode<boost::intrusive::auto_unlink>> {
+  class Callback {
    public:
     Callback();
     virtual ~Callback();
@@ -186,6 +184,11 @@ class HHWheelTimerBase
       return getTimeRemaining(std::chrono::steady_clock::now());
     }
 
+    // Operations of the list hook. Unlike cancelTimeout(), unlink() only
+    // removes the callback from its bucket and doesn't update the timer.
+    bool is_linked() const noexcept { return timerHook_.is_linked(); }
+    void unlink() noexcept { timerHook_.unlink(); }
+
    private:
     // Get the time remaining until this timeout expires
     Duration getTimeRemaining(std::chrono::steady_clock::time_point now) const {
@@ -204,8 +207,7 @@ class HHWheelTimerBase
     std::chrono::steady_clock::time_point expiration_{};
     int bucket_{-1};
 
-    using List = boost::intrusive::
-        list<Callback, boost::intrusive::constant_time_size<false>>;
+    IntrusiveListHook timerHook_;
 
     std::shared_ptr<RequestContext> requestContext_;
 
@@ -333,7 +335,7 @@ class HHWheelTimerBase
   static constexpr unsigned int WHEEL_MASK = (WHEEL_SIZE - 1);
   static constexpr uint32_t LARGEST_SLOT = 0xffffffffUL;
 
-  using CallbackList = typename Callback::List;
+  using CallbackList = IntrusiveList<Callback, &Callback::timerHook_>;
   CallbackList buckets_[WHEEL_BUCKETS][WHEEL_SIZE];
   std::array<std::size_t, (WHEEL_SIZE / sizeof(std::size_t)) / 8> bitmap_;
 
