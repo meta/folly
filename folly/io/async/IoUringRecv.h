@@ -16,11 +16,14 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
+#include <vector>
 
 #include <folly/SocketAddress.h>
 #include <folly/futures/Future.h>
 #include <folly/io/async/AsyncTransport.h>
+#include <folly/io/async/CmsgUtil.h>
 #include <folly/io/async/DelayedDestruction.h>
 #include <folly/io/async/IoUringBase.h>
 #include <folly/net/NetworkSocket.h>
@@ -35,6 +38,14 @@ class IoUringRecvCallback {
   virtual ~IoUringRecvCallback() = default;
 
   virtual void recvSuccess(std::unique_ptr<IOBuf> data) = 0;
+
+  virtual void recvSuccessWithCmsgs(
+      std::unique_ptr<IOBuf> data,
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
+      detail::IoUringRecvmsgControl /*control*/) {
+    recvSuccess(std::move(data));
+  }
+
   virtual void recvEOF() noexcept = 0;
   virtual void recvErr(
       int err,
@@ -44,9 +55,18 @@ class IoUringRecvCallback {
 
 class IoUringRecvHandle : public DelayedDestruction {
  public:
+  struct CmsgRead {
+    std::unique_ptr<IOBuf> data;
+    detail::IoUringRecvmsgControl control;
+  };
+
+  struct PendingReadData {
+    std::unique_ptr<IOBuf> data;
+    std::vector<CmsgRead> cmsgReads;
+  };
+
   using UniquePtr = std::unique_ptr<IoUringRecvHandle, Destructor>;
   using PendingRead = SemiFuture<std::unique_ptr<IOBuf>>;
-  using PendingReadMaybe = Optional<PendingRead>;
 
   static UniquePtr create(
       EventBase* evb,
@@ -70,6 +90,9 @@ class IoUringRecvHandle : public DelayedDestruction {
   void cancel();
 
  private:
+  using PendingReadDataFuture = SemiFuture<PendingReadData>;
+  using PendingReadDataFutureMaybe = Optional<PendingReadDataFuture>;
+
   explicit IoUringRecvHandle(
       IoUringBackend* backend,
       NetworkSocket fd,
@@ -84,13 +107,19 @@ class IoUringRecvHandle : public DelayedDestruction {
       IoUringRecvCallback* callback,
       UniquePtr other);
 
-  void setPendingRead(EventBase* evb, PendingRead&& future);
+  void setPendingRead(EventBase* evb, PendingReadDataFuture&& future);
   void processPendingRead();
   void appendQueuedData(std::unique_ptr<IOBuf> data);
+  void appendQueuedCmsgData(
+      std::unique_ptr<IOBuf> data, detail::IoUringRecvmsgControl control);
+  void drainCompletedReadsAndRearm();
   void ensureRecvArmed();
 
   class RecvRequest;
+
   void onRecvComplete(std::unique_ptr<IOBuf> data);
+  void onRecvCompleteWithCmsgs(
+      std::unique_ptr<IOBuf> data, detail::IoUringRecvmsgControl control);
   void onEnobufs();
   void onRecvEOF();
   void onRecvErr(int err);
@@ -101,8 +130,10 @@ class IoUringRecvHandle : public DelayedDestruction {
   std::unique_ptr<RecvRequest, DelayedDestruction::Destructor> request_;
 
   std::unique_ptr<IOBuf> queuedReceivedData_;
+  std::vector<CmsgRead> queuedCmsgReads_;
+  size_t queuedCmsgReadOffset_{0};
   bool readEnabled_{false};
-  PendingReadMaybe pendingRead_{folly::none};
+  PendingReadDataFutureMaybe pendingRead_{folly::none};
 };
 
 } // namespace folly

@@ -16,7 +16,10 @@
 
 #include <folly/io/async/IoUringRecv.h>
 
+#include <iterator>
+
 #include <folly/io/async/AsyncSocketException.h>
+#include <folly/io/async/CmsgUtil.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
 #include <folly/io/async/IoUringBackend.h>
@@ -33,11 +36,18 @@ namespace {
 class DetachedReadCallback : public IoUringRecvCallback {
  public:
   void recvSuccess(std::unique_ptr<IOBuf> data) override {
-    if (!data_) {
-      data_ = std::move(data);
+    if (!data_.data) {
+      data_.data = std::move(data);
     } else {
-      data_->appendToChain(std::move(data));
+      data_.data->appendToChain(std::move(data));
     }
+  }
+
+  void recvSuccessWithCmsgs(
+      std::unique_ptr<IOBuf> data,
+      detail::IoUringRecvmsgControl control) override {
+    data_.cmsgReads.push_back(
+        IoUringRecvHandle::CmsgRead{std::move(data), std::move(control)});
   }
 
   void recvEOF() noexcept override { done(); }
@@ -54,10 +64,10 @@ class DetachedReadCallback : public IoUringRecvCallback {
     delete this;
   }
 
-  Promise<std::unique_ptr<IOBuf>> promise;
+  Promise<IoUringRecvHandle::PendingReadData> promise;
 
  private:
-  std::unique_ptr<IOBuf> data_;
+  IoUringRecvHandle::PendingReadData data_;
 };
 } // namespace
 
@@ -284,7 +294,9 @@ IoUringRecvHandle::IoUringRecvHandle(
     : backend_(backend),
       recvCallback_(callback),
       request_(RecvRequest::create(backend, fd, addr, this)),
-      queuedReceivedData_(std::move(other->queuedReceivedData_)) {
+      queuedReceivedData_(std::move(other->queuedReceivedData_)),
+      queuedCmsgReads_(std::move(other->queuedCmsgReads_)),
+      queuedCmsgReadOffset_(std::exchange(other->queuedCmsgReadOffset_, 0)) {
   if (other->pendingRead_.has_value()) {
     setPendingRead(evb, std::move(*other->pendingRead_));
   }
@@ -309,13 +321,26 @@ void IoUringRecvHandle::submit() {
 }
 
 void IoUringRecvHandle::drainCompletedReads() {
-  if (!readEnabled_ || !queuedReceivedData_) {
+  if (!readEnabled_) {
     return;
   }
 
   DestructorGuard dg(this);
-  auto data = std::exchange(queuedReceivedData_, nullptr);
-  recvCallback_->recvSuccess(std::move(data));
+  if (queuedReceivedData_) {
+    auto data = std::exchange(queuedReceivedData_, nullptr);
+    recvCallback_->recvSuccess(std::move(data));
+  }
+
+  while (readEnabled_ && recvCallback_ &&
+         queuedCmsgReadOffset_ < queuedCmsgReads_.size()) {
+    auto read = std::move(queuedCmsgReads_[queuedCmsgReadOffset_++]);
+    recvCallback_->recvSuccessWithCmsgs(
+        std::move(read.data), std::move(read.control));
+  }
+  queuedCmsgReads_.erase(
+      queuedCmsgReads_.begin(),
+      queuedCmsgReads_.begin() + queuedCmsgReadOffset_);
+  queuedCmsgReadOffset_ = 0;
 }
 
 void IoUringRecvHandle::detachEventBase() {
@@ -329,16 +354,19 @@ void IoUringRecvHandle::detachEventBase() {
       pendingRead_ =
           std::move(*pendingRead_)
               .deferValue([currRead = std::move(thisPendingRead)](
-                              std::unique_ptr<IOBuf>&& prevData) mutable {
+                              PendingReadData&& prevData) mutable {
                 return std::move(currRead).deferValue(
                     [data = std::move(prevData)](
-                        std::unique_ptr<IOBuf>&& currData) mutable {
-                      if (!data) {
-                        return std::move(currData);
+                        PendingReadData&& currData) mutable {
+                      if (!data.data) {
+                        data.data = std::move(currData.data);
+                      } else if (currData.data) {
+                        data.data->appendToChain(std::move(currData.data));
                       }
-                      if (currData) {
-                        data->appendToChain(std::move(currData));
-                      }
+                      data.cmsgReads.insert(
+                          data.cmsgReads.end(),
+                          std::make_move_iterator(currData.cmsgReads.begin()),
+                          std::make_move_iterator(currData.cmsgReads.end()));
                       return std::move(data);
                     });
               });
@@ -363,6 +391,12 @@ IoUringRecvHandle::PendingRead IoUringRecvHandle::takeDetachedData() {
          "detachEventBase() releases an in-flight request for cancellation "
          "or resets an idle request";
 
+  if (queuedCmsgReadOffset_ < queuedCmsgReads_.size()) {
+    return makeSemiFuture<std::unique_ptr<IOBuf>>(AsyncSocketException(
+        AsyncSocketException::INVALID_STATE,
+        "switching a receive with ancillary data to EventHandler mode is "
+        "unsupported"));
+  }
   auto queuedData = std::move(queuedReceivedData_);
   if (!pendingRead_) {
     return makeSemiFuture(std::move(queuedData));
@@ -372,12 +406,18 @@ IoUringRecvHandle::PendingRead IoUringRecvHandle::takeDetachedData() {
   pendingRead_.reset();
   return std::move(pendingRead)
       .deferValue([queuedData = std::move(queuedData)](
-                      std::unique_ptr<IOBuf> pendingData) mutable {
-        if (!queuedData) {
-          return pendingData;
+                      PendingReadData pendingData) mutable {
+        if (!pendingData.cmsgReads.empty()) {
+          throw AsyncSocketException(
+              AsyncSocketException::INVALID_STATE,
+              "switching a receive with ancillary data to EventHandler mode "
+              "is unsupported");
         }
-        if (pendingData) {
-          queuedData->appendToChain(std::move(pendingData));
+        if (!queuedData) {
+          return std::move(pendingData.data);
+        }
+        if (pendingData.data) {
+          queuedData->appendToChain(std::move(pendingData.data));
         }
         return std::move(queuedData);
       });
@@ -395,7 +435,8 @@ void IoUringRecvHandle::cancel() {
   return;
 }
 
-void IoUringRecvHandle::setPendingRead(EventBase* evb, PendingRead&& prevRead) {
+void IoUringRecvHandle::setPendingRead(
+    EventBase* evb, PendingReadDataFuture&& prevRead) {
   pendingRead_ = std::move(prevRead).via(evb).thenValue(
       [this, evb, dg = DestructorGuard(this)](auto&& prevData) {
         if (backend_) {
@@ -417,7 +458,11 @@ void IoUringRecvHandle::processPendingRead() {
     auto data = std::move(*pendingRead_).get();
     pendingRead_.reset();
 
-    appendQueuedData(std::move(data));
+    appendQueuedData(std::move(data.data));
+    queuedCmsgReads_.insert(
+        queuedCmsgReads_.end(),
+        std::make_move_iterator(data.cmsgReads.begin()),
+        std::make_move_iterator(data.cmsgReads.end()));
     drainCompletedReads();
     ensureRecvArmed();
   }
@@ -431,6 +476,16 @@ void IoUringRecvHandle::appendQueuedData(std::unique_ptr<IOBuf> data) {
       queuedReceivedData_ = std::move(data);
     }
   }
+}
+
+void IoUringRecvHandle::appendQueuedCmsgData(
+    std::unique_ptr<IOBuf> data, detail::IoUringRecvmsgControl control) {
+  queuedCmsgReads_.push_back(CmsgRead{std::move(data), std::move(control)});
+}
+
+void IoUringRecvHandle::drainCompletedReadsAndRearm() {
+  drainCompletedReads();
+  ensureRecvArmed();
 }
 
 void IoUringRecvHandle::ensureRecvArmed() {
@@ -465,8 +520,22 @@ void IoUringRecvHandle::onRecvComplete(std::unique_ptr<IOBuf> data) {
   }
 
   appendQueuedData(std::move(data));
-  drainCompletedReads();
-  ensureRecvArmed();
+  drainCompletedReadsAndRearm();
+}
+
+void IoUringRecvHandle::onRecvCompleteWithCmsgs(
+    std::unique_ptr<IOBuf> data, detail::IoUringRecvmsgControl control) {
+  DestructorGuard dg(this);
+  if (backend_ == nullptr) {
+    if (recvCallback_) {
+      // DetachedReadCallback preserves the cmsgs until the handle is cloned.
+      recvCallback_->recvSuccessWithCmsgs(std::move(data), std::move(control));
+    }
+    return;
+  }
+
+  appendQueuedCmsgData(std::move(data), std::move(control));
+  drainCompletedReadsAndRearm();
 }
 
 void IoUringRecvHandle::onEnobufs() {
@@ -562,7 +631,7 @@ void IoUringRecvHandle::cancel() {
 }
 
 void IoUringRecvHandle::setPendingRead(
-    EventBase* /*evb*/, PendingRead&& /*future*/) {
+    EventBase* /*evb*/, PendingReadDataFuture&& /*future*/) {
   folly::terminate_with<std::runtime_error>("io_uring not supported");
 }
 
@@ -583,6 +652,12 @@ void IoUringRecvHandle::onBuffersScarce(bool /*scarce*/) noexcept {
 }
 
 void IoUringRecvHandle::onRecvComplete(std::unique_ptr<IOBuf> /*data*/) {
+  folly::terminate_with<std::runtime_error>("io_uring not supported");
+}
+
+void IoUringRecvHandle::onRecvCompleteWithCmsgs(
+    std::unique_ptr<IOBuf> /*data*/,
+    detail::IoUringRecvmsgControl /*control*/) {
   folly::terminate_with<std::runtime_error>("io_uring not supported");
 }
 
