@@ -47,6 +47,7 @@ folly_add_library(
     folly_optional
     folly_portability
     folly_range
+    folly_string
     folly_traits
     folly_utility
 )
