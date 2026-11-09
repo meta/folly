@@ -1956,15 +1956,15 @@ class hive {
   constexpr iterator emplaceInErasedSlot(Block* block, Args&&... args) {
     const SkipType index = block->freeHead;
     const SkipType runLength = block->skipfield[index];
-    // Constructing the element writes over the free-list node living in this
-    // slot, and a constructor that throws may already have written part of it.
-    // Read the node first, put it back if construction fails, and commit the
-    // bookkeeping only once it has succeeded.
-    const SkipType prevFree = block->slots[index].free.prev;
+    // The slot heads the block's free list, so its node has no predecessor
+    // and only the successor needs keeping. Constructing the element writes
+    // over the node, and a constructor that throws may already have written
+    // part of it: read the successor first, put the node back if construction
+    // fails, and commit the bookkeeping only once it has succeeded.
     const SkipType nextFree = block->slots[index].free.next;
 
     auto restore = makeGuard([&] {
-      block->slots[index].free.prev = prevFree;
+      block->slots[index].free.prev = kNullIndex;
       block->slots[index].free.next = nextFree;
     });
     AllocTraits::construct(
@@ -1978,9 +1978,9 @@ class hive {
       const SkipType moved = static_cast<SkipType>(index + 1);
       block->skipfield[moved] = shortened;
       block->skipfield[last] = shortened;
-      freeListRelink(block, prevFree, nextFree, moved);
+      freeListRelink(block, kNullIndex, nextFree, moved);
     } else {
-      freeListUnlink(block, prevFree, nextFree);
+      freeListUnlink(block, kNullIndex, nextFree);
     }
     ++block->liveCount;
     ++size_;

@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <list>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <random>
 #include <string>
@@ -328,7 +329,6 @@ using TombBox = SlotBox<
 // fixtures, all built before any timing starts
 
 constexpr unsigned kLive = 1u << 17;
-constexpr unsigned kTraceLength = 1u << 16;
 constexpr unsigned kAgeMutations = kLive * 2;
 
 template <typename Box>
@@ -337,13 +337,16 @@ struct Fixture {
   std::vector<typename Box::Handle> handles;
 };
 
+/// The order in which churn visits handles: a shuffled permutation of
+/// 0..kLive-1. Over a fixture of kLive handles, as the timed churn rows and
+/// the aged fixture use, each pass of kLive mutations replaces every element
+/// exactly once. The untimed checks reduce it modulo their smaller fixtures
+/// and get no such guarantee.
 const std::vector<std::uint32_t>& trace() {
   static const std::vector<std::uint32_t> values = [] {
-    std::vector<std::uint32_t> out(kTraceLength);
-    std::mt19937 rng{20260916};
-    for (auto& value : out) {
-      value = static_cast<std::uint32_t>(rng());
-    }
+    std::vector<std::uint32_t> out(kLive);
+    std::iota(out.begin(), out.end(), std::uint32_t{0});
+    std::shuffle(out.begin(), out.end(), std::mt19937{20260916});
     return out;
   }();
   return values;
@@ -713,6 +716,12 @@ Reading the table, from how these containers work:
     that no long-lived list has.
   - list and vector<unique_ptr> allocate per element and again per mutation;
     hive and the flat containers allocate per block - the churn column.
+  - In the churn rows every erase is followed at once by an insert, so the
+    freed storage is reused while it is still in cache: hive takes the slot
+    it just freed, and list usually gets back from the allocator the node it
+    just freed. How much the per-element containers gain from that depends
+    on the allocator, so their churn rows can move by several ns under a
+    different one.
   - vector (not stable) is the floor, not a competitor: it is what the work
     costs when nobody needs the guarantee.
   - The build rows include each container's own handle bookkeeping, and a
