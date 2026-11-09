@@ -21,6 +21,7 @@
 #include <folly/Conv.h>
 #include <folly/File.h>
 #include <folly/FileUtil.h>
+#include <folly/Subprocess.h>
 #include <folly/Utility.h>
 #include <folly/lang/cstring_view.h>
 #include <folly/portability/Fcntl.h>
@@ -28,10 +29,6 @@
 #include <folly/portability/SysStat.h>
 #include <folly/system/Pid.h>
 #include <folly/testing/TestUtil.h>
-
-#if FOLLY_PERF_IS_SUPPORTED
-#include <folly/Subprocess.h> // @manual
-#endif
 
 #include <algorithm>
 #include <chrono>

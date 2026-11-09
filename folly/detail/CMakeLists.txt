@@ -141,11 +141,6 @@ folly_add_library(
   EXPORTED_DEPS folly_mpmc_queue
 )
 
-set(FOLLY_DETAIL_PERF_SCOPED_SELECT_DEPS)
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  list(APPEND FOLLY_DETAIL_PERF_SCOPED_SELECT_DEPS folly_subprocess)
-endif ()
-
 folly_add_library(
   NAME perf_scoped
   SRCS PerfScoped.cpp
@@ -158,10 +153,10 @@ folly_add_library(
     folly_lang_cstring_view
     folly_portability_fcntl
     folly_portability_sys_stat
+    folly_subprocess
     folly_system_pid
     folly_testing_test_util
     folly_utility
-    ${FOLLY_DETAIL_PERF_SCOPED_SELECT_DEPS}
 )
 set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS Boost::regex)
 

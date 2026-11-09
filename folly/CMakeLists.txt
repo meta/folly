@@ -1181,44 +1181,41 @@ folly_add_library(
     folly_unit
 )
 
-# subprocess is not supported on Windows
-if (NOT WIN32)
-  folly_add_library(
-    NAME subprocess
-    SRCS Subprocess.cpp
-    HEADERS Subprocess.h
-    DEPS
-      folly_conv
-      folly_lang_assume
-      folly_logging_logging
-      folly_portability_dirent
-      folly_portability_fcntl
-      folly_portability_sched
-      folly_portability_sockets
-      folly_portability_stdlib
-      folly_portability_sys_mman
-      folly_portability_sys_syscall
-      folly_portability_unistd
-      folly_scope_guard
-      folly_string
-      folly_system_at_fork
-      folly_system_libc
-      folly_system_shell
-    EXPORTED_DEPS
-      folly_container_sorted_vector_types
-      folly_exception
-      folly_file
-      folly_file_util
-      folly_function
-      folly_gen_string
-      folly_io_iobuf
-      folly_map_util
-      folly_optional
-      folly_portability
-      folly_portability_sys_resource
-      folly_range
-  )
-endif ()
+folly_add_library(
+  NAME subprocess
+  SRCS Subprocess.cpp
+  HEADERS Subprocess.h
+  DEPS
+    folly_conv
+    folly_lang_assume
+    folly_logging_logging
+    folly_portability_dirent
+    folly_portability_fcntl
+    folly_portability_sched
+    folly_portability_sockets
+    folly_portability_stdlib
+    folly_portability_sys_mman
+    folly_portability_sys_syscall
+    folly_portability_unistd
+    folly_scope_guard
+    folly_string
+    folly_system_at_fork
+    folly_system_libc
+    folly_system_shell
+  EXPORTED_DEPS
+    folly_container_sorted_vector_types
+    folly_exception
+    folly_file
+    folly_file_util
+    folly_function
+    folly_gen_string
+    folly_io_iobuf
+    folly_map_util
+    folly_optional
+    folly_portability
+    folly_portability_sys_resource
+    folly_range
+)
 
 folly_add_library(
   NAME synchronized

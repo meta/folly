@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifndef _WIN32
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -1752,3 +1754,5 @@ Initializer initializer;
 } // namespace
 
 } // namespace folly
+
+#endif // _WIN32

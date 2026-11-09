@@ -156,22 +156,19 @@ fb_dirsync_cpp_library(
     srcs = ["PerfScoped.cpp"],
     headers = ["PerfScoped.h"],
     use_raw_headers = True,
-    # folly subprocess is not supported on windows
     deps = [
         "fbsource//third-party/boost:boost_regex",
         "//folly:conv",
         "//folly:file",
         "//folly:file_util",
+        "//folly:subprocess",
         "//folly:utility",
         "//folly/lang:cstring_view",
         "//folly/portability:fcntl",
         "//folly/portability:sys_stat",
         "//folly/system:pid",
         "//folly/testing:test_util",
-    ] + select({
-        "DEFAULT": [],
-        "ovr_config//os:linux": ["//folly:subprocess"],
-    }),
+    ],
 )
 
 fb_dirsync_cpp_library(

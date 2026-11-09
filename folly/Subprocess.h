@@ -93,9 +93,7 @@
 
 #pragma once
 
-#ifdef _WIN32
-#error Subprocess is not supported on Windows.
-#endif
+#ifndef _WIN32
 
 #include <signal.h>
 #include <sys/resource.h>
@@ -1165,3 +1163,5 @@ class Subprocess {
 };
 
 } // namespace folly
+
+#endif // _WIN32
