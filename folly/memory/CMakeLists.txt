@@ -32,6 +32,7 @@ folly_add_library(
     Arena-inl.h
     Arena.h
   EXPORTED_DEPS
+    Boost::headers
     folly_conv
     folly_lang_align
     folly_lang_checked_math

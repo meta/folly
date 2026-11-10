@@ -9,7 +9,6 @@ fb_dirsync_cpp_unittest(
     labels = ["oss-broken"],
     deps = [
         "fbsource//third-party/glog:glog",
-        "//folly:memory",
         "//folly:random",
         "//folly/memory:allocator",
         "//folly/memory:arena",

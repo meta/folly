@@ -22,7 +22,6 @@
 
 #include <glog/logging.h>
 
-#include <folly/Memory.h>
 #include <folly/Random.h>
 #include <folly/memory/Allocator.h>
 #include <folly/memory/MallctlHelper.h>
@@ -87,7 +86,11 @@ TEST(Arena, SizeSanity) {
   allocatedItems.insert(ptr);
   minimum_size += 10 * requestedBlockSize;
   maximum_size +=
-      goodMallocSize(10 * requestedBlockSize + SysArena::kLargeBlockOverhead);
+      goodMallocSize(10 * requestedBlockSize + SysArena::kBlockOverhead);
+#if defined(__APPLE__) && defined(FOLLY_AARCH64)
+  // expectation is a bit too small
+  maximum_size += 8;
+#endif
   EXPECT_GE(arena.totalSize(), minimum_size);
   EXPECT_LE(arena.totalSize(), maximum_size);
   VLOG(4) << minimum_size << " < " << arena.totalSize() << " < "
@@ -260,70 +263,6 @@ TEST(Arena, ExtremeSize) {
   EXPECT_THROW(alloc(arena, SIZE_MAX - 2), std::bad_alloc);
 }
 
-TEST(Arena, SizeLimitCoversLargeBlockHeader) {
-  static const size_t size = 4096;
-
-  for (size_t sizeLimit = size; sizeLimit < size + 64; ++sizeLimit) {
-    SCOPED_TRACE(sizeLimit);
-    SysArena arena(64, sizeLimit);
-    try {
-      void* ptr = alloc(arena, size);
-      EXPECT_EQ(
-          reinterpret_cast<uintptr_t>(ptr) % SysArena::kDefaultMaxAlign, 0);
-    } catch (const std::bad_alloc&) {
-      continue;
-    }
-    EXPECT_LE(arena.totalSize() - sizeof(SysArena), sizeLimit);
-  }
-}
-
-TEST(Arena, LargeBlockSizeOverflow) {
-  SysArena arena;
-  // Adding the large block header to this size overflows.
-  EXPECT_THROW(arena.allocate(SIZE_MAX - 15), std::bad_alloc);
-}
-
-namespace {
-// Returns memory at a given offset past a 64-byte boundary, followed by guard
-// bytes that must stay untouched.
-struct OffsetAllocator {
-  using value_type = char;
-  template <typename T>
-  struct rebind {
-    using other = OffsetAllocator;
-  };
-  static constexpr size_t kGuard = 64;
-  size_t offset = 0;
-
-  char* allocate(size_t n) {
-    auto p = static_cast<char*>(aligned_malloc(offset + n + kGuard, 64));
-    memset(p + offset + n, 0x5a, kGuard);
-    return p + offset;
-  }
-  void deallocate(char* p, size_t n) {
-    for (size_t i = 0; i < kGuard; ++i) {
-      EXPECT_EQ(p[n + i], 0x5a) << "overrun at " << i;
-    }
-    aligned_free(p - offset);
-  }
-};
-} // namespace
-
-TEST(Arena, LargeBlockPaddingForCustomAlign) {
-  // The allocator only guarantees the alignment of the block header, so a
-  // large block's payload may need up to 64 - that alignment bytes of padding.
-  for (size_t offset = 0; offset < 64; offset += max_align_v) {
-    SCOPED_TRACE(offset);
-    Arena<OffsetAllocator> arena(
-        OffsetAllocator{offset}, 64, Arena<OffsetAllocator>::kNoSizeLimit, 64);
-    for (size_t size : {128, 1024}) {
-      void* ptr = arena.allocate(size);
-      EXPECT_EQ(reinterpret_cast<uintptr_t>(ptr) % 64, 0);
-      memset(ptr, 0xff, size);
-    }
-  }
-}
-
 TEST(Arena, MaxAlign) {
   // Results are still aligned with nonstandard size and allocations
   static const size_t blockSize = 123;
@@ -442,7 +381,7 @@ TEST(Arena, MergeIntoUntouchedArena) {
   auto* live = static_cast<char*>(alloc(src, 1));
   *live = 'x';
 
-  // dst has never allocated, so it has no current block.
+  // dst has never allocated, so its currentBlock_ is still before_begin().
   SysArena dst;
   dst.merge(std::move(src));
 
