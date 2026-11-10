@@ -40,6 +40,7 @@ def make_ctx() -> ManifestContext:
             "distro_family": None,
             "fb": "off",
             "fbsource": "off",
+            "shared_lib": "off",
             "test": "off",
         }
     )

@@ -68,6 +68,7 @@ class FbcodeBuilderLayoutTest(unittest.TestCase):
                         "distro_family": None,
                         "fb": "on",
                         "fbsource": "on",
+                        "shared_lib": "off",
                         "test": "off",
                     }
                 ),

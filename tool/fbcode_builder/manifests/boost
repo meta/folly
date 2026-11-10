@@ -60,8 +60,10 @@ boost169-serialization
 boost169-program-options
 
 # EL 10 and later carry a new enough Boost under the same names (EL 8
-# needs the boost169 compat packages above).
-[rpms.any(distro=fedora,all(distro_family=rhel,not(any(distro_vers=8,distro_vers=9))))]
+# needs the boost169 compat packages above). Their static archives are not
+# position-independent and cannot be linked into a shared library, so
+# --shared-lib builds Boost from source instead.
+[rpms.all(shared_lib=off,any(distro=fedora,all(distro_family=rhel,not(any(distro_vers=8,distro_vers=9)))))]
 boost-devel
 boost-static
 

@@ -24,6 +24,7 @@ def _ctx_with_features(features: set[str] | None = None) -> ManifestContext:
             "distro_family": None,
             "fb": "off",
             "fbsource": "off",
+            "shared_lib": "off",
             "test": "off",
         }
     )
@@ -68,6 +69,7 @@ def _make_loader(manifests: dict[str, str]) -> ManifestLoader:
             "distro_family": None,
             "fb": "off",
             "fbsource": "off",
+            "shared_lib": "off",
             "test": "off",
         }
     )

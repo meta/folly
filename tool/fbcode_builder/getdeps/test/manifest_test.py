@@ -268,6 +268,29 @@ foo = bar
             msg="source-built libaio installs libaio.so with version nodes",
         )
 
+    def test_shared_lib_builds_boost_from_source(self) -> None:
+        # EL 10's boost-static archives are not position-independent, so a
+        # --shared-lib build cannot link them into a shared library.
+        patch_loader(__name__)
+        manifests = load_all_manifests(MagicMock(spec=BuildOptions))
+        el10 = {
+            "os": "linux",
+            "distro": "centos_stream",
+            "distro_vers": "10",
+            "distro_family": "rhel",
+            "fb": "off",
+            "fbsource": "off",
+            "test": "off",
+        }
+        boost = manifests["boost"]
+        self.assertEqual(
+            boost.get_section_as_args("rpms", {**el10, "shared_lib": "off"}),
+            ["boost-devel", "boost-static"],
+        )
+        self.assertEqual(
+            boost.get_section_as_args("rpms", {**el10, "shared_lib": "on"}), []
+        )
+
     def test_mismatch_name(self) -> None:
         with self.assertRaisesRegex(
             Exception,

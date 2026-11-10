@@ -1,0 +1,18 @@
+[manifest]
+name = pcre
+
+[download]
+url = https://downloads.sourceforge.net/project/pcre/pcre/8.43/pcre-8.43.tar.gz
+sha256 = 0b8e7465dc5e98c757cc3650a20a7843ee4c3edf50aaf60bb33fd879690d2c73
+
+[build]
+builder = autoconf
+subdir = pcre-8.43
+
+# hsthrift's Util.Regex compiles patterns with PCRE_UTF8 and PCRE_UCP.
+[autoconf.args]
+--with-pic
+--disable-shared
+--disable-cpp
+--enable-utf
+--enable-unicode-properties

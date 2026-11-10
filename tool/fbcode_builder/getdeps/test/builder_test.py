@@ -44,6 +44,7 @@ def make_cmake_builder() -> CMakeBuilder:
                 "distro_family": None,
                 "fb": "off",
                 "fbsource": "off",
+                "shared_lib": "off",
                 "test": "off",
             }
         ),

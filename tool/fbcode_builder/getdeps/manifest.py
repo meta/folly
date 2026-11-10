@@ -984,6 +984,7 @@ class ManifestContext:
         "distro_family",
         "fb",
         "fbsource",
+        "shared_lib",
         "test",
     }
 

@@ -19,6 +19,7 @@ fbthrift
 wangle
 fizz
 boost
+pcre
 
 [build]
 builder = make

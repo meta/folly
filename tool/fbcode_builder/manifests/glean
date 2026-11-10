@@ -30,6 +30,8 @@ googletest
 # thrift-http's streaming-commons, warp and http-client link zlib through the
 # Hackage zlib package.
 zlib
+# regex-pcre finds PCRE1 through `pkgconfig-depends: libpcre`.
+pcre
 
 [build]
 builder = make
