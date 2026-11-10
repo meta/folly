@@ -266,8 +266,14 @@ ParkResult ParkingLot<Data>::park_until(
   WaitNode node(key, lotid_, std::forward<D>(data));
 
   {
-    // A: Must be seq_cst.  Matches B.
+    // A: Must be seq_cst.  Matches B.  toPark() below may read caller state
+    // at any memory order the caller chooses (e.g. relaxed or acquire), so
+    // this fence -- not just the seq_cst tag on the fetch_add -- is what
+    // guarantees the increment is globally visible before that read, the
+    // same way B's fence guarantees the caller's state update is visible
+    // before the count_ check on the unpark side.
     bucket.count_.fetch_add(1, std::memory_order_seq_cst);
+    std::atomic_thread_fence(std::memory_order_seq_cst);
 
     std::unique_lock bucketLock(bucket.mutex_);
 

@@ -106,6 +106,58 @@ TEST(ParkingLot, StressTestPingPong) {
   threadTwo.join();
 }
 
+// Same shape as StressTestPingPong, but the parking thread's toPark() check
+// deliberately reads with memory_order_relaxed rather than the default
+// (seq_cst). ParkingLot can't assume callers check their own state at
+// seq_cst -- the caller here uses relaxed/acquire/release throughout, same
+// as this file's other stress test does for its own state on the unpark
+// side. This exercises the park side's A fence the same way the original
+// test exercises the unpark side's B fence.
+TEST(ParkingLot, StressTestPingPongRelaxedToPark) {
+  auto lot = ParkingLot<std::uint32_t>{};
+  auto one = std::atomic<std::uint64_t>{0};
+  auto two = std::atomic<std::uint64_t>{0};
+
+  auto testDone = std::atomic<bool>{false};
+  auto threadOneDone = std::atomic<bool>{false};
+
+  auto threadOne = std::thread{[&]() {
+    auto local = std::uint64_t{0};
+    while (!testDone.load(std::memory_order_relaxed)) {
+      lot.park(
+          &one,
+          -1,
+          [&]() { return one.load(std::memory_order_relaxed) == local; },
+          []() {});
+      local = one.load(std::memory_order_acquire);
+      two.store(local, std::memory_order_release);
+    }
+
+    threadOneDone.store(true, std::memory_order_release);
+  }};
+
+  auto threadTwo = std::thread{[&]() {
+    for (auto i = std::uint64_t{1}; true; ++i) {
+      auto local = two.load(std::memory_order_acquire);
+
+      one.store(i, std::memory_order_release);
+      lot.unpark(&one, [&](auto&&) { return UnparkControl::RemoveBreak; });
+
+      while (two.load(std::memory_order_acquire) == local) {
+        if (threadOneDone.load(std::memory_order_acquire)) {
+          return;
+        }
+      }
+    }
+  }};
+
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds{10});
+  testDone.store(true);
+  threadOne.join();
+  threadTwo.join();
+}
+
 // This is not possible to implement with Futex, because futex
 // and the native linux syscall are 32-bit only.
 TEST(ParkingLot, LargeWord) {
