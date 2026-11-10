@@ -677,6 +677,19 @@ class [[nodiscard]] TaskWithExecutor {
 /// current RequestContext whenever the coroutine suspends and resumes at a
 /// co_await expression.
 ///
+/// Prefer `now_task` (`folly/coro/safe/NowTask.h`) for new coroutines.  A
+/// `now_task` is immovable and must be `co_await`ed in the expression that
+/// creates it, so C++ lifetime extension keeps by-reference arguments and
+/// lambda captures alive until it completes.  This rules out the
+/// dangling-reference bugs that `Task` allows.
+///
+/// Caveat: code that holds a task before awaiting it -- collect-style
+/// algorithms such as `collectAll` and `collectAllRange`, `AsyncScope::add`,
+/// or storing tasks in a container -- needs a movable `Task`.  Such callers can
+/// wrap a `now_task` function in a `Task` coroutine that takes its arguments
+/// by value, e.g. `Task<T> fTask(Arg arg) { co_return co_await f(arg); }`,
+/// so that the wrapper owns everything the call refers to.
+///
 /// More documentation on how to use coroutines is available at
 /// https://github.com/facebook/folly/blob/main/folly/coro/README.md
 ///
