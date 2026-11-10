@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cassert>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -28,6 +29,7 @@
 
 #include <folly/CPortability.h>
 #include <folly/Likely.h>
+#include <folly/Traits.h>
 
 namespace folly {
 namespace detail {
@@ -182,6 +184,14 @@ bool checked_div(T* result, T dividend, T divisor) {
     *result = {};
     return false;
   }
+  if constexpr (folly::is_integral_v<T> && folly::is_signed_v<T>) {
+    constexpr auto min =
+        T(folly::make_unsigned_t<T>(1) << (sizeof(T) * CHAR_BIT - 1));
+    if (dividend == min && divisor == T(-1)) [[unlikely]] {
+      *result = {};
+      return false;
+    }
+  }
   *result = dividend / divisor;
   return true;
 }
@@ -191,6 +201,17 @@ bool checked_mod(T* result, T dividend, T divisor) {
   if (divisor == 0) [[unlikely]] {
     *result = {};
     return false;
+  }
+  using R = decltype(dividend % divisor);
+  if constexpr (
+      folly::is_integral_v<T> && folly::is_integral_v<R> &&
+      folly::is_signed_v<R>) {
+    constexpr auto min =
+        R(folly::make_unsigned_t<R>(1) << (sizeof(R) * CHAR_BIT - 1));
+    if (dividend == min && divisor == T(-1)) [[unlikely]] {
+      *result = {};
+      return false;
+    }
   }
   *result = dividend % divisor;
   return true;
