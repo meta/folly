@@ -212,7 +212,8 @@ class F14HashtableIterator:
     def __init__(self, ht, is_node_container):
         item_type = gdb.lookup_type("{}::{}".format(ht.type.name, "Item"))
         self.item_ptr_type = item_type.pointer()
-        self.chunk_ptr = ht["chunks_"]
+        chunk_type = gdb.lookup_type("{}::{}".format(ht.type.name, "Chunk"))
+        self.chunk_ptr = ht["chunks_"].cast(chunk_type.pointer())
         pair = ht["sizeAndChunkShiftAndPackedBegin_"]["sizeAndChunkShift_"]
         size_of_size_t = gdb.lookup_type("size_t").sizeof
         if size_of_size_t == 4:
