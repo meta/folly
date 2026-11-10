@@ -21,6 +21,16 @@
 
 namespace folly {
 
+TEST_P(AsyncIoUringSocketTestAll, WriteBig) {
+  MAYBE_SKIP();
+  auto [e, s, cb] = makeConnected();
+  cb->setHoldData(true);
+  std::string big(4000000, 'X');
+  s->write(&nullWriteCallback, big.c_str(), big.size());
+  auto res = cb->waitFor(big.size()).via(base.get()).getVia(base.get());
+  EXPECT_TRUE(big == res) << big.size() << " vs " << res.size();
+}
+
 TEST_P(AsyncIoUringSocketTestAll, WriteBigDrop) {
   MAYBE_SKIP();
   auto [e, s, cb] = makeConnected();

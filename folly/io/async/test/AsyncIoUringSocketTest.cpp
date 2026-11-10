@@ -750,32 +750,6 @@ TEST_P(AsyncIoUringSocketTestAll, WriteAfterWait) {
           .getVia(base.get()));
 }
 
-namespace {
-std::string randomString(size_t n) {
-  std::random_device r;
-  std::default_random_engine e1(r());
-
-  std::uniform_int_distribution<int8_t> uniform_dist('A', 'Z');
-
-  std::string ret;
-  ret.reserve(n);
-  for (size_t i = 0; i < n; i++) {
-    ret.push_back(uniform_dist(e1));
-  }
-  return ret;
-}
-} // namespace
-
-TEST_P(AsyncIoUringSocketTestAll, WriteBig) {
-  MAYBE_SKIP();
-  auto [e, s, cb] = makeConnected();
-  cb->setHoldData(true);
-  std::string big = randomString(4000000);
-  s->write(&nullWriteCallback, big.c_str(), big.size());
-  auto res = cb->waitFor(big.size()).via(base.get()).getVia(base.get());
-  EXPECT_TRUE(big == res) << big.size() << " vs " << res.size();
-}
-
 TEST_P(AsyncIoUringSocketTestAll, WriteBigChunked) {
   MAYBE_SKIP();
   auto [e, s, cb] = makeConnected();

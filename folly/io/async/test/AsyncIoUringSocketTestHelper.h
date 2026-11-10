@@ -19,6 +19,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -63,6 +64,20 @@ class NullWriteCallback : public AsyncWriter::WriteCallback {
 static NullWriteCallback nullWriteCallback;
 
 } // namespace
+
+inline std::string randomString(size_t n) {
+  std::random_device r;
+  std::default_random_engine e1(r());
+
+  std::uniform_int_distribution<int8_t> uniform_dist('A', 'Z');
+
+  std::string ret;
+  ret.reserve(n);
+  for (size_t i = 0; i < n; i++) {
+    ret.push_back(uniform_dist(e1));
+  }
+  return ret;
+}
 
 class EchoTransport
     : public AsyncReader::ReadCallback,
