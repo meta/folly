@@ -874,12 +874,29 @@ folly::StringPiece getFunctionName(
 Die findDefinitionDie(const CompilationUnit& cu, const Die& die) {
   // Find the real definition instead of declaration.
   // DW_AT_specification: Incomplete, non-defining, or separate declaration
-  // corresponding to a declaration
-  auto offset = getAttribute<uint64_t>(cu, die, DW_AT_specification);
-  if (!offset) {
+  // corresponding to a declaration.
+  //
+  // The attribute is a reference. Most reference forms (DW_FORM_ref1,
+  // DW_FORM_ref2, DW_FORM_ref4, DW_FORM_ref8, DW_FORM_ref_udata) are
+  // offsets from the first byte of the compilation unit header.
+  // DW_FORM_ref_addr is an offset from the first byte of the .debug_info
+  // section, so it must not be offset by cu.offset.
+  uint64_t offset = 0;
+  bool isRefAddr = false;
+  bool found = false;
+  forEachAttribute(cu, die, [&](const Attribute& attr) {
+    if (attr.spec.name == DW_AT_specification) {
+      offset = std::get<uint64_t>(attr.attrValue);
+      isRefAddr = attr.spec.form == DW_FORM_ref_addr;
+      found = true;
+      return false;
+    }
+    return true;
+  });
+  if (!found) {
     return die;
   }
-  return getDieAtOffset(cu, cu.offset + offset.value());
+  return getDieAtOffset(cu, isRefAddr ? offset : cu.offset + offset);
 }
 
 } // namespace symbolizer
