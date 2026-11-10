@@ -147,6 +147,10 @@ fb_dirsync_cpp_library(
         "//folly/portability:windows",
         "//folly/synchronization:relaxed_atomic",
     ],
+    exported_deps = [
+        "//folly:likely",
+        "//folly:portability",
+    ],
 )
 
 fb_dirsync_cpp_library(

@@ -55,6 +55,23 @@ TEST(ThreadId, getUniqueThreadIdStable) {
   EXPECT_EQ(id, folly::get_unique_thread_id());
 }
 
+TEST(ThreadId, getUniqueThreadIdBacking) {
+  const auto check = [](bool backingFirst) {
+    std::thread thread{[=] {
+      const auto id = backingFirst
+          ? folly::detail::get_unique_thread_id_slow()
+          : folly::get_unique_thread_id();
+      EXPECT_NE(0, id);
+      EXPECT_EQ(id, folly::detail::get_unique_thread_id_slow());
+      EXPECT_EQ(id, folly::get_unique_thread_id());
+      EXPECT_EQ(id, folly::detail::get_unique_thread_id_slow());
+    }};
+    thread.join();
+  };
+  check(false);
+  check(true);
+}
+
 TEST(ThreadId, getUniqueThreadIdConcurrent) {
   std::array<uint64_t, 17> ids{};
   ids[0] = folly::get_unique_thread_id();

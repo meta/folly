@@ -121,6 +121,9 @@ folly_add_library(
     folly_portability_windows
     folly_synchronization_relaxed_atomic
     folly_system_at_fork
+  EXPORTED_DEPS
+    folly_likely
+    folly_portability
 )
 
 folly_add_library(

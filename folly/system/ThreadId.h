@@ -18,7 +18,14 @@
 
 #include <cstdint>
 
+#include <folly/Likely.h>
+#include <folly/Portability.h>
+
 namespace folly {
+
+namespace detail {
+uint64_t get_unique_thread_id_slow();
+} // namespace detail
 
 /**
  * Get a nonzero, process-specific identifier for the current thread.
@@ -30,7 +37,13 @@ namespace folly {
  * After fork(), the surviving thread retains its identifier and new threads
  * receive identifiers from the inherited counter.
  */
-uint64_t get_unique_thread_id();
+FOLLY_ALWAYS_INLINE uint64_t get_unique_thread_id() {
+  // Cache the backing ID locally to avoid repeated calls across DSO boundaries.
+  static thread_local uint64_t cached_id{0};
+  return FOLLY_LIKELY(cached_id != 0)
+      ? cached_id
+      : (cached_id = detail::get_unique_thread_id_slow());
+}
 
 /**
  * Get a process-specific identifier for the current thread.

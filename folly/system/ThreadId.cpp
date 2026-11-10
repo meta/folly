@@ -36,7 +36,7 @@
 
 namespace folly {
 
-uint64_t get_unique_thread_id() {
+uint64_t detail::get_unique_thread_id_slow() {
   static relaxed_atomic<uint64_t> counter{0};
   static thread_local uint64_t id{0};
   return FOLLY_LIKELY(id != 0) ? id : (id = ++counter);
