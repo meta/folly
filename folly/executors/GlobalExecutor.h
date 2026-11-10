@@ -227,6 +227,19 @@ void setUnsafeMutableGlobalIOExecutor(std::weak_ptr<IOExecutor> executor);
     "For a better solution use getGlobalIOExecutor and request the EventBase "
     "from there.")]] folly::EventBase*
 getEventBase();
+
+/// getEventBaseKeepAlive
+///
+/// Retrieve an owning EventBase token from the mutable global IO executor.
+/// Returns an empty token if the executor is unavailable during shutdown.
+[[deprecated(
+    "getEventBaseKeepAlive is deprecated. "
+    "To use the global mutable executor use getUnsafeMutableGlobalIOExecutor "
+    "and request the EventBase from there. "
+    "For a better solution use getGlobalIOExecutor and request the EventBase "
+    "from there.")]] folly::Executor::KeepAlive<folly::EventBase>
+getEventBaseKeepAlive();
+
 /**
  * @methodset Executors
  *

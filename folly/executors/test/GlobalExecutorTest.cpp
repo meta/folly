@@ -95,9 +95,11 @@ TEST(GlobalExecutorTest, GlobalIOExecutor) {
     void add(Func) override { count++; }
     folly::EventBase* getEventBase() override { return nullptr; }
     Executor::KeepAlive<EventBase> getEventBaseKeepAlive() override {
+      eventBaseKeepAliveCount++;
       return {};
     }
     int count{0};
+    int eventBaseKeepAliveCount{0};
   };
 
   auto f = []() {};
@@ -111,6 +113,8 @@ TEST(GlobalExecutorTest, GlobalIOExecutor) {
     auto dummy = std::make_shared<DummyExecutor>();
     setIOExecutor(dummy);
     getIOExecutor()->add(f);
+    EXPECT_FALSE(folly::getEventBaseKeepAlive());
+    EXPECT_EQ(1, dummy->eventBaseKeepAliveCount);
     // Make sure we were properly installed.
     EXPECT_EQ(1, dummy->count);
   }
@@ -118,6 +122,11 @@ TEST(GlobalExecutorTest, GlobalIOExecutor) {
   // Don't explode, we should restore the default global IOExecutor because our
   // weak reference to dummy has expired
   getIOExecutor()->add(f);
+  auto eventBase = folly::getEventBaseKeepAlive();
+  ASSERT_TRUE(eventBase);
+  folly::Baton<> baton;
+  eventBase->add([&] { baton.post(); });
+  baton.wait();
   FOLLY_POP_WARNING
 }
 
