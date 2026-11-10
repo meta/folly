@@ -1277,14 +1277,16 @@ class F14VectorSet
   // reverse-iterating.  You can write that as set.erase(*riter)
   // if you need it; erase(iter) hashes the key too.
 
-  reverse_iterator rbegin() { return this->table_.values_; }
+  reverse_iterator rbegin() { return crbegin(); }
   const_reverse_iterator rbegin() const { return crbegin(); }
-  const_reverse_iterator crbegin() const { return this->table_.values_; }
+  const_reverse_iterator crbegin() const {
+    return const_reverse_iterator{this->table_.values_};
+  }
 
-  reverse_iterator rend() { return this->table_.values_ + this->table_.size(); }
+  reverse_iterator rend() { return crend(); }
   const_reverse_iterator rend() const { return crend(); }
   const_reverse_iterator crend() const {
-    return this->table_.values_ + this->table_.size();
+    return const_reverse_iterator{this->table_.values_ + this->table_.size()};
   }
 
   /**

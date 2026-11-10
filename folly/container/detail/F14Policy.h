@@ -28,7 +28,9 @@
 #include <folly/Unit.h>
 #include <folly/Utility.h>
 #include <folly/container/HeterogeneousAccess.h>
+#include <folly/container/Iterator.h>
 #include <folly/container/detail/F14Table.h>
+#include <folly/detail/Iterators.h>
 #include <folly/hash/Hash.h>
 #include <folly/lang/Align.h>
 #include <folly/lang/Exception.h>
@@ -549,7 +551,7 @@ class ValueContainerPolicy
 
  public:
   using ConstIter = ValueContainerIterator<typename AllocTraits::const_pointer>;
-  using Iter = std::conditional_t<
+  using Iter = folly::conditional_t<
       kIsMap,
       ValueContainerIterator<typename AllocTraits::pointer>,
       ConstIter>;
@@ -792,7 +794,7 @@ class NodeContainerPolicy
 
  public:
   using ConstIter = NodeContainerIterator<typename AllocTraits::const_pointer>;
-  using Iter = std::conditional_t<
+  using Iter = folly::conditional_t<
       kIsMap,
       NodeContainerIterator<typename AllocTraits::pointer>,
       ConstIter>;
@@ -926,62 +928,35 @@ template <
 class VectorContainerPolicy;
 
 template <typename ValuePtr>
-class VectorContainerIterator : public BaseIter<ValuePtr, uint32_t> {
-  using Super = BaseIter<ValuePtr, uint32_t>;
-  using ValueConstPtr = typename Super::ValueConstPtr;
+class VectorContainerIterator;
+
+template <typename ValuePtr>
+using VectorContainerIteratorFacade = folly::detail::IteratorFacade<
+    VectorContainerIterator<ValuePtr>,
+    std::iter_value_t<ValuePtr>,
+    std::random_access_iterator_tag,
+    std::iter_reference_t<ValuePtr>,
+    std::iter_difference_t<ValuePtr>>;
+
+template <typename ValuePtr>
+class VectorContainerIterator : public VectorContainerIteratorFacade<ValuePtr> {
+  using facade = VectorContainerIteratorFacade<ValuePtr>;
+  friend facade;
 
  public:
-  using pointer = typename Super::pointer;
-  using reference = typename Super::reference;
-  using value_type = typename Super::value_type;
+  using typename facade::difference_type;
 
   VectorContainerIterator() = default;
-  VectorContainerIterator(VectorContainerIterator const&) = default;
-  VectorContainerIterator(VectorContainerIterator&&) = default;
-  VectorContainerIterator& operator=(VectorContainerIterator const&) = default;
-  VectorContainerIterator& operator=(VectorContainerIterator&&) = default;
-  ~VectorContainerIterator() = default;
 
-  /*implicit*/ operator VectorContainerIterator<ValueConstPtr>() const {
-    return VectorContainerIterator<ValueConstPtr>{current_, lowest_};
-  }
-
-  reference operator*() const { return *current_; }
-
-  pointer operator->() const { return current_; }
-
-  VectorContainerIterator& operator++() {
-    if (current_ == lowest_) [[unlikely]] {
-      current_ = nullptr;
-    } else {
-      --current_;
-    }
-    return *this;
-  }
-
-  VectorContainerIterator operator++(int) {
-    auto cur = *this;
-    ++*this;
-    return cur;
-  }
-
-  friend bool operator==(
-      VectorContainerIterator const& lhs, VectorContainerIterator const& rhs) {
-    return lhs.current_ == rhs.current_;
-  }
-  friend bool operator!=(
-      VectorContainerIterator const& lhs, VectorContainerIterator const& rhs) {
-    return !(lhs == rhs);
-  }
+  template <typename U>
+  /* implicit */ VectorContainerIterator(const VectorContainerIterator<U>& u)
+    requires(!std::same_as<U, ValuePtr>) &&
+                std::convertible_to<const U&, ValuePtr>
+      : values_{u.values_}, index_{u.index_} {}
 
  private:
-  ValuePtr current_;
-  ValuePtr lowest_;
-
-  explicit VectorContainerIterator(ValuePtr current, ValuePtr lowest)
-      : current_(current), lowest_(lowest) {}
-
-  std::size_t index() const { return current_ - lowest_; }
+  template <typename P>
+  friend class VectorContainerIterator;
 
   template <
       typename K,
@@ -992,9 +967,37 @@ class VectorContainerIterator : public BaseIter<ValuePtr, uint32_t> {
       typename P>
   friend class VectorContainerPolicy;
 
-  template <typename P>
-  friend class VectorContainerIterator;
+  VectorContainerIterator(ValuePtr values, std::size_t index)
+      : values_{values}, index_{index} {}
+
+  std::size_t index() const { return index_ - 1; }
+
+  decltype(auto) dereference() const { return values_[index()]; }
+
+  bool equal(const VectorContainerIterator& rhs) const {
+    assert(values_ == rhs.values_);
+    return index_ == rhs.index_;
+  }
+
+  void increment() { --index_; }
+
+  void decrement() { ++index_; }
+
+  void advance(difference_type n) {
+    index_ = static_cast<std::size_t>(static_cast<difference_type>(index_) - n);
+  }
+
+  difference_type distance_to(const VectorContainerIterator& rhs) const {
+    assert(values_ == rhs.values_);
+    return static_cast<difference_type>(index_) -
+        static_cast<difference_type>(rhs.index_);
+  }
+
+  ValuePtr values_{};
+  std::size_t index_{};
 };
+
+struct VectorContainerReverseIteratorTag {};
 
 struct VectorContainerIndexSearch {
   uint32_t index_;
@@ -1117,13 +1120,19 @@ class VectorContainerPolicy
 
   using ConstIter =
       VectorContainerIterator<typename AllocTraits::const_pointer>;
-  using Iter = std::conditional_t<
+  using Iter = folly::conditional_t<
       kIsMap,
       VectorContainerIterator<typename AllocTraits::pointer>,
       ConstIter>;
-  using ConstReverseIter = typename AllocTraits::const_pointer;
-  using ReverseIter = std::
-      conditional_t<kIsMap, typename AllocTraits::pointer, ConstReverseIter>;
+  using ConstReverseIter = folly::wrap_iterator<
+      typename AllocTraits::const_pointer,
+      VectorContainerReverseIteratorTag>;
+  using ReverseIter = folly::conditional_t<
+      kIsMap,
+      folly::wrap_iterator<
+          typename AllocTraits::pointer,
+          VectorContainerReverseIteratorTag>,
+      ConstReverseIter>;
 
   using ValuePtr = typename AllocTraits::pointer;
 
@@ -1519,13 +1528,9 @@ class VectorContainerPolicy
 
   // Iterator stuff
 
-  Iter linearBegin(std::size_t size) const {
-    return size > 0
-        ? Iter{values_ + size - 1, values_}
-        : Iter{nullptr, nullptr};
-  }
+  Iter linearBegin(std::size_t size) const { return Iter{values_, size}; }
 
-  Iter linearEnd() const { return Iter{nullptr, nullptr}; }
+  Iter linearEnd() const { return Iter{values_, 0}; }
 
   //////// F14BasicMap/Set policy
 
@@ -1533,9 +1538,8 @@ class VectorContainerPolicy
     if (underlying.atEnd()) {
       return linearEnd();
     } else {
-      assume(values_ + underlying.item() != nullptr);
       assume(values_ != nullptr);
-      return Iter{values_ + underlying.item(), values_};
+      return indexToIter(underlying.item());
     }
   }
 
@@ -1549,7 +1553,7 @@ class VectorContainerPolicy
     return static_cast<Item>(n);
   }
 
-  Iter indexToIter(Item index) const { return Iter{values_ + index, values_}; }
+  Iter indexToIter(Item index) const { return Iter{values_, index + 1}; }
 
   ValuePtr values_{nullptr};
 };

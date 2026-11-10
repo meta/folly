@@ -49,6 +49,8 @@ folly_add_library(
     folly_container_detail_f14_mask
     folly_container_detail_util
     folly_container_heterogeneous_access
+    folly_container_iterator
+    folly_detail_iterators
     folly_functional_invoke
     folly_hash_hash
     folly_lang_align

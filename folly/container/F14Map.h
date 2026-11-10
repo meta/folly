@@ -1568,7 +1568,7 @@ class F14VectorMapImpl
     auto index = this->table_.iterToIndex(pos);
     auto underlying = this->table_.find(VectorContainerIndexSearch{index});
     eraseUnderlying(underlying, beforeDestroy);
-    return index == 0 ? end() : this->table_.indexToIter(index - 1);
+    return std::next(this->table_.indexToIter(index));
   }
 
   // This form avoids ambiguity when key_type has a templated constructor
@@ -1589,10 +1589,7 @@ class F14VectorMapImpl
     while (first != last) {
       first = eraseInto(first, beforeDestroy);
     }
-    if (first == cend()) {
-      return end();
-    }
-    return this->table_.indexToIter(this->table_.iterToIndex(first));
+    return begin() + (first - cbegin());
   }
 
   /// Callback-erase a specific key.
@@ -1696,7 +1693,7 @@ class F14VectorMap
 
   /// @methodset Iterators
   reverse_iterator rbegin() [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
-    return this->table_.values_;
+    return reverse_iterator{this->table_.values_};
   }
   /// @methodset Iterators
   const_reverse_iterator rbegin() const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
@@ -1704,12 +1701,12 @@ class F14VectorMap
   }
   /// @methodset Iterators
   const_reverse_iterator crbegin() const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
-    return this->table_.values_;
+    return const_reverse_iterator{this->table_.values_};
   }
 
   /// @methodset Iterators
   reverse_iterator rend() [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
-    return this->table_.values_ + this->table_.size();
+    return reverse_iterator{this->table_.values_ + this->table_.size()};
   }
   /// @methodset Iterators
   const_reverse_iterator rend() const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
@@ -1717,7 +1714,7 @@ class F14VectorMap
   }
   /// @methodset Iterators
   const_reverse_iterator crend() const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
-    return this->table_.values_ + this->table_.size();
+    return const_reverse_iterator{this->table_.values_ + this->table_.size()};
   }
 
   /**

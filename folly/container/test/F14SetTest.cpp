@@ -38,6 +38,7 @@ FOLLY_GNU_DISABLE_WARNING("-Wdeprecated-declarations")
 #include <folly/Conv.h>
 #include <folly/FBString.h>
 #include <folly/container/test/F14TestUtil.h>
+#include <folly/container/test/IteratorTestUtil.h>
 #include <folly/container/test/TrackingTypes.h>
 #include <folly/lang/Keep.h>
 #include <folly/portability/GMock.h>
@@ -869,6 +870,41 @@ TEST(F14VectorMap, reverseIterator) {
   }
 }
 
+TEST(F14VectorSet, iterators) {
+  using namespace folly::iterator_test_utils;
+  using TSet = F14VectorSet<int>;
+
+  check_traits_match<TSet::iterator, std::reverse_iterator<const int*>>();
+  check_traits_match<TSet::reverse_iterator, const int*>();
+  static_assert(std::is_same_v<TSet::iterator, TSet::const_iterator>);
+  static_assert(
+      std::is_same_v<TSet::reverse_iterator, TSet::const_reverse_iterator>);
+  static_assert(std::is_trivially_copyable_v<TSet::iterator>);
+
+  TSet s;
+  for (int i = 0; i < 5; ++i) {
+    s.insert(i);
+  }
+  const int* first = s.data();
+  const int* last = first + s.size();
+  const std::reverse_iterator ref_first{last};
+  const std::reverse_iterator ref_last{first};
+
+  EXPECT_TRUE(same_access(s.begin(), ref_first, ref_last));
+  EXPECT_TRUE(same_arithmetic(s.begin(), ref_first, ref_last));
+  EXPECT_TRUE(
+      same_differences(s.begin(), s.end(), s.cbegin(), ref_first, ref_last));
+  EXPECT_TRUE(same_comparisons(s.begin(), s.end(), ref_first, ref_last));
+
+  EXPECT_TRUE(same_access(s.rbegin(), first, last));
+  EXPECT_TRUE(same_arithmetic(s.rbegin(), first, last));
+  EXPECT_TRUE(same_differences(s.rbegin(), s.rend(), s.crbegin(), first, last));
+  EXPECT_TRUE(same_comparisons(s.rbegin(), s.rend(), first, last));
+
+  TSet other{1};
+  EXPECT_DEBUG_DEATH((void)(s.begin() == other.begin()), "");
+}
+
 TEST(F14VectorSet, OrderPreservingReinsertionView) {
   F14VectorSet<int> s1;
   for (size_t i = 0; i < 5; ++i) {
@@ -897,7 +933,7 @@ TEST(F14VectorSet, Data) {
   // are const even through a non-const set, like set iterators.
   auto* p = s.data();
   static_assert(std::is_same_v<decltype(p), int const*>);
-  EXPECT_EQ(p, s.rbegin());
+  EXPECT_EQ(p, std::to_address(s.rbegin()));
   for (int i = 0; i < 5; ++i) {
     EXPECT_EQ(i, p[i]);
   }
@@ -906,7 +942,7 @@ TEST(F14VectorSet, Data) {
   EXPECT_EQ(cs.data(), p);
 
   TSet e;
-  EXPECT_EQ(e.data(), e.rbegin());
+  EXPECT_EQ(e.data(), std::to_address(e.rbegin()));
 
   static_assert(!has_data_v<F14ValueSet<int>>);
   static_assert(!has_data_v<F14NodeSet<int>>);

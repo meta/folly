@@ -63,6 +63,8 @@ fb_dirsync_cpp_library(
         "//folly:traits",
         "//folly:unit",
         "//folly/container:heterogeneous_access",
+        "//folly/container:iterator",
+        "//folly/detail:iterators",
         "//folly/functional:invoke",
         "//folly/hash:hash",
         "//folly/lang:align",

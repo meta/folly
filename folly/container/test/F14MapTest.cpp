@@ -31,6 +31,7 @@
 #include <folly/FBString.h>
 #include <folly/Portability.h>
 #include <folly/container/test/F14TestUtil.h>
+#include <folly/container/test/IteratorTestUtil.h>
 #include <folly/container/test/TrackingTypes.h>
 #include <folly/hash/Hash.h>
 #include <folly/portability/GMock.h>
@@ -888,6 +889,47 @@ TEST(F14VectorMap, reverseIterator) {
   }
 }
 
+TEST(F14VectorMap, iterators) {
+  using namespace folly::iterator_test_utils;
+  using TMap = F14VectorMap<int, int>;
+  using value_type = TMap::value_type;
+
+  check_traits_match<TMap::iterator, std::reverse_iterator<value_type*>>();
+  check_traits_match<
+      TMap::const_iterator,
+      std::reverse_iterator<const value_type*>>();
+  check_traits_match<TMap::reverse_iterator, value_type*>();
+  check_traits_match<TMap::const_reverse_iterator, const value_type*>();
+
+  static_assert(std::is_trivially_copyable_v<TMap::iterator>);
+  static_assert(std::is_convertible_v<TMap::iterator, TMap::const_iterator>);
+  static_assert(!std::is_convertible_v<TMap::const_iterator, TMap::iterator>);
+
+  TMap m;
+  for (int i = 0; i < 5; ++i) {
+    m[i] = 10 * i;
+  }
+  value_type* first = m.data();
+  value_type* last = first + m.size();
+  const std::reverse_iterator ref_first{last};
+  const std::reverse_iterator ref_last{first};
+
+  EXPECT_TRUE(same_access(m.begin(), ref_first, ref_last));
+  EXPECT_TRUE(same_arithmetic(m.begin(), ref_first, ref_last));
+  EXPECT_TRUE(
+      same_differences(m.begin(), m.end(), m.cbegin(), ref_first, ref_last));
+  EXPECT_TRUE(same_comparisons(m.begin(), m.end(), ref_first, ref_last));
+  EXPECT_TRUE(same_comparisons(m.cbegin(), m.end(), ref_first, ref_last));
+
+  EXPECT_TRUE(same_access(m.rbegin(), first, last));
+  EXPECT_TRUE(same_arithmetic(m.rbegin(), first, last));
+  EXPECT_TRUE(same_differences(m.rbegin(), m.rend(), m.crbegin(), first, last));
+  EXPECT_TRUE(same_comparisons(m.rbegin(), m.rend(), first, last));
+
+  TMap other{{1, 1}};
+  EXPECT_DEBUG_DEATH((void)(m.begin() == other.begin()), "");
+}
+
 TEST(F14VectorMap, OrderPreservingReinsertionView) {
   F14VectorMap<int, int> m1;
   for (size_t i = 0; i < 5; ++i) {
@@ -915,7 +957,7 @@ TEST(F14VectorMap, Data) {
   // Storage order matches [rbegin, rend), the raw values_ range.
   auto* p = m.data();
   static_assert(std::is_same_v<decltype(p), TMap::value_type*>);
-  EXPECT_EQ(p, m.rbegin());
+  EXPECT_EQ(p, std::to_address(m.rbegin()));
   for (int i = 0; i < 5; ++i) {
     EXPECT_EQ(i, p[i].first);
     EXPECT_EQ(10 * i, p[i].second);
@@ -933,7 +975,7 @@ TEST(F14VectorMap, Data) {
 
   // Empty.
   TMap e;
-  EXPECT_EQ(e.data(), e.rbegin());
+  EXPECT_EQ(e.data(), std::to_address(e.rbegin()));
 
   static_assert(!has_data_v<F14ValueMap<int, int>>);
   static_assert(!has_data_v<F14NodeMap<int, int>>);
