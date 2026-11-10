@@ -34,7 +34,8 @@
 namespace folly {
 namespace sync_tests {
 
-void randomSleep(std::chrono::milliseconds min, std::chrono::milliseconds max) {
+inline void randomSleep(
+    std::chrono::milliseconds min, std::chrono::milliseconds max) {
   std::uniform_int_distribution<> range(min.count(), max.count());
   folly::ThreadLocalPRNG prng;
   std::chrono::milliseconds duration(range(prng));
