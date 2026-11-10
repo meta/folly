@@ -17,6 +17,7 @@
 #include <folly/detail/RangeSse42.h>
 
 #include <cassert>
+#include <string_view>
 
 #include <folly/Portability.h>
 
@@ -29,7 +30,7 @@
 namespace folly {
 namespace detail {
 size_t qfind_first_byte_of_sse42(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   return qfind_first_byte_of_nosimd(haystack, needles);
 }
 } // namespace detail
@@ -68,16 +69,18 @@ static inline size_t nextAlignedIndex(const char* arr) {
 
 // helper method for case where needles.size() <= 16
 size_t qfind_first_byte_of_needles16(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   assert(haystack.size() > 0u);
   assert(needles.size() > 0u);
   assert(needles.size() <= 16u);
   if ((needles.size() <= 2 && haystack.size() >= 256) ||
       // must bail if we can't even SSE-load a single segment of haystack
       (haystack.size() < 16 &&
-       page_for(haystack.end() - 1) != page_for(haystack.data() + 15)) ||
+       page_for(haystack.data() + haystack.size() - 1) !=
+           page_for(haystack.data() + 15)) ||
       // can't load needles into SSE register if it could cross page boundary
-      page_for(needles.end() - 1) != page_for(needles.data() + 15)) {
+      page_for(needles.data() + needles.size() - 1) !=
+          page_for(needles.data() + 15)) {
     return detail::qfind_first_byte_of_nosimd(haystack, needles);
   }
 
@@ -112,8 +115,8 @@ size_t qfind_first_byte_of_needles16(
 // block.
 template <bool HAYSTACK_ALIGNED>
 size_t scanHaystackBlock(
-    const StringPieceLite haystack,
-    const StringPieceLite needles,
+    const std::string_view haystack,
+    const std::string_view needles,
     uint64_t blockStartIdx) {
   assert(needles.size() > 16u); // should handled by *needles16() method
   assert(
@@ -156,10 +159,10 @@ size_t scanHaystackBlock(
 }
 
 size_t qfind_first_byte_of_sse42(
-    const StringPieceLite haystack, const StringPieceLite needles);
+    const std::string_view haystack, const std::string_view needles);
 
 size_t qfind_first_byte_of_sse42(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   if (needles.empty() || haystack.empty()) [[unlikely]] {
     return std::string::npos;
   } else if (needles.size() <= 16) {
@@ -169,7 +172,8 @@ size_t qfind_first_byte_of_sse42(
   }
 
   if (haystack.size() < 16 &&
-      page_for(haystack.end() - 1) != page_for(haystack.data() + 16)) {
+      page_for(haystack.data() + haystack.size() - 1) !=
+          page_for(haystack.data() + 16)) {
     // We can't safely SSE-load haystack. Use a different approach.
     if (haystack.size() <= 2) {
       return qfind_first_byte_of_std(haystack, needles);

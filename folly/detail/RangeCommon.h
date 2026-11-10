@@ -17,8 +17,8 @@
 #pragma once
 
 #include <algorithm>
-#include <cassert>
 #include <string>
+#include <string_view>
 
 #include <folly/Likely.h>
 
@@ -26,40 +26,8 @@ namespace folly {
 
 namespace detail {
 
-/***
- *  The qfind_first_byte_of_* functions are declared here, before Range.h, so
- *  they cannot take StringPiece values. But they're there to operate on
- *  StringPiece values. Dependency cycles: fun.
- *
- *  StringPieceLite is here to break that dependency cycle.
- */
-class StringPieceLite {
- public:
-  StringPieceLite(const char* b, const char* e) : b_(b), e_(e) {}
-  template <typename Range>
-  /* implicit */ StringPieceLite(const Range& r)
-      : StringPieceLite(r.data(), r.data() + r.size()) {}
-  const char* data() const { return b_; }
-  const char* begin() const { return b_; }
-  const char* end() const { return e_; }
-  size_t size() const { return size_t(e_ - b_); }
-  bool empty() const { return size() == 0; }
-  const char& operator[](size_t i) const {
-    assert(size() > i);
-    return b_[i];
-  }
-  template <typename Range>
-  explicit operator Range() const {
-    return Range(begin(), end());
-  }
-
- private:
-  const char* b_;
-  const char* e_;
-};
-
 inline size_t qfind_first_byte_of_std(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   auto ret = std::find_first_of(
       haystack.begin(),
       haystack.end(),
@@ -70,13 +38,13 @@ inline size_t qfind_first_byte_of_std(
 }
 
 size_t qfind_first_byte_of_bitset(
-    const StringPieceLite haystack, const StringPieceLite needles);
+    const std::string_view haystack, const std::string_view needles);
 
 size_t qfind_first_byte_of_byteset(
-    const StringPieceLite haystack, const StringPieceLite needles);
+    const std::string_view haystack, const std::string_view needles);
 
 inline size_t qfind_first_byte_of_nosimd(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   if (needles.empty() || haystack.empty()) [[unlikely]] {
     return std::string::npos;
   }

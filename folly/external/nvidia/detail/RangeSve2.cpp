@@ -16,6 +16,8 @@
 
 #include <folly/external/nvidia/detail/RangeSve2.h>
 
+#include <string_view>
+
 #include <folly/CPortability.h>
 #include <folly/Portability.h>
 
@@ -23,7 +25,7 @@
 namespace folly {
 namespace detail {
 size_t qfind_first_byte_of_sve2(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   return qfind_first_byte_of_nosimd(haystack, needles);
 }
 } // namespace detail
@@ -40,7 +42,7 @@ namespace detail {
 
 // helper method for case where needles.size() <= 16
 size_t qfind_first_byte_of_needles16(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   assert(haystack.size() > 0u);
   assert(needles.size() > 0u);
   assert(needles.size() <= 16u);
@@ -87,7 +89,7 @@ size_t qfind_first_byte_of_needles16(
 }
 
 size_t qfind_first_byte_of_sve2(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   if (FOLLY_UNLIKELY(needles.empty() || haystack.empty())) {
     return std::string::npos;
   } else if (needles.size() <= 16) {

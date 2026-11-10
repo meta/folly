@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string_view>
 
 #include <folly/detail/RangeCommon.h>
 
@@ -24,7 +25,7 @@ namespace folly {
 namespace detail {
 
 size_t qfind_first_byte_of_sve2(
-    const StringPieceLite haystack, const StringPieceLite needles);
+    const std::string_view haystack, const std::string_view needles);
 
 } // namespace detail
 } // namespace folly

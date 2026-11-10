@@ -16,6 +16,8 @@
 
 #include <folly/detail/RangeSimd.h>
 
+#include <string_view>
+
 #include <folly/Portability.h>
 
 #include <folly/detail/RangeSse42.h>
@@ -25,7 +27,7 @@ namespace folly {
 namespace detail {
 
 size_t qfind_first_byte_of_simd(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
 #if FOLLY_ARM_FEATURE_SVE2
   return qfind_first_byte_of_sve2(haystack, needles);
 #elif FOLLY_SSE_PREREQ(4, 2)

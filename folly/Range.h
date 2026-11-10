@@ -1535,7 +1535,7 @@ size_t qfind(const Range<Iter>& haystack, const Range<Iter>& needle, Comp eq) {
 namespace detail {
 
 inline size_t qfind_first_byte_of(
-    const StringPiece haystack, const StringPiece needles) {
+    const std::string_view haystack, const std::string_view needles) {
   // Let's default to the SIMD implementation. Internally, if that's not
   // available, the _nosimd version gets picked instead.
   return qfind_first_byte_of_simd(haystack, needles);
@@ -1660,7 +1660,10 @@ inline size_t qfind_first_of(
     const Range<const unsigned char*>& haystack,
     const Range<const unsigned char*>& needles) {
   return detail::qfind_first_byte_of(
-      StringPiece(haystack), StringPiece(needles));
+      std::string_view{
+          reinterpret_cast<const char*>(haystack.data()), haystack.size()},
+      std::string_view{
+          reinterpret_cast<const char*>(needles.data()), needles.size()});
 }
 
 template <class Key, class Enable>

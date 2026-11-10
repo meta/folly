@@ -17,6 +17,7 @@
 #include <folly/detail/RangeCommon.h>
 
 #include <bitset>
+#include <string_view>
 
 #include <folly/container/SparseByteSet.h>
 
@@ -25,7 +26,7 @@ namespace folly {
 namespace detail {
 
 size_t qfind_first_byte_of_bitset(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   std::bitset<256> s;
   for (auto needle : needles) {
     s[(uint8_t)needle] = true;
@@ -39,7 +40,7 @@ size_t qfind_first_byte_of_bitset(
 }
 
 size_t qfind_first_byte_of_byteset(
-    const StringPieceLite haystack, const StringPieceLite needles) {
+    const std::string_view haystack, const std::string_view needles) {
   SparseByteSet s;
   for (auto needle : needles) {
     s.add(uint8_t(needle));
