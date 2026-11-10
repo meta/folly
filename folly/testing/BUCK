@@ -11,7 +11,6 @@ fb_dirsync_cpp_library(
     ],
     use_raw_headers = True,
     deps = [
-        "fbsource//third-party/boost:boost_regex",  # @manual
         "fbsource//third-party/glog:glog",
         "//folly:exception",
         "//folly:file",
@@ -23,8 +22,19 @@ fb_dirsync_cpp_library(
         "//folly/portability:fcntl",
     ],
     exported_deps = [
+        ":test_util_pcre",
         "//folly:range",
         "//folly:scope_guard",
         "//folly/io:fs_util",
+    ],
+)
+
+fb_dirsync_cpp_library(
+    name = "test_util_pcre",
+    srcs = ["TestUtilPCRE.cpp"],
+    use_raw_headers = True,
+    deps = [
+        "fbsource//third-party/boost:boost_regex",
+        "//folly:range",
     ],
 )

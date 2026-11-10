@@ -33,11 +33,6 @@
 #include <crtdbg.h> // @manual
 #endif
 
-// This needs to be at the end because some versions end up including
-// Windows.h without defining NOMINMAX, which breaks uses of std::numeric_limits
-// in various headers that we include.
-#include <boost/regex.hpp>
-
 namespace folly {
 namespace test {
 
@@ -197,17 +192,6 @@ void enableInvalidParameters(SavedState state) {
 #else
 void enableInvalidParameters(SavedState) {}
 #endif
-
-bool hasPCREPatternMatch(StringPiece pattern, StringPiece target) {
-  return boost::regex_match(
-      target.begin(),
-      target.end(),
-      boost::regex(pattern.begin(), pattern.end()));
-}
-
-bool hasNoPCREPatternMatch(StringPiece pattern, StringPiece target) {
-  return !hasPCREPatternMatch(pattern, target);
-}
 
 } // namespace detail
 

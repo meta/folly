@@ -143,6 +143,13 @@ OpenSSL from source when it is not installed, configure with
 `-DFOLLY_BUILD_OPENSSL=ON`, which is the default when folly is built as part
 of another project.
 
+Boost.Regex is optional too. Without it, `json/JSONSchema` and
+`container/RegexMatchCache` are not built or installed, `EXPECT_PCRE_MATCH` and
+`EXPECT_NO_PCRE_MATCH` from `testing/TestUtil.h` are not available, and the
+tests that use any of them are left out. Downstream projects can check for
+`TARGET Folly::folly_testing_test_util_pcre` to see whether the PCRE helpers
+are available.
+
 fast_float is optional with a standard library that has floating-point
 `std::from_chars`, such as libstdc++ 11 or newer and libc++ 20 or newer.
 

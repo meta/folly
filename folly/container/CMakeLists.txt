@@ -254,33 +254,36 @@ folly_add_library(
 )
 
 if (FOLLY_HAVE_OPENSSL)
-  folly_add_library(
-    NAME regex_match_cache
-    SRCS RegexMatchCache.cpp
-    HEADERS RegexMatchCache.h
-    DEPS
-      ${GLOG_LIBRARIES}
-      Boost::regex
-      fmt::fmt
-      folly_map_util
-      folly_portability_windows
-      folly_string
-      folly_synchronization_atomic_util
-    EXPORTED_DEPS
-      folly_chrono
-      folly_container_f14_hash
-      folly_container_reserve
-      folly_function
-      folly_hash_unique_hash_key
-      folly_lang_bits
-  )
-  set_property(
-    GLOBAL
-    APPEND
-    PROPERTY
-      FOLLY_MONOLITHIC_EXTERNAL_DEPS
-      Boost::regex
-  )
+  # regex_match_cache requires Boost.Regex
+  if (FOLLY_BUILD_REGEX)
+    folly_add_library(
+      NAME regex_match_cache
+      SRCS RegexMatchCache.cpp
+      HEADERS RegexMatchCache.h
+      DEPS
+        ${GLOG_LIBRARIES}
+        Boost::regex
+        fmt::fmt
+        folly_map_util
+        folly_portability_windows
+        folly_string
+        folly_synchronization_atomic_util
+      EXPORTED_DEPS
+        folly_chrono
+        folly_container_f14_hash
+        folly_container_reserve
+        folly_function
+        folly_hash_unique_hash_key
+        folly_lang_bits
+    )
+    set_property(
+      GLOBAL
+      APPEND
+      PROPERTY
+        FOLLY_MONOLITHIC_EXTERNAL_DEPS
+        Boost::regex
+    )
+  endif ()
 else ()
   folly_exclude_headers(RegexMatchCache.h)
 endif ()

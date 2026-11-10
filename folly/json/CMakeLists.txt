@@ -101,24 +101,33 @@ folly_add_library(
     folly_expected
 )
 
-folly_add_library(
-  NAME json_schema
-  SRCS JSONSchema.cpp
-  HEADERS JSONSchema.h
-  DEPS
-    Boost::regex
-    folly_c_portability
-    folly_conv
-    folly_memory
-    folly_optional
-    folly_singleton
-    folly_string
-  EXPORTED_DEPS
-    folly_exception_wrapper
-    folly_json_dynamic
-    folly_range
-)
-set_property(GLOBAL APPEND PROPERTY FOLLY_MONOLITHIC_EXTERNAL_DEPS Boost::regex)
+# json_schema requires Boost.Regex
+if (FOLLY_BUILD_REGEX)
+  folly_add_library(
+    NAME json_schema
+    SRCS JSONSchema.cpp
+    HEADERS JSONSchema.h
+    DEPS
+      Boost::regex
+      folly_c_portability
+      folly_conv
+      folly_memory
+      folly_optional
+      folly_singleton
+      folly_string
+    EXPORTED_DEPS
+      folly_exception_wrapper
+      folly_json_dynamic
+      folly_range
+  )
+  set_property(
+    GLOBAL
+    APPEND
+    PROPERTY
+      FOLLY_MONOLITHIC_EXTERNAL_DEPS
+      Boost::regex
+  )
+endif ()
 
 folly_add_library(
   NAME json_test_util

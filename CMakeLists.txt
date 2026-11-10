@@ -258,6 +258,10 @@ if (NOT FOLLY_BUILD_CLI_PROGRAM_OPTIONS)
   list(REMOVE_ITEM hfiles ${FOLLY_DIR}/cli/NestedCommandLineApp.h
        ${FOLLY_DIR}/cli/ProgramOptions.h)
 endif ()
+if (NOT FOLLY_BUILD_REGEX)
+  list(REMOVE_ITEM hfiles ${FOLLY_DIR}/container/RegexMatchCache.h
+       ${FOLLY_DIR}/json/JSONSchema.h)
+endif ()
 # Add test utility headers that are part of public API
 list(
   APPEND
@@ -1255,10 +1259,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     traits_test.cpp
     DIRECTORY
     io/test/
-    TEST
-    io_fs_util_test
-    SOURCES
-    FsUtilTest.cpp
     BENCHMARK
     io_iobuf_benchmark
     WINDOWS_DISABLED
@@ -2085,12 +2085,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     benchmark_impl.cpp
     test_functions.cpp
     DIRECTORY
-    testing/test/
-    TEST
-    testing_test_util_test
-    SOURCES
-    TestUtilTest.cpp
-    DIRECTORY
     tracing/test/
     TEST
     static_tracepoint_section_test
@@ -2106,10 +2100,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     json_dynamic_other_test
     SOURCES
     DynamicOtherTest.cpp
-    TEST
-    json_dynamic_parser_test
-    SOURCES
-    DynamicParserTest.cpp
     TEST
     json_dynamic_test
     SOURCES
@@ -2135,10 +2125,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     json_json_pointer_test
     SOURCES
     json_pointer_test.cpp
-    TEST
-    json_json_schema_test
-    SOURCES
-    JSONSchemaTest.cpp
   )
 
   folly_add_test_module(
@@ -2149,12 +2135,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
 
   if (FOLLY_HAVE_OPENSSL)
     folly_define_tests(
-      DIRECTORY
-      container/test/
-      TEST
-      container_regex_match_cache_test
-      SOURCES
-      RegexMatchCacheTest.cpp
       DIRECTORY
       hash/test/
       TEST
@@ -2226,6 +2206,45 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
       SOURCES
       StringToFloatBenchmark.cpp
     )
+  endif ()
+
+  # These use Boost.Regex through TestUtil's EXPECT_PCRE_MATCH, or through
+  # JSONSchema and RegexMatchCache.
+  if (FOLLY_BUILD_REGEX)
+    folly_define_tests(
+      DIRECTORY
+      io/test/
+      TEST
+      io_fs_util_test
+      SOURCES
+      FsUtilTest.cpp
+      DIRECTORY
+      json/test/
+      TEST
+      json_dynamic_parser_test
+      SOURCES
+      DynamicParserTest.cpp
+      TEST
+      json_json_schema_test
+      SOURCES
+      JSONSchemaTest.cpp
+      DIRECTORY
+      testing/test/
+      TEST
+      testing_test_util_test
+      SOURCES
+      TestUtilTest.cpp
+    )
+    if (FOLLY_HAVE_OPENSSL)
+      folly_define_tests(
+        DIRECTORY
+        container/test/
+        TEST
+        container_regex_match_cache_test
+        SOURCES
+        RegexMatchCacheTest.cpp
+      )
+    endif ()
   endif ()
 
   if (${LIBSODIUM_FOUND})

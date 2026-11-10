@@ -56,17 +56,18 @@ set(Boost_USE_STATIC_LIBS "${FOLLY_BOOST_LINK_STATIC}")
 # Note: We find these components so the CMake targets exist, but we don't
 # link them globally. Targets that need specific Boost libraries should
 # add them to their EXTERNAL_DEPS (e.g., Boost::regex, Boost::context).
-set(FOLLY_BOOST_COMPONENTS context regex)
+set(FOLLY_BOOST_COMPONENTS context)
 
 # CMake 4 dropped FindBoost, so this config-only probe warns without QUIET.
-# folly/cli's ProgramOptions is built only if Boost.ProgramOptions is found.
+# folly/cli's ProgramOptions is built only if Boost.ProgramOptions is found,
+# and the libraries that need Boost.Regex only if it is.
 find_package(Boost 1.69.0 QUIET COMPONENTS ${FOLLY_BOOST_COMPONENTS}
-             OPTIONAL_COMPONENTS program_options)
+             OPTIONAL_COMPONENTS program_options regex)
 if (NOT Boost_FOUND)
   set(BOOST_ENABLE_CMAKE ON)
   # A parent project that builds folly can ask for more of Boost's libraries
   # in BOOST_INCLUDE_LIBRARIES, as eden does for filesystem.
-  list(APPEND BOOST_INCLUDE_LIBRARIES ${FOLLY_BOOST_COMPONENTS})
+  list(APPEND BOOST_INCLUDE_LIBRARIES ${FOLLY_BOOST_COMPONENTS} regex)
   list(REMOVE_DUPLICATES BOOST_INCLUDE_LIBRARIES)
   # Boost 1.83's libs/predef and libs/filesystem still ask for
   # cmake_minimum_required 2.8 and 3.0. CMake 4 rejects anything below 3.5 and
@@ -717,6 +718,16 @@ if (TARGET Boost::program_options AND (LIBGFLAGS_FOUND OR gflags_FOUND))
 else ()
   set(FOLLY_BUILD_CLI_PROGRAM_OPTIONS OFF)
   set(FOLLY_BOOST_PROGRAM_OPTIONS "")
+endif ()
+
+# Likewise for the libraries that need Boost.Regex: JSONSchema, RegexMatchCache
+# and the PCRE matching in testing/TestUtil.
+if (TARGET Boost::regex)
+  set(FOLLY_BUILD_REGEX ON)
+  set(FOLLY_BOOST_REGEX regex)
+else ()
+  set(FOLLY_BUILD_REGEX OFF)
+  set(FOLLY_BOOST_REGEX "")
 endif ()
 
 add_library(folly_deps INTERFACE)
