@@ -23,11 +23,10 @@
 #include <memory>
 #include <type_traits>
 
-#include <boost/intrusive/list.hpp>
-
 #include <folly/CppAttributes.h>
 #include <folly/container/F14Set.h>
 #include <folly/container/HeterogeneousAccess.h>
+#include <folly/container/IntrusiveList.h>
 #include <folly/detail/Iterators.h>
 #include <folly/lang/Exception.h>
 
@@ -69,13 +68,28 @@ template <
     class TKeyEqual = HeterogeneousAccessEqualTo<TKey>>
 class EvictingCacheMap {
  private:
+  using TPair = std::pair<const TKey, TValue>;
+
+  // Defined before anything names it: clang targeting Windows crashes while
+  // mangling &Node::hook if Node is only forward-declared at its first use.
+  struct Node {
+    template <typename K>
+    Node(const K& key, TValue&& value) : pr(key, std::move(value)) {}
+
+    template <typename Key, typename... Args>
+    explicit Node(std::piecewise_construct_t, Key&& k, Args&&... args)
+        : pr(std::piecewise_construct,
+             std::forward_as_tuple(std::forward<Key>(k)),
+             std::forward_as_tuple(std::forward<Args>(args)...)) {}
+    SafeIntrusiveListHook hook;
+    TPair pr;
+  };
+
   // typedefs for brevity
-  struct Node;
   struct NodeList;
   struct KeyHasher;
   struct KeyValueEqual;
   using NodeMap = F14VectorSet<Node*, KeyHasher, KeyValueEqual>;
-  using TPair = std::pair<const TKey, TValue>;
 
  public:
   using PruneHookCall = std::function<void(TKey, TValue&&)>;
@@ -555,32 +569,20 @@ class EvictingCacheMap {
   }
 
  private:
-  struct Node
-      : public boost::intrusive::list_base_hook<
-            boost::intrusive::link_mode<boost::intrusive::safe_link>> {
-    template <typename K>
-    Node(const K& key, TValue&& value) : pr(key, std::move(value)) {}
-
-    template <typename Key, typename... Args>
-    explicit Node(std::piecewise_construct_t, Key&& k, Args&&... args)
-        : pr(std::piecewise_construct,
-             std::forward_as_tuple(std::forward<Key>(k)),
-             std::forward_as_tuple(std::forward<Args>(args)...)) {}
-    TPair pr;
-  };
   using NodePtr = Node*;
 
-  // NOTE: deriving from boost::intrusive::list is likely discouraged. This is
-  // simply an alternative to an ugly explicit move operator for
-  // EvictingCacheMap. Change to that if this derivation proves problematic.
-  struct NodeList : public boost::intrusive::list<Node> {
+  // Deriving from the list is simply an alternative to an ugly explicit move
+  // operator for EvictingCacheMap.
+  struct NodeList : public CountedIntrusiveList<Node, &Node::hook> {
+    using NodeListBase = CountedIntrusiveList<Node, &Node::hook>;
+
     NodeList() {}
     NodeList& operator=(NodeList&& that) noexcept {
       // Clear the moved-from rather than swap, for consistency with NodeMap
       clear_nodes();
       // Now invoke base class move operator without using static_cast
-      boost::intrusive::list<Node>& this_parent = *this;
-      boost::intrusive::list<Node>&& that_parent = std::move(that);
+      NodeListBase& this_parent = *this;
+      NodeListBase&& that_parent = std::move(that);
       this_parent = std::move(that_parent);
       return *this;
     }
@@ -592,9 +594,7 @@ class EvictingCacheMap {
 
    private:
     void clear_nodes() {
-      boost::intrusive::list<Node>::clear_and_dispose([](Node* ptr) {
-        delete ptr;
-      });
+      NodeListBase::clear_and_dispose([](Node* ptr) { delete ptr; });
     }
   };
 

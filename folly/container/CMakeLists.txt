@@ -65,9 +65,9 @@ folly_add_library(
   NAME evicting_cache_map
   HEADERS EvictingCacheMap.h
   EXPORTED_DEPS
-    Boost::headers
     folly_container_f14_hash
     folly_container_heterogeneous_access
+    folly_container_intrusive_list
     folly_detail_iterators
     folly_lang_exception
 )
