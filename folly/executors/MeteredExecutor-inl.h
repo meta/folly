@@ -85,7 +85,7 @@ void MeteredExecutorImpl<Atom>::modifyState(F f) {
   } while (!state_.compare_exchange_strong(
       oldState,
       newState,
-      std::memory_order_seq_cst,
+      std::memory_order_relaxed,
       std::memory_order_relaxed));
 }
 
