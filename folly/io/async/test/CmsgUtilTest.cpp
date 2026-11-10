@@ -54,9 +54,9 @@ std::vector<uint8_t> makeRecvmsgBlob(
       sizeof(io_uring_recvmsg_out) + kControlLength + payload.size());
   auto* out = reinterpret_cast<io_uring_recvmsg_out*>(blob.data());
   out->namelen = 0;
-  out->controllen = msg.msg_controllen;
-  out->payloadlen =
-      reportedPayloadLength == 0 ? payload.size() : reportedPayloadLength;
+  out->controllen = static_cast<uint32_t>(msg.msg_controllen);
+  out->payloadlen = static_cast<uint32_t>(
+      reportedPayloadLength == 0 ? payload.size() : reportedPayloadLength);
   out->flags = msg.msg_flags;
 
   memcpy(blob.data() + sizeof(*out), controlBuffer.data(), msg.msg_controllen);
