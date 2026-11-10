@@ -17,12 +17,11 @@
 #pragma once
 #define FOLLY_ARENA_H_
 
+#include <algorithm>
 #include <cassert>
 #include <limits>
 #include <stdexcept>
 #include <utility>
-
-#include <boost/intrusive/slist.hpp>
 
 #include <folly/Conv.h>
 #include <folly/Likely.h>
@@ -67,7 +66,6 @@ class Arena {
       size_t sizeLimit = kNoSizeLimit,
       size_t maxAlign = kDefaultMaxAlign)
       : allocAndSize_(alloc, minBlockSize),
-        currentBlock_(blocks_.last()),
         ptr_(nullptr),
         end_(nullptr),
         totalAllocatedSize_(0),
@@ -99,7 +97,7 @@ class Arena {
     }
 
     if (canReuseExistingBlock(size)) {
-      currentBlock_++;
+      currentBlock_ = currentBlock_->next;
       char* r = align(currentBlock_->start());
       ptr_ = r + size;
       end_ = currentBlock_->start() + blockGoodAllocSize() - sizeof(Block);
@@ -124,10 +122,10 @@ class Arena {
   void clear() {
     bytesUsed_ = 0;
     freeLargeBlocks(); // We don't reuse large blocks
-    if (blocks_.empty()) {
+    if (!firstBlock_) {
       return;
     }
-    currentBlock_ = blocks_.begin();
+    currentBlock_ = firstBlock_;
     ptr_ = align(currentBlock_->start());
     end_ = currentBlock_->start() + blockGoodAllocSize() - sizeof(Block);
     assert(ptr_ <= end_);
@@ -151,10 +149,8 @@ class Arena {
  private:
   using AllocTraits =
       typename std::allocator_traits<Alloc>::template rebind_traits<char>;
-  using BlockLink = boost::intrusive::slist_member_hook<>;
-
   struct alignas(max_align_v) Block {
-    BlockLink link;
+    Block* next = nullptr;
 
     char* start() { return reinterpret_cast<char*>(this + 1); }
 
@@ -164,11 +160,11 @@ class Arena {
 
   constexpr size_t blockGoodAllocSize() {
     return ArenaAllocatorTraits<Alloc>::goodSize(
-        alloc(), roundUp(sizeof(Block)) + minBlockSize());
+        alloc(), headerSize<Block>() + minBlockSize());
   }
 
   struct alignas(max_align_v) LargeBlock {
-    BlockLink link;
+    LargeBlock* next = nullptr;
     const size_t allocSize;
 
     char* start() { return reinterpret_cast<char*>(this + 1); }
@@ -182,28 +178,31 @@ class Arena {
       // We don't reuse large blocks
       return false;
     }
-    if (blocks_.empty() || currentBlock_ == blocks_.last()) {
-      // No regular blocks to reuse
-      return false;
-    }
-    return true;
+    // No regular blocks to reuse past the current one
+    return currentBlock_ != lastBlock_;
   }
 
   void freeBlocks() {
-    blocks_.clear_and_dispose([this](Block* b) {
+    for (Block* b = firstBlock_; b;) {
+      Block* const next = b->next;
       b->~Block();
       AllocTraits::deallocate(
           alloc(), reinterpret_cast<char*>(b), blockGoodAllocSize());
-    });
+      b = next;
+    }
+    firstBlock_ = lastBlock_ = currentBlock_ = nullptr;
   }
 
   void freeLargeBlocks() {
-    largeBlocks_.clear_and_dispose([this](LargeBlock* b) {
+    for (LargeBlock* b = firstLargeBlock_; b;) {
+      LargeBlock* const next = b->next;
       auto size = b->allocSize;
       totalAllocatedSize_ -= size;
       b->~LargeBlock();
       AllocTraits::deallocate(alloc(), reinterpret_cast<char*>(b), size);
-    });
+      b = next;
+    }
+    firstLargeBlock_ = lastLargeBlock_ = nullptr;
   }
 
  public:
@@ -211,6 +210,7 @@ class Arena {
   static constexpr size_t kNoSizeLimit = 0;
   static constexpr size_t kDefaultMaxAlign = alignof(Block);
   static constexpr size_t kBlockOverhead = sizeof(Block);
+  static constexpr size_t kLargeBlockOverhead = sizeof(LargeBlock);
 
  private:
   bool isAligned(uintptr_t address) const {
@@ -232,19 +232,23 @@ class Arena {
 
   char* align(char* ptr) { return align_ceil(ptr, maxAlign_); }
 
-  // cache_last<true> makes the list keep a pointer to the last element, so we
-  // have push_back() and constant time splice_after()
-  using BlockList = boost::intrusive::slist<
-      Block,
-      boost::intrusive::member_hook<Block, BlockLink, &Block::link>,
-      boost::intrusive::constant_time_size<false>,
-      boost::intrusive::cache_last<true>>;
+  // A block header plus the most padding align() can add after it, since the
+  // allocator only guarantees alignment for the header.
+  template <typename Header>
+  size_t headerSize() const {
+    return sizeof(Header) + std::max(maxAlign_, alignof(Header)) -
+        alignof(Header);
+  }
 
-  using LargeBlockList = boost::intrusive::slist<
-      LargeBlock,
-      boost::intrusive::member_hook<LargeBlock, BlockLink, &LargeBlock::link>,
-      boost::intrusive::constant_time_size<false>,
-      boost::intrusive::cache_last<true>>;
+  // Appends the chain [first, last], if not empty, to the chain [head, tail].
+  template <typename B>
+  static void append(B*& head, B*& tail, B* first, B* last) {
+    if (!first) {
+      return;
+    }
+    (tail ? tail->next : head) = first;
+    tail = last;
+  }
 
   void* allocateSlow(size_t size);
 
@@ -262,9 +266,14 @@ class Arena {
   const Alloc& alloc() const { return allocAndSize_; }
 
   AllocAndSize allocAndSize_;
-  BlockList blocks_;
-  typename BlockList::iterator currentBlock_;
-  LargeBlockList largeBlocks_;
+  // Blocks are chained through their next pointers. Blocks after
+  // currentBlock_ are free for reuse; currentBlock_ is null only when there
+  // are no blocks.
+  Block* firstBlock_ = nullptr;
+  Block* lastBlock_ = nullptr;
+  Block* currentBlock_ = nullptr;
+  LargeBlock* firstLargeBlock_ = nullptr;
+  LargeBlock* lastLargeBlock_ = nullptr;
   char* ptr_;
   char* end_;
   size_t totalAllocatedSize_;
