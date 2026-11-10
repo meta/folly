@@ -28,9 +28,12 @@ template <class Alloc>
 void* Arena<Alloc>::allocateSlow(size_t size) {
   char* start;
 
+  const bool large = size > minBlockSize();
   size_t allocSize;
   if (!checked_add(
-          &allocSize, std::max(size, minBlockSize()), roundUp(sizeof(Block)))) {
+          &allocSize,
+          std::max(size, minBlockSize()),
+          large ? headerSize<LargeBlock>() : headerSize<Block>())) {
     throw_exception<std::bad_alloc>();
   }
   if (sizeLimit_ != kNoSizeLimit &&
@@ -38,14 +41,13 @@ void* Arena<Alloc>::allocateSlow(size_t size) {
     throw_exception<std::bad_alloc>();
   }
 
-  if (size > minBlockSize()) {
+  if (large) {
     // Allocate a large block for this chunk only; don't change ptr_ and end_,
     // let them point into a normal block (or none, if they're null)
-    allocSize = roundUp(sizeof(LargeBlock)) + size;
     void* mem = AllocTraits::allocate(alloc(), allocSize);
     auto blk = new (mem) LargeBlock(allocSize);
     start = align(blk->start());
-    largeBlocks_.push_back(*blk);
+    append(firstLargeBlock_, lastLargeBlock_, blk, blk);
   } else {
     // Allocate a normal sized block and carve out size bytes from it
     // Will allocate more than size bytes if convenient
@@ -55,8 +57,8 @@ void* Arena<Alloc>::allocateSlow(size_t size) {
     void* mem = AllocTraits::allocate(alloc(), allocSize);
     auto blk = new (mem) Block();
     start = align(blk->start());
-    blocks_.push_back(*blk);
-    currentBlock_ = blocks_.last();
+    append(firstBlock_, lastBlock_, blk, blk);
+    currentBlock_ = blk;
     ptr_ = start + size;
     end_ = static_cast<char*>(mem) + allocSize;
     assert(ptr_ <= end_);
@@ -71,16 +73,26 @@ void Arena<Alloc>::merge(Arena<Alloc>&& other) {
   FOLLY_SAFE_CHECK(
       blockGoodAllocSize() == other.blockGoodAllocSize(),
       "cannot merge arenas of different minBlockSize");
-  const bool wasEmpty = blocks_.empty();
-  blocks_.splice_after(blocks_.before_begin(), other.blocks_);
-  other.blocks_.clear();
-  if (wasEmpty) {
-    // currentBlock_ is still before_begin(); leaving it there would let
-    // canReuseExistingBlock() bump-allocate into a merged block.
-    currentBlock_ = blocks_.last();
+  // Put the other arena's blocks in front of ours, which keeps them out of
+  // reach of canReuseExistingBlock(). Without blocks of our own, they are all
+  // in use, so the last one becomes current.
+  if (other.firstBlock_) {
+    append(other.firstBlock_, other.lastBlock_, firstBlock_, lastBlock_);
+    firstBlock_ = other.firstBlock_;
+    lastBlock_ = other.lastBlock_;
+    if (!currentBlock_) {
+      currentBlock_ = lastBlock_;
+    }
   }
-  largeBlocks_.splice_after(largeBlocks_.before_begin(), other.largeBlocks_);
-  other.largeBlocks_.clear();
+  append(
+      other.firstLargeBlock_,
+      other.lastLargeBlock_,
+      firstLargeBlock_,
+      lastLargeBlock_);
+  firstLargeBlock_ = other.firstLargeBlock_;
+  lastLargeBlock_ = other.lastLargeBlock_;
+  other.firstBlock_ = other.lastBlock_ = other.currentBlock_ = nullptr;
+  other.firstLargeBlock_ = other.lastLargeBlock_ = nullptr;
   other.ptr_ = other.end_ = nullptr;
   totalAllocatedSize_ += other.totalAllocatedSize_;
   other.totalAllocatedSize_ = 0;

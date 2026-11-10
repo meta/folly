@@ -26,7 +26,6 @@ fb_dirsync_cpp_library(
     ],
     use_raw_headers = True,
     exported_deps = [
-        "fbsource//third-party/boost:boost",
         ":allocator",
         ":malloc",
         "//folly:conv",
