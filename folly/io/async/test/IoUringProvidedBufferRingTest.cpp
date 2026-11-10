@@ -22,6 +22,8 @@
 
 #include <gtest/gtest.h>
 
+#include <folly/portability/SysMman.h>
+
 #if FOLLY_HAS_LIBURING
 
 using namespace ::testing;
@@ -55,6 +57,7 @@ class IoUringProvidedBufferRingTestHelper {
 
   uint32_t ringBufferCount() { return ring.ringBufferCount_; }
   uint32_t returnedBuffers() { return ring.bufferReturnedCount; }
+  uint32_t bufferMemSize() { return ring.bufferMemSize_; }
 
   IoUringProvidedBufferRing& ring;
 };
@@ -86,6 +89,39 @@ TEST_F(IoUringProvidedBufferRingTest, CreateNoHugepages) {
   EXPECT_EQ(bufRing->sizePerBuffer(), 4096);
   IoUringProvidedBufferRingTestHelper helper(*bufRing);
   EXPECT_EQ(helper.ringBufferCount(), 2048);
+}
+
+TEST_F(IoUringProvidedBufferRingTest, KernelAllocatedRing) {
+  IoUringProvidedBufferRing::Options options = {
+      .gid = 1,
+      .bufferCount = 512,
+      .bufferSize = 4096,
+  };
+  auto bufRing = IoUringProvidedBufferRing::create(&ring_, options);
+  IoUringProvidedBufferRingTestHelper helper(*bufRing);
+  EXPECT_EQ(helper.bufferMemSize(), 2 * 1024 * 1024);
+
+  auto ringMemSize = sizeof(struct io_uring_buf_ring) * options.bufferCount;
+  off_t offset = IORING_OFF_PBUF_RING |
+      (static_cast<uint64_t>(options.gid) << IORING_OFF_PBUF_SHIFT);
+  auto* ringMem = ::mmap(
+      nullptr,
+      ringMemSize,
+      PROT_READ | PROT_WRITE,
+      MAP_SHARED | MAP_POPULATE,
+      ring_.ring_fd,
+      offset);
+  ASSERT_NE(ringMem, MAP_FAILED);
+  auto* descriptors = static_cast<struct io_uring_buf_ring*>(ringMem);
+  EXPECT_EQ(descriptors->tail, options.bufferCount);
+
+  auto buf = bufRing->getIoBuf(0, 1024, false);
+  EXPECT_EQ(descriptors->bufs[0].addr, reinterpret_cast<uint64_t>(buf->data()));
+  EXPECT_EQ(descriptors->bufs[0].len, options.bufferSize);
+  buf.reset();
+  EXPECT_EQ(descriptors->tail, options.bufferCount + 1);
+
+  EXPECT_EQ(::munmap(ringMem, ringMemSize), 0);
 }
 
 TEST_F(IoUringProvidedBufferRingTest, BufferMinSize) {

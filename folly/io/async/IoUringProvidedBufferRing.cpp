@@ -26,7 +26,6 @@
 namespace {
 constexpr uint32_t kMinBufferSize = 32;
 constexpr uint32_t kHugePageSizeBytes = 1024 * 1024 * 2;
-constexpr uint32_t kBufferAlignBytes = 32;
 constexpr uint32_t kMaxRingRefillEntries = 32768;
 } // namespace
 
@@ -56,43 +55,64 @@ IoUringProvidedBufferRing::UniquePtr IoUringProvidedBufferRing::create(
       new IoUringProvidedBufferRing(ioRingPtr, options));
 }
 
-void IoUringProvidedBufferRing::mapMemory() {
-  uint32_t ringMemSize = sizeof(struct io_uring_buf) * ringBufferCount_;
-  ringMemSize =
-      folly::to_narrow(folly::align_ceil(ringMemSize, kBufferAlignBytes));
+void IoUringProvidedBufferRing::mapBuffers() {
+  bufferMemSize_ = folly::to_narrow(
+      folly::align_ceil(
+          static_cast<size_t>(sizePerBuffer_) * ringBufferCount_,
+          kHugePageSizeBytes));
 
-  auto bufferSize = sizePerBuffer_ * ringBufferCount_;
-  allSize_ = ringMemSize + bufferSize;
-
-  int pages;
-  allSize_ = folly::to_narrow(folly::align_ceil(allSize_, kHugePageSizeBytes));
-  pages = allSize_ / kHugePageSizeBytes;
-
-  buffer_ = ::mmap(
+  auto* buffer = ::mmap(
       nullptr,
-      allSize_,
+      bufferMemSize_,
       PROT_READ | PROT_WRITE,
       MAP_ANONYMOUS | MAP_PRIVATE,
       -1,
       0);
 
-  if (buffer_ == MAP_FAILED) {
+  if (buffer == MAP_FAILED) {
     auto errnoCopy = errno;
     throw std::runtime_error(
         folly::to<std::string>(
             "unable to allocate pages of size ",
-            allSize_,
+            bufferMemSize_,
             " pages=",
-            pages,
+            bufferMemSize_ / kHugePageSizeBytes,
             ": ",
             folly::errnoStr(errnoCopy)));
   }
 
-  ringPtr_ = static_cast<struct io_uring_buf_ring*>(buffer_);
-  bufferBuffer_ = static_cast<char*>(buffer_) + ringMemSize;
+  bufferBuffer_ = static_cast<char*>(buffer);
 
-  int ret = ::madvise(buffer_, allSize_, MADV_HUGEPAGE);
+  int ret = ::madvise(bufferBuffer_, bufferMemSize_, MADV_HUGEPAGE);
   PLOG_IF(ERROR, ret) << "cannot enable huge pages";
+}
+
+void IoUringProvidedBufferRing::mapRing() {
+  auto memSize = ringMemSize();
+  off_t offset = IORING_OFF_PBUF_RING |
+      (static_cast<uint64_t>(gid_) << IORING_OFF_PBUF_SHIFT);
+
+  auto ringMem = ::mmap(
+      nullptr,
+      memSize,
+      PROT_READ | PROT_WRITE,
+      MAP_SHARED | MAP_POPULATE,
+      ringIoPtr->ring_fd,
+      offset);
+
+  if (ringMem == MAP_FAILED) {
+    auto errnoCopy = errno;
+    ::io_uring_unregister_buf_ring(ringIoPtr, gid_);
+    ::munmap(bufferBuffer_, bufferMemSize_);
+    throw std::runtime_error(
+        folly::to<std::string>(
+            "unable to map ring memory of size ",
+            memSize,
+            ": ",
+            folly::errnoStr(errnoCopy)));
+  }
+
+  ringPtr_ = static_cast<struct io_uring_buf_ring*>(ringMem);
 }
 
 IoUringProvidedBufferRing::IoUringProvidedBufferRing(
@@ -126,8 +146,9 @@ IoUringProvidedBufferRing::IoUringProvidedBufferRing(
     ringBufferCount_ = adjustedBufferCount;
   }
 
-  mapMemory();
+  mapBuffers();
   initialRegister();
+  mapRing();
 
   bufferStates_ = std::make_unique<BufferState[]>(ringBufferCount_);
   for (uint16_t i = 0; i < ringBufferCount_; i++) {
@@ -293,11 +314,10 @@ std::unique_ptr<IOBuf> IoUringProvidedBufferRing::getIoBuf(
 void IoUringProvidedBufferRing::initialRegister() {
   struct io_uring_buf_reg reg{};
   memset(&reg, 0, sizeof(reg));
-  reg.ring_addr = reinterpret_cast<__u64>(ringPtr_);
   reg.ring_entries = ringBufferCount_;
   reg.bgid = gid_;
 
-  int flags = useIncremental_ ? IOU_PBUF_RING_INC : 0;
+  int flags = IOU_PBUF_RING_MMAP | (useIncremental_ ? IOU_PBUF_RING_INC : 0);
   int ret = ::io_uring_register_buf_ring(ringIoPtr, &reg, flags);
 
   if (ret) {
@@ -319,7 +339,8 @@ void IoUringProvidedBufferRing::initialRegister() {
 
 void IoUringProvidedBufferRing::delayedDestroy(uint32_t refs) noexcept {
   if (refs == 0) {
-    ::munmap(buffer_, allSize_);
+    ::munmap(ringPtr_, ringMemSize());
+    ::munmap(bufferBuffer_, bufferMemSize_);
     delete this;
   }
 }

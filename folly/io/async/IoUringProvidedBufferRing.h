@@ -100,8 +100,12 @@ class IoUringProvidedBufferRing {
   IoUringProvidedBufferRing& operator=(IoUringProvidedBufferRing const&) =
       delete;
 
-  void mapMemory();
+  void mapBuffers();
+  void mapRing();
   void initialRegister();
+  size_t ringMemSize() const noexcept {
+    return sizeof(struct io_uring_buf_ring) * ringBufferCount_;
+  }
 
   void returnBuffer(uint16_t i) noexcept;
 
@@ -166,8 +170,7 @@ class IoUringProvidedBufferRing {
   alignas(folly::hardware_constructive_interference_size) io_uring* ringIoPtr;
   uint32_t shutdownReferences_{0};
   uint16_t const gid_{0};
-  uint32_t allSize_{0};
-  void* buffer_{nullptr};
+  uint32_t bufferMemSize_{0};
 };
 
 } // namespace folly
