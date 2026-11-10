@@ -1350,17 +1350,13 @@ void AsyncSocket::setErrMessageCB(ErrMessageCallback* callback) {
   VLOG(6) << "AsyncSocket::setErrMessageCB() this=" << this << ", fd=" << fd_
           << ", callback=" << callback << ", state=" << state_;
 
-  // In the latest stable kernel 4.14.3 as of 2017-12-04, unix domain
-  // socket does not support MSG_ERRQUEUE. So recvmsg(MSG_ERRQUEUE)
-  // will read application data from unix domain socket as error
-  // message, which breaks the message flow in application.  Feel free
-  // to remove the next code block if MSG_ERRQUEUE is added for unix
-  // domain socket in the future.
+  // Linux Unix domain sockets do not have an error queue. MSG_ERRQUEUE is
+  // ignored by AF_UNIX recvmsg(), which can consume normal application data.
   if (callback != nullptr) {
     cacheLocalAddress();
     if (localAddr_.getFamily() == AF_UNIX) {
       LOG(ERROR) << "Failed to set ErrMessageCallback=" << callback
-                 << " for Unix Doamin Socket where MSG_ERRQUEUE is unsupported,"
+                 << " for Unix Domain Socket where MSG_ERRQUEUE is unsupported,"
                  << " fd=" << fd_;
       return;
     }
@@ -1939,11 +1935,10 @@ void AsyncSocket::enableByteEvents() {
     //     kernel offset tracks the last unacknowledged byte, not the last
     //     written byte, the offset will end up being off.
     //
-    // There is already a fix in the Linux kernel to reset the kernel offset
-    // according to write_seq (written bytes) instead of snd_una (unacknowledged
-    // bytes) [1].
-    //
-    // For kernels without this patch, we adopt the following solution:
+    // Linux provides SOF_TIMESTAMPING_OPT_ID_TCP to initialize the offset from
+    // write_seq (written bytes) instead of snd_una (unacknowledged bytes) [1].
+    // AsyncSocket retains the following correction for kernels that predate
+    // that option.
     //
     // (1) We record the number of sent bytes and unacknowledged bytes before
     //     and after enabling byte events. If they change, we disable and

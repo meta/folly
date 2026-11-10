@@ -11023,17 +11023,9 @@ TEST(AsyncSocketTest, ReceiveTruncatedAncillaryDataUnhandled) {
 }
 
 TEST(AsyncSocketTest, UnixDomainSocketErrMessageCB) {
-  // In the latest stable kernel 4.14.3 as of 2017-12-04, Unix Domain
-  // Socket (UDS) does not support MSG_ERRQUEUE. So
-  // recvmsg(MSG_ERRQUEUE) will read application data from UDS which
-  // breaks application message flow.  To avoid this problem,
-  // AsyncSocket currently disables setErrMessageCB for UDS.
-  //
-  // This tests two things for UDS
-  // 1. setErrMessageCB fails
-  // 2. recvmsg(MSG_ERRQUEUE) reads application data
-  //
-  // Feel free to remove this test if UDS supports MSG_ERRQUEUE in the future.
+  // Linux AF_UNIX ignores MSG_ERRQUEUE, so recvmsg() consumes ordinary data.
+  // Verify that AsyncSocket declines the callback and that the behavior it
+  // protects against is still present.
 
   NetworkSocket fd[2];
   EXPECT_EQ(netops::socketpair(AF_UNIX, SOCK_STREAM, 0, fd), 0);

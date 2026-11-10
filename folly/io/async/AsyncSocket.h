@@ -98,10 +98,6 @@ class AsyncDetachFdCallback {
 #define SO_NO_TSOCKS 201
 #endif
 
-#if defined(FOLLY_HAVE_SO_TIMESTAMPING) && FOLLY_HAVE_SO_TIMESTAMPING
-#define SO_MAX_ATTEMPTS_ENABLE_BYTEEVENTS 10
-#endif
-
 class AsyncSocket
     : public AsyncSocketTransport,
       public IoUringSendCallback,
@@ -1109,11 +1105,10 @@ class AsyncSocket
   size_t getRecvBufInUse() const;
 #endif
 
-/**
- * Sets a specific tcp personality
- * Available only on kernels 3.2 and greater
- */
+/** Applies a TCP personality through Meta's SO_SET_NAMESPACE socket option. */
+#ifndef SO_SET_NAMESPACE
 #define SO_SET_NAMESPACE 41
+#endif
   int setTCPProfile(int profd);
 
   /**
