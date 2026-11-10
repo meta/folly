@@ -21,6 +21,7 @@
 #endif
 
 #include <deque>
+#include <string_view>
 
 #include <glog/logging.h>
 
@@ -42,7 +43,7 @@ using namespace std;
 namespace {
 class Reader {
  public:
-  Reader(off_t offset, StringPiece data, std::deque<ssize_t> spec);
+  Reader(off_t offset, std::string_view data, std::deque<ssize_t> spec);
 
   // write-like
   ssize_t operator()(int fd, void* buf, size_t count);
@@ -60,11 +61,11 @@ class Reader {
   ssize_t nextSize();
 
   off_t offset_;
-  StringPiece data_;
+  std::string_view data_;
   std::deque<ssize_t> spec_;
 };
 
-Reader::Reader(off_t offset, StringPiece data, std::deque<ssize_t> spec)
+Reader::Reader(off_t offset, std::string_view data, std::deque<ssize_t> spec)
     : offset_(offset), data_(data), spec_(std::move(spec)) {}
 
 ssize_t Reader::nextSize() {
@@ -106,7 +107,7 @@ ssize_t Reader::operator()(int /* fd */, void* buf, size_t count) {
 #endif
   }
   memcpy(buf, data_.data(), n);
-  data_.advance(n);
+  data_.remove_prefix(n);
   return n;
 }
 
@@ -124,7 +125,7 @@ ssize_t Reader::operator()(int /* fd */, const iovec* iov, int count) {
   for (; count != 0 && remaining != 0; ++iov, --count) {
     ssize_t len = std::min(remaining, ssize_t(iov->iov_len));
     memcpy(iov->iov_base, data_.data(), len);
-    data_.advance(len);
+    data_.remove_prefix(len);
     remaining -= len;
   }
   if (remaining != 0) {
@@ -285,7 +286,7 @@ TEST_F(FileUtilTest, writeVStderr) {
   // would call lockf(), and this would hang and eventually fail for stderr.
   std::vector<iovec> iov;
   size_t totalSize = 0;
-  auto addBuf = [&](StringPiece str) {
+  auto addBuf = [&](std::string_view str) {
     iov.emplace_back();
     iov.back().iov_base = const_cast<char*>(str.data());
     iov.back().iov_len = str.size();
@@ -305,7 +306,7 @@ TEST(String, readFile) {
   auto emptyFile = emptyFileTemp.path().string();
 
   EXPECT_TRUE(writeFile(string(), emptyFile.c_str()));
-  EXPECT_TRUE(writeFile(StringPiece("bar"), afile.c_str()));
+  EXPECT_TRUE(writeFile(std::string_view("bar"), afile.c_str()));
 
   {
     string contents;
@@ -334,7 +335,8 @@ TEST(String, readFile) {
 class ReadFileFd : public ::testing::Test {
  protected:
   void SetUp() override {
-    ASSERT_TRUE(writeFile(StringPiece("bar"), aFile.path().string().c_str()));
+    ASSERT_TRUE(
+        writeFile(std::string_view("bar"), aFile.path().string().c_str()));
   }
 
   TemporaryFile aFile;
@@ -407,8 +409,8 @@ class WriteFileAtomic : public ::testing::Test {
     return (statFile(path).st_mode & 0777);
   }
 
-  string tmpPath(StringPiece name) {
-    return tmpDir_.path().string() + "/" + name.str();
+  string tmpPath(std::string_view name) {
+    return tmpDir_.path().string() + "/" + std::string(name);
   }
 
   void setDirPerms(mode_t mode) {
@@ -422,7 +424,7 @@ class WriteFileAtomic : public ::testing::Test {
 TEST_F(WriteFileAtomic, writeNew) {
   // Call writeFileAtomic() to create a new file
   auto path = tmpPath("foo");
-  auto contents = StringPiece{"contents\n"};
+  auto contents = std::string_view{"contents\n"};
   writeFileAtomic(path, contents);
 
   // The directory should contain exactly 1 file now, with the correct contents
@@ -434,7 +436,7 @@ TEST_F(WriteFileAtomic, writeNew) {
 TEST_F(WriteFileAtomic, withSync) {
   // Call writeFileAtomic() to create a new file
   auto path = tmpPath("foo");
-  auto contents = StringPiece{"contents\n"};
+  auto contents = std::string_view{"contents\n"};
   auto permissions = mode_t{0644};
   writeFileAtomic(path, contents, permissions, SyncType::WITH_SYNC);
 
@@ -447,7 +449,7 @@ TEST_F(WriteFileAtomic, withSync) {
 TEST_F(WriteFileAtomic, overwrite) {
   // Call writeFileAtomic() to create a new file
   auto path = tmpPath("foo");
-  auto contents1 = StringPiece{"contents\n"};
+  auto contents1 = std::string_view{"contents\n"};
   writeFileAtomic(path, contents1);
 
   EXPECT_EQ(set<string>{"foo"}, listTmpDir());
@@ -455,7 +457,7 @@ TEST_F(WriteFileAtomic, overwrite) {
   EXPECT_EQ(0644, getPerms(path));
 
   // Now overwrite the file with different contents
-  auto contents2 = StringPiece{"testing"};
+  auto contents2 = std::string_view{"testing"};
   writeFileAtomic(path, contents2);
   EXPECT_EQ(set<string>{"foo"}, listTmpDir());
   EXPECT_EQ(contents2, readData(path));
@@ -475,7 +477,7 @@ TEST_F(WriteFileAtomic, overwrite) {
   // but we writeFileAtomic() should still replace it successfully.  Since we
   // update it with a rename we need write permissions on the parent directory,
   // but not the destination file.
-  auto contents4 = StringPiece("");
+  auto contents4 = std::string_view("");
   writeFileAtomic(path, contents4, 0400);
   EXPECT_EQ(set<string>{"foo"}, listTmpDir());
   EXPECT_EQ(contents4, readData(path));
@@ -501,7 +503,7 @@ TEST_F(WriteFileAtomic, directoryPermissions) {
 
   // writeFileAtomic() should fail, and the directory should still be empty
   auto path1 = tmpPath("foo");
-  auto contents = StringPiece("testing");
+  auto contents = std::string_view("testing");
   EXPECT_THROW(writeFileAtomic(path1, contents), std::system_error);
   EXPECT_EQ(set<string>{}, listTmpDir());
 
@@ -623,7 +625,7 @@ TEST_F(WriteFileAtomic, chmodFailure) {
   EXPECT_EQ(set<string>{}, listTmpDir());
 
   // Now create a file normally so we can overwrite it
-  auto contents = StringPiece("regular perms");
+  auto contents = std::string_view("regular perms");
   writeFileAtomic(path, contents, 0600);
   EXPECT_EQ(contents, readData(path));
   EXPECT_EQ(0600, getPerms(path));

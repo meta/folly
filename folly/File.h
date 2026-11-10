@@ -25,12 +25,13 @@
 #include <sys/types.h>
 
 #include <string>
+#include <string_view>
 #include <system_error>
+#include <utility>
 
 #include <folly/ExceptionWrapper.h>
 #include <folly/Expected.h>
 #include <folly/Portability.h>
-#include <folly/Range.h>
 #include <folly/portability/Fcntl.h>
 #include <folly/portability/Unistd.h>
 
@@ -63,7 +64,8 @@ class File {
   explicit File(const char* name, int flags = O_RDONLY, mode_t mode = 0666);
   explicit File(
       const std::string& name, int flags = O_RDONLY, mode_t mode = 0666);
-  explicit File(StringPiece name, int flags = O_RDONLY, mode_t mode = 0666);
+  explicit File(
+      std::string_view name, int flags = O_RDONLY, mode_t mode = 0666);
 
   /**
    * All the constructors that are not noexcept can throw std::system_error.

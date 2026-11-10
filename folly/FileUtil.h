@@ -22,6 +22,7 @@
 #include <cassert>
 #include <filesystem>
 #include <limits>
+#include <string_view>
 
 #include <folly/Portability.h>
 #include <folly/Range.h>
@@ -319,24 +320,26 @@ class WriteFileAtomicOptions {
  * modification is durable.
  */
 void writeFileAtomic(
-    StringPiece filePath,
+    std::string_view filePath,
     iovec* iov,
     int count,
     mode_t permissions = 0644,
     SyncType syncType = SyncType::WITHOUT_SYNC);
 void writeFileAtomic(
-    StringPiece filePath,
+    std::string_view filePath,
     ByteRange data,
     mode_t permissions = 0644,
     SyncType syncType = SyncType::WITHOUT_SYNC);
 void writeFileAtomic(
-    StringPiece filePath,
-    StringPiece data,
+    std::string_view filePath,
+    std::string_view data,
     mode_t permissions = 0644,
     SyncType syncType = SyncType::WITHOUT_SYNC);
 
 void writeFileAtomic(
-    StringPiece filePath, StringPiece data, const WriteFileAtomicOptions&);
+    std::string_view filePath,
+    std::string_view data,
+    const WriteFileAtomicOptions&);
 
 /**
  * A version of writeFileAtomic() that returns an errno value instead of
@@ -345,14 +348,16 @@ void writeFileAtomic(
  * Returns 0 on success or an errno value on error.
  */
 int writeFileAtomicNoThrow(
-    StringPiece filePath,
+    std::string_view filePath,
     iovec* iov,
     int count,
     mode_t permissions = 0644,
     SyncType syncType = SyncType::WITHOUT_SYNC);
 
 int writeFileAtomicNoThrow(
-    StringPiece filePath, StringPiece data, const WriteFileAtomicOptions&);
+    std::string_view filePath,
+    std::string_view data,
+    const WriteFileAtomicOptions&);
 
 #endif // !_WIN32
 

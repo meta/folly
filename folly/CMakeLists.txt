@@ -482,7 +482,6 @@ folly_add_library(
     folly_portability
     folly_portability_fcntl
     folly_portability_unistd
-    folly_range
 )
 
 folly_add_library(

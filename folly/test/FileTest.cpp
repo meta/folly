@@ -18,6 +18,7 @@
 
 #include <fstream>
 #include <random>
+#include <string_view>
 
 #include <fmt/core.h>
 #include <glog/logging.h>
@@ -72,13 +73,13 @@ TEST(File, Simple) {
   }
 }
 
-TEST(File, SimpleStringPiece) {
+TEST(File, SimpleStringView) {
   TempDir tmpd;
   auto tmpf = tmpd.path / "foobar.txt";
   std::ofstream{tmpf.native()} << "hello world" << std::endl;
 
   char buf = 'x';
-  File f(StringPiece(tmpf.string()));
+  File f(std::string_view(tmpf.string()));
   EXPECT_NE(-1, f.fd());
   EXPECT_EQ(1, fileops::read(f.fd(), &buf, 1));
   f.close();
@@ -190,7 +191,7 @@ TEST(File, HelperCtor) {
   TempDir tmpd;
   auto tmpf = tmpd.path / "foobar.txt";
 
-  File::makeFile(StringPiece(tmpf.string())).then([](File&& f) {
+  File::makeFile(std::string_view(tmpf.string())).then([](File&& f) {
     char buf = 'x';
     EXPECT_NE(-1, f.fd());
     EXPECT_EQ(1, fileops::read(f.fd(), &buf, 1));

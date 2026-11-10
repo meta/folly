@@ -55,8 +55,8 @@ File::File(const char* name, int flags, mode_t mode)
 File::File(const std::string& name, int flags, mode_t mode)
     : File(name.c_str(), flags, mode) {}
 
-File::File(StringPiece name, int flags, mode_t mode)
-    : File(name.str(), flags, mode) {}
+File::File(std::string_view name, int flags, mode_t mode)
+    : File(std::string(name), flags, mode) {}
 
 File::File(File&& other) noexcept : fd_(other.fd_), ownsFd_(other.ownsFd_) {
   other.release();

@@ -226,7 +226,7 @@ WriteFileAtomicOptions& WriteFileAtomicOptions::setTemporaryDirectory(
 
 namespace {
 void throwIfWriteFileAtomicFailed(
-    StringPiece function, StringPiece filename, std::int64_t rc) {
+    std::string_view function, std::string_view filename, std::int64_t rc) {
   if (rc != 0) {
     auto msg =
         std::string{function} + "() failed to update " + std::string{filename};
@@ -241,7 +241,7 @@ void throwIfWriteFileAtomicFailed(
 // always be valid, even if we crash or are killed partway through writing out
 // data.
 int writeFileAtomicNoThrowImpl(
-    StringPiece filename,
+    std::string_view filename,
     iovec* iov,
     int count,
     const WriteFileAtomicOptions& options) {
@@ -301,7 +301,7 @@ int writeFileAtomicNoThrowImpl(
 } // namespace
 
 int writeFileAtomicNoThrow(
-    StringPiece filename,
+    std::string_view filename,
     iovec* iov,
     int count,
     mode_t permissions,
@@ -316,15 +316,15 @@ int writeFileAtomicNoThrow(
 }
 
 int writeFileAtomicNoThrow(
-    StringPiece filename,
-    StringPiece data,
+    std::string_view filename,
+    std::string_view data,
     const WriteFileAtomicOptions& options) {
   auto iov = getIOVecFor(ByteRange{data});
   return writeFileAtomicNoThrowImpl(filename, &iov, 1, options);
 }
 
 void writeFileAtomic(
-    StringPiece filename,
+    std::string_view filename,
     iovec* iov,
     int count,
     mode_t permissions,
@@ -340,7 +340,7 @@ void writeFileAtomic(
 }
 
 void writeFileAtomic(
-    StringPiece filename,
+    std::string_view filename,
     ByteRange data,
     mode_t permissions,
     SyncType syncType) {
@@ -349,16 +349,16 @@ void writeFileAtomic(
 }
 
 void writeFileAtomic(
-    StringPiece filename,
-    StringPiece data,
+    std::string_view filename,
+    std::string_view data,
     mode_t permissions,
     SyncType syncType) {
   writeFileAtomic(filename, ByteRange(data), permissions, syncType);
 }
 
 void writeFileAtomic(
-    StringPiece filename,
-    StringPiece data,
+    std::string_view filename,
+    std::string_view data,
     const WriteFileAtomicOptions& options) {
   auto iov = getIOVecFor(ByteRange{data});
   auto rc = writeFileAtomicNoThrowImpl(filename, &iov, 1, options);

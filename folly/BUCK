@@ -268,7 +268,6 @@ fb_dirsync_cpp_library(
         ":expected",
         ":file_util",  # @manual
         ":portability",
-        ":range",
         "//folly/portability:fcntl",
         "//folly/portability:unistd",
     ],
