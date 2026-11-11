@@ -32,13 +32,12 @@ DwarfLineNumberVM::DwarfLineNumberVM(
     : compilationDirectory_(compilationDirectory),
       debugSections_(debugSections) {
   DwarfSection section(data);
-  std::span<const uint8_t> chunk;
-  if (!section.next(chunk)) {
-    FOLLY_SAFE_DFATAL("invalid line number VM");
+  auto chunk = section.next();
+  if (chunk.hasError() || !chunk->hasValue()) {
     reset();
     return;
   }
-  data_ = chunk;
+  data_ = **chunk;
   is64Bit_ = section.is64Bit();
   initializationSuccess_ = init();
 }

@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <span>
 
+#include <folly/Optional.h>
+#include <folly/debugging/symbolizer/DwarfCursor.h>
 #include <folly/portability/Config.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
@@ -42,7 +44,7 @@ class DwarfSection {
    * Return next chunk, if any; the 4- or 12-byte length was already
    * parsed and isn't part of the chunk.
    */
-  bool next(std::span<const uint8_t>& chunk);
+  DwarfParseResult<folly::Optional<std::span<const uint8_t>>> next();
 
   /** Is the current chunk 64 bit? */
   bool is64Bit() const { return is64Bit_; }
@@ -51,6 +53,7 @@ class DwarfSection {
   // Yes, 32- and 64- bit sections may coexist.  Yikes!
   bool is64Bit_;
   std::span<const uint8_t> data_;
+  size_t offset_ = 0;
 };
 
 } // namespace symbolizer

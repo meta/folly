@@ -16,7 +16,9 @@
 
 #include <folly/debugging/symbolizer/DwarfSection.h>
 
-#include <folly/debugging/symbolizer/DwarfUtil.h>
+#include <limits>
+
+#include <folly/debugging/symbolizer/detail/DwarfConstants.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
 
@@ -26,32 +28,45 @@ namespace symbolizer {
 DwarfSection::DwarfSection(std::span<const uint8_t> data)
     : is64Bit_(false), data_(data) {}
 
-// Next chunk in section
-bool DwarfSection::next(std::span<const uint8_t>& chunk) {
-  auto cursor = data_;
-  if (cursor.empty()) {
-    return false;
+DwarfParseResult<folly::Optional<std::span<const uint8_t>>>
+DwarfSection::next() {
+  if (data_.empty()) {
+    return folly::Optional<std::span<const uint8_t>>{};
   }
 
+  DwarfCursor cursor(data_, offset_);
   // Initial length is a uint32_t value for a 32-bit section, and
   // a 96-bit value (0xffffffff followed by the 64-bit length) for a 64-bit
-  // section. Either read below aborts on truncation, so check first.
-  if (data_.size() < sizeof(uint32_t)) {
-    return false;
+  // section.
+  auto initialLength = cursor.read<uint32_t>();
+  if (initialLength.hasError()) {
+    return makeUnexpected(initialLength.error());
   }
-  auto initialLength = read<uint32_t>(cursor);
-  is64Bit_ = (initialLength == uint32_t(-1));
-  if (is64Bit_ && cursor.size() < sizeof(uint64_t)) {
-    return false;
+  const bool is64Bit = *initialLength == std::numeric_limits<uint32_t>::max();
+  uint64_t length = *initialLength;
+  if (is64Bit) {
+    auto extendedLength = cursor.read<uint64_t>();
+    if (extendedLength.hasError()) {
+      return makeUnexpected(extendedLength.error());
+    }
+    length = *extendedLength;
+  } else if (*initialLength >= kDwarfReservedInitialLengthStart) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_value, offset_});
   }
-  auto length = is64Bit_ ? read<uint64_t>(cursor) : initialLength;
-  if (length > cursor.size()) {
-    return false;
+  if (length > cursor.remaining().size()) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::truncated, cursor.offset()});
   }
-  auto headerSize = data_.size() - cursor.size();
-  chunk = data_.subspan(headerSize, length);
-  data_ = data_.subspan(headerSize + length);
-  return true;
+
+  const size_t headerSize = cursor.offset() - offset_;
+  const size_t chunkSize = static_cast<size_t>(length);
+  auto chunk = data_.subspan(headerSize, chunkSize);
+  const size_t consumedSize = headerSize + chunkSize;
+  data_ = data_.subspan(consumedSize);
+  offset_ += consumedSize;
+  is64Bit_ = is64Bit;
+  return folly::Optional<std::span<const uint8_t>>{chunk};
 }
 
 } // namespace symbolizer

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <folly/debugging/symbolizer/DwarfSection.h>
 #include <folly/debugging/symbolizer/DwarfUtil.h>
 
 #include <cstdint>
@@ -715,6 +716,85 @@ TEST(DwarfUtil, ReadAttributeRejectsInvalidStringIndex) {
 
   ASSERT_TRUE(result.hasError());
   EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
+}
+
+TEST(DwarfSection, Reads32And64BitChunks) {
+  std::vector<uint8_t> bytes;
+  append<uint32_t>(bytes, 2);
+  bytes.push_back(0x11);
+  bytes.push_back(0x22);
+  append<uint32_t>(bytes, std::numeric_limits<uint32_t>::max());
+  append<uint64_t>(bytes, 3);
+  bytes.push_back(0x33);
+  bytes.push_back(0x44);
+  bytes.push_back(0x55);
+  DwarfSection section(bytes);
+
+  auto dwarf32 = section.next();
+  ASSERT_TRUE(dwarf32.hasValue());
+  ASSERT_TRUE(dwarf32->hasValue());
+  EXPECT_FALSE(section.is64Bit());
+  EXPECT_EQ(size_t{2}, (**dwarf32).size());
+  EXPECT_EQ(uint8_t{0x11}, (**dwarf32)[0]);
+  EXPECT_EQ(uint8_t{0x22}, (**dwarf32)[1]);
+
+  auto dwarf64 = section.next();
+  ASSERT_TRUE(dwarf64.hasValue());
+  ASSERT_TRUE(dwarf64->hasValue());
+  EXPECT_TRUE(section.is64Bit());
+  EXPECT_EQ(size_t{3}, (**dwarf64).size());
+  EXPECT_EQ(uint8_t{0x33}, (**dwarf64)[0]);
+  EXPECT_EQ(uint8_t{0x55}, (**dwarf64)[2]);
+
+  auto end = section.next();
+  ASSERT_TRUE(end.hasValue());
+  EXPECT_FALSE(end->hasValue());
+}
+
+TEST(DwarfSection, ReadsEmptySectionAsEnd) {
+  const std::vector<uint8_t> bytes;
+  DwarfSection section(bytes);
+
+  auto end = section.next();
+
+  ASSERT_TRUE(end.hasValue());
+  EXPECT_FALSE(end->hasValue());
+}
+
+TEST(DwarfSection, RejectsTruncatedLengthHeader) {
+  const std::vector<uint8_t> bytes{0x01, 0x02, 0x03};
+  DwarfSection section(bytes);
+
+  auto result = section.next();
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::truncated, result.error().code);
+  EXPECT_EQ(size_t{0}, result.error().offset);
+}
+
+TEST(DwarfSection, RejectsTruncatedChunk) {
+  std::vector<uint8_t> bytes;
+  append<uint32_t>(bytes, 4);
+  bytes.push_back(0x01);
+  bytes.push_back(0x02);
+  DwarfSection section(bytes);
+
+  auto result = section.next();
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::truncated, result.error().code);
+  EXPECT_EQ(size_t{4}, result.error().offset);
+}
+
+TEST(DwarfSection, RejectsReservedInitialLength) {
+  std::vector<uint8_t> bytes;
+  append<uint32_t>(bytes, 0xfffffff0);
+  DwarfSection section(bytes);
+
+  auto result = section.next();
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
 }
 
 } // namespace

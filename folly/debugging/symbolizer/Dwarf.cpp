@@ -17,6 +17,7 @@
 #include <folly/debugging/symbolizer/Dwarf.h>
 
 #include <array>
+#include <limits>
 #include <type_traits>
 
 #include <folly/debugging/symbolizer/DwarfImpl.h>
@@ -70,57 +71,59 @@ namespace {
 bool findDebugInfoOffset(
     uintptr_t address, std::span<const uint8_t> aranges, uint64_t& offset) {
   DwarfSection section(aranges);
-  std::span<const uint8_t> chunk;
-  while (section.next(chunk)) {
-    auto version = read<uint16_t>(chunk);
-    if (version != 2) {
-      FOLLY_SAFE_DFATAL("invalid aranges version: ", version);
+  for (;;) {
+    auto chunk = section.next();
+    if (chunk.hasError()) {
       return false;
     }
+    if (!chunk->hasValue()) {
+      break;
+    }
+    DwarfCursor cursor(**chunk);
 
-    offset = readOffset(chunk, section.is64Bit());
-    auto addressSize = read<uint8_t>(chunk);
-    if (addressSize != sizeof(uintptr_t)) {
-      FOLLY_SAFE_DFATAL("invalid address size: ", addressSize);
+    auto version = cursor.read<uint16_t>();
+    if (version.hasError() || *version != 2) {
       return false;
     }
-    auto segmentSize = read<uint8_t>(chunk);
-    if (segmentSize != 0) {
-      FOLLY_SAFE_DFATAL("segmented architecture not supported: ", segmentSize);
+    auto infoOffset = cursor.readOffset(section.is64Bit());
+    auto addressSize = cursor.read<uint8_t>();
+    auto segmentSize = cursor.read<uint8_t>();
+    if (infoOffset.hasError() || addressSize.hasError() ||
+        segmentSize.hasError() || *addressSize != sizeof(uintptr_t) ||
+        *segmentSize != 0) {
       return false;
     }
+    offset = *infoOffset;
 
     // Padded to a multiple of 2 addresses.
     // Strangely enough, this is the only place in the DWARF spec that requires
     // padding.
     {
       size_t alignment = 2 * sizeof(uintptr_t);
-      size_t remainder = (chunk.data() - aranges.data()) % alignment;
+      size_t remainder =
+          (cursor.remaining().data() - aranges.data()) % alignment;
       if (remainder != 0) {
-        if (alignment - remainder > chunk.size()) {
-          FOLLY_SAFE_DFATAL(
-              "invalid padding: alignment: ",
-              alignment,
-              " remainder: ",
-              remainder,
-              " chunk.size(): ",
-              chunk.size());
+        auto padding = cursor.readBytes(alignment - remainder);
+        if (padding.hasError()) {
           return false;
         }
-        chunk = chunk.subspan(alignment - remainder);
       }
     }
 
     for (;;) {
-      auto start = read<uintptr_t>(chunk);
-      auto length = read<uintptr_t>(chunk);
+      auto start = cursor.read<uintptr_t>();
+      auto length = cursor.read<uintptr_t>();
+      if (start.hasError() || length.hasError()) {
+        return false;
+      }
 
-      if (start == 0 && length == 0) {
+      if (*start == 0 && *length == 0) {
         break;
       }
 
       // Is our address in this range?
-      if (address >= start && address < start + length) {
+      if (*length <= std::numeric_limits<uintptr_t>::max() - *start &&
+          address >= *start && address < *start + *length) {
         return true;
       }
     }
