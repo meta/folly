@@ -3003,7 +3003,10 @@ TEST(F14Map, constinitDefaultConstruct) {
 namespace {
 struct ForwardDeclaredMapped;
 F14NodeMap<int, ForwardDeclaredMapped> nodeMapOfForwardDeclared; // NOLINT
+// MSVC needs the complete value type to instantiate F14VectorMap's policy.
+#if !defined(_MSC_VER) || defined(__clang__)
 F14VectorMap<int, ForwardDeclaredMapped> vectorMapOfForwardDeclared; // NOLINT
+#endif
 struct ForwardDeclaredMapped {};
 } // namespace
 #endif
