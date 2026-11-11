@@ -1009,8 +1009,8 @@ void piecesTest() {
   EXPECT_EQ(pieces.size(), 2);
   EXPECT_EQ(pieces[0], "a");
   EXPECT_EQ(pieces[1], "b");
-  EXPECT_EQ(pieces[0].begin(), str);
-  EXPECT_EQ(pieces[1].begin(), str + 2);
+  EXPECT_EQ(pieces[0].data(), str);
+  EXPECT_EQ(pieces[1].data(), str + 2);
 
   std::set<Str> unique;
   folly::splitTo<Str>(
