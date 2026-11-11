@@ -78,7 +78,6 @@ fb_dirsync_cpp_unittest(
     include_directories = [
         "..",
     ],
-    modifiers = ["ovr_config//project/folly:folly[fbcode]"],
     platforms = (ANDROID, APPLE, CXX, WINDOWS),
     use_instrumentation_test = True,
     deps = [
@@ -113,7 +112,6 @@ fb_dirsync_cpp_unittest(
     include_directories = [
         "..",
     ],
-    modifiers = ["ovr_config//project/folly:folly[fbcode]"],
     platforms = (ANDROID, APPLE, CXX, WINDOWS),
     use_instrumentation_test = True,
     deps = [
