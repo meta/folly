@@ -25,6 +25,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -823,6 +824,15 @@ class small_vector
       erase(begin() + sz, end());
       FOLLY_POP_WARNING
       return;
+    }
+    if (sz > capacity() && !empty()) {
+      auto less = std::less<value_type const*>{};
+      auto* value = std::addressof(v);
+      if (!less(value, data()) && less(value, data() + size())) {
+        value_type copy(v);
+        resize(sz, copy);
+        return;
+      }
     }
     auto extra = sz - size();
     makeSize(sz);
