@@ -340,4 +340,137 @@ TEST(Uninitialized, copyContiguousPreservesConstructorOverload) {
   EXPECT_EQ(7, constCopy.data[1].value);
 }
 
+TEST(Uninitialized, copyEmptyNonTrivialRanges) {
+  const std::string* first = nullptr;
+  std::string* result = nullptr;
+  EXPECT_EQ(result, folly::uninitialized_copy(first, first, result));
+
+  const std::counted_iterator<const std::string*> countedFirst;
+  const std::counted_iterator<std::string*> countedResult;
+  EXPECT_EQ(
+      countedResult,
+      folly::uninitialized_copy(countedFirst, countedFirst, countedResult));
+
+  const std::forward_list<std::string> source;
+  Storage<std::string, 1> destination;
+  EXPECT_EQ(
+      destination.data,
+      folly::uninitialized_copy(
+          source.begin(), source.end(), destination.data));
+}
+
+TEST(Uninitialized, copySingleTrivialPointer) {
+  constexpr int source[] = {3};
+  Storage<int, 2> destination;
+  std::construct_at(destination.data + 1, 99);
+
+  EXPECT_EQ(
+      destination.data + 1,
+      folly::uninitialized_copy(
+          std::begin(source), std::end(source), destination.data));
+  destination.size = 2;
+
+  const std::vector<int> expected = {3, 99};
+  EXPECT_EQ(expected, std::vector<int>(destination.data, destination.data + 2));
+}
+
+TEST(Uninitialized, copySingleNonTrivialPointer) {
+  std::string source[] = {std::string(64, 'a')};
+  Storage<std::string, 2> destination;
+  std::construct_at(destination.data + 1, "sentinel");
+
+  EXPECT_EQ(
+      destination.data + 1,
+      folly::uninitialized_copy(
+          std::begin(source), std::end(source), destination.data));
+  destination.size = 2;
+  source[0] = "changed";
+
+  const std::vector<std::string> expected = {std::string(64, 'a'), "sentinel"};
+  EXPECT_EQ(
+      expected,
+      std::vector<std::string>(destination.data, destination.data + 2));
+}
+
+TEST(Uninitialized, copySingleContiguousIterator) {
+  const std::vector<std::string> source = {std::string(64, 'a')};
+  Storage<std::string, 1> destination;
+  const std::counted_iterator first(source.begin(), 1);
+  const std::counted_iterator result(destination.data, 1);
+
+  const auto end = folly::uninitialized_copy(first, first + 1, result);
+  destination.size = 1;
+
+  EXPECT_EQ(result + 1, end);
+  EXPECT_EQ(0, end.count());
+  EXPECT_EQ(destination.data + 1, end.base());
+  EXPECT_EQ(source[0], destination.data[0]);
+}
+
+TEST(Uninitialized, copySinglePreservesConstructorOverload) {
+  CopyOverload source[] = {CopyOverload(3)};
+  Storage<CopyOverload, 1> mutableCopy;
+  const std::counted_iterator first(source, 1);
+  const std::counted_iterator result(mutableCopy.data, 1);
+  EXPECT_EQ(result + 1, folly::uninitialized_copy(first, first + 1, result));
+  mutableCopy.size = 1;
+  EXPECT_EQ(103, mutableCopy.data[0].value);
+
+  const auto& constSource = source;
+  Storage<CopyOverload, 1> constCopy;
+  EXPECT_EQ(
+      constCopy.data + 1,
+      folly::uninitialized_copy(
+          std::begin(constSource), std::end(constSource), constCopy.data));
+  constCopy.size = 1;
+  EXPECT_EQ(3, constCopy.data[0].value);
+}
+
+TEST(Uninitialized, copySingleConvertingPointer) {
+  constexpr short source[] = {3};
+  Storage<long, 1> destination;
+  EXPECT_EQ(
+      destination.data + 1,
+      folly::uninitialized_copy(
+          std::begin(source), std::end(source), destination.data));
+  destination.size = 1;
+  EXPECT_EQ(3, destination.data[0]);
+}
+
+TEST(Uninitialized, copySingleVolatileInput) {
+  // NOLINTNEXTLINE
+  volatile int source[] = {3};
+  Storage<int, 1> destination;
+  EXPECT_EQ(
+      destination.data + 1,
+      folly::uninitialized_copy(
+          std::begin(source), std::end(source), destination.data));
+  destination.size = 1;
+  EXPECT_EQ(3, destination.data[0]);
+}
+
+TEST(Uninitialized, copySingleGenericOutput) {
+  const std::string source[] = {std::string(64, 'a')};
+  Storage<std::string, 1> destination;
+  const auto result = std::make_reverse_iterator(destination.data + 1);
+  EXPECT_EQ(
+      std::make_reverse_iterator(destination.data),
+      folly::uninitialized_copy(std::begin(source), std::end(source), result));
+  destination.size = 1;
+  EXPECT_EQ(source[0], destination.data[0]);
+}
+
+TEST(Uninitialized, copySingleThrows) {
+  int live = 0;
+  const ThrowingCopy source[] = {{2, live}};
+  Storage<ThrowingCopy, 1> destination;
+  EXPECT_EQ(1, live);
+
+  EXPECT_THROW(
+      folly::uninitialized_copy(
+          std::begin(source), std::end(source), destination.data),
+      std::runtime_error);
+  EXPECT_EQ(1, live);
+}
+
 } // namespace folly::test
