@@ -20,9 +20,6 @@
 #include <type_traits>
 #include <variant>
 
-#include <boost/variant.hpp>
-
-#include <folly/DiscriminatedPtr.h>
 #include <folly/portability/GTest.h>
 
 namespace folly {
@@ -173,52 +170,30 @@ TEST(Overload, StdVariant) {
   EXPECT_EQ(toString(two), "Two");
 }
 
-TEST(Overload, BoostVariant) {
-  using V = boost::variant<One, Two>;
-  V one(One{});
-  V two(Two{});
+struct DerivedVariant : std::variant<One, Two> {
+  using std::variant<One, Two>::variant;
+};
 
+TEST(Overload, DerivedStdVariant) {
+  const DerivedVariant one(One{});
   EXPECT_TRUE(variant_match(
       one, [](const One&) { return true; }, [](const Two&) { return false; }));
+  EXPECT_EQ(
+      variant_match<std::string>(
+          one,
+          [](const One&) { return "One"; },
+          [](const Two&) { return "Two"; }),
+      "One");
   EXPECT_TRUE(variant_match(
-      two, [](const One&) { return false; }, [](const Two&) { return true; }));
-  EXPECT_TRUE(variant_match(
-      std::move(one), [](One&&) { return true; }, [](Two&&) { return false; }));
-  EXPECT_TRUE(variant_match(
-      std::move(two), [](One&&) { return false; }, [](Two&&) { return true; }));
-
-  auto toString = [](const auto& variant) {
-    return variant_match(variant, [](const auto& value) {
-      return value.toString();
-    });
-  };
-  EXPECT_EQ(toString(one), "One");
-  EXPECT_EQ(toString(two), "Two");
-}
-
-TEST(Overload, DiscriminatedPtr) {
-  using V = DiscriminatedPtr<One, Two>;
-  One one_obj;
-  Two two_obj;
-  V one_ptr(&one_obj);
-  V two_ptr(&two_obj);
-
-  EXPECT_TRUE(variant_match(
-      one_ptr,
-      [](const One*) { return true; },
-      [](const Two*) { return false; }));
-  EXPECT_TRUE(variant_match(
-      two_ptr,
-      [](const One*) { return false; },
-      [](const Two*) { return true; }));
-
-  auto toString = [](const auto& variant) {
-    return variant_match(variant, [](const auto* value) {
-      return value->toString();
-    });
-  };
-  EXPECT_EQ(toString(one_ptr), "One");
-  EXPECT_EQ(toString(two_ptr), "Two");
+      DerivedVariant(Two{}),
+      [](One&&) { return false; },
+      [](Two&&) { return true; }));
+  EXPECT_EQ(
+      variant_match<std::string>(
+          DerivedVariant(Two{}),
+          [](One&&) { return "One"; },
+          [](Two&&) { return "Two"; }),
+      "Two");
 }
 
 TEST(Overload, StdPattern) {
@@ -235,32 +210,6 @@ TEST(Overload, StdPattern) {
   auto is_two_overload = overload(
       [](const One&) { return false; }, [](const Two&) { return true; });
   EXPECT_TRUE(std::visit(is_two_overload, two));
-  EXPECT_FALSE(variant_match(one, is_two_overload));
-  EXPECT_TRUE(variant_match(two, is_two_overload));
-
-  auto is_one_copy = overload(is_one_overload);
-  auto is_one_const_copy =
-      overload(static_cast<const decltype(is_one_overload)&>(is_one_overload));
-  EXPECT_TRUE(variant_match(one, is_one_copy));
-  EXPECT_TRUE(variant_match(one, is_one_const_copy));
-  EXPECT_FALSE(variant_match(two, is_one_copy));
-  EXPECT_FALSE(variant_match(two, is_one_const_copy));
-}
-
-TEST(Overload, BoostPattern) {
-  using V = boost::variant<One, Two>;
-  V one(One{});
-  V two(Two{});
-
-  auto is_one_overload = overload(
-      [](const One&) { return true; }, [](const Two&) { return false; });
-  EXPECT_TRUE(boost::apply_visitor(is_one_overload, one));
-  EXPECT_TRUE(variant_match(one, is_one_overload));
-  EXPECT_FALSE(variant_match(two, is_one_overload));
-
-  auto is_two_overload = overload(
-      [](const One&) { return false; }, [](const Two&) { return true; });
-  EXPECT_TRUE(boost::apply_visitor(is_two_overload, two));
   EXPECT_FALSE(variant_match(one, is_two_overload));
   EXPECT_TRUE(variant_match(two, is_two_overload));
 

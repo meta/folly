@@ -18,6 +18,7 @@
 
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 #include <folly/Portability.h>
 #include <folly/Traits.h>
@@ -270,37 +271,42 @@ constexpr decltype(auto) overload(Cases&&... cases) {
       std::forward<Cases>(cases)...};
 }
 
-namespace overload_detail {
-FOLLY_CREATE_MEMBER_INVOKER(valueless_by_exception, valueless_by_exception);
-FOLLY_PUSH_WARNING
-FOLLY_MSVC_DISABLE_WARNING(4003) /* not enough arguments to macro */
-FOLLY_CREATE_FREE_INVOKER(visit, visit);
-FOLLY_CREATE_FREE_INVOKER(apply_visitor, apply_visitor);
-FOLLY_POP_WARNING
-} // namespace overload_detail
+namespace detail {
+// Converts a type derived from `std::variant` to its `std::variant` base, as
+// P2162 specifies for `std::visit`, for standard libraries that lack P2162.
+template <typename... T>
+constexpr std::variant<T...>& as_std_variant(std::variant<T...>& v) noexcept {
+  return v;
+}
+template <typename... T>
+constexpr const std::variant<T...>& as_std_variant(
+    const std::variant<T...>& v) noexcept {
+  return v;
+}
+template <typename... T>
+constexpr std::variant<T...>&& as_std_variant(std::variant<T...>&& v) noexcept {
+  return std::move(v);
+}
+template <typename... T>
+constexpr const std::variant<T...>&& as_std_variant(
+    const std::variant<T...>&& v) noexcept {
+  return std::move(v);
+}
+} // namespace detail
 
 /*
  * Match `Variant` with one of the `Cases`
  *
  * Note: you can also use `[] (const auto&) {...}` as default case
  *
- * Selects `visit` if `v.valueless_by_exception()` available and the call to
- * `visit` is valid (e.g. `std::variant`). Otherwise, selects `apply_visitor`
- * (e.g. `boost::variant`, `folly::DiscriminatedPtr`).
+ * `Variant` must be a `std::variant` or a type derived from one, which is
+ * matched as its `std::variant` base. Dispatches through `std::visit`.
  */
 template <typename Variant, typename... Cases>
 decltype(auto) variant_match(Variant&& variant, Cases&&... cases) {
-  using invoker = std::conditional_t<
-      std::conjunction_v<
-          is_invocable<overload_detail::valueless_by_exception, Variant>,
-          is_invocable<
-              overload_detail::visit,
-              decltype(overload(std::forward<Cases>(cases)...)),
-              Variant>>,
-      overload_detail::visit,
-      overload_detail::apply_visitor>;
-  return invoker{}(
-      overload(std::forward<Cases>(cases)...), std::forward<Variant>(variant));
+  return std::visit(
+      overload(std::forward<Cases>(cases)...),
+      detail::as_std_variant(std::forward<Variant>(variant)));
 }
 
 template <typename R, typename Variant, typename... Cases>
@@ -313,13 +319,7 @@ R variant_match(Variant&& variant, Cases&&... cases) {
           std::forward<decltype(v)>(v));
     }
   };
-  using invoker = std::conditional_t<
-      std::conjunction<
-          is_invocable<overload_detail::valueless_by_exception, Variant>,
-          is_invocable<overload_detail::visit, decltype(f), Variant>>::value,
-      overload_detail::visit,
-      overload_detail::apply_visitor>;
-  return invoker{}(f, std::forward<Variant>(variant));
+  return std::visit(f, detail::as_std_variant(std::forward<Variant>(variant)));
 }
 
 } // namespace folly
