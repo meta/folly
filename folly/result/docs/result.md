@@ -262,10 +262,10 @@ result<int> addFive1() { co_return 5 + co_await or_unwind(childFn()); }
 // non-coroutine
 result<int> addFive2() {
   auto res = childFn();
-  if (!res.has_value()) {
-    return res.error_or_stopped(); // propagate "error" or "stopped"
+  if (auto* value = res.get_pointer()) {
+    return 5 + *value;
   }
-  return 5 + res.value_or_throw();
+  return res.error_or_stopped(); // propagate "error" or "stopped"
 }
 ```
 
@@ -279,13 +279,15 @@ readability:
   - In `folly::coro` async coroutines, `auto v = co_await or_unwind(resultFn())`
     and `co_yield co_error(ew)` are much cheaper than throwing.
 
-`value_or_throw()` **can** be useful when you're writing non-coroutine `result`
-functions, which might help hot-path code (profile first!). In those cases, make
-the "throw" branch impossible via an explicit `has_value()` check:
+For lvalue `result`s, `get_pointer()` is the non-throwing replacement for
+`has_value()` + `value_or_throw()`:
 
 ```cpp
-if (res.has_value()) { auto& val = res.value_or_throw(); }
+if (auto* val = res.get_pointer()) { use(*val); }
 ```
+
+Keep `value_or_throw()` for cases that intentionally cross into throwing code,
+or for rvalue extraction when `co_await or_unwind(std::move(res))` does not fit.
 
 ### Avoid `co_return std::move(...)` or `return std::move(...)`
 
@@ -375,6 +377,7 @@ For this use-case to make sense, `co_await or_unwind(m.at(k))` must return
 Note that `const result<V&>` only lets you access the value as `const V&`.
 
 ```cpp
+std::as_const(rn).get_pointer() -> const int*
 std::as_const(rn).value_or_throw() -> const int&
 co_await or_unwind(std::as_const(rn)) -> const int&
 ```
@@ -475,15 +478,17 @@ result<int> plantSeeds(int n) {
       return error_or_stopped{std::logic_error{"cannot plant < 0 seeds"}};
     }
     int seedsLeft = n;
-    for (int i = 0; i < n; ++i) {}
+    for (int i = 0; i < n; ++i) {
       auto rh = digHole(i);
       if (auto ex = get_exception<HitBigRock>(rh)) {
         continue; // skip planting this seed
-      } else if (!rh.has_value()) {
+      }
+      if (auto* hole = rh.get_pointer()) {
+        hole->plantSeed(i);
+        --seedsLeft;
+      } else {
         return rh.error_or_stopped(); // unhandled error or stopped
       }
-      rh.value_or_throw().plantSeed(i);
-      --seedsLeft;
     }
     return seedsLeft;
   });

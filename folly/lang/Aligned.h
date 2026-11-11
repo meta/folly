@@ -70,11 +70,19 @@ class aligned {
   }
 
   T* get() noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] { return &value_; }
-  T const* get() const noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] { return &value_; }
-  T* operator->() noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] { return &value_; }
-  T const* operator->() const noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] { return &value_; }
+  T const* get() const noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    return &value_;
+  }
+  T* operator->() noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    return &value_;
+  }
+  T const* operator->() const noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    return &value_;
+  }
   T& operator*() noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] { return value_; }
-  T const& operator*() const noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] { return value_; }
+  T const& operator*() const noexcept [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    return value_;
+  }
 
  private:
   alignas(Align) T value_;

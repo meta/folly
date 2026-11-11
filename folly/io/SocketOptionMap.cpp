@@ -61,8 +61,9 @@ SocketOptionMap validateSocketOptions(
     }
     if ((family == AF_INET && option.first.level == IPPROTO_IP) ||
         (family == AF_INET6 && option.first.level == IPPROTO_IPV6) ||
-        option.first.level == IPPROTO_TCP || option.first.level == IPPROTO_UDP ||
-        option.first.level == SOL_SOCKET || option.first.level == SOL_UDP) {
+        option.first.level == IPPROTO_TCP ||
+        option.first.level == IPPROTO_UDP || option.first.level == SOL_SOCKET ||
+        option.first.level == SOL_UDP) {
       validOptions.insert(option);
     }
   }

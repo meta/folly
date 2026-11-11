@@ -22,6 +22,7 @@
 
 #include <fmt/format.h>
 #include <folly/Range.h>
+#include <folly/io/Cursor.h>
 #include <folly/portability/GTest.h>
 
 using folly::IOBuf;
@@ -287,6 +288,123 @@ TEST(IOBufQueue, SplitZero) {
   queue.append(stringToIOBuf(SCL("Hello world")));
   auto buf = queue.split(0);
   EXPECT_EQ(buf->computeChainDataLength(), 0);
+}
+
+TEST(IOBufQueue, SplitOptimizeCoalescesIntoTailroom) {
+  IOBufQueue queue(clOptions);
+  // Create an IOBuf with 1024 bytes capacity but only 4 bytes used,
+  // leaving ~1020 bytes of tailroom.
+  auto big = IOBuf::create(1024);
+  memcpy(big->writableTail(), "AAAA", 4);
+  big->append(4);
+  queue.append(std::move(big));
+
+  // Append small buffers that should fit in the tailroom.
+  queue.append(stringToIOBuf(SCL("BB")));
+  queue.append(stringToIOBuf(SCL("CC")));
+  EXPECT_EQ(8, queue.chainLength());
+
+  auto result = queue.splitAtMost(8, true);
+  EXPECT_EQ(8, result->computeChainDataLength());
+  // The small buffers should have been coalesced into the first IOBuf's
+  // tailroom, producing a single non-chained IOBuf.
+  EXPECT_FALSE(result->isChained());
+  EXPECT_EQ("AAAABBCC", std::string((const char*)result->data(), 8));
+}
+
+TEST(IOBufQueue, SplitOptimizeFallsBackToChainWhenNoTailroom) {
+  IOBufQueue queue(clOptions);
+  // Create IOBufs with exactly zero tailroom using wrapBuffer.
+  const char a[] = "Hello";
+  const char b[] = "World";
+  queue.append(IOBuf::wrapBuffer(a, 5));
+  queue.append(IOBuf::wrapBuffer(b, 5));
+  EXPECT_EQ(10, queue.chainLength());
+
+  auto result = queue.splitAtMost(10, true);
+  EXPECT_EQ(10, result->computeChainDataLength());
+  // Both buffers have no spare tailroom, so the result is still chained.
+  EXPECT_TRUE(result->isChained());
+}
+
+TEST(IOBufQueue, SplitOptimizeDropsEmptyNodes) {
+  IOBufQueue queue(clOptions);
+  queue.append(stringToIOBuf(SCL("AA")));
+  queue.append(stringToIOBuf(SCL("")));
+  queue.append(stringToIOBuf(SCL("BB")));
+  EXPECT_EQ(4, queue.chainLength());
+
+  auto result = queue.splitAtMost(4, true);
+  EXPECT_EQ(4, result->computeChainDataLength());
+  // The empty node should have been dropped, so at most 2 chain links.
+  size_t chainLinks = 0;
+  const IOBuf* cur = result.get();
+  do {
+    chainLinks++;
+    cur = cur->next();
+  } while (cur != result.get());
+  EXPECT_LE(chainLinks, 2u);
+}
+
+TEST(IOBufQueue, SplitOptimizePreservesDataCorrectness) {
+  IOBufQueue queue(clOptions);
+  // Build a chain of many small buffers.
+  for (int i = 0; i < 100; i++) {
+    auto buf = IOBuf::create(32);
+    auto s = fmt::format("{:02d}", i);
+    memcpy(buf->writableTail(), s.data(), 2);
+    buf->append(2);
+    queue.append(std::move(buf));
+  }
+  EXPECT_EQ(200, queue.chainLength());
+
+  // Split with optimization and verify data is byte-identical.
+  auto optimized = queue.splitAtMost(200, true);
+  EXPECT_EQ(200, optimized->computeChainDataLength());
+
+  // Verify content.
+  folly::io::Cursor cursor(optimized.get());
+  for (int i = 0; i < 100; i++) {
+    auto expected = fmt::format("{:02d}", i);
+    auto actual = cursor.readFixedString(2);
+    EXPECT_EQ(expected, actual) << "Mismatch at index " << i;
+  }
+  EXPECT_TRUE(queue.empty());
+}
+
+TEST(IOBufQueue, SplitOptimizePartialSplit) {
+  IOBufQueue queue(clOptions);
+  auto buf = IOBuf::create(1024);
+  memcpy(buf->writableTail(), "AAAA", 4);
+  buf->append(4);
+  queue.append(std::move(buf));
+  queue.append(stringToIOBuf(SCL("BBBB")));
+  queue.append(stringToIOBuf(SCL("CCCC")));
+  EXPECT_EQ(12, queue.chainLength());
+
+  // Split only part of the queue.
+  auto result = queue.splitAtMost(8, true);
+  EXPECT_EQ(8, result->computeChainDataLength());
+  EXPECT_EQ(4, queue.chainLength());
+
+  // Remaining data is correct.
+  auto rest = queue.splitAtMost(4, true);
+  EXPECT_EQ(4, rest->computeChainDataLength());
+  folly::io::Cursor cursor(rest.get());
+  EXPECT_EQ("CCCC", cursor.readFixedString(4));
+}
+
+TEST(IOBufQueue, SplitOptimizeDefaultIsFalse) {
+  // Verify default template argument doesn't optimize.
+  IOBufQueue queue(clOptions);
+  queue.append(stringToIOBuf(SCL("AA")));
+  queue.append(stringToIOBuf(SCL("")));
+  queue.append(stringToIOBuf(SCL("BB")));
+
+  auto result = queue.splitAtMost(4);
+  EXPECT_EQ(4, result->computeChainDataLength());
+  // Default (OptimizeOnSplit=false) preserves all nodes including empty.
+  EXPECT_TRUE(result->isChained());
 }
 
 TEST(IOBufQueue, Preallocate) {
