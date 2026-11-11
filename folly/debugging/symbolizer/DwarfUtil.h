@@ -22,6 +22,7 @@
 
 #include <folly/Function.h>
 #include <folly/Range.h>
+#include <folly/debugging/symbolizer/DwarfCursor.h>
 #include <folly/debugging/symbolizer/Elf.h>
 #include <folly/debugging/symbolizer/ElfCache.h>
 #include <folly/debugging/symbolizer/detail/DwarfConstants.h>
@@ -72,7 +73,7 @@ struct CompilationUnit {
 
   bool is64Bit = false;
   uint8_t version = 0;
-  uint8_t unitType = DW_UT_compile; // DW_UT_compile or DW_UT_skeleton
+  uint8_t unitType = DW_UT_compile;
   uint8_t addrSize = 0;
   // Offset in .debug_info of this compilation unit.
   uint32_t offset = 0;
@@ -107,6 +108,17 @@ struct CompilationUnit {
   // Only the CompilationUnit that contains the caller functions needs this.
   // Indexed by (abbr.code - 1) if (abbr.code - 1) < abbrCache.size();
   folly::Range<DIEAbbreviation*> abbrCache;
+};
+
+struct CompilationUnitHeader {
+  bool is64Bit = false;
+  uint32_t size = 0;
+  uint8_t version = 0;
+  uint8_t unitType = DW_UT_compile;
+  uint8_t addrSize = 0;
+  uint32_t firstDie = 0;
+  uint64_t abbrevOffset = 0;
+  folly::Optional<uint64_t> dwoId;
 };
 
 // Contains the main compilation unit in the binary file and an optional
@@ -198,6 +210,14 @@ folly::StringPiece readNullTerminated(std::span<const uint8_t>& bytes);
 
 folly::StringPiece getStringFromStringSection(
     std::span<const uint8_t> bytes, uint64_t offset);
+
+DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
+    std::span<const uint8_t> debugInfo, size_t offset);
+
+// Find the contribution for dwoId in .debug_cu_index. A successful false
+// result means that no matching, usable entry was found.
+DwarfParseResult<bool> findDwpCompilationUnit(
+    std::span<const uint8_t> debugCuIndex, uint64_t dwoId, CompilationUnit& cu);
 
 CompilationUnits getCompilationUnits(
     ElfCacheBase* elfCache,

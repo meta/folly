@@ -83,6 +83,19 @@ TEST(DwarfCursor, FixedWidthTruncationDoesNotAdvance) {
   EXPECT_EQ(input.size(), cursor.remaining().size());
 }
 
+TEST(DwarfCursor, ReportsOffsetsRelativeToContainingSection) {
+  const std::array<uint8_t, 1> input{0x12};
+  DwarfCursor cursor(input, 0x40);
+
+  auto byte = cursor.read<uint8_t>();
+  auto truncated = cursor.read<uint8_t>();
+
+  ASSERT_TRUE(byte.hasValue());
+  EXPECT_EQ(0x12, *byte);
+  EXPECT_EQ(0x41, cursor.offset());
+  expectError(truncated, DwarfParseErrorCode::truncated, 0x41);
+}
+
 TEST(DwarfCursor, ReadsPartialWidthUnsignedValue) {
   const std::array<uint8_t, 3> input{0x12, 0x34, 0x56};
   uint64_t expected = 0;

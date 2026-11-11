@@ -29,12 +29,14 @@ folly_add_library(
     DwarfSection.h
     DwarfUtil.h
   DEPS
+    folly_lang_checked_math
     folly_lang_safe_assert
     folly_optional
     folly_portability_config
     folly_portability_unistd
   EXPORTED_DEPS
     folly_debugging_symbolizer_detail_dwarf_constants
+    folly_debugging_symbolizer_dwarf_cursor
     folly_debugging_symbolizer_elf
     folly_debugging_symbolizer_elf_cache
     folly_debugging_symbolizer_symbolized_frame

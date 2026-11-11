@@ -370,26 +370,20 @@ void DwarfImpl::fillInlineFrames(
 // Finds the Compilation Unit starting at offset.
 CompilationUnit DwarfImpl::findCompilationUnit(
     const CompilationUnit& cu, uint64_t targetOffset) const {
-  FOLLY_SAFE_DCHECK(
-      targetOffset < cu.debugSections.debugInfo.size(),
-      "unexpected target address");
-  uint64_t offset = 0;
+  if (targetOffset >= cu.debugSections.debugInfo.size()) {
+    return {};
+  }
+  size_t offset = 0;
   while (offset < cu.debugSections.debugInfo.size()) {
-    auto chunk = cu.debugSections.debugInfo.subspan(offset);
-
-    auto initialLength = read<uint32_t>(chunk);
-    auto is64Bit = (initialLength == (uint32_t)-1);
-    auto size = is64Bit ? read<uint64_t>(chunk) : initialLength;
-    if (size > chunk.size()) {
-      FOLLY_SAFE_DFATAL(
-          "invalid chunk size: ", size, " chunk.size(): ", chunk.size());
+    auto header =
+        parseCompilationUnitHeader(cu.debugSections.debugInfo, offset);
+    if (header.hasError() || header->size == 0) {
+      return {};
+    }
+    if (offset + header->size > targetOffset) {
       break;
     }
-    size += is64Bit ? 12 : 4;
-    if (offset + size > targetOffset) {
-      break;
-    }
-    offset += size;
+    offset += header->size;
   }
   return getCompilationUnits(
              elfCache_, cu.debugSections, offset, /* requireSplitDwarf */ false)

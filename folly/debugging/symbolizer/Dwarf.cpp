@@ -157,6 +157,9 @@ bool Dwarf::findAddress(
           defaultDebugSections_,
           offset,
           mode == LocationInfoMode::FULL_WITH_INLINE);
+      if (unit.mainCompilationUnit.size == 0) {
+        return false;
+      }
       if (unit.mainCompilationUnit.unitType != DW_UT_compile &&
           unit.mainCompilationUnit.unitType != DW_UT_skeleton) {
         return false;
@@ -192,6 +195,11 @@ bool Dwarf::findAddress(
         defaultDebugSections_,
         offset,
         mode == LocationInfoMode::FULL_WITH_INLINE);
+    if (unit.mainCompilationUnit.size == 0 ||
+        unit.mainCompilationUnit.size >
+            defaultDebugSections_.debugInfo.size() - offset) {
+      return false;
+    }
     offset += unit.mainCompilationUnit.size;
     if (unit.mainCompilationUnit.unitType != DW_UT_compile &&
         unit.mainCompilationUnit.unitType != DW_UT_skeleton) {

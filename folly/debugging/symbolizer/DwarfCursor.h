@@ -31,6 +31,8 @@ namespace folly::symbolizer {
 enum class DwarfParseErrorCode : uint8_t {
   truncated,
   integer_overflow,
+  invalid_offset,
+  invalid_value,
   unterminated_string,
 };
 
@@ -53,42 +55,43 @@ using DwarfParseResult = folly::Expected<T, DwarfParseError>;
  */
 class DwarfCursor {
  public:
-  explicit constexpr DwarfCursor(std::span<const uint8_t> bytes) noexcept
-      : bytes_(bytes) {}
+  explicit constexpr DwarfCursor(
+      std::span<const uint8_t> bytes, size_t baseOffset = 0) noexcept
+      : bytes_(bytes), baseOffset_(baseOffset) {}
 
-  constexpr size_t offset() const noexcept { return offset_; }
+  constexpr size_t offset() const noexcept { return baseOffset_ + position_; }
   constexpr size_t totalSize() const noexcept { return bytes_.size(); }
-  constexpr bool empty() const noexcept { return offset_ == bytes_.size(); }
+  constexpr bool empty() const noexcept { return position_ == bytes_.size(); }
   constexpr std::span<const uint8_t> remaining() const noexcept {
-    return bytes_.subspan(offset_);
+    return bytes_.subspan(position_);
   }
 
   template <typename T>
   DwarfParseResult<T> read() noexcept {
     static_assert(std::is_standard_layout_v<T> && std::is_trivial_v<T>);
-    if (sizeof(T) > bytes_.size() - offset_) {
+    if (sizeof(T) > bytes_.size() - position_) {
       return fail<T>(DwarfParseErrorCode::truncated);
     }
     T value;
-    std::memcpy(&value, bytes_.data() + offset_, sizeof(T));
-    offset_ += sizeof(T);
+    std::memcpy(&value, bytes_.data() + position_, sizeof(T));
+    position_ += sizeof(T);
     return value;
   }
 
   template <size_t N>
   DwarfParseResult<uint64_t> readU64() noexcept {
     static_assert(N >= 1 && N <= sizeof(uint64_t));
-    if (N > bytes_.size() - offset_) {
+    if (N > bytes_.size() - position_) {
       return fail<uint64_t>(DwarfParseErrorCode::truncated);
     }
     uint64_t value = 0;
-    std::memcpy(&value, bytes_.data() + offset_, N);
-    offset_ += N;
+    std::memcpy(&value, bytes_.data() + position_, N);
+    position_ += N;
     return value;
   }
 
   DwarfParseResult<uint64_t> readULEB() noexcept {
-    const auto start = offset_;
+    const auto start = position_;
     const auto available = bytes_.size() - start;
     uint64_t value = 0;
     for (size_t i = 0; i < 10; ++i) {
@@ -102,7 +105,7 @@ class DwarfCursor {
       }
       value |= static_cast<uint64_t>(payload) << (i * 7);
       if ((byte & 0x80) == 0) {
-        offset_ = start + i + 1;
+        position_ = start + i + 1;
         return value;
       }
     }
@@ -110,7 +113,7 @@ class DwarfCursor {
   }
 
   DwarfParseResult<int64_t> readSLEB() noexcept {
-    const auto start = offset_;
+    const auto start = position_;
     const auto available = bytes_.size() - start;
     uint64_t value = 0;
     for (size_t i = 0; i < 10; ++i) {
@@ -128,7 +131,7 @@ class DwarfCursor {
         if (shift < 64 && (byte & 0x40) != 0) {
           value |= ~uint64_t{0} << shift;
         }
-        offset_ = start + i + 1;
+        position_ = start + i + 1;
         return std::bit_cast<int64_t>(value);
       }
     }
@@ -143,11 +146,11 @@ class DwarfCursor {
   }
 
   DwarfParseResult<std::span<const uint8_t>> readBytes(size_t size) noexcept {
-    if (size > bytes_.size() - offset_) {
+    if (size > bytes_.size() - position_) {
       return fail<std::span<const uint8_t>>(DwarfParseErrorCode::truncated);
     }
-    auto value = bytes_.subspan(offset_, size);
-    offset_ += size;
+    auto value = bytes_.subspan(position_, size);
+    position_ += size;
     return value;
   }
 
@@ -166,18 +169,19 @@ class DwarfCursor {
     const auto size = static_cast<size_t>(terminator - bytes.data());
     folly::cstring_view value(
         reinterpret_cast<const char*>(bytes.data()), size);
-    offset_ += size + 1;
+    position_ += size + 1;
     return value;
   }
 
  private:
   template <typename T>
   DwarfParseResult<T> fail(DwarfParseErrorCode code) const noexcept {
-    return folly::makeUnexpected(DwarfParseError{code, offset_});
+    return folly::makeUnexpected(DwarfParseError{code, offset()});
   }
 
   std::span<const uint8_t> bytes_;
-  size_t offset_ = 0;
+  size_t baseOffset_ = 0;
+  size_t position_ = 0;
 };
 
 } // namespace folly::symbolizer

@@ -16,6 +16,14 @@
 
 #pragma once
 
+#include <cstdint>
+
+namespace folly::symbolizer {
+
+inline constexpr uint32_t kDwarfReservedInitialLengthStart = 0xfffffff0;
+
+} // namespace folly::symbolizer
+
 // The DWARF constants the symbolizer uses, so it doesn't depend on a
 // dwarf.h from libdwarf or elfutils. Values and section numbers are from the
 // DWARF Debugging Information Format, Version 5 (https://dwarfstd.org); the
@@ -35,18 +43,22 @@
 #define DW_TAG_catch_block 0x25
 #define DW_TAG_subprogram 0x2e
 #define DW_TAG_try_block 0x32
+#define DW_TAG_partial_unit 0x3c
 #define DW_TAG_skeleton_unit 0x4a
 
 // Children determination (section 7.5.3)
 #define DW_CHILDREN_no 0x00
 
 // Attribute names (section 7.5.4)
+#define DW_AT_location 0x02
 #define DW_AT_name 0x03
 #define DW_AT_stmt_list 0x10
 #define DW_AT_low_pc 0x11
 #define DW_AT_high_pc 0x12
 #define DW_AT_comp_dir 0x1b
 #define DW_AT_abstract_origin 0x31
+#define DW_AT_decl_line 0x3b
+#define DW_AT_external 0x3f
 #define DW_AT_specification 0x47
 #define DW_AT_ranges 0x55
 #define DW_AT_call_file 0x58
@@ -113,6 +125,7 @@
 
 // Unit header unit types (section 7.5.1)
 #define DW_UT_compile 0x01
+#define DW_UT_type 0x02
 #define DW_UT_skeleton 0x04
 #define DW_UT_split_compile 0x05
 

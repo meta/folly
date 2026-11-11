@@ -30,11 +30,13 @@ fb_dirsync_cpp_library(
     use_raw_headers = True,
     deps = [
         "//folly:optional",
+        "//folly/lang:checked_math",
         "//folly/lang:safe_assert",
         "//folly/portability:config",
         "//folly/portability:unistd",
     ],
     exported_deps = [
+        ":dwarf_cursor",
         ":elf",
         ":elf_cache",
         ":symbolized_frame",

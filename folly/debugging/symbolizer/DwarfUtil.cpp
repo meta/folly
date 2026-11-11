@@ -17,12 +17,14 @@
 #include <folly/debugging/symbolizer/DwarfUtil.h>
 
 #include <array>
+#include <limits>
 #include <type_traits>
 
 #include <folly/Optional.h>
 #include <folly/Range.h>
 #include <folly/debugging/symbolizer/Elf.h>
 #include <folly/debugging/symbolizer/detail/DwarfConstants.h>
+#include <folly/lang/CheckedMath.h>
 #include <folly/portability/Config.h>
 #include <folly/portability/Unistd.h>
 
@@ -179,184 +181,337 @@ DIEAbbreviation getAbbreviation(
   return {};
 }
 
-// Parse compilation unit info, abbrev and str_offsets offset from
-// .debug_cu_index section.
-bool findCompiliationOffset(
+template <typename T>
+DwarfParseResult<T> parseError(DwarfParseErrorCode code, size_t offset) {
+  return makeUnexpected(DwarfParseError{code, offset});
+}
+
+DwarfParseResult<size_t> checkedMultiply(
+    size_t lhs, size_t rhs, size_t offset) {
+  size_t result;
+  if (!folly::checked_mul(&result, lhs, rhs)) {
+    return parseError<size_t>(DwarfParseErrorCode::integer_overflow, offset);
+  }
+  return result;
+}
+
+bool isSupportedCompilationUnitType(uint8_t unitType) {
+  return unitType == DW_UT_compile || unitType == DW_UT_skeleton ||
+      unitType == DW_UT_split_compile;
+}
+
+} // namespace
+
+DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
+    std::span<const uint8_t> debugInfo, size_t offset) {
+  if (offset > debugInfo.size()) {
+    return parseError<CompilationUnitHeader>(
+        DwarfParseErrorCode::invalid_offset, offset);
+  }
+  if (offset > std::numeric_limits<uint32_t>::max()) {
+    return parseError<CompilationUnitHeader>(
+        DwarfParseErrorCode::integer_overflow, offset);
+  }
+
+  DwarfCursor lengthCursor(debugInfo.subspan(offset), offset);
+  auto initialLength = lengthCursor.read<uint32_t>();
+  if (initialLength.hasError()) {
+    return makeUnexpected(initialLength.error());
+  }
+
+  CompilationUnitHeader header;
+  uint64_t unitLength = *initialLength;
+  if (*initialLength == std::numeric_limits<uint32_t>::max()) {
+    header.is64Bit = true;
+    auto extendedLength = lengthCursor.read<uint64_t>();
+    if (extendedLength.hasError()) {
+      return makeUnexpected(extendedLength.error());
+    }
+    unitLength = *extendedLength;
+  } else if (*initialLength >= kDwarfReservedInitialLengthStart) {
+    return parseError<CompilationUnitHeader>(
+        DwarfParseErrorCode::invalid_value, offset);
+  }
+
+  const auto lengthFieldSize = lengthCursor.offset() - offset;
+  if (unitLength > lengthCursor.remaining().size()) {
+    return parseError<CompilationUnitHeader>(
+        DwarfParseErrorCode::truncated, lengthCursor.offset());
+  }
+  const auto unitSize = lengthFieldSize + static_cast<size_t>(unitLength);
+  if (unitSize > std::numeric_limits<uint32_t>::max() ||
+      offset > std::numeric_limits<uint32_t>::max() - unitSize) {
+    return parseError<CompilationUnitHeader>(
+        DwarfParseErrorCode::integer_overflow, offset);
+  }
+  header.size = static_cast<uint32_t>(unitSize);
+
+  DwarfCursor cursor(debugInfo.subspan(offset, unitSize), offset);
+  auto lengthField = cursor.readBytes(lengthFieldSize);
+  if (lengthField.hasError()) {
+    return makeUnexpected(lengthField.error());
+  }
+
+  auto version = cursor.read<uint16_t>();
+  if (version.hasError()) {
+    return makeUnexpected(version.error());
+  }
+  if (*version < 2 || *version > 5) {
+    return parseError<CompilationUnitHeader>(
+        DwarfParseErrorCode::invalid_value, cursor.offset() - sizeof(*version));
+  }
+  header.version = *version;
+
+  if (header.version == 5) {
+    auto unitType = cursor.read<uint8_t>();
+    if (unitType.hasError()) {
+      return makeUnexpected(unitType.error());
+    }
+    if (*unitType < 1 || *unitType > 6) {
+      return parseError<CompilationUnitHeader>(
+          DwarfParseErrorCode::invalid_value,
+          cursor.offset() - sizeof(*unitType));
+    }
+    header.unitType = *unitType;
+    if (!isSupportedCompilationUnitType(header.unitType)) {
+      header.firstDie = static_cast<uint32_t>(cursor.offset());
+      return header;
+    }
+
+    auto addrSize = cursor.read<uint8_t>();
+    if (addrSize.hasError()) {
+      return makeUnexpected(addrSize.error());
+    }
+    if (*addrSize != sizeof(uintptr_t)) {
+      return parseError<CompilationUnitHeader>(
+          DwarfParseErrorCode::invalid_value,
+          cursor.offset() - sizeof(*addrSize));
+    }
+    header.addrSize = *addrSize;
+
+    auto abbrevOffset = cursor.readOffset(header.is64Bit);
+    if (abbrevOffset.hasError()) {
+      return makeUnexpected(abbrevOffset.error());
+    }
+    header.abbrevOffset = *abbrevOffset;
+
+    if (header.unitType == DW_UT_skeleton ||
+        header.unitType == DW_UT_split_compile) {
+      auto dwoId = cursor.read<uint64_t>();
+      if (dwoId.hasError()) {
+        return makeUnexpected(dwoId.error());
+      }
+      header.dwoId = *dwoId;
+    }
+  } else {
+    auto abbrevOffset = cursor.readOffset(header.is64Bit);
+    if (abbrevOffset.hasError()) {
+      return makeUnexpected(abbrevOffset.error());
+    }
+    header.abbrevOffset = *abbrevOffset;
+
+    auto addrSize = cursor.read<uint8_t>();
+    if (addrSize.hasError()) {
+      return makeUnexpected(addrSize.error());
+    }
+    if (*addrSize != sizeof(uintptr_t)) {
+      return parseError<CompilationUnitHeader>(
+          DwarfParseErrorCode::invalid_value,
+          cursor.offset() - sizeof(*addrSize));
+    }
+    header.addrSize = *addrSize;
+  }
+
+  header.firstDie = static_cast<uint32_t>(cursor.offset());
+  return header;
+}
+
+DwarfParseResult<bool> findDwpCompilationUnit(
     std::span<const uint8_t> debugCuIndex,
     uint64_t dwoId,
     CompilationUnit& cu) {
   if (debugCuIndex.empty()) {
     return false;
   }
-  if (debugCuIndex.size() < 4 * sizeof(uint32_t)) {
+
+  DwarfCursor cursor(debugCuIndex);
+  auto version = cursor.read<uint32_t>();
+  auto numColumns = cursor.read<uint32_t>();
+  auto numUnits = cursor.read<uint32_t>();
+  auto numBuckets = cursor.read<uint32_t>();
+  if (version.hasError()) {
+    return makeUnexpected(version.error());
+  }
+  if (numColumns.hasError()) {
+    return makeUnexpected(numColumns.error());
+  }
+  if (numUnits.hasError()) {
+    return makeUnexpected(numUnits.error());
+  }
+  if (numBuckets.hasError()) {
+    return makeUnexpected(numBuckets.error());
+  }
+  if (*version != 2 && *version != (5 << (kIsLittleEndian ? 0 : 16))) {
     return false;
   }
 
-  // v4: GCC Debug Fission defines version as an unsigned 4B field with value
-  // of 2.
-  // https://gcc.gnu.org/wiki/DebugFissionDWP#Format_of_the_CU_and_TU_Index_Sections
-  //
-  // v5: DWARF5 7.3.5.3 Format of the CU and TU Index Sections
-  // The first 2 header entries are version (2B, value=5) and padding (2B,
-  // value=0)
-  //
-  // Both were read into version (4B) and on little endian will have value=5.
-  auto version = read<uint32_t>(debugCuIndex);
-  if (version != 2 && version != (5 << (kIsLittleEndian ? 0 : 16))) {
-    return false;
+  const auto tableEntries =
+      checkedMultiply(*numUnits, *numColumns, cursor.offset());
+  if (tableEntries.hasError()) {
+    return makeUnexpected(tableEntries.error());
   }
-  auto numColumns = read<uint32_t>(debugCuIndex);
-  auto numUnits = read<uint32_t>(debugCuIndex);
-  auto numBuckets = read<uint32_t>(debugCuIndex);
+  const auto offsetsSize =
+      checkedMultiply(*tableEntries, sizeof(uint32_t), cursor.offset());
+  if (offsetsSize.hasError()) {
+    return makeUnexpected(offsetsSize.error());
+  }
+  const auto signaturesSize =
+      checkedMultiply(*numBuckets, sizeof(uint64_t), cursor.offset());
+  if (signaturesSize.hasError()) {
+    return makeUnexpected(signaturesSize.error());
+  }
+  const auto indexesSize =
+      checkedMultiply(*numBuckets, sizeof(uint32_t), cursor.offset());
+  if (indexesSize.hasError()) {
+    return makeUnexpected(indexesSize.error());
+  }
+  const auto columnsSize =
+      checkedMultiply(*numColumns, sizeof(uint32_t), cursor.offset());
+  if (columnsSize.hasError()) {
+    return makeUnexpected(columnsSize.error());
+  }
 
-  // Get index of the CU matches the given dwo id.
-  if (numBuckets > debugCuIndex.size() / sizeof(uint64_t)) {
-    return false;
+  const auto signaturesOffset = cursor.offset();
+  auto signatures = cursor.readBytes(*signaturesSize);
+  if (signatures.hasError()) {
+    return makeUnexpected(signatures.error());
   }
-  auto signatureSection =
-      readBytes(debugCuIndex, numBuckets * sizeof(uint64_t));
-  if (numBuckets > debugCuIndex.size() / sizeof(uint32_t)) {
-    return false;
+  const auto indexesOffset = cursor.offset();
+  auto indexes = cursor.readBytes(*indexesSize);
+  if (indexes.hasError()) {
+    return makeUnexpected(indexes.error());
   }
-  auto indexesSection = readBytes(debugCuIndex, numBuckets * sizeof(uint32_t));
-  uint32_t idx = 0;
-  for (unsigned i = 0; i < numBuckets; i++) {
-    uint64_t hash = read<uint64_t>(signatureSection);
-    uint32_t index = read<uint32_t>(indexesSection);
-    if (hash == dwoId) {
-      idx = index;
+  const auto columnsOffset = cursor.offset();
+  auto columns = cursor.readBytes(*columnsSize);
+  if (columns.hasError()) {
+    return makeUnexpected(columns.error());
+  }
+  const auto offsetsOffset = cursor.offset();
+  auto offsets = cursor.readBytes(*offsetsSize);
+  if (offsets.hasError()) {
+    return makeUnexpected(offsets.error());
+  }
+
+  DwarfCursor signaturesCursor(*signatures, signaturesOffset);
+  DwarfCursor indexesCursor(*indexes, indexesOffset);
+  uint32_t unitIndex = 0;
+  for (uint32_t i = 0; i < *numBuckets; ++i) {
+    auto signature = signaturesCursor.read<uint64_t>();
+    auto index = indexesCursor.read<uint32_t>();
+    if (signature.hasError()) {
+      return makeUnexpected(signature.error());
+    }
+    if (index.hasError()) {
+      return makeUnexpected(index.error());
+    }
+    if (*signature == dwoId) {
+      unitIndex = *index;
       break;
     }
   }
-  if (idx == 0 || idx > numUnits) {
+  if (unitIndex == 0) {
+    return false;
+  }
+  if (unitIndex > *numUnits) {
+    return parseError<bool>(DwarfParseErrorCode::invalid_value, indexesOffset);
+  }
+
+  folly::Optional<size_t> infoSectionIndex;
+  folly::Optional<size_t> abbrevSectionIndex;
+  folly::Optional<size_t> strOffsetsSectionIndex;
+  folly::Optional<size_t> rnglistsSectionIndex;
+  DwarfCursor columnsCursor(*columns, columnsOffset);
+  for (uint32_t i = 0; i < *numColumns; ++i) {
+    auto section = columnsCursor.read<uint32_t>();
+    if (section.hasError()) {
+      return makeUnexpected(section.error());
+    }
+    switch (*section) {
+      case DW_SECT_INFO:
+        infoSectionIndex = i;
+        break;
+      case DW_SECT_ABBREV:
+        abbrevSectionIndex = i;
+        break;
+      case DW_SECT_STR_OFFSETS:
+        strOffsetsSectionIndex = i;
+        break;
+      case DW_SECT_RNGLISTS:
+        rnglistsSectionIndex = i;
+        break;
+    }
+  }
+  if (!infoSectionIndex || !abbrevSectionIndex || !strOffsetsSectionIndex) {
     return false;
   }
 
-  // column headers
-  if (numColumns > debugCuIndex.size() / sizeof(uint32_t)) {
-    return false;
-  }
-  ssize_t infoSectionIndex = -1;
-  ssize_t abbrevSectionIndex = -1;
-  ssize_t strOffsetsSectionIndex = -1;
-  ssize_t rnglistsSectionIndex = -1;
-  for (unsigned i = 0; i != numColumns; ++i) {
-    auto index = read<uint32_t>(debugCuIndex);
-    if (index == DW_SECT_INFO) {
-      infoSectionIndex = i;
-    } else if (index == DW_SECT_ABBREV) {
-      abbrevSectionIndex = i;
-    } else if (index == DW_SECT_STR_OFFSETS) {
-      strOffsetsSectionIndex = i;
-    } else if (index == DW_SECT_RNGLISTS) {
-      rnglistsSectionIndex = i;
+  const auto rowSize = *columnsSize;
+  const auto rowOffset = static_cast<size_t>(unitIndex - 1) * rowSize;
+  DwarfCursor rowCursor(
+      offsets->subspan(rowOffset, rowSize), offsetsOffset + rowOffset);
+  uint32_t infoOffset = 0;
+  uint32_t abbrevOffset = 0;
+  uint32_t strOffsetsBase = 0;
+  folly::Optional<uint32_t> rnglistsBase;
+  for (uint32_t i = 0; i < *numColumns; ++i) {
+    auto value = rowCursor.read<uint32_t>();
+    if (value.hasError()) {
+      return makeUnexpected(value.error());
+    }
+    if (i == *infoSectionIndex) {
+      infoOffset = *value;
+    } else if (i == *abbrevSectionIndex) {
+      abbrevOffset = *value;
+    } else if (i == *strOffsetsSectionIndex) {
+      strOffsetsBase = *value;
+    } else if (rnglistsSectionIndex && i == *rnglistsSectionIndex) {
+      rnglistsBase = *value;
     }
   }
 
-  // DW_SECT_RNGLISTS/rnglistsSectionIndex only appears in DWARF5 .dwp, not in
-  // DWARF4 .dwp
-  if (infoSectionIndex == -1 || abbrevSectionIndex == -1 ||
-      strOffsetsSectionIndex == -1) {
-    return false;
-  }
-
-  // debugCuIndex offsets
-  const size_t rowIndex = idx - 1;
-  const size_t availableEntries = debugCuIndex.size() / sizeof(uint32_t);
-  if (numColumns != 0 && rowIndex > availableEntries / numColumns) {
-    return false;
-  }
-  const size_t entriesToSkip = rowIndex * numColumns;
-  readBytes(debugCuIndex, entriesToSkip * sizeof(uint32_t));
-  if (numColumns > debugCuIndex.size() / sizeof(uint32_t)) {
-    return false;
-  }
-  for (unsigned i = 0; i != numColumns; ++i) {
-    auto offset = read<uint32_t>(debugCuIndex);
-    if (i == infoSectionIndex) {
-      cu.offset = offset;
-    }
-    if (i == abbrevSectionIndex) {
-      cu.abbrevOffset = offset;
-    }
-    if (i == strOffsetsSectionIndex) {
-      cu.strOffsetsBase = offset;
-    }
-    if (i == rnglistsSectionIndex) {
-      cu.rnglistsBase = offset;
-    }
+  cu.offset = infoOffset;
+  cu.abbrevOffset = abbrevOffset;
+  cu.strOffsetsBase = strOffsetsBase;
+  if (rnglistsBase) {
+    cu.rnglistsBase = *rnglistsBase;
   }
   return true;
 }
 
-bool parseCompilationUnitMetadata(CompilationUnit& cu, size_t offset) {
-  auto debugInfo = cu.debugSections.debugInfo;
-  cu.offset = offset;
-  if (offset > debugInfo.size()) {
+namespace {
+
+DwarfParseResult<bool> parseCompilationUnitMetadata(
+    CompilationUnit& cu, size_t offset, bool preserveIndexedOffsets = false) {
+  auto header = parseCompilationUnitHeader(cu.debugSections.debugInfo, offset);
+  if (header.hasError()) {
+    return makeUnexpected(header.error());
+  }
+
+  cu.offset = static_cast<uint32_t>(offset);
+  cu.is64Bit = header->is64Bit;
+  cu.size = header->size;
+  cu.version = header->version;
+  cu.unitType = header->unitType;
+  cu.addrSize = header->addrSize;
+  cu.firstDie = header->firstDie;
+  cu.dwoId = header->dwoId;
+  if (!preserveIndexedOffsets) {
+    cu.abbrevOffset = header->abbrevOffset;
+  }
+  if (!isSupportedCompilationUnitType(cu.unitType)) {
     return false;
   }
-  auto chunk = debugInfo.subspan(offset);
-  // 1) unit_length
-  auto initialLength = read<uint32_t>(chunk);
-  cu.is64Bit = (initialLength == uint32_t(-1));
-  cu.size = cu.is64Bit ? read<uint64_t>(chunk) : initialLength;
-  if (cu.size > chunk.size()) {
-    FOLLY_SAFE_DFATAL(
-        "invalid size: ", cu.size, " chunk.size(): ", chunk.size());
-    return false;
-  }
-  cu.size += cu.is64Bit ? 12 : 4;
 
-  // 2) version
-  cu.version = read<uint16_t>(chunk);
-  if (cu.version < 2 || cu.version > 5) {
-    FOLLY_SAFE_DFATAL("invalid info version: ", cu.version);
-    return false;
-  }
-
-  if (cu.version == 5) {
-    // DWARF5: 7.5.1.1 Full and Partial Compilation Unit Headers
-    // 3) unit_type (new DWARF 5)
-    cu.unitType = read<uint8_t>(chunk);
-    if (cu.unitType != DW_UT_compile && cu.unitType != DW_UT_skeleton &&
-        cu.unitType != DW_UT_split_compile) {
-      return false;
-    }
-    // 4) address_size
-    cu.addrSize = read<uint8_t>(chunk);
-    if (cu.addrSize != sizeof(uintptr_t)) {
-      FOLLY_SAFE_DFATAL("invalid address size: ", cu.addrSize);
-      return false;
-    }
-
-    // 5) debug_abbrev_offset
-    // This can be already set in from .debug_cu_index if dwp file is used.
-    uint64_t abbrevOffset = readOffset(chunk, cu.is64Bit);
-    if (!cu.abbrevOffset.hasValue()) {
-      cu.abbrevOffset = abbrevOffset;
-    }
-
-    if (cu.unitType == DW_UT_skeleton || cu.unitType == DW_UT_split_compile) {
-      // 6) dwo_id
-      cu.dwoId = read<uint64_t>(chunk);
-    }
-  } else {
-    // DWARF4 has a single type of unit in .debug_info
-    cu.unitType = DW_UT_compile;
-    // 3) debug_abbrev_offset
-    // This can be already set in from .debug_cu_index if dwp file is used.
-    uint64_t abbrevOffset = readOffset(chunk, cu.is64Bit);
-    if (!cu.abbrevOffset.hasValue()) {
-      cu.abbrevOffset = abbrevOffset;
-    }
-    // 4) address_size
-    cu.addrSize = read<uint8_t>(chunk);
-    if (cu.addrSize != sizeof(uintptr_t)) {
-      FOLLY_SAFE_DFATAL("invalid address size: ", cu.addrSize);
-      return false;
-    }
-  }
-  cu.firstDie = chunk.data() - debugInfo.data();
   Die die = getDieAtOffset(cu, cu.firstDie);
   if (die.abbr.tag != DW_TAG_compile_unit &&
       die.abbr.tag != DW_TAG_skeleton_unit) {
@@ -408,12 +563,15 @@ CompilationUnits getCompilationUnits(
     const DebugSections& debugSections,
     uint64_t offset,
     bool requireSplitDwarf) {
-  const auto debugInfo = debugSections.debugInfo;
-  FOLLY_SAFE_DCHECK(offset < debugInfo.size(), "unexpected offset");
   CompilationUnits cu;
   cu.mainCompilationUnit.debugSections = debugSections;
 
-  if (!parseCompilationUnitMetadata(cu.mainCompilationUnit, offset)) {
+  if (offset > debugSections.debugInfo.size()) {
+    return cu;
+  }
+  auto mainResult = parseCompilationUnitMetadata(
+      cu.mainCompilationUnit, static_cast<size_t>(offset));
+  if (mainResult.hasError() || !*mainResult) {
     return cu;
   }
 
@@ -508,11 +666,16 @@ CompilationUnits getCompilationUnits(
   }
 
   if (useDWP) {
-    if (!findCompiliationOffset(
-            splitCU.debugSections.debugCuIndex,
-            *cu.mainCompilationUnit.dwoId,
-            splitCU) ||
-        !parseCompilationUnitMetadata(splitCU, splitCU.offset)) {
+    auto indexResult = findDwpCompilationUnit(
+        splitCU.debugSections.debugCuIndex,
+        *cu.mainCompilationUnit.dwoId,
+        splitCU);
+    if (indexResult.hasError() || !*indexResult) {
+      return cu;
+    }
+    auto splitResult =
+        parseCompilationUnitMetadata(splitCU, splitCU.offset, true);
+    if (splitResult.hasError() || !*splitResult) {
       return cu;
     }
     // 3.1.3 Split Full Compilation Unit Entries
@@ -556,10 +719,25 @@ CompilationUnits getCompilationUnits(
     }
   } else {
     // Skip CUs like DW_TAG_type_unit
+    bool found = false;
     for (size_t dwoOffset = 0;
-         !parseCompilationUnitMetadata(splitCU, dwoOffset) &&
          dwoOffset < splitCU.debugSections.debugInfo.size();) {
-      dwoOffset = dwoOffset + splitCU.size;
+      auto splitResult = parseCompilationUnitMetadata(splitCU, dwoOffset);
+      if (splitResult.hasError()) {
+        return cu;
+      }
+      if (*splitResult) {
+        found = true;
+        break;
+      }
+      if (splitCU.size == 0 ||
+          splitCU.size > splitCU.debugSections.debugInfo.size() - dwoOffset) {
+        return cu;
+      }
+      dwoOffset += splitCU.size;
+    }
+    if (!found) {
+      return cu;
     }
     if (!splitCU.dwoId || *splitCU.dwoId != *cu.mainCompilationUnit.dwoId) {
       return cu;
