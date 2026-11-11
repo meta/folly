@@ -489,10 +489,10 @@ void AsyncServerSocket::bind(uint16_t port) {
 
 void AsyncServerSocket::bind(
     uint16_t port, const SocketOptionMap& socketOptions) {
-  struct addrinfo hints, *res0;
+  struct addrinfo hints{};
+  struct addrinfo* res0;
   char sport[sizeof("65536")];
 
-  memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE | AI_NUMERICSERV;
