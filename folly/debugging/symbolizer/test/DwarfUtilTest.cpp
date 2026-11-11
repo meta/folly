@@ -487,6 +487,236 @@ TEST(DwarfUtil, FindDefinitionDiePropagatesInvalidReference) {
   EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
 }
 
+TEST(DwarfUtil, ReadAttributeRejectsTruncatedFixedValue) {
+  const std::vector<uint8_t> bytes{0x01, 0x02, 0x03};
+  DwarfCursor cursor(bytes);
+  CompilationUnit cu{};
+  Die die{};
+
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_decl_line, .form = DW_FORM_data4},
+      cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::truncated, result.error().code);
+  EXPECT_EQ(size_t{0}, cursor.offset());
+}
+
+TEST(DwarfUtil, ReadAttributeRejectsTruncatedBlock) {
+  const std::vector<uint8_t> bytes{4, 0x01, 0x02};
+  DwarfCursor cursor(bytes);
+  CompilationUnit cu{};
+  Die die{};
+
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_location, .form = DW_FORM_block1},
+      cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::truncated, result.error().code);
+}
+
+TEST(DwarfUtil, ReadAttributeRejectsUnterminatedString) {
+  const std::vector<uint8_t> bytes{'f', 'o', 'o'};
+  DwarfCursor cursor(bytes);
+  CompilationUnit cu{};
+  Die die{};
+
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_name, .form = DW_FORM_string},
+      cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::unterminated_string, result.error().code);
+}
+
+TEST(DwarfUtil, ReadAttributeRejectsUnknownForm) {
+  const std::vector<uint8_t> bytes;
+  DwarfCursor cursor(bytes);
+  CompilationUnit cu{};
+  Die die{};
+
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_name, .form = uint64_t{0xffff}},
+      cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
+}
+
+TEST(DwarfUtil, ReadAttributeResolvesIndirectForm) {
+  const std::vector<uint8_t> bytes{DW_FORM_data1, 0x2a};
+  DwarfCursor cursor(bytes);
+  CompilationUnit cu{};
+  Die die{};
+
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_decl_line, .form = DW_FORM_indirect},
+      cursor);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_EQ(uint64_t{DW_FORM_data1}, result->spec.form);
+  EXPECT_EQ(uint64_t{0x2a}, std::get<uint64_t>(result->attrValue));
+}
+
+TEST(DwarfUtil, ReadAttributeReadsEmbeddedValueForms) {
+  // DW_FORM_flag_present and DW_FORM_implicit_const carry their value in the
+  // form itself and consume no bytes; DW_FORM_sdata reads a single SLEB.
+  {
+    const std::vector<uint8_t> bytes;
+    DwarfCursor cursor(bytes);
+    CompilationUnit cu{};
+    Die die{};
+
+    auto result = readAttribute(
+        cu,
+        die,
+        AttributeSpec{.name = DW_AT_external, .form = DW_FORM_flag_present},
+        cursor);
+
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_EQ(uint64_t{1}, std::get<uint64_t>(result->attrValue));
+    EXPECT_EQ(0, cursor.offset());
+  }
+  {
+    const std::vector<uint8_t> bytes;
+    DwarfCursor cursor(bytes);
+    CompilationUnit cu{};
+    Die die{};
+
+    auto result = readAttribute(
+        cu,
+        die,
+        AttributeSpec{
+            .name = DW_AT_decl_line,
+            .form = DW_FORM_implicit_const,
+            .implicitConst = -1},
+        cursor);
+
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_EQ(
+        std::numeric_limits<uint64_t>::max(),
+        std::get<uint64_t>(result->attrValue));
+    EXPECT_EQ(0, cursor.offset());
+  }
+  {
+    const std::vector<uint8_t> bytes{0x7f};
+    DwarfCursor cursor(bytes);
+    CompilationUnit cu{};
+    Die die{};
+
+    auto result = readAttribute(
+        cu,
+        die,
+        AttributeSpec{.name = DW_AT_decl_line, .form = DW_FORM_sdata},
+        cursor);
+
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_EQ(
+        std::numeric_limits<uint64_t>::max(),
+        std::get<uint64_t>(result->attrValue));
+  }
+}
+
+TEST(DwarfUtil, ForEachAttributeReturnsNextDieOffset) {
+  const std::vector<uint8_t> info{'f', 'o', 'o', 0};
+  const std::vector<uint8_t> attributes{DW_AT_name, DW_FORM_string, 0, 0};
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.size = static_cast<uint32_t>(info.size());
+  Die die{
+      .abbr =
+          {
+              .attributes = attributes,
+          },
+  };
+  folly::StringPiece name;
+
+  auto result = forEachAttribute(cu, die, [&](const Attribute& attr) {
+    name = std::get<folly::StringPiece>(attr.attrValue);
+    return true;
+  });
+
+  ASSERT_TRUE(result.hasValue());
+  ASSERT_TRUE(result->hasValue());
+  EXPECT_EQ(info.size(), **result);
+  EXPECT_EQ("foo", name);
+}
+
+TEST(DwarfUtil, ForEachAttributeReportsEarlyStop) {
+  const std::vector<uint8_t> info{0x2a};
+  const std::vector<uint8_t> attributes{DW_AT_decl_line, DW_FORM_data1, 0, 0};
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.size = static_cast<uint32_t>(info.size());
+  Die die{
+      .abbr =
+          {
+              .attributes = attributes,
+          },
+  };
+
+  auto result = forEachAttribute(cu, die, [](const Attribute&) {
+    return false;
+  });
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_FALSE(result->hasValue());
+}
+
+TEST(DwarfUtil, GetAttributeRejectsTypeMismatch) {
+  const std::vector<uint8_t> info{0x2a};
+  const std::vector<uint8_t> attributes{DW_AT_name, DW_FORM_data1, 0, 0};
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.size = static_cast<uint32_t>(info.size());
+  Die die{
+      .abbr =
+          {
+              .attributes = attributes,
+          },
+  };
+
+  auto result = getAttribute<folly::StringPiece>(cu, die, DW_AT_name);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
+}
+
+TEST(DwarfUtil, ReadAttributeRejectsInvalidStringIndex) {
+  const uint32_t invalidStringOffset = 0x100;
+  std::vector<uint8_t> stringOffsets(sizeof(invalidStringOffset));
+  std::memcpy(
+      stringOffsets.data(), &invalidStringOffset, sizeof(invalidStringOffset));
+  const std::vector<uint8_t> strings{'x', 0};
+  const std::vector<uint8_t> info{0};
+  DwarfCursor cursor(info);
+  CompilationUnit cu{};
+  cu.debugSections.debugStrOffsets = stringOffsets;
+  cu.debugSections.debugStr = strings;
+  cu.strOffsetsBase = 0;
+  Die die{};
+
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_name, .form = DW_FORM_strx1},
+      cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
+}
+
 } // namespace
 } // namespace folly::symbolizer
 

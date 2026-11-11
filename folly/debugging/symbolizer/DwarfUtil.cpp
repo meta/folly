@@ -127,16 +127,6 @@ folly::StringPiece getStringFromStringSection(
   return readNullTerminated(bytes);
 }
 
-AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes) {
-  AttributeSpec spec;
-  spec.name = readULEB(bytes);
-  spec.form = readULEB(bytes);
-  if (spec.form == DW_FORM_implicit_const) {
-    spec.implicitConst = readSLEB(bytes);
-  }
-  return spec;
-}
-
 DwarfParseResult<folly::Optional<AttributeSpec>> readAttributeSpec(
     DwarfCursor& cursor) {
   const auto specOffset = cursor.offset();
@@ -603,37 +593,79 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
   // Read the DW_AT_*_base attributes.
   // Attributes which use FORMs relative to these base attrs
   // will not have valid values during this first pass!
-  forEachAttribute(cu, die, [&](const Attribute& attr) {
+  bool typeMismatch = false;
+  auto assign = [&]<typename T>(T& target, const Attribute& attr) {
+    const auto* value = std::get_if<T>(&attr.attrValue);
+    if (value == nullptr) {
+      typeMismatch = true;
+      return false;
+    }
+    target = *value;
+    return true;
+  };
+  auto assignOptional =
+      [&]<typename T>(folly::Optional<T>& target, const Attribute& attr) {
+        const auto* value = std::get_if<T>(&attr.attrValue);
+        if (value == nullptr) {
+          typeMismatch = true;
+          return false;
+        }
+        target = *value;
+        return true;
+      };
+  auto attributes = forEachAttribute(cu, die, [&](const Attribute& attr) {
     switch (attr.spec.name) {
       case DW_AT_comp_dir:
-        cu.compDir = std::get<folly::StringPiece>(attr.attrValue);
+        if (!assign(cu.compDir, attr)) {
+          return false;
+        }
         break;
       case DW_AT_addr_base:
       case DW_AT_GNU_addr_base:
-        cu.addrBase = std::get<uint64_t>(attr.attrValue);
+        if (!assignOptional(cu.addrBase, attr)) {
+          return false;
+        }
         break;
       case DW_AT_GNU_ranges_base:
-        cu.rangesBase = std::get<uint64_t>(attr.attrValue);
+        if (!assignOptional(cu.rangesBase, attr)) {
+          return false;
+        }
         break;
       case DW_AT_loclists_base:
-        cu.loclistsBase = std::get<uint64_t>(attr.attrValue);
+        if (!assignOptional(cu.loclistsBase, attr)) {
+          return false;
+        }
         break;
       case DW_AT_rnglists_base:
-        cu.rnglistsBase = std::get<uint64_t>(attr.attrValue);
+        if (!assignOptional(cu.rnglistsBase, attr)) {
+          return false;
+        }
         break;
       case DW_AT_str_offsets_base:
-        cu.strOffsetsBase = std::get<uint64_t>(attr.attrValue);
+        if (!assignOptional(cu.strOffsetsBase, attr)) {
+          return false;
+        }
         break;
       case DW_AT_GNU_dwo_name:
       case DW_AT_dwo_name: // dwo id is set above in dwarf5.
-        cu.dwoName = std::get<folly::StringPiece>(attr.attrValue);
+        if (!assignOptional(cu.dwoName, attr)) {
+          return false;
+        }
         break;
       case DW_AT_GNU_dwo_id:
-        cu.dwoId = std::get<uint64_t>(attr.attrValue);
+        if (!assignOptional(cu.dwoId, attr)) {
+          return false;
+        }
         break;
     }
     return true; // continue forEachAttribute
   });
+  if (attributes.hasError()) {
+    return makeUnexpected(attributes.error());
+  }
+  if (typeMismatch) {
+    return parseError<bool>(DwarfParseErrorCode::invalid_value, die.offset);
+  }
 
   return true;
 }
@@ -836,31 +868,84 @@ CompilationUnits getCompilationUnits(
 
 namespace {
 
-std::span<const uint8_t> getCompilationUnitBytes(
+DwarfParseResult<std::span<const uint8_t>> getCompilationUnitBytes(
     const CompilationUnit& cu, uint64_t offset) {
   const auto debugInfo = cu.debugSections.debugInfo;
-  FOLLY_SAFE_CHECK(cu.offset <= debugInfo.size(), "invalid CU offset");
-  FOLLY_SAFE_CHECK(cu.size <= debugInfo.size() - cu.offset, "invalid CU size");
-  const auto end = cu.offset + cu.size;
-  FOLLY_SAFE_CHECK(offset <= end, "offset outside CU");
-  return debugInfo.subspan(offset, end - offset);
+  if (cu.offset > debugInfo.size() || cu.size > debugInfo.size() - cu.offset) {
+    return parseError<std::span<const uint8_t>>(
+        DwarfParseErrorCode::invalid_offset, cu.offset);
+  }
+  const auto end = static_cast<uint64_t>(cu.offset) + cu.size;
+  if (offset < cu.offset || offset > end) {
+    return parseError<std::span<const uint8_t>>(
+        DwarfParseErrorCode::invalid_offset, toErrorOffset(offset));
+  }
+  return debugInfo.subspan(
+      static_cast<size_t>(offset), static_cast<size_t>(end - offset));
 }
 
-std::span<const uint8_t> getIndexedSectionBytes(
+DwarfParseResult<std::span<const uint8_t>> getIndexedSectionBytes(
     std::span<const uint8_t> section,
     uint64_t base,
     uint64_t index,
-    uint64_t entrySize) {
-  // Entry sizes come from address and offset widths, which are nonzero, but
-  // check anyway: the index bound below divides by entrySize.
-  FOLLY_SAFE_CHECK(entrySize != 0, "zero section entry size");
-  FOLLY_SAFE_CHECK(base <= section.size(), "invalid section base");
+    size_t entrySize,
+    size_t errorOffset) {
+  if (base > section.size()) {
+    return parseError<std::span<const uint8_t>>(
+        DwarfParseErrorCode::invalid_offset, errorOffset);
+  }
   const auto remaining = section.size() - base;
-  FOLLY_SAFE_CHECK(entrySize <= remaining, "section entry out of bounds");
-  FOLLY_SAFE_CHECK(
-      index <= (remaining - entrySize) / entrySize,
-      "section index out of bounds");
-  return section.subspan(base + index * entrySize);
+  if (entrySize == 0 || entrySize > remaining ||
+      index > (remaining - entrySize) / entrySize) {
+    return parseError<std::span<const uint8_t>>(
+        DwarfParseErrorCode::invalid_offset, errorOffset);
+  }
+  const auto entryOffset =
+      static_cast<size_t>(base) + static_cast<size_t>(index) * entrySize;
+  return section.subspan(entryOffset, entrySize);
+}
+
+DwarfParseResult<folly::StringPiece> getStringFromSection(
+    std::span<const uint8_t> section, uint64_t offset, size_t errorOffset) {
+  if (offset >= section.size()) {
+    return parseError<folly::StringPiece>(
+        DwarfParseErrorCode::invalid_offset, errorOffset);
+  }
+  DwarfCursor cursor(
+      section.subspan(static_cast<size_t>(offset)),
+      static_cast<size_t>(offset));
+  auto value = cursor.readCString();
+  if (value.hasError()) {
+    return makeUnexpected(value.error());
+  }
+  return folly::StringPiece(value->data(), value->size());
+}
+
+DwarfParseResult<uint64_t> addSectionOffsets(
+    uint64_t base, uint64_t offset, size_t errorOffset) {
+  if (offset > std::numeric_limits<uint64_t>::max() - base) {
+    return parseError<uint64_t>(
+        DwarfParseErrorCode::integer_overflow, errorOffset);
+  }
+  return base + offset;
+}
+
+DwarfParseResult<uint64_t> getIndexedOffset(
+    std::span<const uint8_t> section,
+    uint64_t base,
+    uint64_t index,
+    bool is64Bit,
+    size_t errorOffset) {
+  const size_t entrySize = is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
+  auto entry =
+      getIndexedSectionBytes(section, base, index, entrySize, errorOffset);
+  if (entry.hasError()) {
+    return makeUnexpected(entry.error());
+  }
+  const auto entryOffset =
+      static_cast<size_t>(base) + static_cast<size_t>(index) * entrySize;
+  DwarfCursor cursor(*entry, entryOffset);
+  return cursor.readOffset(is64Bit);
 }
 
 } // namespace
@@ -923,11 +1008,11 @@ DwarfParseResult<Die> getDieAtOffset(
   return die;
 }
 
-Attribute readAttribute(
+DwarfParseResult<Attribute> readAttribute(
     const CompilationUnit& cu,
     const Die& die,
     AttributeSpec spec,
-    std::span<const uint8_t>& info) {
+    DwarfCursor& info) {
   // DWARF 5 introduces new FORMs whose values are relative to some base
   // attrs: DW_AT_str_offsets_base, DW_AT_rnglists_base, DW_AT_addr_base.
   // Debug Fission DWARF 4 uses GNU DW_AT_GNU_ranges_base &
@@ -938,7 +1023,51 @@ Attribute readAttribute(
   // The DW_AT_*_base attrs are CU specific; so we read them just after
   // reading the CU header. During this first pass return empty values
   // when encountering a FORM that depends on DW_AT_*_base.
-  auto getStringUsingOffsetTable = [&](uint64_t index) {
+  auto makeValue =
+      [&](DwarfAttributeValue value) -> DwarfParseResult<Attribute> {
+    return Attribute{spec, die, value};
+  };
+  auto makeNumeric = [&](auto result) -> DwarfParseResult<Attribute> {
+    if (result.hasError()) {
+      return makeUnexpected(result.error());
+    }
+    return makeValue(uint64_t{*result});
+  };
+  auto makeBlock = [&](auto length) -> DwarfParseResult<Attribute> {
+    if (length.hasError()) {
+      return makeUnexpected(length.error());
+    }
+    using Length = std::remove_cvref_t<decltype(*length)>;
+    if constexpr (sizeof(Length) > sizeof(size_t)) {
+      if (*length > std::numeric_limits<size_t>::max()) {
+        return parseError<Attribute>(
+            DwarfParseErrorCode::integer_overflow, info.offset());
+      }
+    }
+    auto value = info.readBytes(static_cast<size_t>(*length));
+    if (value.hasError()) {
+      return makeUnexpected(value.error());
+    }
+    return makeValue(*value);
+  };
+  auto makeString = [&](DwarfParseResult<folly::StringPiece> value)
+      -> DwarfParseResult<Attribute> {
+    if (value.hasError()) {
+      return makeUnexpected(value.error());
+    }
+    return makeValue(*value);
+  };
+  auto readSectionString =
+      [&](std::span<const uint8_t> section) -> DwarfParseResult<Attribute> {
+    const auto valueOffset = info.offset();
+    auto offset = info.readOffset(die.is64Bit);
+    if (offset.hasError()) {
+      return makeUnexpected(offset.error());
+    }
+    return makeString(getStringFromSection(section, *offset, valueOffset));
+  };
+  auto getStringUsingOffsetTable =
+      [&](uint64_t index) -> DwarfParseResult<folly::StringPiece> {
     if (!cu.strOffsetsBase.has_value() &&
         !(cu.version < 5 && cu.dwoId.has_value())) {
       return folly::StringPiece();
@@ -948,17 +1077,20 @@ Attribute readAttribute(
     // following the header. The entries are indexed sequentially from
     // this base entry, starting from 0. For DWARF 4 version DWO files,
     // the value of DW_AT_str_offsets_base is implicitly zero.
-    const auto entrySize = cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
-    auto sp = getIndexedSectionBytes(
+    auto strOffset = getIndexedOffset(
         cu.debugSections.debugStrOffsets,
         cu.strOffsetsBase.value_or(0),
         index,
-        entrySize);
-    uint64_t strOffset = readOffset(sp, cu.is64Bit);
-    return getStringFromStringSection(cu.debugSections.debugStr, strOffset);
+        cu.is64Bit,
+        info.offset());
+    if (strOffset.hasError()) {
+      return makeUnexpected(strOffset.error());
+    }
+    return getStringFromSection(
+        cu.debugSections.debugStr, *strOffset, info.offset());
   };
 
-  auto readDebugAddr = [&](uint64_t index) {
+  auto readDebugAddr = [&](uint64_t index) -> DwarfParseResult<uint64_t> {
     if (!cu.addrBase.has_value()) {
       return uint64_t(0);
     }
@@ -966,68 +1098,77 @@ Attribute readAttribute(
     // The DW_AT_addr_base attribute points to the first entry following
     // the header. The entries are indexed sequentially from this base
     // entry, starting from 0.
-    auto sp = getIndexedSectionBytes(
-        cu.debugSections.debugAddr, *cu.addrBase, index, sizeof(uint64_t));
-    return read<uint64_t>(sp);
+    return getIndexedOffset(
+        cu.debugSections.debugAddr, *cu.addrBase, index, true, info.offset());
   };
+
+  while (spec.form == DW_FORM_indirect) {
+    auto form = info.readULEB();
+    if (form.hasError()) {
+      return makeUnexpected(form.error());
+    }
+    spec.form = *form;
+  }
 
   switch (spec.form) {
     case DW_FORM_addr:
-      return {spec, die, read<uintptr_t>(info)};
+      return makeNumeric(info.read<uintptr_t>());
     case DW_FORM_block1:
-      return {spec, die, readBytes(info, read<uint8_t>(info))};
+      return makeBlock(info.read<uint8_t>());
     case DW_FORM_block2:
-      return {spec, die, readBytes(info, read<uint16_t>(info))};
+      return makeBlock(info.read<uint16_t>());
     case DW_FORM_block4:
-      return {spec, die, readBytes(info, read<uint32_t>(info))};
+      return makeBlock(info.read<uint32_t>());
     case DW_FORM_block:
       [[fallthrough]];
     case DW_FORM_exprloc:
-      return {spec, die, readBytes(info, readULEB(info))};
+      return makeBlock(info.readULEB());
     case DW_FORM_data1:
       [[fallthrough]];
     case DW_FORM_ref1:
-      return {spec, die, read<uint8_t>(info)};
+      return makeNumeric(info.read<uint8_t>());
     case DW_FORM_data2:
       [[fallthrough]];
     case DW_FORM_ref2:
-      return {spec, die, read<uint16_t>(info)};
+      return makeNumeric(info.read<uint16_t>());
     case DW_FORM_data4:
       [[fallthrough]];
     case DW_FORM_ref4:
-      return {spec, die, read<uint32_t>(info)};
+      return makeNumeric(info.read<uint32_t>());
     case DW_FORM_data8:
       [[fallthrough]];
     case DW_FORM_ref8:
       [[fallthrough]];
     case DW_FORM_ref_sig8:
-      return {spec, die, read<uint64_t>(info)};
-    case DW_FORM_sdata:
-      return {spec, die, to_unsigned(readSLEB(info))};
+      return makeNumeric(info.read<uint64_t>());
+    case DW_FORM_sdata: {
+      auto value = info.readSLEB();
+      if (value.hasError()) {
+        return makeUnexpected(value.error());
+      }
+      return makeValue(to_unsigned(*value));
+    }
     case DW_FORM_udata:
       [[fallthrough]];
     case DW_FORM_ref_udata:
-      return {spec, die, readULEB(info)};
+      return makeNumeric(info.readULEB());
     case DW_FORM_flag:
-      return {spec, die, read<uint8_t>(info)};
+      return makeNumeric(info.read<uint8_t>());
     case DW_FORM_flag_present:
-      return {spec, die, 1u};
+      return makeValue(uint64_t{1});
     case DW_FORM_sec_offset:
       [[fallthrough]];
     case DW_FORM_ref_addr:
-      return {spec, die, readOffset(info, die.is64Bit)};
-    case DW_FORM_string:
-      return {spec, die, readNullTerminated(info)};
+      return makeNumeric(info.readOffset(die.is64Bit));
+    case DW_FORM_string: {
+      auto value = info.readCString();
+      if (value.hasError()) {
+        return makeUnexpected(value.error());
+      }
+      return makeValue(folly::StringPiece(value->data(), value->size()));
+    }
     case DW_FORM_strp:
-      return {
-          spec,
-          die,
-          getStringFromStringSection(
-              cu.debugSections.debugStr, readOffset(info, die.is64Bit))};
-    case DW_FORM_indirect: // form is explicitly specified
-      // Update spec with the actual FORM.
-      spec.form = readULEB(info);
-      return readAttribute(cu, die, spec, info);
+      return readSectionString(cu.debugSections.debugStr);
 
     // DWARF 5:
     case DW_FORM_implicit_const: // form is explicitly specified
@@ -1035,80 +1176,148 @@ Attribute readAttribute(
       // contains a third part, which is a signed LEB128 number. The value
       // of this number is used as the value of the attribute, and no
       // value is stored in the .debug_info section.
-      return {spec, die, to_unsigned(spec.implicitConst)};
+      return makeValue(to_unsigned(spec.implicitConst));
 
     case DW_FORM_addrx:
-    case DW_FORM_GNU_addr_index:
-      return {spec, die, readDebugAddr(readULEB(info))};
-    case DW_FORM_addrx1:
-      return {spec, die, readDebugAddr(readU64<1>(info))};
-    case DW_FORM_addrx2:
-      return {spec, die, readDebugAddr(readU64<2>(info))};
-    case DW_FORM_addrx3:
-      return {spec, die, readDebugAddr(readU64<3>(info))};
-    case DW_FORM_addrx4:
-      return {spec, die, readDebugAddr(readU64<4>(info))};
+    case DW_FORM_GNU_addr_index: {
+      auto index = info.readULEB();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeNumeric(readDebugAddr(*index));
+    }
+    case DW_FORM_addrx1: {
+      auto index = info.readU64<1>();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeNumeric(readDebugAddr(*index));
+    }
+    case DW_FORM_addrx2: {
+      auto index = info.readU64<2>();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeNumeric(readDebugAddr(*index));
+    }
+    case DW_FORM_addrx3: {
+      auto index = info.readU64<3>();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeNumeric(readDebugAddr(*index));
+    }
+    case DW_FORM_addrx4: {
+      auto index = info.readU64<4>();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeNumeric(readDebugAddr(*index));
+    }
 
     case DW_FORM_line_strp:
-      return {
-          spec,
-          die,
-          getStringFromStringSection(
-              cu.debugSections.debugLineStr, readOffset(info, die.is64Bit))};
+      return readSectionString(cu.debugSections.debugLineStr);
 
-    case DW_FORM_strx:
-      return {spec, die, getStringUsingOffsetTable(readULEB(info))};
-    case DW_FORM_strx1:
-      return {spec, die, getStringUsingOffsetTable(readU64<1>(info))};
-    case DW_FORM_strx2:
-      return {spec, die, getStringUsingOffsetTable(readU64<2>(info))};
-    case DW_FORM_strx3:
-      return {spec, die, getStringUsingOffsetTable(readU64<3>(info))};
-    case DW_FORM_strx4:
-      return {spec, die, getStringUsingOffsetTable(readU64<4>(info))};
+    case DW_FORM_strx: {
+      auto index = info.readULEB();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeString(getStringUsingOffsetTable(*index));
+    }
+    case DW_FORM_strx1: {
+      auto index = info.readU64<1>();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeString(getStringUsingOffsetTable(*index));
+    }
+    case DW_FORM_strx2: {
+      auto index = info.readU64<2>();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeString(getStringUsingOffsetTable(*index));
+    }
+    case DW_FORM_strx3: {
+      auto index = info.readU64<3>();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeString(getStringUsingOffsetTable(*index));
+    }
+    case DW_FORM_strx4: {
+      auto index = info.readU64<4>();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeString(getStringUsingOffsetTable(*index));
+    }
 
-    case DW_FORM_GNU_str_index:
-      return {spec, die, getStringUsingOffsetTable(readULEB(info))};
+    case DW_FORM_GNU_str_index: {
+      auto index = info.readULEB();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
+      }
+      return makeString(getStringUsingOffsetTable(*index));
+    }
 
     case DW_FORM_rnglistx: {
-      auto index = readULEB(info);
-      if (!cu.rnglistsBase.has_value()) {
-        return {spec, die, 0u};
+      auto index = info.readULEB();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
       }
-      const uint64_t offsetSize =
-          cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
-      auto sp = getIndexedSectionBytes(
-          cu.debugSections.debugRnglists, *cu.rnglistsBase, index, offsetSize);
-      auto offset = readOffset(sp, cu.is64Bit);
-      return {spec, die, *cu.rnglistsBase + offset};
+      if (!cu.rnglistsBase.has_value()) {
+        return makeValue(uint64_t{0});
+      }
+      auto offset = getIndexedOffset(
+          cu.debugSections.debugRnglists,
+          *cu.rnglistsBase,
+          *index,
+          cu.is64Bit,
+          info.offset());
+      if (offset.hasError()) {
+        return makeUnexpected(offset.error());
+      }
+      return makeNumeric(
+          addSectionOffsets(*cu.rnglistsBase, *offset, info.offset()));
     }
 
     case DW_FORM_loclistx: {
-      auto index = readULEB(info);
-      if (!cu.loclistsBase.has_value()) {
-        return {spec, die, 0u};
+      auto index = info.readULEB();
+      if (index.hasError()) {
+        return makeUnexpected(index.error());
       }
-      const uint64_t offsetSize =
-          cu.is64Bit ? sizeof(uint64_t) : sizeof(uint32_t);
-      auto sp = getIndexedSectionBytes(
-          cu.debugSections.debugLoclists, *cu.loclistsBase, index, offsetSize);
-      auto offset = readOffset(sp, cu.is64Bit);
-      return {spec, die, *cu.loclistsBase + offset};
+      if (!cu.loclistsBase.has_value()) {
+        return makeValue(uint64_t{0});
+      }
+      auto offset = getIndexedOffset(
+          cu.debugSections.debugLoclists,
+          *cu.loclistsBase,
+          *index,
+          cu.is64Bit,
+          info.offset());
+      if (offset.hasError()) {
+        return makeUnexpected(offset.error());
+      }
+      return makeNumeric(
+          addSectionOffsets(*cu.loclistsBase, *offset, info.offset()));
     }
 
-    case DW_FORM_data16:
-      return {spec, die, readBytes(info, 16)};
+    case DW_FORM_data16: {
+      auto value = info.readBytes(16);
+      if (value.hasError()) {
+        return makeUnexpected(value.error());
+      }
+      return makeValue(*value);
+    }
 
     case DW_FORM_ref_sup4:
     case DW_FORM_ref_sup8:
     case DW_FORM_strp_sup:
-      FOLLY_SAFE_DFATAL(
-          "Unexpected DWARF5 supplimentary object files: ", spec.form);
-      return {spec, die, 0u};
-
     default:
-      FOLLY_SAFE_DFATAL("invalid attribute form: ", spec.form);
-      return {spec, die, 0u};
+      return parseError<Attribute>(
+          DwarfParseErrorCode::invalid_value, info.offset());
   }
 }
 
@@ -1117,44 +1326,80 @@ Attribute readAttribute(
  * callable for each. Iteration is stopped early if any of the calls
  * return false.
  */
-size_t forEachAttribute(
+DwarfParseResult<folly::Optional<size_t>> forEachAttribute(
     const CompilationUnit& cu,
     const Die& die,
     folly::FunctionRef<bool(const Attribute&)> f) {
-  auto attrs = die.abbr.attributes;
-  const auto debugInfo = cu.debugSections.debugInfo;
-  auto values = getCompilationUnitBytes(cu, die.offset);
-  FOLLY_SAFE_CHECK(die.attrOffset <= values.size(), "attributes outside CU");
-  values = values.subspan(die.attrOffset);
-  while (auto spec = readAttributeSpec(attrs)) {
-    auto attr = readAttribute(cu, die, spec, values);
-    if (!f(attr)) {
-      return static_cast<size_t>(-1);
+  auto valuesBytes = getCompilationUnitBytes(cu, die.offset);
+  if (valuesBytes.hasError()) {
+    return makeUnexpected(valuesBytes.error());
+  }
+  if (die.attrOffset > valuesBytes->size()) {
+    return parseError<folly::Optional<size_t>>(
+        DwarfParseErrorCode::invalid_offset, die.offset);
+  }
+
+  DwarfCursor attrs(die.abbr.attributes);
+  DwarfCursor values(
+      valuesBytes->subspan(die.attrOffset), die.offset + die.attrOffset);
+  for (;;) {
+    auto spec = readAttributeSpec(attrs);
+    if (spec.hasError()) {
+      return makeUnexpected(spec.error());
+    }
+    if (!spec->hasValue()) {
+      break;
+    }
+    auto attr = readAttribute(cu, die, **spec, values);
+    if (attr.hasError()) {
+      return makeUnexpected(attr.error());
+    }
+    if (!f(*attr)) {
+      return folly::Optional<size_t>{};
     }
   }
-  return values.data() - debugInfo.data();
+  return folly::Optional<size_t>{values.offset()};
 }
 
-folly::StringPiece getFunctionNameFromDie(
+DwarfParseResult<folly::StringPiece> getFunctionNameFromDie(
     const CompilationUnit& srcu, const Die& die) {
   folly::StringPiece name;
-  forEachAttribute(srcu, die, [&](const Attribute& attr) {
+  bool typeMismatch = false;
+  auto iteration = forEachAttribute(srcu, die, [&](const Attribute& attr) {
     switch (attr.spec.name) {
-      case DW_AT_linkage_name:
-        name = std::get<folly::StringPiece>(attr.attrValue);
+      case DW_AT_linkage_name: {
+        const auto* value = std::get_if<folly::StringPiece>(&attr.attrValue);
+        if (value == nullptr) {
+          typeMismatch = true;
+          return false;
+        }
+        name = *value;
         break;
+      }
       case DW_AT_name:
         // NOTE: when DW_AT_linkage_name and DW_AT_name match, dwarf
         // emitters omit DW_AT_linkage_name (to save space). If present
         // DW_AT_linkage_name should always be preferred (mangled C++ name
         // vs just the function name).
         if (name.empty()) {
-          name = std::get<folly::StringPiece>(attr.attrValue);
+          const auto* value = std::get_if<folly::StringPiece>(&attr.attrValue);
+          if (value == nullptr) {
+            typeMismatch = true;
+            return false;
+          }
+          name = *value;
         }
         break;
     }
     return true; // continue forEachAttribute
   });
+  if (iteration.hasError()) {
+    return makeUnexpected(iteration.error());
+  }
+  if (typeMismatch) {
+    return parseError<folly::StringPiece>(
+        DwarfParseErrorCode::invalid_value, die.offset);
+  }
   return name;
 }
 
@@ -1165,13 +1410,18 @@ folly::StringPiece getFunctionName(
     return {};
   }
   auto name = getFunctionNameFromDie(srcu, *declDie);
-  if (!name.empty()) {
-    return name;
+  if (name.hasError()) {
+    return {};
+  }
+  if (!name->empty()) {
+    return *name;
   }
   auto definition = findDefinitionDie(srcu, *declDie);
-  return definition.hasValue()
-      ? getFunctionNameFromDie(srcu, *definition)
-      : folly::StringPiece{};
+  if (definition.hasError()) {
+    return {};
+  }
+  auto definitionName = getFunctionNameFromDie(srcu, *definition);
+  return definitionName.hasValue() ? *definitionName : folly::StringPiece{};
 }
 
 DwarfParseResult<Die> findDefinitionDie(
@@ -1180,14 +1430,17 @@ DwarfParseResult<Die> findDefinitionDie(
   // DW_AT_specification: Incomplete, non-defining, or separate declaration
   // corresponding to a declaration
   auto offset = getAttribute<uint64_t>(cu, die, DW_AT_specification);
-  if (!offset) {
+  if (offset.hasError()) {
+    return makeUnexpected(offset.error());
+  }
+  if (!offset->hasValue()) {
     return die;
   }
-  if (*offset > cu.size) {
+  if (**offset > cu.size) {
     return makeUnexpected(
         DwarfParseError{DwarfParseErrorCode::invalid_offset, die.offset});
   }
-  return getDieAtOffset(cu, cu.offset + offset.value());
+  return getDieAtOffset(cu, cu.offset + **offset);
 }
 
 } // namespace symbolizer

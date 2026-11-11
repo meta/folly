@@ -59,9 +59,6 @@ class DwarfImpl {
       bool checkAddress = true) const;
 
  private:
-  using AttributeValue =
-      std::variant<uint64_t, folly::StringPiece, std::span<const uint8_t>>;
-
   /**
    * Finds a subprogram debugging info entry that contains a given address among
    * children of given die. Depth first search.
@@ -77,7 +74,7 @@ class DwarfImpl {
    * Finds inlined subroutine DIEs and their caller lines that contains a given
    * address among children of given die. Depth first search.
    */
-  void findInlinedSubroutineDieForAddress(
+  DwarfParseResult<bool> findInlinedSubroutineDieForAddress(
       const CompilationUnit& cu,
       const Die& die,
       const DwarfLineNumberVM& lineVM,

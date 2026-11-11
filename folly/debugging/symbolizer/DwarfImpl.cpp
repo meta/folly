@@ -132,27 +132,57 @@ bool DwarfImpl::findLocation(
     expectedAttributes |= kHighPCOrRanges;
   }
 
-  forEachAttribute(mainCu, die, [&](const Attribute& attr) {
+  bool typeMismatch = false;
+  auto getUnsigned = [&](const Attribute& attr) {
+    const auto* value = std::get_if<uint64_t>(&attr.attrValue);
+    typeMismatch |= value == nullptr;
+    return value;
+  };
+  auto getString = [&](const Attribute& attr) {
+    const auto* value = std::get_if<folly::StringPiece>(&attr.attrValue);
+    typeMismatch |= value == nullptr;
+    return value;
+  };
+  auto attributes = forEachAttribute(mainCu, die, [&](const Attribute& attr) {
     switch (attr.spec.name) {
-      case DW_AT_stmt_list:
+      case DW_AT_stmt_list: {
+        const auto* value = getUnsigned(attr);
+        if (value == nullptr) {
+          return false;
+        }
         expectedAttributes &= ~kStmtList;
         // Offset in .debug_line for the line number VM program for this
         // compilation unit
-        lineOffset = std::get<uint64_t>(attr.attrValue);
+        lineOffset = *value;
         break;
-      case DW_AT_comp_dir:
+      }
+      case DW_AT_comp_dir: {
+        const auto* value = getString(attr);
+        if (value == nullptr) {
+          return false;
+        }
         expectedAttributes &= ~kCompDir;
         // Compilation directory
-        compilationDirectory = std::get<folly::StringPiece>(attr.attrValue);
+        compilationDirectory = *value;
         break;
-      case DW_AT_name:
+      }
+      case DW_AT_name: {
+        const auto* value = getString(attr);
+        if (value == nullptr) {
+          return false;
+        }
         expectedAttributes &= ~kName;
         // File name of main file being compiled
-        mainFileName = std::get<folly::StringPiece>(attr.attrValue);
+        mainFileName = *value;
         break;
-      case DW_AT_low_pc:
+      }
+      case DW_AT_low_pc: {
+        const auto* value = getUnsigned(attr);
+        if (value == nullptr) {
+          return false;
+        }
         expectedAttributes &= ~kLowPC;
-        baseAddrCU = std::get<uint64_t>(attr.attrValue);
+        baseAddrCU = *value;
         if (!foundAddress) {
           if (address < *baseAddrCU) {
             return false;
@@ -173,24 +203,34 @@ bool DwarfImpl::findLocation(
           }
         }
         break;
-      case DW_AT_high_pc:
+      }
+      case DW_AT_high_pc: {
+        const auto* value = getUnsigned(attr);
+        if (value == nullptr) {
+          return false;
+        }
         expectedAttributes &= ~kHighPCOrRanges;
         if (!foundAddress) {
-          if (address >= std::get<uint64_t>(attr.attrValue)) {
+          if (address >= *value) {
             return false;
           }
           seenHighPC = true;
           foundAddress = seenLowPC;
         }
         break;
-      case DW_AT_ranges:
+      }
+      case DW_AT_ranges: {
+        const auto* value = getUnsigned(attr);
+        if (value == nullptr) {
+          return false;
+        }
         // 3.1.1: CU entries have:
         // - either DW_AT_low_pc and DW_AT_high_pc
         // OR
         // - DW_AT_ranges and optional DW_AT_low_pc
         expectedAttributes &= ~kHighPCOrRanges;
         if (!foundAddress) {
-          rangesOffset = std::get<uint64_t>(attr.attrValue);
+          rangesOffset = *value;
           if (seenLowPC) {
             if (!isAddrInRangeList(
                     mainCu,
@@ -204,9 +244,13 @@ bool DwarfImpl::findLocation(
           }
         }
         break;
+      }
     }
     return (expectedAttributes != 0); // continue forEachAttribute
   });
+  if (attributes.hasError() || typeMismatch) {
+    return false;
+  }
 
   if (!foundAddress || !lineOffset) {
     return false;
@@ -282,7 +326,9 @@ bool DwarfImpl::findLocation(
     return true;
   }
 
-  if (auto name = getFunctionNameFromDie(cu, subprogram); !name.empty()) {
+  auto functionName = getFunctionNameFromDie(cu, subprogram);
+  if (functionName.hasValue() && !functionName->empty()) {
+    const auto name = *functionName;
     // frame.name may already be filled from an earlier call to:
     //   frame.name = elf->getSymbolName(elf->getDefinitionByAddress(address))
     //
@@ -300,16 +346,21 @@ bool DwarfImpl::findLocation(
   }
 
   if (eachParameterName) {
+    bool parameterError = false;
     auto parameters = forEachChild(cu, subprogram, [&](const Die& child) {
       if (child.abbr.tag == DW_TAG_formal_parameter) {
-        if (auto name =
-                getAttribute<folly::StringPiece>(cu, child, DW_AT_name)) {
-          eachParameterName(*name);
+        auto name = getAttribute<folly::StringPiece>(cu, child, DW_AT_name);
+        if (name.hasError()) {
+          parameterError = true;
+          return false;
+        }
+        if (name->hasValue()) {
+          eachParameterName(**name);
         }
       }
       return true; // continue forEachChild
     });
-    if (parameters.hasError()) {
+    if (parameters.hasError() || parameterError) {
       return true;
     }
   }
@@ -326,7 +377,7 @@ bool DwarfImpl::findLocation(
       std::min<size_t>(kMaxInlineLocationInfoPerFrame, inlineFrames.size()) + 1;
   CallLocation callLocations[kMaxInlineLocationInfoPerFrame + 1];
   size_t numFound = 0;
-  findInlinedSubroutineDieForAddress(
+  auto inlineResult = findInlinedSubroutineDieForAddress(
       cu,
       subprogram,
       lineVM,
@@ -334,6 +385,9 @@ bool DwarfImpl::findLocation(
       baseAddrCU,
       folly::Range<CallLocation*>(callLocations, size),
       numFound);
+  if (inlineResult.hasError()) {
+    return true;
+  }
   folly::Range<CallLocation*> inlineLocations(callLocations, numFound);
   fillInlineFrames(address, frame, inlineLocations, inlineFrames);
   return true;
@@ -427,14 +481,21 @@ DwarfParseResult<size_t> DwarfImpl::forEachChild(
     const CompilationUnit& cu,
     const Die& die,
     folly::FunctionRef<bool(const Die& die)> f) const {
-  size_t nextDieOffset = forEachAttribute(cu, die, [&](const Attribute&) {
+  auto nextDieOffset = forEachAttribute(cu, die, [&](const Attribute&) {
     return true;
   });
+  if (nextDieOffset.hasError()) {
+    return makeUnexpected(nextDieOffset.error());
+  }
+  if (!nextDieOffset->hasValue()) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_value, die.offset});
+  }
   if (!die.abbr.hasChildren) {
-    return nextDieOffset;
+    return **nextDieOffset;
   }
 
-  auto childDie = getDieAtOffset(cu, nextDieOffset);
+  auto childDie = getDieAtOffset(cu, **nextDieOffset);
   if (childDie.hasError()) {
     return makeUnexpected(childDie.error());
   }
@@ -623,30 +684,70 @@ DwarfParseResult<bool> DwarfImpl::findSubProgramDieForAddress(
       folly::Optional<uint64_t> highPc;
       folly::Optional<bool> isHighPcAddr;
       folly::Optional<uint64_t> rangeOffset;
-      forEachAttribute(cu, childDie, [&](const Attribute& attr) {
-        switch (attr.spec.name) {
-          case DW_AT_ranges:
-            rangeOffset =
-                std::get<uint64_t>(attr.attrValue) + cu.rangesBase.value_or(0);
-            break;
-          case DW_AT_low_pc:
-            lowPc = std::get<uint64_t>(attr.attrValue);
-            break;
-          case DW_AT_high_pc:
-            // The value of the DW_AT_high_pc attribute can be
-            // an address (DW_FORM_addr*) or an offset (DW_FORM_data*).
-            isHighPcAddr = attr.spec.form == DW_FORM_addr || //
-                attr.spec.form == DW_FORM_addrx || //
-                attr.spec.form == DW_FORM_addrx1 || //
-                attr.spec.form == DW_FORM_addrx2 || //
-                attr.spec.form == DW_FORM_addrx3 || //
-                attr.spec.form == DW_FORM_addrx4;
-            highPc = std::get<uint64_t>(attr.attrValue);
-            break;
-        }
-        return true; // continue forEachAttribute
-      });
+      bool typeMismatch = false;
+      auto attributes =
+          forEachAttribute(cu, childDie, [&](const Attribute& attr) {
+            switch (attr.spec.name) {
+              case DW_AT_ranges: {
+                const auto* value = std::get_if<uint64_t>(&attr.attrValue);
+                if (value == nullptr) {
+                  typeMismatch = true;
+                  return false;
+                }
+                const auto base = cu.rangesBase.value_or(0);
+                if (*value > std::numeric_limits<uint64_t>::max() - base) {
+                  parseError = DwarfParseError{
+                      DwarfParseErrorCode::integer_overflow, childDie.offset};
+                  return false;
+                }
+                rangeOffset = *value + base;
+                break;
+              }
+              case DW_AT_low_pc: {
+                const auto* value = std::get_if<uint64_t>(&attr.attrValue);
+                if (value == nullptr) {
+                  typeMismatch = true;
+                  return false;
+                }
+                lowPc = *value;
+                break;
+              }
+              case DW_AT_high_pc: {
+                const auto* value = std::get_if<uint64_t>(&attr.attrValue);
+                if (value == nullptr) {
+                  typeMismatch = true;
+                  return false;
+                }
+                // The value of the DW_AT_high_pc attribute can be
+                // an address (DW_FORM_addr*) or an offset (DW_FORM_data*).
+                isHighPcAddr = attr.spec.form == DW_FORM_addr || //
+                    attr.spec.form == DW_FORM_addrx || //
+                    attr.spec.form == DW_FORM_addrx1 || //
+                    attr.spec.form == DW_FORM_addrx2 || //
+                    attr.spec.form == DW_FORM_addrx3 || //
+                    attr.spec.form == DW_FORM_addrx4;
+                highPc = *value;
+                break;
+              }
+            }
+            return true; // continue forEachAttribute
+          });
+      if (attributes.hasError()) {
+        parseError = attributes.error();
+        return false;
+      }
+      if (typeMismatch) {
+        parseError = DwarfParseError{
+            DwarfParseErrorCode::invalid_value, childDie.offset};
+        return false;
+      }
 
+      if (lowPc && highPc && isHighPcAddr && !*isHighPcAddr &&
+          *highPc > std::numeric_limits<uint64_t>::max() - *lowPc) {
+        parseError = DwarfParseError{
+            DwarfParseErrorCode::integer_overflow, childDie.offset};
+        return false;
+      }
       bool pcMatch = lowPc && highPc && isHighPcAddr && address >= *lowPc &&
           (address < (*isHighPcAddr ? *highPc : *lowPc + *highPc));
       if (pcMatch) {
@@ -663,13 +764,13 @@ DwarfParseResult<bool> DwarfImpl::findSubProgramDieForAddress(
     }
 
     // Continue forEachChild to next sibling DIE only if not already found.
-    auto nested = findSubProgramDieForAddress(
+    auto descendant = findSubProgramDieForAddress(
         cu, childDie, address, baseAddrCU, subprogram);
-    if (nested.hasError()) {
-      parseError = nested.error();
+    if (descendant.hasError()) {
+      parseError = descendant.error();
       return false;
     }
-    return !*nested;
+    return !*descendant;
   });
   if (children.hasError()) {
     return makeUnexpected(children.error());
@@ -690,7 +791,7 @@ DwarfParseResult<bool> DwarfImpl::findSubProgramDieForAddress(
  *   are only stored in its "concrete out-of-line instance" (a
  *   DW_TAG_subprogram) which we find using DW_AT_abstract_origin.
  */
-void DwarfImpl::findInlinedSubroutineDieForAddress(
+DwarfParseResult<bool> DwarfImpl::findInlinedSubroutineDieForAddress(
     const CompilationUnit& cu,
     const Die& die,
     const DwarfLineNumberVM& lineVM,
@@ -699,9 +800,10 @@ void DwarfImpl::findInlinedSubroutineDieForAddress(
     folly::Range<CallLocation*> locations,
     size_t& numFound) const {
   if (numFound >= locations.size()) {
-    return;
+    return true;
   }
 
+  folly::Optional<DwarfParseError> parseError;
   auto children = forEachChild(cu, die, [&](const Die& childDie) {
     // Between a DW_TAG_subprogram and DW_TAG_inlined_subroutine we might
     // have arbitrary intermediary "nodes", including DW_TAG_common_block,
@@ -716,8 +818,12 @@ void DwarfImpl::findInlinedSubroutineDieForAddress(
         childDie.abbr.tag == DW_TAG_entry_point ||
         childDie.abbr.tag == DW_TAG_common_block ||
         childDie.abbr.tag == DW_TAG_lexical_block) {
-      findInlinedSubroutineDieForAddress(
+      auto nested = findInlinedSubroutineDieForAddress(
           cu, childDie, lineVM, address, baseAddrCU, locations, numFound);
+      if (nested.hasError()) {
+        parseError = nested.error();
+        return false;
+      }
       return true;
     }
 
@@ -734,39 +840,90 @@ void DwarfImpl::findInlinedSubroutineDieForAddress(
     folly::Optional<uint64_t> callFile;
     folly::Optional<uint64_t> callLine;
     folly::Optional<uint64_t> rangeOffset;
-    forEachAttribute(cu, childDie, [&](const Attribute& attr) {
-      switch (attr.spec.name) {
-        case DW_AT_ranges:
-          rangeOffset =
-              std::get<uint64_t>(attr.attrValue) + cu.rangesBase.value_or(0);
-          break;
-        case DW_AT_low_pc:
-          lowPc = std::get<uint64_t>(attr.attrValue);
-          break;
-        case DW_AT_high_pc:
-          // The value of the DW_AT_high_pc attribute can be
-          // an address (DW_FORM_addr*) or an offset (DW_FORM_data*).
-          isHighPcAddr = attr.spec.form == DW_FORM_addr || //
-              attr.spec.form == DW_FORM_addrx || //
-              attr.spec.form == DW_FORM_addrx1 || //
-              attr.spec.form == DW_FORM_addrx2 || //
-              attr.spec.form == DW_FORM_addrx3 || //
-              attr.spec.form == DW_FORM_addrx4;
-          highPc = std::get<uint64_t>(attr.attrValue);
-          break;
-        case DW_AT_abstract_origin:
-          abstractOriginRefType = attr.spec.form;
-          abstractOrigin = std::get<uint64_t>(attr.attrValue);
-          break;
-        case DW_AT_call_line:
-          callLine = std::get<uint64_t>(attr.attrValue);
-          break;
-        case DW_AT_call_file:
-          callFile = std::get<uint64_t>(attr.attrValue);
-          break;
-      }
-      return true; // continue forEachAttribute
-    });
+    bool typeMismatch = false;
+    auto getUnsigned = [&](const Attribute& attr) {
+      const auto* value = std::get_if<uint64_t>(&attr.attrValue);
+      typeMismatch |= value == nullptr;
+      return value;
+    };
+    auto attributes =
+        forEachAttribute(cu, childDie, [&](const Attribute& attr) {
+          switch (attr.spec.name) {
+            case DW_AT_ranges: {
+              const auto* value = getUnsigned(attr);
+              if (value == nullptr) {
+                return false;
+              }
+              const auto base = cu.rangesBase.value_or(0);
+              if (*value > std::numeric_limits<uint64_t>::max() - base) {
+                parseError = DwarfParseError{
+                    DwarfParseErrorCode::integer_overflow, childDie.offset};
+                return false;
+              }
+              rangeOffset = *value + base;
+              break;
+            }
+            case DW_AT_low_pc: {
+              const auto* value = getUnsigned(attr);
+              if (value == nullptr) {
+                return false;
+              }
+              lowPc = *value;
+              break;
+            }
+            case DW_AT_high_pc: {
+              const auto* value = getUnsigned(attr);
+              if (value == nullptr) {
+                return false;
+              }
+              // The value of the DW_AT_high_pc attribute can be
+              // an address (DW_FORM_addr*) or an offset (DW_FORM_data*).
+              isHighPcAddr = attr.spec.form == DW_FORM_addr || //
+                  attr.spec.form == DW_FORM_addrx || //
+                  attr.spec.form == DW_FORM_addrx1 || //
+                  attr.spec.form == DW_FORM_addrx2 || //
+                  attr.spec.form == DW_FORM_addrx3 || //
+                  attr.spec.form == DW_FORM_addrx4;
+              highPc = *value;
+              break;
+            }
+            case DW_AT_abstract_origin: {
+              const auto* value = getUnsigned(attr);
+              if (value == nullptr) {
+                return false;
+              }
+              abstractOriginRefType = attr.spec.form;
+              abstractOrigin = *value;
+              break;
+            }
+            case DW_AT_call_line: {
+              const auto* value = getUnsigned(attr);
+              if (value == nullptr) {
+                return false;
+              }
+              callLine = *value;
+              break;
+            }
+            case DW_AT_call_file: {
+              const auto* value = getUnsigned(attr);
+              if (value == nullptr) {
+                return false;
+              }
+              callFile = *value;
+              break;
+            }
+          }
+          return true; // continue forEachAttribute
+        });
+    if (attributes.hasError()) {
+      parseError = attributes.error();
+      return false;
+    }
+    if (typeMismatch) {
+      parseError =
+          DwarfParseError{DwarfParseErrorCode::invalid_value, childDie.offset};
+      return false;
+    }
 
     // 2.17 Code Addresses and Ranges
     // Any debugging information entry describing an entity that has a
@@ -781,6 +938,12 @@ void DwarfImpl::findInlinedSubroutineDieForAddress(
     // have DW_AT_low_pc/DW_AT_high_pc pairs and DW_AT_ranges.
     // TODO: Support relocated address which requires lookup in relocation
     // map.
+    if (lowPc && highPc && isHighPcAddr && !*isHighPcAddr &&
+        *highPc > std::numeric_limits<uint64_t>::max() - *lowPc) {
+      parseError = DwarfParseError{
+          DwarfParseErrorCode::integer_overflow, childDie.offset};
+      return false;
+    }
     bool pcMatch = lowPc && highPc && isHighPcAddr && address >= *lowPc &&
         (address < (*isHighPcAddr ? *highPc : (*lowPc + *highPc)));
     bool rangeMatch = rangeOffset &&
@@ -815,14 +978,22 @@ void DwarfImpl::findInlinedSubroutineDieForAddress(
         ? getFunctionName(cu, cu.offset + *abstractOrigin)
         : getFunctionName(
               findCompilationUnit(cu, *abstractOrigin), *abstractOrigin);
-    findInlinedSubroutineDieForAddress(
+    auto nested = findInlinedSubroutineDieForAddress(
         cu, childDie, lineVM, address, baseAddrCU, locations, ++numFound);
+    if (nested.hasError()) {
+      parseError = nested.error();
+      return false;
+    }
 
     return false;
   });
   if (children.hasError()) {
-    return;
+    return makeUnexpected(children.error());
   }
+  if (parseError) {
+    return makeUnexpected(*parseError);
+  }
+  return true;
 }
 
 } // namespace symbolizer

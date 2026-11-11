@@ -157,11 +157,13 @@ struct AttributeSpec {
   explicit operator bool() const { return name != 0 || form != 0; }
 };
 
+using DwarfAttributeValue =
+    std::variant<uint64_t, folly::StringPiece, std::span<const uint8_t>>;
+
 struct Attribute {
   AttributeSpec spec;
   const Die& die;
-  std::variant<uint64_t, folly::StringPiece, std::span<const uint8_t>>
-      attrValue;
+  DwarfAttributeValue attrValue;
 };
 
 // Get an ELF section by name.
@@ -200,7 +202,6 @@ uint64_t readOffset(std::span<const uint8_t>& bytes, bool is64Bit);
 std::span<const uint8_t> readBytes(
     std::span<const uint8_t>& bytes, uint64_t len);
 
-AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes);
 DwarfParseResult<folly::Optional<AttributeSpec>> readAttributeSpec(
     DwarfCursor& cursor);
 
@@ -234,36 +235,49 @@ DwarfParseResult<Die> getDieAtOffset(
     const CompilationUnit& cu, uint64_t offset);
 
 // Read attribute value.
-Attribute readAttribute(
+DwarfParseResult<Attribute> readAttribute(
     const CompilationUnit& cu,
     const Die& die,
     AttributeSpec spec,
-    std::span<const uint8_t>& info);
+    DwarfCursor& info);
 
 /*
  * Iterate over all attributes of the given DIE, calling the given callable
  * for each. Iteration is stopped early if any of the calls return false.
  */
-size_t forEachAttribute(
+DwarfParseResult<folly::Optional<size_t>> forEachAttribute(
     const CompilationUnit& cu,
     const Die& die,
     folly::FunctionRef<bool(const Attribute&)> f);
 
 template <class T>
-folly::Optional<T> getAttribute(
+DwarfParseResult<folly::Optional<T>> getAttribute(
     const CompilationUnit& cu, const Die& die, uint64_t attrName) {
   folly::Optional<T> result;
-  forEachAttribute(cu, die, [&](const Attribute& attr) {
+  bool typeMismatch = false;
+  auto iteration = forEachAttribute(cu, die, [&](const Attribute& attr) {
     if (attr.spec.name == attrName) {
-      result = std::get<T>(attr.attrValue);
+      const auto* value = std::get_if<T>(&attr.attrValue);
+      if (value == nullptr) {
+        typeMismatch = true;
+      } else {
+        result = *value;
+      }
       return false;
     }
     return true;
   });
+  if (iteration.hasError()) {
+    return makeUnexpected(iteration.error());
+  }
+  if (typeMismatch) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_value, die.offset});
+  }
   return result;
 }
 
-folly::StringPiece getFunctionNameFromDie(
+DwarfParseResult<folly::StringPiece> getFunctionNameFromDie(
     const CompilationUnit& srcu, const Die& die);
 
 folly::StringPiece getFunctionName(
