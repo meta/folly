@@ -295,7 +295,7 @@ typename std::enable_if<
 makeTryWithNoUnwrap(F&& f) noexcept {
   using ResultType = invoke_result_t<F>;
   try {
-    return Try<ResultType>(f());
+    return Try<ResultType>(detail::TryFromFunctionTag{}, f);
   } catch (...) {
     return Try<ResultType>(exception_wrapper(current_exception()));
   }

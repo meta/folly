@@ -51,6 +51,8 @@ template <class T>
 class Try;
 
 namespace detail {
+struct TryFromFunctionTag {};
+
 template <class T>
 class TryBase {
  protected:
@@ -87,6 +89,10 @@ class TryBase {
   explicit TryBase(std::in_place_t, Args&&... args) noexcept(
       std::is_nothrow_constructible<T, Args&&...>::value)
       : contains_(Contains::VALUE), value_(static_cast<Args&&>(args)...) {}
+
+  template <typename F>
+  explicit TryBase(TryFromFunctionTag, F& f)
+      : contains_(Contains::VALUE), value_(f()) {}
 
   /// Implicit conversion from Try<void> to Try<Unit>
   template <class T2 = T>
