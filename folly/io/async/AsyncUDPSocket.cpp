@@ -817,7 +817,7 @@ ssize_t AsyncUDPSocket::writeWithCmsgsImpl(
     }
   }
   for (const auto& itr : *cmsgs_) {
-    if (additionalCmsgs.find(itr.first) != additionalCmsgs.end()) {
+    if (additionalCmsgs.contains(itr.first)) {
       continue;
     }
     const auto key = itr.first;
@@ -947,7 +947,7 @@ ssize_t AsyncUDPSocket::writevWithCmsgs(
   // buffer.
   size_t numCmsgs = additionalCmsgs.size();
   for (const auto& itr : *cmsgs_) {
-    if (additionalCmsgs.find(itr.first) == additionalCmsgs.end()) {
+    if (!additionalCmsgs.contains(itr.first)) {
       ++numCmsgs;
     }
   }
