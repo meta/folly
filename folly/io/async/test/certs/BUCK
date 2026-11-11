@@ -1,12 +1,35 @@
-load("@fbcode_macros//build_defs:export_files.bzl", "export_files")
+load("@fbcode_macros//build_defs:export_files.bzl", "export_file")
 load("@fbcode_macros//build_defs:native_rules.bzl", "buck_filegroup")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 
 oncall("fbcode_entropy_wardens_folly")
 
-export_files(files = glob(["*.pem"]))
+[
+    fb_dirsync_rule(
+        name = pem,
+        src = pem,
+        fbcode_rule = export_file,
+    )
+    for pem in [
+        "ca-cert.pem",
+        "ca-key.pem",
+        "client_ca_cert.pem",
+        "client_ca_key.pem",
+        "client_cert.pem",
+        "client_chain.pem",
+        "client_intermediate_ca.pem",
+        "client_intermediate_ca_key.pem",
+        "client_key.pem",
+        "clienti_cert.pem",
+        "clienti_key.pem",
+        "tests-cert.pem",
+        "tests-key.pem",
+    ]
+]
 
-buck_filegroup(
+fb_dirsync_rule(
     name = "certs",
     srcs = glob(["*.pem"]),
+    fbcode_rule = buck_filegroup,
     visibility = ["PUBLIC"],
 )

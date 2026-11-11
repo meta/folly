@@ -1,29 +1,34 @@
 load("@fbcode_macros//build_defs:export_files.bzl", "export_file")
 load("@fbcode_macros//build_defs:python_binary.bzl", "python_binary")
 load("@fbcode_macros//build_defs:python_library.bzl", "python_library")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 
 oncall("fbcode_entropy_wardens_folly")
 
-export_file(
+fb_dirsync_rule(
     name = "apply_diffs",
     src = "apply_diffs",
+    fbcode_rule = export_file,
     visibility = ["PUBLIC"],
 )
 
-python_library(
+fb_dirsync_rule(
     name = "isolated_agent_lib",
     srcs = ["isolated_agent.py"],
+    fbcode_rule = python_library,
     visibility = ["PUBLIC"],
 )
 
-python_library(
+fb_dirsync_rule(
     name = "isolated_codex_cli_lib",
     srcs = ["isolated_codex.py"],
+    fbcode_rule = python_library,
     deps = [":isolated_agent_lib"],
 )
 
-python_binary(
+fb_dirsync_rule(
     name = "isolated_codex",
+    fbcode_rule = python_binary,
     main_function = ".isolated_codex.main",
     deps = [":isolated_codex_cli_lib"],
 )

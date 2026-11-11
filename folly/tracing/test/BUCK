@@ -64,9 +64,10 @@ fb_dirsync_cpp_library(
     ],
 )
 
-fb_native.filegroup(
+fb_dirsync_rule(
     name = "static_tracepoint_section_test_lds",
     srcs = ["StaticTracepointSectionTest.lds"],
+    fbcode_rule = fb_native.filegroup,
 )
 
 fb_dirsync_rule(

@@ -6,10 +6,12 @@ load("@fbsource//tools/build_defs:fbsource_utils.bzl", "is_xplat")
 load("@fbsource//tools/build_defs:rust_bindgen_library.bzl", "rust_bindgen_library")
 load("@fbsource//tools/build_defs/dirsync:dirsync_redirect.bzl", "dirsync_redirect")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rust_library.bzl", "fb_dirsync_rust_library")
 
 oncall("rust_libraries")
 
-rust_bindgen_library(
+fb_dirsync_rule(
     name = "iobuf-sys",
     allowlist_funcs = [
         "facebook::rust::.*",
@@ -29,12 +31,14 @@ rust_bindgen_library(
     ],
     cpp_deps = [":iobuf-ffi"],
     cxx_namespaces = True,
+    fbcode_rule = rust_bindgen_library,
     generate = ("types", "vars", "functions"),
     header = "iobuf.h",
     opaque_types = [
         "std::.*",
         "folly::fbstring.*",
     ],
+    pin_crate = True,
     platforms = [
         CXX,
         APPLE,
@@ -43,7 +47,7 @@ rust_bindgen_library(
     ]
     + ([ANDROID] if is_xplat() else []),
     src_includes = ["iobuf_sys.rs"],
-    visibility = [],
+    visibility = ["fbcode//folly/rust/iobuf:iobuf-sys"],
 )
 
 fb_dirsync_cpp_library(
@@ -78,7 +82,7 @@ fb_native.alias(
     actual = ":iobuf",
 )
 
-fb_xplat_rust_library(
+fb_dirsync_rust_library(
     name = "iobuf",
     srcs = glob(["src/*.rs"]),
     cpp_deps = [":iobuf-ffi"],
@@ -97,6 +101,7 @@ fb_xplat_rust_library(
     ],
     visibility = ["PUBLIC"],
     xplat_preexisting_target_flavors = [FBCODE],
+    xplat_rule = fb_xplat_rust_library,
     deps = [
         "fbsource//third-party/rust:bytes",
         "fbsource//third-party/rust:cxx",

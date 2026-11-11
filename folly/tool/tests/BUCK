@@ -1,12 +1,14 @@
 load("@fbcode_macros//build_defs:python_unittest.bzl", "python_unittest")
 load("@fbsource//tools/build_defs:fbsource_utils.bzl", "is_xplat")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
 
 oncall("fbcode_entropy_wardens_folly")
 
-python_unittest(
+fb_dirsync_rule(
     name = "benchmark_ab_test",
     srcs = ["test_benchmark_ab.py"],
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     resources = glob(["testdata/*"]),
     deps = ["fbsource//xplat/folly/tool:benchmark_ab_lib" if is_xplat() else "//folly/tool:benchmark_ab_lib"],

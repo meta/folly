@@ -5,6 +5,7 @@ load("@fbsource//tools/build_defs:fb_xplat_cxx_library.bzl", "fb_xplat_cxx_libra
 load("@fbsource//tools/build_defs:fb_xplat_cxx_test.bzl", "fb_xplat_cxx_test")
 load("@fbsource//tools/build_defs:platform_defs.bzl", "ALL_APPLE_SDKS", "ANDROID", "APPLE", "APPLETVOS", "CXX", "FBCODE", "IOS", "MACOSX", "WATCHOS", "WINDOWS")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 load("@prelude//configurations:constraint_alias.bzl", "constraint_with_aliases")
 load(
     ":defs.bzl",
@@ -2697,27 +2698,31 @@ fb_dirsync_cpp_library(
 
 # For things that would go in c++ stdlib <utility>:
 
-# @fb-only[end= ]: fb_native.export_file(
+# @fb-only[end= ]: fb_dirsync_rule(
     # @fb-only[end= ]: name = "src-tree",
     # @fb-only[end= ]: src = ".",
+    fbcode_rule = fb_native.export_file,
     # @fb-only[end= ]: mode = "reference",
     # @fb-only[end= ]: visibility = ["PUBLIC"],
 # @fb-only[end= ]: )
 
-# @fb-only[end= ]: fb_native.export_file(
+# @fb-only[end= ]: fb_dirsync_rule(
     # @fb-only[end= ]: name = "support/gdb.py",
     # @fb-only[end= ]: src = "support/gdb.py",
+    fbcode_rule = fb_native.export_file,
     # @fb-only[end= ]: visibility = ["PUBLIC"],
 # @fb-only[end= ]: )
 
-# @fb-only[end= ]: fb_native.export_file(
+# @fb-only[end= ]: fb_dirsync_rule(
     # @fb-only[end= ]: name = "fibers/scripts/gdb.py",
     # @fb-only[end= ]: src = "fibers/scripts/gdb.py",
+    fbcode_rule = fb_native.export_file,
     # @fb-only[end= ]: visibility = ["PUBLIC"],
 # @fb-only[end= ]: )
 
-# @fb-only[end= ]: fb_native.export_file(
+# @fb-only[end= ]: fb_dirsync_rule(
     # @fb-only[end= ]: name = "coro/scripts/co_bt.py",
     # @fb-only[end= ]: src = "coro/scripts/co_bt.py",
+    fbcode_rule = fb_native.export_file,
     # @fb-only[end= ]: visibility = ["PUBLIC"],
 # @fb-only[end= ]: )

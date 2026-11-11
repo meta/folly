@@ -3,6 +3,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dir
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 load("../../../defs.bzl", "fbcode_ci_default_labels")
 
 oncall("fbcode_entropy_wardens_folly")
@@ -106,12 +107,13 @@ fb_dirsync_cpp_binary(
     ],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "exception_tracer_uncaught_test",
     srcs = ["exception_tracer_uncaught_test.py"],
     env = {
         "EXCEPTION_TRACER_TEST_BIN": "$(location :exception_tracer_uncaught_test_bin)",
     },
+    fbcode_rule = python_unittest,
     labels = fbcode_ci_default_labels(python = True),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
 )

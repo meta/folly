@@ -6,6 +6,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dir
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
 load("@fbsource//tools/target_determinator/macros:ci.bzl", "ci")
 load("../../../defs.bzl", "fbcode_ci_default_labels")
@@ -88,12 +89,13 @@ fb_dirsync_cpp_binary(
     ],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "elf_cache_comparison_binding_test",
     srcs = ["elf_cache_comparison_binding_test.py"],
     env = {
         "ELF_CACHE_COMPARISON": "$(location :elf_cache_comparison)",
     },
+    fbcode_rule = python_unittest,
     labels = fbcode_ci_default_labels(python = True),
     target_compatible_with = [
         "ovr_config//os:linux",
@@ -101,13 +103,14 @@ python_unittest(
     ],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "small_sigaltstack_test",
     srcs = ["small_sigaltstack_test.py"],
     env = {
         "OBJCOPY": "$(location fbsource//third-party/llvm-project:llvm-objcopy)",
         "SMALL_SIGALTSTACK_CRASH": "$(location :small_sigaltstack_crash)",
     },
+    fbcode_rule = python_unittest,
     labels = fbcode_ci_default_labels(python = True),
     network_access = network_access_utils.none(),
     target_compatible_with = [
@@ -131,12 +134,13 @@ fb_dirsync_cpp_binary(
     ],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "signal_safe_libc_warmup_test",
     srcs = ["signal_safe_libc_warmup_test.py"],
     env = {
         "SIGNAL_SAFE_LIBC_WARMUP": "$(location :signal_safe_libc_warmup)",
     },
+    fbcode_rule = python_unittest,
     labels = fbcode_ci_default_labels(python = True),
     network_access = network_access_utils.none(),
     target_compatible_with = [
@@ -251,19 +255,21 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
-buck_sh_binary(
+fb_dirsync_rule(
     name = "gnu_debuglink_test.sh",
+    fbcode_rule = buck_sh_binary,
     labels = fbcode_ci_default_labels(),
     main = "gnu_debuglink_test.sh",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
 )
 
-custom_unittest(
+fb_dirsync_rule(
     name = "gnu_debuglink_test",
     command = [
         "$(exe :gnu_debuglink_test.sh)",
         "$(location :crash)",
     ],
+    fbcode_rule = custom_unittest,
     labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     type = "json",
@@ -408,8 +414,9 @@ customized_unittest(
     extra_compiler_flags = ["-gdwarf-5"],
 )
 
-buck_sh_binary(
+fb_dirsync_rule(
     name = "compare-addr2line.sh",
+    fbcode_rule = buck_sh_binary,
     labels = fbcode_ci_default_labels(),
     main = "compare-addr2line.sh",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
@@ -420,8 +427,9 @@ validate_folly_symbolizer(
     binary = ":symbolizer_test_dwarf4_dwarf32_aaranges",
 )
 
-buck_sh_binary(
+fb_dirsync_rule(
     name = "symbolizer_dwp_compability.sh",
+    fbcode_rule = buck_sh_binary,
     labels = fbcode_ci_default_labels(),
     main = "symbolizer_dwp_compability.sh",
     target_compatible_with = ["ovr_config//runtime:fbcode"],
@@ -451,7 +459,11 @@ validate_symbolizer_dwp(
     binary = ":symbolizer_test_dwarf5_dwarf32_aaranges_split-dwarf4-by-default",
 )
 
-export_file(name = "eh_sdata8_large.lds")
+fb_dirsync_rule(
+    name = "eh_sdata8_large.lds",
+    src = "eh_sdata8_large.lds",
+    fbcode_rule = export_file,
+)
 
 fb_dirsync_cpp_unittest(
     name = "stack_trace_large_test",

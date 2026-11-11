@@ -1,12 +1,15 @@
 load("@fbcode_macros//build_defs:cpp_python_extension.bzl", "cpp_python_extension")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dirsync_cpp_benchmark")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 
 oncall("fbcode_entropy_wardens_folly")
 
-cpp_python_extension(
+fb_dirsync_rule(
     name = "folly_json_serialize",
     srcs = ["folly_json_serialize.cpp"],
+    fbcode_rule = cpp_python_extension,
+    module_name = "folly_json_serialize",
     types = ["folly_json_serialize.pyi"],
     deps = [
         "fbsource//third-party/nanobind:nanobind",

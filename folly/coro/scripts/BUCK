@@ -1,10 +1,12 @@
 load("@fbsource//tools/build_defs:fb_python_library.bzl", "fb_python_library")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 
 oncall("fbcode_entropy_wardens_folly")
 
-fb_python_library(
+fb_dirsync_rule(
     # @autodeps-skip
     name = "co_bt",
     srcs = ["co_bt.py"],
+    fbcode_rule = fb_python_library,
     visibility = ["PUBLIC"],
 )

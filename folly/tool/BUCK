@@ -1,11 +1,13 @@
 load("@fbcode_macros//build_defs:python_library.bzl", "python_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 
 oncall("fbcode_entropy_wardens_folly")
 
-python_library(
+fb_dirsync_rule(
     name = "benchmark_ab_lib",
     srcs = ["benchmark_ab.py"],
+    fbcode_rule = python_library,
 )
 
 fb_dirsync_cpp_binary(

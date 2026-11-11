@@ -1,11 +1,12 @@
 load("@fbcode_macros//build_defs:python_library.bzl", "python_library")
 load("@fbcode_macros//build_defs:python_unittest.bzl", "python_unittest")
 load("@fbsource//tools/build_defs:fbsource_utils.bzl", "is_xplat")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
 
 oncall("fbcode_entropy_wardens_folly")
 
-python_library(
+fb_dirsync_rule(
     name = "run_scenario_lib",
     srcs = [
         "checkpoint.py",
@@ -15,73 +16,82 @@ python_library(
         "directory_snapshot.py",
         "run_scenario.py",
     ],
+    fbcode_rule = python_library,
     resources = {
         "fbsource//xplat/folly/agents/scripts:apply_diffs": "folly/agents/scripts/apply_diffs",
     },
     deps = ["fbsource//xplat/folly/agents/scripts:isolated_agent_lib" if is_xplat() else "//folly/agents/scripts:isolated_agent_lib"],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "directory_snapshot_test",
     srcs = ["test_directory_snapshot.py"],
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     deps = [":run_scenario_lib"],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "checkpoint_test",
     srcs = ["test_checkpoint.py"],
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
     deps = [":run_scenario_lib"],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "checkpoint_accounting_test",
     srcs = ["test_checkpoint_accounting.py"],
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
     deps = [":run_scenario_lib"],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "compress_checkpoint_outputs_test",
     srcs = ["test_compress_checkpoint_outputs.py"],
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
     deps = [":run_scenario_lib"],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "debrief_tables_test",
     srcs = ["test_debrief_tables.py"],
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
     deps = [":run_scenario_lib"],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "run_scenario_test",
     srcs = ["test_run_scenario.py"],
     env = {
         "FOLLY_TEST_GIT": "$(exe_target fbsource//third-party/git/v2.53.0:git)",
     },
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
     deps = [":run_scenario_lib"],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "isolated_agent_test",
     srcs = ["test_isolated_agent.py"],
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
     deps = ["fbsource//xplat/folly/agents/scripts:isolated_agent_lib" if is_xplat() else "//folly/agents/scripts:isolated_agent_lib"],
 )
 
-python_unittest(
+fb_dirsync_rule(
     name = "isolated_codex_test",
     srcs = ["test_isolated_codex.py"],
+    fbcode_rule = python_unittest,
     network_access = network_access_utils.none(),
     use_opt_by_default = True,
     deps = ["fbsource//xplat/folly/agents/scripts:isolated_codex_cli_lib" if is_xplat() else "//folly/agents/scripts:isolated_codex_cli_lib"],

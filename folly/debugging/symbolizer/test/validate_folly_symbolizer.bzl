@@ -3,6 +3,7 @@ load("@fbcode_macros//build_defs/lib:split_dwarf.bzl", "split_dwarf")
 load("@fbsource//tools/build_defs:cell_defs.bzl", "get_fbsource_cell")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 load("@fbsource//tools/target_determinator/macros:ci.bzl", "ci")
 load("../../../defs.bzl", "fbcode_ci_default_labels")
 
@@ -125,8 +126,9 @@ def customized_unittest(available_dwarf_versions = [], avilable_split_dwarf_keys
                         )
 
 def validate_folly_symbolizer(name, binary):
-    custom_unittest(
+    fb_dirsync_rule(
         name = name,
+        fbcode_rule = custom_unittest,
         command = [
             "$(exe :compare-addr2line.sh)",
             "$(location {})".format(_FOLLY_ADDR2LINE),
@@ -161,8 +163,9 @@ def validate_symbolizer_dwp(name, binary, mode = "fbcode//mode/opt", modifiers =
                 ci.linux(ci.mode("fbcode//mode/libcxx")),
             )
         )
-    custom_unittest(
+    fb_dirsync_rule(
         name = name,
+        fbcode_rule = custom_unittest,
         command = [
             "$(exe :symbolizer_dwp_compability.sh)",
             "$(location {})".format(binary),

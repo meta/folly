@@ -1,11 +1,13 @@
 load("@fbcode_macros//build_defs:python_unittest.bzl", "python_unittest")
 load("@fbsource//tools/build_defs:fbsource_utils.bzl", "is_xplat")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
 
 oncall("fbcode_entropy_wardens_folly")
 
-python_unittest(
+fb_dirsync_rule(
     name = "test_float_format_python_json",
     srcs = ["test_float_format_python_json.py"],
+    fbcode_rule = python_unittest,
     deps = [
         "fbsource//xplat/folly/json/test:folly_json_serialize" if is_xplat() else "//folly/json/test:folly_json_serialize",
     ],

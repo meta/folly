@@ -327,7 +327,7 @@ fb_dirsync_rule(
     ],
 )
 
-cpp_unittest(
+fb_dirsync_rule(
     name = "weak-test-linked",
     srcs = [
         "WeakTest.cpp",
@@ -337,6 +337,7 @@ cpp_unittest(
         "ovr_config//os:macos",
         "ovr_config//os:windows",
     ],
+    fbcode_rule = cpp_unittest,
     supports_static_listing = True,
     versions = {
         "python": "3.12",
@@ -349,7 +350,7 @@ cpp_unittest(
     ],
 )
 
-cpp_unittest(
+fb_dirsync_rule(
     name = "weak-test",
     srcs = [
         "WeakTest.cpp",
@@ -359,6 +360,7 @@ cpp_unittest(
         "ovr_config//os:macos",
         "ovr_config//os:windows",
     ],
+    fbcode_rule = cpp_unittest,
     supports_static_listing = True,
     versions = {
         "python": "3.12",
