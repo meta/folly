@@ -474,7 +474,7 @@ void AsyncSocket::SendMsgParamsCallback::getAncillaryData(
     sofFlags = sofFlags | folly::netops::SOF_TIMESTAMPING_TX_SCHED;
   }
 
-  msghdr msg;
+  msghdr msg{};
   msg.msg_control = data;
   msg.msg_controllen = ancillaryDataSize;
   struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
@@ -1035,7 +1035,7 @@ void AsyncSocket::connect(
   connectCallback_ = callback;
   invokeConnectAttempt();
 
-  sockaddr_storage addrStorage;
+  sockaddr_storage addrStorage{};
   auto saddr = reinterpret_cast<sockaddr*>(&addrStorage);
 
   try {
@@ -2037,7 +2037,7 @@ void AsyncSocket::enableByteEvents() {
 
 void AsyncSocket::write(
     WriteCallback* callback, const void* buf, size_t bytes, WriteFlags flags) {
-  iovec op;
+  iovec op{};
   op.iov_base = const_cast<void*>(buf);
   op.iov_len = bytes;
   writeImpl(callback, &op, 1, unique_ptr<IOBuf>(), bytes, flags);
@@ -3176,11 +3176,11 @@ void AsyncSocket::drainErrorQueue() noexcept {
     uint8_t ctrl[1024];
     unsigned char data;
 
-    struct iovec entry;
+    struct iovec entry{};
     entry.iov_base = &data;
     entry.iov_len = sizeof(data);
 
-    struct msghdr msg;
+    struct msghdr msg{};
     msg.msg_iov = &entry;
     msg.msg_iovlen = 1;
     msg.msg_name = nullptr;
@@ -3210,8 +3210,8 @@ size_t AsyncSocket::handleErrMessages() noexcept {
 #ifdef FOLLY_HAVE_MSG_ERRQUEUE
   uint8_t ctrl[1024];
   unsigned char data;
-  struct msghdr msg;
-  iovec entry;
+  struct msghdr msg{};
+  iovec entry{};
 
   entry.iov_base = &data;
   entry.iov_len = sizeof(data);
@@ -3612,7 +3612,7 @@ AsyncSocket::ReadCode AsyncSocket::processNormalRead() {
   // Dest address info
   msg.msg_name = nullptr;
   msg.msg_namelen = 0;
-  struct ::iovec iov; // unused in `ReadMode::ReadVec`
+  struct ::iovec iov{}; // unused in `ReadMode::ReadVec`
   if (readMode == AsyncReader::ReadCallback::ReadMode::ReadVec) {
     msg.msg_iov = iovs.data();
     msg.msg_iovlen = iovs.size();
@@ -4223,7 +4223,7 @@ AsyncSocket::WriteResult AsyncSocket::sendSocketMessage(
     }
   };
   if (state_ == StateEnum::FAST_OPEN) {
-    sockaddr_storage addr;
+    sockaddr_storage addr{};
     auto len = addr_.getAddress(&addr);
     msg->msg_name = &addr;
     msg->msg_namelen = len;
