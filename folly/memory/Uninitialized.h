@@ -47,6 +47,9 @@ ForwardIt uninitialized_copy(InputIt first, InputIt last, ForwardIt result) {
   if constexpr (
       std::contiguous_iterator<InputIt> &&
       std::contiguous_iterator<ForwardIt>) {
+    if (first == last) {
+      return result;
+    }
     using Source = std::remove_reference_t<std::iter_reference_t<InputIt>>;
     using Destination =
         std::remove_reference_t<std::iter_reference_t<ForwardIt>>;
@@ -55,9 +58,6 @@ ForwardIt uninitialized_copy(InputIt first, InputIt last, ForwardIt result) {
         !std::is_volatile_v<Source> &&
         std::is_trivially_copyable_v<Destination> &&
         std::is_trivially_constructible_v<Destination, Source&>) {
-      if (first == last) {
-        return result;
-      }
       const auto count = last - first;
       std::memcpy(
           std::to_address(result),
