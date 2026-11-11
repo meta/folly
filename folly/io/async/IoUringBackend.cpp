@@ -148,7 +148,7 @@ class SQGroupInfoRegistry {
       size_t count{0};
 
       void add(int fd) {
-        CHECK(!fds.count(fd));
+        CHECK(!fds.contains(fd));
         fds.insert(fd);
         ++count;
       }
@@ -183,7 +183,7 @@ class SQGroupInfoRegistry {
     }
 
     size_t add(int fd, SQSubGroupInfo* sg) {
-      CHECK(!fdSgMap.count(fd));
+      CHECK(!fdSgMap.contains(fd));
       fdSgMap.emplace(fd, sg);
       sg->add(fd);
       ++count;
@@ -265,16 +265,15 @@ class SQGroupInfoRegistry {
       return 0;
     }
 
-    size_t ret;
-
     std::lock_guard g(mutex_);
 
     func();
 
     auto iter = map_.find(groupName);
     CHECK(iter != map_.end());
+    const auto ret = iter->second.remove(fd);
     // check for empty group
-    if ((ret = iter->second.remove(fd)) == 0) {
+    if (ret == 0) {
       map_.erase(iter);
     }
 
