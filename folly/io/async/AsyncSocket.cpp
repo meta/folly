@@ -812,18 +812,6 @@ void AsyncSocket::init() {
     eventBase_->dcheckIsInEventBaseThread();
     useIoUring_ = checkIoUringBackend(eventBase_);
   }
-  eventFlags_ = EventHandler::NONE;
-  sendTimeout_ = 0;
-  maxReadsPerEvent_ = 16;
-  connectCallback_ = nullptr;
-  errMessageCallback_ = nullptr;
-  readAncillaryDataCallback_ = nullptr;
-  readCallback_ = nullptr;
-  writeReqHead_ = nullptr;
-  writeReqTail_ = nullptr;
-  wShutdownSocketSet_.reset();
-  appBytesReceived_ = 0;
-  totalAppBytesScheduledForWrite_ = 0;
   sendMsgParamCallback_ = &defaultSendMsgParamsCallback;
   if (useIoUring_ && state_ == StateEnum::ESTABLISHED) {
     assert(iouSendHandle_ == nullptr);

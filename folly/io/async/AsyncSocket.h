@@ -2015,13 +2015,14 @@ class AsyncSocket
 
   StateEnum state_{StateEnum::UNINIT}; ///< StateEnum describing current state
   uint8_t shutdownFlags_{0}; ///< Shutdown state (ShutdownFlags)
-  uint16_t eventFlags_; ///< EventBase::HandlerFlags settings
+  uint16_t eventFlags_{
+      EventHandler::NONE}; ///< EventBase::HandlerFlags settings
   NetworkSocket fd_; ///< The socket file descriptor
   mutable folly::SocketAddress addr_; ///< The address we tried to connect to
   mutable folly::SocketAddress localAddr_;
   ///< The address we are connecting from
-  uint32_t sendTimeout_; ///< The send timeout, in milliseconds
-  uint16_t maxReadsPerEvent_; ///< Max reads per event loop iteration
+  uint32_t sendTimeout_{0}; ///< The send timeout, in milliseconds
+  uint16_t maxReadsPerEvent_{16}; ///< Max reads per event loop iteration
 
   int8_t readErr_{READ_NO_ERROR}; ///< The read error encountered, if any
 
@@ -2030,22 +2031,22 @@ class AsyncSocket
   IoHandler ioHandler_; ///< A EventHandler to monitor the fd
   ImmediateReadCB immediateReadHandler_; ///< LoopCallback for checking read
 
-  ConnectCallback* connectCallback_; ///< ConnectCallback
-  ErrMessageCallback* errMessageCallback_; ///< TimestampCallback
-  ReadAncillaryDataCallback*
-      readAncillaryDataCallback_; ///< AncillaryDataCallback
+  ConnectCallback* connectCallback_{nullptr}; ///< ConnectCallback
+  ErrMessageCallback* errMessageCallback_{nullptr}; ///< TimestampCallback
+  ReadAncillaryDataCallback* readAncillaryDataCallback_{
+      nullptr}; ///< AncillaryDataCallback
   SendMsgParamsCallback* ///< Callback for retrieving
-      sendMsgParamCallback_; ///< ::sendmsg() parameters
-  ReadCallback* readCallback_; ///< ReadCallback
-  WriteRequest* writeReqHead_; ///< Chain of WriteRequests
-  WriteRequest* writeReqTail_; ///< End of WriteRequest chain
+      sendMsgParamCallback_{nullptr}; ///< ::sendmsg() parameters
+  ReadCallback* readCallback_{nullptr}; ///< ReadCallback
+  WriteRequest* writeReqHead_{nullptr}; ///< Chain of WriteRequests
+  WriteRequest* writeReqTail_{nullptr}; ///< End of WriteRequest chain
   std::weak_ptr<ShutdownSocketSet> wShutdownSocketSet_;
-  size_t appBytesReceived_; ///< Num of bytes received from socket
+  size_t appBytesReceived_{0}; ///< Num of bytes received from socket
   size_t appBytesWritten_{0}; ///< Num of bytes written to socket
   size_t rawBytesWritten_{0}; ///< Num of (raw) bytes written to socket
   // The total num of bytes passed to AsyncSocket's write functions. It doesn't
   // include failed writes, but it does include buffered writes.
-  size_t totalAppBytesScheduledForWrite_;
+  size_t totalAppBytesScheduledForWrite_{0};
   // Num of bytes allocated in IOBufs pending write.
   size_t allocatedBytesBuffered_{0};
 
