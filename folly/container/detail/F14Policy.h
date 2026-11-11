@@ -72,7 +72,8 @@ struct ObjectHolder {
   T value_;
 
   template <typename... Args>
-  ObjectHolder(Args&&... args) : value_{std::forward<Args>(args)...} {}
+  constexpr ObjectHolder(Args&&... args)
+      : value_{std::forward<Args>(args)...} {}
 
   T& operator*() { return value_; }
   T const& operator*() const { return value_; }
@@ -81,7 +82,7 @@ struct ObjectHolder {
 template <char Tag, typename T>
 struct ObjectHolder<Tag, T, true> : T {
   template <typename... Args>
-  ObjectHolder(Args&&... args) : T{std::forward<Args>(args)...} {}
+  constexpr ObjectHolder(Args&&... args) : T{std::forward<Args>(args)...} {}
 
   T& operator*() { return *this; }
   T const& operator*() const { return *this; }
@@ -208,7 +209,8 @@ struct FOLLY_MSVC_DECLSPEC(empty_bases) BasePolicy
 
   //////// methods
 
-  BasePolicy(Hasher const& hasher, KeyEqual const& keyEqual, Alloc const& alloc)
+  constexpr BasePolicy(
+      Hasher const& hasher, KeyEqual const& keyEqual, Alloc const& alloc)
       : HasherHolder{hasher}, KeyEqualHolder{keyEqual}, AllocHolder{alloc} {}
 
   BasePolicy(BasePolicy const& rhs)
@@ -1154,7 +1156,7 @@ class VectorContainerPolicy
   }
 
  public:
-  VectorContainerPolicy(
+  constexpr VectorContainerPolicy(
       Hasher const& hasher, KeyEqual const& keyEqual, Alloc const& alloc)
       : Super{hasher, keyEqual, alloc} {}
 

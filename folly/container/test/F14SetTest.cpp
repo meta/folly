@@ -2001,3 +2001,23 @@ TEST(F14Set, insertRange) {
   testInsertRange<F14VectorSet>();
   testInsertRange<F14FastSet>();
 }
+
+#if FOLLY_F14_CONSTINIT_AVAILABLE
+template <typename Set>
+constinit Set constinitSet; // NOLINT
+
+template <typename Set>
+void testConstinitDefaultConstruct() {
+  auto& set = constinitSet<Set>;
+  EXPECT_TRUE(set.empty());
+  set.insert(1);
+  EXPECT_TRUE(set.contains(1));
+}
+
+TEST(F14Set, constinitDefaultConstruct) {
+  testConstinitDefaultConstruct<F14ValueSet<int>>();
+  testConstinitDefaultConstruct<F14NodeSet<int>>();
+  testConstinitDefaultConstruct<F14VectorSet<int>>();
+  testConstinitDefaultConstruct<F14FastSet<int>>();
+}
+#endif

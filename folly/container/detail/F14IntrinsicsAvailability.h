@@ -48,6 +48,19 @@
 #define FOLLY_F14_VECTOR_INTRINSICS_AVAILABLE 0
 #endif
 
+// Whether default-constructed F14 maps and sets can be constinit.  The
+// fallback wraps std::unordered_map / std::unordered_set, whose default
+// constructors are not constexpr.  clang targeting Windows crashes compiling
+// header units that use the constexpr default constructors.
+#if FOLLY_F14_VECTOR_INTRINSICS_AVAILABLE && \
+    !(defined(_WIN32) && defined(__clang__))
+#define FOLLY_F14_CONSTEXPR_CONSTRUCTOR constexpr
+#define FOLLY_F14_CONSTINIT_AVAILABLE 1
+#else
+#define FOLLY_F14_CONSTEXPR_CONSTRUCTOR
+#define FOLLY_F14_CONSTINIT_AVAILABLE 0
+#endif
+
 #if FOLLY_SSE_PREREQ(4, 2) || FOLLY_ARM_FEATURE_CRC32
 #define FOLLY_F14_CRC_INTRINSIC_AVAILABLE 1
 #else

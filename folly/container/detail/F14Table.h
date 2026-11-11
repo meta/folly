@@ -707,7 +707,7 @@ struct alignas(constexpr_max(kRequiredVectorAlignment, alignof(ItemType)))
     return static_cast<std::size_t>(byteOffset) / kChunkStride;
   }
 
-  static F14ChunkHeader* getSomeEmptyInstance() noexcept {
+  static constexpr F14ChunkHeader* getSomeEmptyInstance() noexcept {
     return const_cast<F14ChunkHeader*>(&kF14EmptyChunkHeader);
   }
 
@@ -1627,7 +1627,7 @@ class F14Table : public Policy {
  public:
   // Equivalent to F14Table(0, ...), but implemented separately to avoid forcing
   // a reserve() instantiation in the common case.
-  F14Table() noexcept(Policy::kDefaultConstructIsNoexcept)
+  constexpr F14Table() noexcept(Policy::kDefaultConstructIsNoexcept)
       : Policy{Hasher{}, KeyEqual{}, Alloc{}} {}
 
   F14Table(

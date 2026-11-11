@@ -2978,3 +2978,32 @@ TEST(F14Map, insertRange) {
   testInsertRange<F14VectorMap>();
   testInsertRange<F14FastMap>();
 }
+
+#if FOLLY_F14_CONSTINIT_AVAILABLE
+template <typename Map>
+constinit Map constinitMap; // NOLINT
+
+template <typename Map>
+void testConstinitDefaultConstruct() {
+  auto& map = constinitMap<Map>;
+  EXPECT_TRUE(map.empty());
+  map.emplace(1, 2);
+  EXPECT_EQ(map.at(1), 2);
+}
+
+TEST(F14Map, constinitDefaultConstruct) {
+  testConstinitDefaultConstruct<F14ValueMap<int, int>>();
+  testConstinitDefaultConstruct<F14NodeMap<int, int>>();
+  testConstinitDefaultConstruct<F14VectorMap<int, int>>();
+  testConstinitDefaultConstruct<F14FastMap<int, int>>();
+}
+#endif
+
+#if FOLLY_F14_VECTOR_INTRINSICS_AVAILABLE
+namespace {
+struct ForwardDeclaredMapped;
+F14NodeMap<int, ForwardDeclaredMapped> nodeMapOfForwardDeclared; // NOLINT
+F14VectorMap<int, ForwardDeclaredMapped> vectorMapOfForwardDeclared; // NOLINT
+struct ForwardDeclaredMapped {};
+} // namespace
+#endif

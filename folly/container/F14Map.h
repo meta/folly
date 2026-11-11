@@ -120,7 +120,9 @@ class F14BasicMap {
  public:
   //// PUBLIC - Member functions
 
-  F14BasicMap() noexcept(Policy::kDefaultConstructIsNoexcept) : table_{} {}
+  FOLLY_F14_CONSTEXPR_CONSTRUCTOR F14BasicMap() noexcept(
+      Policy::kDefaultConstructIsNoexcept)
+      : table_{} {}
 
   explicit F14BasicMap(
       std::size_t initialCapacity,
