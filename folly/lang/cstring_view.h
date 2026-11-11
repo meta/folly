@@ -339,6 +339,7 @@ class basic_cstring_view {
 };
 
 using cstring_view = basic_cstring_view<char>;
+using wcstring_view = basic_cstring_view<wchar_t>;
 
 template <typename Char, typename Traits>
 std::basic_ostream<Char, Traits>& operator<<(
