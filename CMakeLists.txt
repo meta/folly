@@ -39,7 +39,7 @@ endif ()
 
 # includes
 set(CMAKE_MODULE_PATH
-    "${CMAKE_CURRENT_SOURCE_DIR}/CMake" # for in-fbsource builds
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake" # for in-fbsource builds
     "${CMAKE_CURRENT_SOURCE_DIR}/../opensource/fbcode_builder/CMake"
     # For shipit-transformed builds: the GitHub export puts fbcode_builder in
     # tool/, while other source layouts, such as conda's, use build/.
@@ -224,7 +224,7 @@ endif ()
 
 include(FollyConfigChecks)
 configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/CMake/folly-config.h.cmake
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/folly-config.h.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/folly/folly-config.h
 )
 
@@ -430,7 +430,7 @@ install(
 # files using "find_package(folly CONFIG)"
 include(CMakePackageConfigHelpers)
 configure_package_config_file(
-  CMake/folly-config.cmake.in
+  cmake/folly-config.cmake.in
   folly-config.cmake
   INSTALL_DESTINATION ${CMAKE_INSTALL_DIR}
   PATH_VARS
@@ -455,7 +455,7 @@ install(
 # Generate a pkg-config file so that downstream projects that don't use
 # CMake can depend on folly using pkg-config.
 configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/CMake/libfolly.pc.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/libfolly.pc.in
   ${CMAKE_CURRENT_BINARY_DIR}/libfolly.pc.gen
   @ONLY
 )
