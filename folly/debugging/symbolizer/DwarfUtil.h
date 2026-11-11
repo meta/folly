@@ -167,8 +167,8 @@ struct Attribute {
 // Get an ELF section by name.
 std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name);
 
-// All following read* functions advance their input and abort if there is not
-// enough room.
+// Span-based read* functions advance their input and abort if there is not
+// enough room. DwarfCursor overloads return structured errors instead.
 
 // Read (bitwise) one object of type T
 template <class T>
@@ -201,9 +201,13 @@ std::span<const uint8_t> readBytes(
     std::span<const uint8_t>& bytes, uint64_t len);
 
 AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes);
+DwarfParseResult<folly::Optional<AttributeSpec>> readAttributeSpec(
+    DwarfCursor& cursor);
 
-// Read an abbreviation, returning false at the end and advancing the input.
-bool readAbbreviation(std::span<const uint8_t>& section, DIEAbbreviation& abbr);
+// Read an abbreviation. An empty optional marks the end of an abbreviation
+// table.
+DwarfParseResult<folly::Optional<DIEAbbreviation>> readAbbreviation(
+    DwarfCursor& cursor);
 
 // Read a null-terminated string
 folly::StringPiece readNullTerminated(std::span<const uint8_t>& bytes);
@@ -226,7 +230,8 @@ CompilationUnits getCompilationUnits(
     bool requireSplitDwarf = false);
 
 /** cu must exist during the life cycle of created Die. */
-Die getDieAtOffset(const CompilationUnit& cu, uint64_t offset);
+DwarfParseResult<Die> getDieAtOffset(
+    const CompilationUnit& cu, uint64_t offset);
 
 // Read attribute value.
 Attribute readAttribute(
@@ -264,7 +269,8 @@ folly::StringPiece getFunctionNameFromDie(
 folly::StringPiece getFunctionName(
     const CompilationUnit& srcu, uint64_t dieOffset);
 
-Die findDefinitionDie(const CompilationUnit& cu, const Die& die);
+DwarfParseResult<Die> findDefinitionDie(
+    const CompilationUnit& cu, const Die& die);
 
 } // namespace symbolizer
 } // namespace folly

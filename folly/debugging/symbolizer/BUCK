@@ -30,6 +30,7 @@ fb_dirsync_cpp_library(
     use_raw_headers = True,
     deps = [
         "//folly:optional",
+        "//folly:scope_guard",
         "//folly/lang:checked_math",
         "//folly/lang:safe_assert",
         "//folly/portability:config",

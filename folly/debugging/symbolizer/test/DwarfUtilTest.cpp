@@ -82,6 +82,19 @@ std::vector<uint8_t> dwpIndex(uint64_t dwoId, uint32_t unitIndex = 1) {
   return bytes;
 }
 
+std::vector<uint8_t> abbreviation() {
+  return {
+      1,
+      DW_TAG_compile_unit,
+      DW_CHILDREN_yes,
+      DW_AT_name,
+      DW_FORM_string,
+      0,
+      0,
+      0,
+  };
+}
+
 TEST(DwarfUtil, ParsesDwarf4CompilationUnitHeader) {
   const auto bytes = dwarf4Header();
 
@@ -270,6 +283,208 @@ TEST(DwarfUtil, RejectsOverflowingDwpDimensions) {
 
   ASSERT_TRUE(result.hasError());
   EXPECT_EQ(DwarfParseErrorCode::integer_overflow, result.error().code);
+}
+
+TEST(DwarfUtil, ParsesAbbreviationDeclaration) {
+  const auto bytes = abbreviation();
+  DwarfCursor cursor(bytes, 0x20);
+
+  auto result = readAbbreviation(cursor);
+
+  ASSERT_TRUE(result.hasValue());
+  ASSERT_TRUE(result->hasValue());
+  const auto& abbr = **result;
+  EXPECT_EQ(uint64_t{1}, abbr.code);
+  EXPECT_EQ(uint64_t{DW_TAG_compile_unit}, abbr.tag);
+  EXPECT_TRUE(abbr.hasChildren);
+  EXPECT_EQ(bytes.data() + 3, abbr.attributes.data());
+  EXPECT_EQ(size_t{4}, abbr.attributes.size());
+  EXPECT_EQ(size_t{0x27}, cursor.offset());
+}
+
+TEST(DwarfUtil, ReadsAbbreviationTableTerminator) {
+  const std::vector<uint8_t> bytes{0};
+  DwarfCursor cursor(bytes);
+
+  auto result = readAbbreviation(cursor);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_FALSE(result->hasValue());
+  EXPECT_TRUE(cursor.empty());
+}
+
+TEST(DwarfUtil, RejectsEveryTruncatedAbbreviationPrefix) {
+  const auto bytes = abbreviation();
+  for (size_t size = 0; size < bytes.size() - 1; ++size) {
+    SCOPED_TRACE(size);
+    DwarfCursor cursor(std::span<const uint8_t>{bytes}.first(size));
+    auto result = readAbbreviation(cursor);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(DwarfParseErrorCode::truncated, result.error().code);
+  }
+}
+
+TEST(DwarfUtil, RejectsInvalidAbbreviationChildrenMarker) {
+  auto bytes = abbreviation();
+  bytes[2] = 2;
+  DwarfCursor cursor(bytes);
+
+  auto result = readAbbreviation(cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
+  EXPECT_EQ(size_t{2}, result.error().offset);
+}
+
+TEST(DwarfUtil, RejectsZeroAbbreviationTag) {
+  const std::vector<uint8_t> bytes{1, 0, DW_CHILDREN_no, 0, 0};
+  DwarfCursor cursor(bytes);
+
+  auto result = readAbbreviation(cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
+  EXPECT_EQ(size_t{1}, result.error().offset);
+}
+
+TEST(DwarfUtil, RejectsMismatchedAttributeSpecTerminator) {
+  const std::vector<uint8_t> bytes{DW_AT_name, 0};
+  DwarfCursor cursor(bytes);
+
+  auto result = readAttributeSpec(cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
+  EXPECT_EQ(size_t{0}, result.error().offset);
+}
+
+TEST(DwarfUtil, ParsesImplicitConstantAttributeSpec) {
+  const std::vector<uint8_t> bytes{
+      DW_AT_decl_line, DW_FORM_implicit_const, 0x7f};
+  DwarfCursor cursor(bytes);
+
+  auto result = readAttributeSpec(cursor);
+
+  ASSERT_TRUE(result.hasValue());
+  ASSERT_TRUE(result->hasValue());
+  EXPECT_EQ(uint64_t{DW_AT_decl_line}, (**result).name);
+  EXPECT_EQ(uint64_t{DW_FORM_implicit_const}, (**result).form);
+  EXPECT_EQ(int64_t{-1}, (**result).implicitConst);
+}
+
+TEST(DwarfUtil, ParsesDieAndResolvesAbbreviation) {
+  const std::vector<uint8_t> info{1};
+  const auto abbrev = abbreviation();
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.debugSections.debugAbbrev = abbrev;
+  cu.size = static_cast<uint32_t>(info.size());
+  cu.abbrevOffset = 0;
+
+  auto result = getDieAtOffset(cu, 0);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_EQ(uint64_t{1}, result->code);
+  EXPECT_EQ(uint8_t{1}, result->attrOffset);
+  EXPECT_EQ(uint64_t{DW_TAG_compile_unit}, result->abbr.tag);
+}
+
+TEST(DwarfUtil, RejectsTruncatedDieCode) {
+  const std::vector<uint8_t> info{0x80};
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.size = static_cast<uint32_t>(info.size());
+
+  auto result = getDieAtOffset(cu, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::truncated, result.error().code);
+}
+
+TEST(DwarfUtil, RejectsDieOutsideCompilationUnit) {
+  const std::vector<uint8_t> info{0};
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.size = static_cast<uint32_t>(info.size());
+
+  auto result = getDieAtOffset(cu, 2);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
+}
+
+TEST(DwarfUtil, RejectsMissingAbbreviationCode) {
+  const std::vector<uint8_t> info{2};
+  const auto abbrev = abbreviation();
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.debugSections.debugAbbrev = abbrev;
+  cu.size = static_cast<uint32_t>(info.size());
+  cu.abbrevOffset = 0;
+
+  auto result = getDieAtOffset(cu, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
+}
+
+TEST(DwarfUtil, RejectsOutOfRangeAbbreviationOffset) {
+  const std::vector<uint8_t> info{1};
+  const auto abbrev = abbreviation();
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.debugSections.debugAbbrev = abbrev;
+  cu.size = static_cast<uint32_t>(info.size());
+  cu.abbrevOffset = 99;
+
+  auto result = getDieAtOffset(cu, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
+}
+
+TEST(DwarfUtil, GetCompilationUnitsRejectsMalformedAbbreviation) {
+  auto info = dwarf4Header();
+  overwrite<uint32_t>(info, 0, 8);
+  info.push_back(1);
+  const std::vector<uint8_t> abbrev{0x80};
+  DebugSections sections{};
+  sections.debugInfo = info;
+  sections.debugAbbrev = abbrev;
+
+  auto result = getCompilationUnits(nullptr, sections, 0);
+
+  EXPECT_EQ(info.size(), result.mainCompilationUnit.size);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, FindDefinitionDiePropagatesInvalidReference) {
+  const uint32_t invalidOffset = 0x100;
+  std::vector<uint8_t> info(sizeof(invalidOffset));
+  std::memcpy(info.data(), &invalidOffset, sizeof(invalidOffset));
+  const std::vector<uint8_t> attributes{
+      DW_AT_specification, DW_FORM_ref4, 0, 0};
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.size = static_cast<uint32_t>(info.size());
+  Die die{
+      .is64Bit = false,
+      .attrOffset = 0,
+      .offset = 0,
+      .code = 1,
+      .abbr =
+          {
+              .code = 1,
+              .tag = DW_TAG_subprogram,
+              .hasChildren = false,
+              .attributes = attributes,
+          },
+  };
+
+  auto result = findDefinitionDie(cu, die);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
 }
 
 } // namespace

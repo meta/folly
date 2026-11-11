@@ -137,48 +137,126 @@ AttributeSpec readAttributeSpec(std::span<const uint8_t>& bytes) {
   return spec;
 }
 
-bool readAbbreviation(
-    std::span<const uint8_t>& section, DIEAbbreviation& abbr) {
-  abbr.code = readULEB(section);
-  if (abbr.code == 0) {
-    return false;
+DwarfParseResult<folly::Optional<AttributeSpec>> readAttributeSpec(
+    DwarfCursor& cursor) {
+  const auto specOffset = cursor.offset();
+  auto name = cursor.readULEB();
+  if (name.hasError()) {
+    return makeUnexpected(name.error());
   }
-  abbr.tag = readULEB(section);
-  abbr.hasChildren = (read<uint8_t>(section) != DW_CHILDREN_no);
+  auto form = cursor.readULEB();
+  if (form.hasError()) {
+    return makeUnexpected(form.error());
+  }
+  if (*name == 0 && *form == 0) {
+    return folly::Optional<AttributeSpec>{};
+  }
+  if (*name == 0 || *form == 0) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_value, specOffset});
+  }
 
-  const uint8_t* attributeBegin = section.data();
-  for (;;) {
-    if (section.empty()) {
-      FOLLY_SAFE_DFATAL("invalid attribute section");
-      return false;
+  AttributeSpec spec{.name = *name, .form = *form};
+  if (spec.form == DW_FORM_implicit_const) {
+    auto implicitConst = cursor.readSLEB();
+    if (implicitConst.hasError()) {
+      return makeUnexpected(implicitConst.error());
     }
-    auto spec = readAttributeSpec(section);
-    if (!spec) {
+    spec.implicitConst = *implicitConst;
+  }
+  return folly::Optional<AttributeSpec>{spec};
+}
+
+DwarfParseResult<folly::Optional<DIEAbbreviation>> readAbbreviation(
+    DwarfCursor& cursor) {
+  auto code = cursor.readULEB();
+  if (code.hasError()) {
+    return makeUnexpected(code.error());
+  }
+  if (*code == 0) {
+    return folly::Optional<DIEAbbreviation>{};
+  }
+
+  const auto tagOffset = cursor.offset();
+  auto tag = cursor.readULEB();
+  if (tag.hasError()) {
+    return makeUnexpected(tag.error());
+  }
+  if (*tag == 0) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_value, tagOffset});
+  }
+  const auto childrenOffset = cursor.offset();
+  auto children = cursor.read<uint8_t>();
+  if (children.hasError()) {
+    return makeUnexpected(children.error());
+  }
+  if (*children != DW_CHILDREN_no && *children != DW_CHILDREN_yes) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_value, childrenOffset});
+  }
+
+  DIEAbbreviation abbr{
+      .code = *code,
+      .tag = *tag,
+      .hasChildren = *children == DW_CHILDREN_yes,
+      .attributes = {},
+  };
+  const auto* attributeBegin = cursor.remaining().data();
+  for (;;) {
+    auto spec = readAttributeSpec(cursor);
+    if (spec.hasError()) {
+      return makeUnexpected(spec.error());
+    }
+    if (!spec->hasValue()) {
       break;
     }
   }
   abbr.attributes = {
-      attributeBegin, static_cast<size_t>(section.data() - attributeBegin)};
-  return true;
+      attributeBegin,
+      static_cast<size_t>(cursor.remaining().data() - attributeBegin)};
+  return folly::Optional<DIEAbbreviation>{abbr};
 }
 
 namespace {
 
-DIEAbbreviation getAbbreviation(
-    std::span<const uint8_t> debugAbbrev, uint64_t code, uint64_t offset) {
-  // Linear search in the .debug_abbrev section, starting at offset
-  FOLLY_SAFE_CHECK(offset <= debugAbbrev.size(), "invalid abbrev offset");
-  debugAbbrev = debugAbbrev.subspan(offset);
+template <typename Size = size_t>
+constexpr Size toErrorOffset(uint64_t offset) noexcept {
+  if constexpr (sizeof(Size) < sizeof(uint64_t)) {
+    if (offset > std::numeric_limits<Size>::max()) {
+      return std::numeric_limits<Size>::max();
+    }
+  }
+  return static_cast<Size>(offset);
+}
 
-  DIEAbbreviation abbr;
-  while (readAbbreviation(debugAbbrev, abbr)) {
-    if (abbr.code == code) {
-      return abbr;
+DwarfParseResult<DIEAbbreviation> getAbbreviation(
+    std::span<const uint8_t> debugAbbrev, uint64_t code, uint64_t offset) {
+  if (offset > debugAbbrev.size()) {
+    return makeUnexpected(
+        DwarfParseError{
+            DwarfParseErrorCode::invalid_offset, toErrorOffset(offset)});
+  }
+
+  DwarfCursor cursor(
+      debugAbbrev.subspan(static_cast<size_t>(offset)),
+      static_cast<size_t>(offset));
+  for (;;) {
+    auto abbr = readAbbreviation(cursor);
+    if (abbr.hasError()) {
+      return makeUnexpected(abbr.error());
+    }
+    if (!abbr->hasValue()) {
+      break;
+    }
+    if ((**abbr).code == code) {
+      return **abbr;
     }
   }
 
-  FOLLY_SAFE_DFATAL("could not find abbreviation code");
-  return {};
+  return makeUnexpected(
+      DwarfParseError{
+          DwarfParseErrorCode::invalid_value, toErrorOffset(offset)});
 }
 
 template <typename T>
@@ -512,7 +590,11 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
     return false;
   }
 
-  Die die = getDieAtOffset(cu, cu.firstDie);
+  auto dieResult = getDieAtOffset(cu, cu.firstDie);
+  if (dieResult.hasError()) {
+    return makeUnexpected(dieResult.error());
+  }
+  const auto& die = *dieResult;
   if (die.abbr.tag != DW_TAG_compile_unit &&
       die.abbr.tag != DW_TAG_skeleton_unit) {
     return false;
@@ -783,24 +865,60 @@ std::span<const uint8_t> getIndexedSectionBytes(
 
 } // namespace
 
-Die getDieAtOffset(const CompilationUnit& cu, uint64_t offset) {
+DwarfParseResult<Die> getDieAtOffset(
+    const CompilationUnit& cu, uint64_t offset) {
   const auto debugInfo = cu.debugSections.debugInfo;
+  if (cu.offset > debugInfo.size() || cu.size > debugInfo.size() - cu.offset) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_offset, cu.offset});
+  }
+  const auto unitEnd = static_cast<uint64_t>(cu.offset) + cu.size;
+  if (offset < cu.offset || offset > unitEnd || offset > debugInfo.size()) {
+    return makeUnexpected(
+        DwarfParseError{
+            DwarfParseErrorCode::invalid_offset, toErrorOffset(offset)});
+  }
+  if (offset > std::numeric_limits<uint32_t>::max()) {
+    return makeUnexpected(
+        DwarfParseError{
+            DwarfParseErrorCode::integer_overflow,
+            static_cast<size_t>(offset)});
+  }
+
   Die die;
-  auto sp = getCompilationUnitBytes(cu, offset);
-  die.offset = offset;
+  DwarfCursor cursor(
+      debugInfo.subspan(
+          static_cast<size_t>(offset), static_cast<size_t>(unitEnd - offset)),
+      static_cast<size_t>(offset));
+  die.offset = static_cast<uint32_t>(offset);
   die.is64Bit = cu.is64Bit;
-  auto code = readULEB(sp);
-  die.code = code;
-  if (code == 0) {
+  auto code = cursor.readULEB();
+  if (code.hasError()) {
+    return makeUnexpected(code.error());
+  }
+  die.code = *code;
+  if (die.code == 0) {
     return die;
   }
-  die.attrOffset = sp.data() - debugInfo.data() - offset;
-  die.abbr = !cu.abbrCache.empty() && die.code < kMaxAbbreviationEntries
-      ? cu.abbrCache[die.code - 1]
-      : getAbbreviation(
-            cu.debugSections.debugAbbrev,
-            die.code,
-            cu.abbrevOffset.value_or(0));
+  const size_t attrOffset = cursor.offset() - static_cast<size_t>(offset);
+  if (attrOffset > std::numeric_limits<uint8_t>::max()) {
+    return makeUnexpected(
+        DwarfParseError{
+            DwarfParseErrorCode::integer_overflow, cursor.offset()});
+  }
+  die.attrOffset = static_cast<uint8_t>(attrOffset);
+
+  if (!cu.abbrCache.empty() && die.code <= cu.abbrCache.size() &&
+      cu.abbrCache[die.code - 1].code == die.code) {
+    die.abbr = cu.abbrCache[die.code - 1];
+    return die;
+  }
+  auto abbr = getAbbreviation(
+      cu.debugSections.debugAbbrev, die.code, cu.abbrevOffset.value_or(0));
+  if (abbr.hasError()) {
+    return makeUnexpected(abbr.error());
+  }
+  die.abbr = *abbr;
 
   return die;
 }
@@ -1043,19 +1161,31 @@ folly::StringPiece getFunctionNameFromDie(
 folly::StringPiece getFunctionName(
     const CompilationUnit& srcu, uint64_t dieOffset) {
   auto declDie = getDieAtOffset(srcu, dieOffset);
-  auto name = getFunctionNameFromDie(srcu, declDie);
-  return name.empty()
-      ? getFunctionNameFromDie(srcu, findDefinitionDie(srcu, declDie))
-      : name;
+  if (declDie.hasError()) {
+    return {};
+  }
+  auto name = getFunctionNameFromDie(srcu, *declDie);
+  if (!name.empty()) {
+    return name;
+  }
+  auto definition = findDefinitionDie(srcu, *declDie);
+  return definition.hasValue()
+      ? getFunctionNameFromDie(srcu, *definition)
+      : folly::StringPiece{};
 }
 
-Die findDefinitionDie(const CompilationUnit& cu, const Die& die) {
+DwarfParseResult<Die> findDefinitionDie(
+    const CompilationUnit& cu, const Die& die) {
   // Find the real definition instead of declaration.
   // DW_AT_specification: Incomplete, non-defining, or separate declaration
   // corresponding to a declaration
   auto offset = getAttribute<uint64_t>(cu, die, DW_AT_specification);
   if (!offset) {
     return die;
+  }
+  if (*offset > cu.size) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_offset, die.offset});
   }
   return getDieAtOffset(cu, cu.offset + offset.value());
 }

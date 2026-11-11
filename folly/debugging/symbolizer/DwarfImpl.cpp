@@ -21,6 +21,7 @@
 #include <type_traits>
 
 #include <folly/Optional.h>
+#include <folly/ScopeGuard.h>
 #include <folly/debugging/symbolizer/DwarfUtil.h>
 #include <folly/debugging/symbolizer/detail/DwarfConstants.h>
 #include <folly/lang/SafeAssert.h>
@@ -57,6 +58,17 @@ folly::Optional<uint64_t> addBaseAddress(uint64_t base, uint64_t offset) {
   return base + offset;
 }
 
+template <typename Size = size_t>
+DwarfParseResult<Size> incrementDieOffset(uint32_t offset) {
+  if constexpr (sizeof(Size) <= sizeof(uint32_t)) {
+    if (offset >= std::numeric_limits<Size>::max()) {
+      return makeUnexpected(
+          DwarfParseError{DwarfParseErrorCode::integer_overflow, offset});
+    }
+  }
+  return static_cast<Size>(offset) + 1;
+}
+
 } // namespace
 
 // Indicates inline function `name` is called  at `line@file`.
@@ -87,7 +99,11 @@ bool DwarfImpl::findLocation(
     folly::FunctionRef<void(folly::StringPiece)> eachParameterName,
     bool checkAddress) const {
   auto mainCu = cu_.mainCompilationUnit;
-  Die die = getDieAtOffset(mainCu, mainCu.firstDie);
+  auto dieResult = getDieAtOffset(mainCu, mainCu.firstDie);
+  if (dieResult.hasError()) {
+    return false;
+  }
+  Die die = *dieResult;
   // Partial compilation unit (DW_TAG_partial_unit) is not supported.
   if (die.abbr.tag != DW_TAG_compile_unit &&
       die.abbr.tag != DW_TAG_skeleton_unit) {
@@ -225,28 +241,42 @@ bool DwarfImpl::findLocation(
 
   auto& cu = cu_.defaultCompilationUnit();
   if (cu_.splitCU.hasValue()) {
-    die = getDieAtOffset(*cu_.splitCU, cu_.splitCU->firstDie);
+    auto splitDie = getDieAtOffset(*cu_.splitCU, cu_.splitCU->firstDie);
+    if (splitDie.hasError()) {
+      return true;
+    }
+    die = *splitDie;
   }
 
   // Cache abbreviation.
   std::array<DIEAbbreviation, kMaxAbbreviationEntries> abbrs;
   cu.abbrCache = folly::range(abbrs);
+  auto resetAbbrCache = folly::makeGuard([&] { cu.abbrCache = {}; });
   const auto abbrevOffset = cu.abbrevOffset.value_or(0);
   if (abbrevOffset > cu.debugSections.debugAbbrev.size()) {
     return false;
   }
-  auto abbrev = cu.debugSections.debugAbbrev.subspan(abbrevOffset);
-  DIEAbbreviation abbr;
-  while (readAbbreviation(abbrev, abbr)) {
+  DwarfCursor abbrev(
+      cu.debugSections.debugAbbrev.subspan(abbrevOffset), abbrevOffset);
+  for (;;) {
+    auto abbr = readAbbreviation(abbrev);
+    if (abbr.hasError()) {
+      return true;
+    }
+    if (!abbr->hasValue()) {
+      break;
+    }
     // Abbreviation code 0 is reserved for null debugging information entries.
-    if (abbr.code != 0 && abbr.code <= kMaxAbbreviationEntries) {
-      cu.abbrCache.data()[abbr.code - 1] = abbr;
+    if ((**abbr).code <= kMaxAbbreviationEntries) {
+      abbrs[(**abbr).code - 1] = **abbr;
     }
   }
 
   // Find the subprogram that matches the given address.
   Die subprogram;
-  if (!findSubProgramDieForAddress(cu, die, address, baseAddrCU, subprogram)) {
+  auto foundSubprogram =
+      findSubProgramDieForAddress(cu, die, address, baseAddrCU, subprogram);
+  if (foundSubprogram.hasError() || !*foundSubprogram) {
     // Even though @cu contains @address, it's possible
     // that the corresponding DW_TAG_subprogram DIE is missing.
     return true;
@@ -270,7 +300,7 @@ bool DwarfImpl::findLocation(
   }
 
   if (eachParameterName) {
-    forEachChild(cu, subprogram, [&](const Die& child) {
+    auto parameters = forEachChild(cu, subprogram, [&](const Die& child) {
       if (child.abbr.tag == DW_TAG_formal_parameter) {
         if (auto name =
                 getAttribute<folly::StringPiece>(cu, child, DW_AT_name)) {
@@ -279,6 +309,9 @@ bool DwarfImpl::findLocation(
       }
       return true; // continue forEachChild
     });
+    if (parameters.hasError()) {
+      return true;
+    }
   }
 
   if (!checkInline || !subprogram.abbr.hasChildren) {
@@ -390,7 +423,7 @@ CompilationUnit DwarfImpl::findCompilationUnit(
       .mainCompilationUnit;
 }
 
-size_t DwarfImpl::forEachChild(
+DwarfParseResult<size_t> DwarfImpl::forEachChild(
     const CompilationUnit& cu,
     const Die& die,
     folly::FunctionRef<bool(const Die& die)> f) const {
@@ -402,21 +435,30 @@ size_t DwarfImpl::forEachChild(
   }
 
   auto childDie = getDieAtOffset(cu, nextDieOffset);
-  while (childDie.code != 0) {
-    if (!f(childDie)) {
-      return childDie.offset;
+  if (childDie.hasError()) {
+    return makeUnexpected(childDie.error());
+  }
+  while (childDie->code != 0) {
+    if (!f(*childDie)) {
+      return childDie->offset;
     }
 
     // NOTE: Don't run `f` over grandchildren, just skip over them.
-    size_t siblingOffset = forEachChild(cu, childDie, [](const Die&) {
+    auto siblingOffset = forEachChild(cu, *childDie, [](const Die&) {
       return true;
     });
-    childDie = getDieAtOffset(cu, siblingOffset);
+    if (siblingOffset.hasError()) {
+      return makeUnexpected(siblingOffset.error());
+    }
+    childDie = getDieAtOffset(cu, *siblingOffset);
+    if (childDie.hasError()) {
+      return makeUnexpected(childDie.error());
+    }
   }
 
   // childDie is now a dummy die whose offset is to the code 0 marking the
   // end of the children. Need to add one to get the offset of the next die.
-  return childDie.offset + 1;
+  return incrementDieOffset(childDie->offset);
 }
 
 bool DwarfImpl::isAddrInRangeList(
@@ -568,13 +610,14 @@ bool DwarfImpl::isAddrInRangeList(
   return false;
 }
 
-bool DwarfImpl::findSubProgramDieForAddress(
+DwarfParseResult<bool> DwarfImpl::findSubProgramDieForAddress(
     const CompilationUnit& cu,
     const Die& die,
     uint64_t address,
     folly::Optional<uint64_t> baseAddrCU,
     Die& subprogram) const {
-  forEachChild(cu, die, [&](const Die& childDie) {
+  folly::Optional<DwarfParseError> parseError;
+  auto children = forEachChild(cu, die, [&](const Die& childDie) {
     if (childDie.abbr.tag == DW_TAG_subprogram) {
       folly::Optional<uint64_t> lowPc;
       folly::Optional<uint64_t> highPc;
@@ -620,9 +663,20 @@ bool DwarfImpl::findSubProgramDieForAddress(
     }
 
     // Continue forEachChild to next sibling DIE only if not already found.
-    return !findSubProgramDieForAddress(
+    auto nested = findSubProgramDieForAddress(
         cu, childDie, address, baseAddrCU, subprogram);
+    if (nested.hasError()) {
+      parseError = nested.error();
+      return false;
+    }
+    return !*nested;
   });
+  if (children.hasError()) {
+    return makeUnexpected(children.error());
+  }
+  if (parseError) {
+    return makeUnexpected(*parseError);
+  }
   return subprogram.abbr.tag == DW_TAG_subprogram;
 }
 
@@ -648,7 +702,7 @@ void DwarfImpl::findInlinedSubroutineDieForAddress(
     return;
   }
 
-  forEachChild(cu, die, [&](const Die& childDie) {
+  auto children = forEachChild(cu, die, [&](const Die& childDie) {
     // Between a DW_TAG_subprogram and DW_TAG_inlined_subroutine we might
     // have arbitrary intermediary "nodes", including DW_TAG_common_block,
     // DW_TAG_lexical_block, DW_TAG_try_block, DW_TAG_catch_block and
@@ -766,6 +820,9 @@ void DwarfImpl::findInlinedSubroutineDieForAddress(
 
     return false;
   });
+  if (children.hasError()) {
+    return;
+  }
 }
 
 } // namespace symbolizer

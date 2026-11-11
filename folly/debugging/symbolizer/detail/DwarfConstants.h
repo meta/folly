@@ -48,6 +48,7 @@ inline constexpr uint32_t kDwarfReservedInitialLengthStart = 0xfffffff0;
 
 // Children determination (section 7.5.3)
 #define DW_CHILDREN_no 0x00
+#define DW_CHILDREN_yes 0x01
 
 // Attribute names (section 7.5.4)
 #define DW_AT_location 0x02

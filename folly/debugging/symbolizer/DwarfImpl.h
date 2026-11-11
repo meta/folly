@@ -66,7 +66,7 @@ class DwarfImpl {
    * Finds a subprogram debugging info entry that contains a given address among
    * children of given die. Depth first search.
    */
-  bool findSubProgramDieForAddress(
+  DwarfParseResult<bool> findSubProgramDieForAddress(
       const CompilationUnit& cu,
       const Die& die,
       uint64_t address,
@@ -99,7 +99,7 @@ class DwarfImpl {
    * callable for each. Iteration is stopped early if any of the calls return
    * false. Returns the offset of next DIE after iterations.
    */
-  size_t forEachChild(
+  DwarfParseResult<size_t> forEachChild(
       const CompilationUnit& cu,
       const Die& die,
       folly::FunctionRef<bool(const Die& die)> f) const;
