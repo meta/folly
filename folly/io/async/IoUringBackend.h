@@ -387,7 +387,6 @@ class IoUringBackend : public EventBaseBackendBase {
     bool free(IoUringFdRegistrationRecord* record);
 
     int init();
-    size_t update();
 
     bool err_{false};
     io_uring& ioRing_;
