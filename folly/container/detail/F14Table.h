@@ -589,25 +589,33 @@ using TagVector = __uint128_t;
 constexpr std::size_t kRequiredVectorAlignment =
     constexpr_max(std::size_t{16}, alignof(max_align_t));
 
-struct alignas(kRequiredVectorAlignment) F14EmptyTagVector {
-  std::array<uint8_t, 15> bytes_{};
-  uint8_t marker_{255}; // coincides with outboundOverflowCount_
+struct alignas(kRequiredVectorAlignment) F14ChunkHeader {
+  static constexpr std::uint8_t kOutboundOverflowMax = 254;
+  static constexpr std::uint8_t kOutboundOverflowEmpty = 255;
+
+  // Zero means an empty tag. tags_ array might be bigger
+  // than kCapacity to keep alignment of first item.
+  std::array<uint8_t, 14> tags_;
+
+  // Bits 0..3 of chunk 0 record the scaling factor between the number of
+  // chunks and the max size without rehash.  Bits 4-7 in any chunk are a
+  // 4-bit counter of the number of values in this chunk that were placed
+  // because they overflowed their desired chunk (hostedOverflowCount).
+  uint8_t control_;
+
+  // The number of values that would have been placed into this chunk if
+  // there had been space, including values that also overflowed previous
+  // full chunks.  This value saturates; once it becomes 254 it no longer
+  // increases nor decreases.
+  uint8_t outboundOverflowCount_;
 };
 
-FOLLY_EXPORT inline F14EmptyTagVector& getF14EmptyTagVector() noexcept {
-  static constexpr F14EmptyTagVector instance;
-  auto const raw = reinterpret_cast<uintptr_t>(&instance);
-  FOLLY_SAFE_DCHECK(
-      (raw % kRequiredVectorAlignment) == 0,
-      raw,
-      " not aligned to ",
-      kRequiredVectorAlignment);
-  return const_cast<F14EmptyTagVector&>(instance);
-}
+inline constexpr F14ChunkHeader kF14EmptyChunkHeader{
+    {}, 0, F14ChunkHeader::kOutboundOverflowEmpty};
 
 template <typename ItemType>
 struct alignas(constexpr_max(kRequiredVectorAlignment, alignof(ItemType)))
-    F14Chunk {
+    F14Chunk : F14ChunkHeader {
   using Item = ItemType;
 
   // Alignment required for chunks, which must satisfy both the SIMD tag
@@ -636,25 +644,6 @@ struct alignas(constexpr_max(kRequiredVectorAlignment, alignof(ItemType)))
   static constexpr std::size_t kCapacityScaleShift = kCapacityScaleBits - 4;
 
   static constexpr MaskType kFullMask = FullMask<kCapacity>::value;
-
-  static constexpr std::uint8_t kOutboundOverflowMax = 254;
-  static constexpr std::uint8_t kOutboundOverflowEmpty = 255;
-
-  // Zero means an empty tag. tags_ array might be bigger
-  // than kCapacity to keep alignment of first item.
-  std::array<uint8_t, 14> tags_;
-
-  // Bits 0..3 of chunk 0 record the scaling factor between the number of
-  // chunks and the max size without rehash.  Bits 4-7 in any chunk are a
-  // 4-bit counter of the number of values in this chunk that were placed
-  // because they overflowed their desired chunk (hostedOverflowCount).
-  uint8_t control_;
-
-  // The number of values that would have been placed into this chunk if
-  // there had been space, including values that also overflowed previous
-  // full chunks.  This value saturates; once it becomes 254 it no longer
-  // increases nor decreases.
-  uint8_t outboundOverflowCount_;
 
   // Items are stored at a fixed byte offset from the start of the chunk,
   // accessed via pointer arithmetic rather than a member array.  This keeps
@@ -718,13 +707,12 @@ struct alignas(constexpr_max(kRequiredVectorAlignment, alignof(ItemType)))
     return static_cast<std::size_t>(byteOffset) / kChunkStride;
   }
 
-  FOLLY_EXPORT static F14Chunk* getSomeEmptyInstance() noexcept {
-    return reinterpret_cast<F14Chunk*>(&getF14EmptyTagVector());
+  static F14ChunkHeader* getSomeEmptyInstance() noexcept {
+    return const_cast<F14ChunkHeader*>(&kF14EmptyChunkHeader);
   }
 
   static bool isEmptyInstance(F14Chunk const* const chunk) noexcept {
-    auto const empty = reinterpret_cast<F14EmptyTagVector const*>(chunk);
-    return empty->marker_ == kOutboundOverflowEmpty;
+    return chunk->outboundOverflowCount_ == kOutboundOverflowEmpty;
   }
 
   void clear() {
@@ -754,12 +742,11 @@ struct alignas(constexpr_max(kRequiredVectorAlignment, alignof(ItemType)))
   bool eof() const { return capacityScale(this) != 0; }
 
   static std::size_t capacityScale(F14Chunk const* const chunk) {
-    auto const empty = reinterpret_cast<F14EmptyTagVector const*>(chunk);
     if constexpr (kCapacityScaleBits == 4) {
-      return empty->bytes_[offsetof(F14Chunk, control_)] & 0xf;
+      return chunk->control_ & 0xf;
     } else {
       uint16_t v;
-      std::memcpy(&v, &empty->bytes_[12], 2);
+      std::memcpy(&v, &chunk->tags_[12], 2);
       return v;
     }
   }
@@ -908,7 +895,7 @@ struct alignas(constexpr_max(kRequiredVectorAlignment, alignof(ItemType)))
   }
 
   unsigned outboundOverflowCount(TagVector w) const {
-    return vgetq_lane_u8(w, offsetof(F14Chunk, outboundOverflowCount_));
+    return vgetq_lane_u8(w, offsetof(F14ChunkHeader, outboundOverflowCount_));
   }
 
   void setTagImpl(TagVector w, std::size_t index, std::size_t tag) {
@@ -949,7 +936,7 @@ struct alignas(constexpr_max(kRequiredVectorAlignment, alignof(ItemType)))
   unsigned outboundOverflowCount(TagVector w) const {
     // The byte is the high half of the last 16-bit lane.
     return static_cast<unsigned>(_mm_extract_epi16(
-               w, offsetof(F14Chunk, outboundOverflowCount_) / 2)) >>
+               w, offsetof(F14ChunkHeader, outboundOverflowCount_) / 2)) >>
         8;
   }
 
@@ -1120,6 +1107,8 @@ struct alignas(constexpr_max(kRequiredVectorAlignment, alignof(ItemType)))
 template <typename Ptr>
 class PackedChunkItemPtr {
  public:
+  PackedChunkItemPtr() = default;
+
   PackedChunkItemPtr(Ptr p, std::size_t i) noexcept : ptr_{p}, index_{i} {
     FOLLY_SAFE_DCHECK(ptr_ != nullptr || index_ == 0, "");
   }
@@ -1143,8 +1132,8 @@ class PackedChunkItemPtr {
   }
 
  private:
-  Ptr ptr_;
-  std::size_t index_;
+  Ptr ptr_{};
+  std::size_t index_{};
 };
 
 // Bare pointer form, packed into a uintptr_t.  Uses only bits wasted by
@@ -1216,6 +1205,8 @@ class PackedChunkItemPtr<T*> {
       powerMod(sizeof(T) >> kAlignBits, kModulus - 1, kModulus);
 
  public:
+  PackedChunkItemPtr() = default;
+
   PackedChunkItemPtr(T* p, std::size_t i) noexcept {
     uintptr_t encoded = i >> (kIndexBits - kAlignBits);
     assume((encoded & ~kAlignMask) == 0);
@@ -1244,7 +1235,7 @@ class PackedChunkItemPtr<T*> {
   }
 
  private:
-  uintptr_t raw_;
+  uintptr_t raw_{};
 };
 
 template <typename ChunkPtr>
@@ -1479,7 +1470,7 @@ struct SizeAndChunkShiftAndPackedBegin {
  private:
   SizeAndChunkShift sizeAndChunkShift_;
 
-  typename ItemIter::Packed packedBegin_{ItemIter{}.pack()};
+  typename ItemIter::Packed packedBegin_{};
 
  public:
   auto size() const { return sizeAndChunkShift_.size(); }
@@ -1573,6 +1564,8 @@ class F14Table : public Policy {
   using Chunk = F14Chunk<Item>;
   using ChunkPtr =
       typename std::pointer_traits<BytePtr>::template rebind<Chunk>;
+  using ChunkHeaderPtr =
+      typename std::pointer_traits<BytePtr>::template rebind<F14ChunkHeader>;
 
   using HashPair = typename F14HashToken::HashPair;
 
@@ -1582,11 +1575,19 @@ class F14Table : public Policy {
  private:
   //////// begin fields
 
-  ChunkPtr chunks_{Chunk::getSomeEmptyInstance()};
+  ChunkHeaderPtr chunks_{Chunk::getSomeEmptyInstance()};
   SizeAndChunkShiftAndPackedBegin<ItemIter, kEnableItemIteration>
       sizeAndChunkShiftAndPackedBegin_;
 
   //////// end fields
+
+  ChunkPtr chunks() const {
+    return std::pointer_traits<ChunkPtr>::pointer_to(*chunksToAddress());
+  }
+
+  Chunk* chunksToAddress() const {
+    return static_cast<Chunk*>(std::to_address(chunks_));
+  }
 
   auto chunkShift() const {
     return sizeAndChunkShiftAndPackedBegin_.chunkShift();
@@ -1609,11 +1610,11 @@ class F14Table : public Policy {
 
   ChunkPtr chunkAt(std::size_t i) const {
     return std::pointer_traits<ChunkPtr>::pointer_to(
-        *Chunk::chunkRawAt(std::to_address(chunks_), i));
+        *Chunk::chunkRawAt(chunksToAddress(), i));
   }
 
   std::size_t chunkIndex(Chunk const* chunk) const {
-    return Chunk::chunkRawIndex(std::to_address(chunks_), chunk);
+    return Chunk::chunkRawIndex(chunksToAddress(), chunk);
   }
 
   void swapContents(F14Table& rhs) noexcept {
@@ -1804,7 +1805,7 @@ class F14Table : public Policy {
     }
   }
 
-  ChunkPtr initializeChunks(
+  ChunkHeaderPtr initializeChunks(
       BytePtr raw, std::size_t chunkCount, std::size_t capacityScale) {
     static_assert(std::is_trivial<Chunk>::value, "F14Chunk should be POD");
     auto chunks = static_cast<Chunk*>(static_cast<void*>(&*raw));
@@ -1812,12 +1813,13 @@ class F14Table : public Policy {
       Chunk::chunkRawAt(chunks, i)->clear();
     }
     chunks->markEof(capacityScale);
-    return std::pointer_traits<ChunkPtr>::pointer_to(*chunks);
+    return std::pointer_traits<ChunkHeaderPtr>::pointer_to(
+        static_cast<F14ChunkHeader&>(*chunks));
   }
 
   std::size_t itemCount() const noexcept {
     if (chunkShift() == 0) {
-      return computeCapacity(1, Chunk::capacityScale(std::to_address(chunks_)));
+      return computeCapacity(1, Chunk::capacityScale(chunksToAddress()));
     } else {
       return chunkCount() * Chunk::kCapacity;
     }
@@ -1847,7 +1849,7 @@ class F14Table : public Policy {
 
   std::size_t bucket_count() const noexcept {
     return computeCapacity(
-        chunkCount(), Chunk::capacityScale(std::to_address(chunks_)));
+        chunkCount(), Chunk::capacityScale(chunksToAddress()));
   }
 
   std::size_t max_bucket_count() const noexcept { return max_size(); }
@@ -2210,22 +2212,22 @@ class F14Table : public Policy {
         !this->destroyItemOnClear() && itemCount() == src.itemCount()) {
       FOLLY_SAFE_DCHECK(chunkShift() == src.chunkShift(), "");
 
-      auto scale = Chunk::capacityScale(std::to_address(chunks_));
+      auto scale = Chunk::capacityScale(chunksToAddress());
 
       // most happy path
       auto n = chunkAllocSize(chunkCount(), scale);
-      std::memcpy(std::to_address(chunks_), std::to_address(src.chunks_), n);
+      std::memcpy(chunksToAddress(), src.chunksToAddress(), n);
       sizeAndChunkShiftAndPackedBegin_.setSize(src.size());
       if constexpr (kEnableItemIteration) {
         auto srcBegin = src.begin();
-        auto srcChunkIdx = Chunk::chunkRawIndex(
-            std::to_address(src.chunks_), &*srcBegin.chunk());
+        auto srcChunkIdx =
+            Chunk::chunkRawIndex(src.chunksToAddress(), &*srcBegin.chunk());
         sizeAndChunkShiftAndPackedBegin_.packedBegin() =
             ItemIter{chunkAt(srcChunkIdx), srcBegin.index()}.pack();
       }
       if constexpr (kContinuousCapacity) {
         // capacityScale might not match even if itemCount matches
-        chunks_->setCapacityScale(scale);
+        chunks()->setCapacityScale(scale);
       }
     } else {
       // Happy path, no rehash but pack items toward bottom of chunk
@@ -2233,9 +2235,8 @@ class F14Table : public Policy {
       // lastOccupiedChunk() because there may be higher unoccupied chunks
       // with the overflow bit set.
       auto* srcChunk =
-          Chunk::chunkRawAt(std::to_address(src.chunks_), chunkCount() - 1);
-      Chunk* dstChunk =
-          Chunk::chunkRawAt(std::to_address(chunks_), chunkCount() - 1);
+          Chunk::chunkRawAt(src.chunksToAddress(), chunkCount() - 1);
+      Chunk* dstChunk = Chunk::chunkRawAt(chunksToAddress(), chunkCount() - 1);
       do {
         dstChunk->copyOverflowInfoFrom(*srcChunk);
 
@@ -2265,7 +2266,7 @@ class F14Table : public Policy {
       // reset doesn't care about packedBegin, so we don't fix it until the end
       if constexpr (kEnableItemIteration) {
         std::size_t maxChunkIndex = Chunk::chunkRawIndex(
-            std::to_address(src.chunks_), &*src.lastOccupiedChunk());
+            src.chunksToAddress(), &*src.lastOccupiedChunk());
         sizeAndChunkShiftAndPackedBegin_.packedBegin() =
             ItemIter{
                 chunkAt(maxChunkIndex),
@@ -2325,11 +2326,10 @@ class F14Table : public Policy {
     // lifecycle (F14Vector) then nothing after beforeBuild can throw and
     // we don't have to worry about partial failure.
 
-    std::size_t srcChunkIndex = Chunk::chunkRawIndex(
-        std::to_address(src.chunks_), &*src.lastOccupiedChunk());
+    std::size_t srcChunkIndex =
+        Chunk::chunkRawIndex(src.chunksToAddress(), &*src.lastOccupiedChunk());
     while (true) {
-      auto* srcChunk =
-          Chunk::chunkRawAt(std::to_address(src.chunks_), srcChunkIndex);
+      auto* srcChunk = Chunk::chunkRawAt(src.chunksToAddress(), srcChunkIndex);
       auto iter = srcChunk->occupiedIter();
       if (prefetchBeforeRehash()) {
         for (auto piter = iter; piter.hasNext();) {
@@ -2390,7 +2390,7 @@ class F14Table : public Policy {
     // Use the source's capacity, unless it is oversized.
     auto upperLimit = computeChunkCountAndScale(src.size(), false, false);
     auto ccas = std::make_pair(
-        src.chunkCount(), Chunk::capacityScale(std::to_address(src.chunks_)));
+        src.chunkCount(), Chunk::capacityScale(src.chunksToAddress()));
     FOLLY_SAFE_DCHECK(
         ccas.first >= upperLimit.first,
         "rounded chunk count can't be bigger than actual");
@@ -2413,7 +2413,7 @@ class F14Table : public Policy {
 
   void maybeRehash(std::size_t desiredCapacity, bool attemptExact) {
     auto origChunkCount = chunkCount();
-    auto origCapacityScale = Chunk::capacityScale(std::to_address(chunks_));
+    auto origCapacityScale = Chunk::capacityScale(chunksToAddress());
     auto origCapacity = computeCapacity(origChunkCount, origCapacityScale);
 
     std::size_t newChunkCount;
@@ -2495,7 +2495,7 @@ class F14Table : public Policy {
     FOLLY_SAFE_DCHECK(size() == 0, "");
     FOLLY_SAFE_DCHECK(chunkShift() == 0, "");
     FOLLY_SAFE_DCHECK(!!chunks_);
-    FOLLY_SAFE_DCHECK(Chunk::isEmptyInstance(std::to_address(chunks_)), "");
+    FOLLY_SAFE_DCHECK(Chunk::isEmptyInstance(chunksToAddress()), "");
     if (desiredCapacity == 0) {
       return;
     }
@@ -2527,7 +2527,7 @@ class F14Table : public Policy {
       std::size_t origCapacityScale,
       std::size_t newChunkCount,
       std::size_t newCapacityScale) {
-    auto origChunks = chunks_;
+    auto origChunks = chunks();
     auto origCapacity = computeCapacity(origChunkCount, origCapacityScale);
     auto origAllocSize = chunkAllocSize(origChunkCount, origCapacityScale);
     auto newCapacity = computeCapacity(newChunkCount, newCapacityScale);
@@ -2574,7 +2574,7 @@ class F14Table : public Policy {
     } else if (origChunkCount == 1 && newChunkCount == 1) {
       // no mask, no chunk scan, no hash computation, no probing
       auto srcChunk = origChunks;
-      auto dstChunk = chunks_;
+      auto dstChunk = chunks();
       std::size_t srcI = 0;
       std::size_t dstI = 0;
       while (dstI < origSize) {
@@ -2638,7 +2638,7 @@ class F14Table : public Policy {
           FOLLY_SAFE_CHECK(hp.second == srcChunk->tag(srcI), "");
           prefetchAddr(
               Chunk::chunkRawAt(
-                  std::to_address(chunks_), moduloByChunkCount(hp.first)));
+                  chunksToAddress(), moduloByChunkCount(hp.first)));
           if (pendingItem != nullptr) {
             auto dstIter = allocateTag(fullness, pendingHp);
             this->moveItemDuringRehash(dstIter.itemAddr(), *pendingItem);
@@ -2680,7 +2680,7 @@ class F14Table : public Policy {
 
   void debugModeSpuriousRehash() {
     auto cc = chunkCount();
-    auto ss = Chunk::capacityScale(std::to_address(chunks_));
+    auto ss = Chunk::capacityScale(chunksToAddress());
     rehashImpl(size(), cc, ss, cc, ss);
   }
 
@@ -2735,7 +2735,7 @@ class F14Table : public Policy {
     //   map.reserve(map.size() + 2); auto& r1 = map[k1]; auto& r2 = map[k2];
     debugModeOnReserve(capacity);
     FOLLY_SAFE_DCHECK(!!chunks_);
-    if (Chunk::isEmptyInstance(std::to_address(chunks_))) {
+    if (Chunk::isEmptyInstance(chunksToAddress())) {
       initialReserve(capacity);
     } else {
       reserveImpl(capacity);
@@ -2749,7 +2749,7 @@ class F14Table : public Policy {
 
     auto needed = size() + incoming;
     auto chunkCount_ = chunkCount();
-    auto scale = Chunk::capacityScale(std::to_address(chunks_));
+    auto scale = Chunk::capacityScale(chunksToAddress());
     auto existing = computeCapacity(chunkCount_, scale);
     if (needed - 1 >= existing) {
       reserveForInsertImpl(needed - 1, chunkCount_, scale, existing);
@@ -2838,7 +2838,7 @@ class F14Table : public Policy {
   template <bool Reset>
   void clearImpl() noexcept {
     FOLLY_SAFE_DCHECK(!!chunks_);
-    if (Chunk::isEmptyInstance(std::to_address(chunks_))) {
+    if (Chunk::isEmptyInstance(chunksToAddress())) {
       FOLLY_SAFE_DCHECK(empty() && bucket_count() == 0, "");
       return;
     }
@@ -2856,7 +2856,7 @@ class F14Table : public Policy {
     }
 
     if (!empty()) {
-      auto* const chunks = std::to_address(chunks_); // hoisted loop-invariant
+      auto* const chunks = chunksToAddress(); // hoisted loop-invariant
       auto const cc = chunkCount(); // hoisted loop-invariant
       if (destroyItemOnClear()) {
         for (std::size_t ci = 0; ci < cc; ++ci) {
@@ -2892,8 +2892,8 @@ class F14Table : public Policy {
     if (willReset) {
       BytePtr rawAllocation = std::pointer_traits<BytePtr>::pointer_to(
           *static_cast<uint8_t*>(static_cast<void*>(&*chunks_)));
-      std::size_t rawSize = chunkAllocSize(
-          chunkCount(), Chunk::capacityScale(std::to_address(chunks_)));
+      std::size_t rawSize =
+          chunkAllocSize(chunkCount(), Chunk::capacityScale(chunksToAddress()));
 
       chunks_ = Chunk::getSomeEmptyInstance();
       sizeAndChunkShiftAndPackedBegin_.setChunkCount(1);
@@ -2977,7 +2977,7 @@ class F14Table : public Policy {
   // be called with a zero allocationCount.
   template <typename V>
   void visitAllocationClasses(V&& visitor) const {
-    auto scale = Chunk::capacityScale(std::to_address(chunks_));
+    auto scale = Chunk::capacityScale(chunksToAddress());
     this->visitPolicyAllocationClasses(
         scale == 0 ? 0 : chunkAllocSize(chunkCount(), scale),
         size(),
@@ -2992,7 +2992,7 @@ class F14Table : public Policy {
       return;
     }
     std::size_t maxChunkIndex = chunkIndex(&*lastOccupiedChunk());
-    auto* chunk = std::to_address(chunks_);
+    auto* chunk = chunksToAddress();
     for (std::size_t i = 0; i <= maxChunkIndex;
          ++i, chunk = Chunk::nextChunkRaw(chunk)) {
       auto iter = chunk->occupiedIter();
@@ -3014,7 +3014,7 @@ class F14Table : public Policy {
       return;
     }
     std::size_t maxChunkIndex = chunkIndex(&*lastOccupiedChunk());
-    auto* chunk = std::to_address(chunks_);
+    auto* chunk = chunksToAddress();
     for (std::size_t i = 0; i <= maxChunkIndex;
          ++i, chunk = Chunk::nextChunkRaw(chunk)) {
       for (auto iter = chunk->occupiedRangeIter(); iter.hasNext();) {
@@ -3054,8 +3054,7 @@ class F14Table : public Policy {
     }
 
     FOLLY_SAFE_DCHECK(
-        (Chunk::isEmptyInstance(std::to_address(chunks_))) ==
-            (bucket_count() == 0),
+        (Chunk::isEmptyInstance(chunksToAddress())) == (bucket_count() == 0),
         "");
 
     std::size_t n1 = 0;
