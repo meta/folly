@@ -1211,6 +1211,16 @@ class AsyncSocket
   void setTosOrTrafficClass(int tosOrTrafficClass);
 
   /**
+   * Set the 20-bit IPv6 flow label passed to connect and TCP Fast Open.
+   * Must be called before connect(). A nonzero label requires a native IPv6
+   * destination; 0 (the default) clears the label. The caller must configure
+   * any socket options or flow-label registration required by the operating
+   * system before connecting.
+   * Throws AsyncSocketException for an invalid label or socket state.
+   */
+  void setIPv6FlowLabel(uint32_t flowLabel);
+
+  /**
    * This flag controls whether or not IP_BIND_ADDRESS_NO_PORT is enabled for
    * AsyncSocket sockets. This is enabled by default.
    */
@@ -1837,6 +1847,8 @@ class AsyncSocket
 
   int socketConnect(const struct sockaddr* addr, socklen_t len);
 
+  socklen_t getConnectAddress(sockaddr_storage& storage) const;
+
   virtual void scheduleConnectTimeout();
   void registerForConnectEvents();
 
@@ -2096,6 +2108,8 @@ class AsyncSocket
   // zerocopy re-enable logic
   size_t zeroCopyReenableThreshold_{0};
   size_t zeroCopyReenableCounter_{0};
+
+  uint32_t ipv6FlowLabel_{0}; ///< IPv6 flow label for connect; 0 if unset
 
   // zerocopy read
   bool zerocopyReadDisabled_{false};

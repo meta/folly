@@ -764,6 +764,7 @@ AsyncSocket::AsyncSocket(AsyncSocket* oldAsyncSocket)
           oldAsyncSocket->maybeConnectionEstablishTime_),
       tfoInfo_(std::move(oldAsyncSocket->tfoInfo_)),
       byteEventHelper_(std::move(oldAsyncSocket->byteEventHelper_)),
+      ipv6FlowLabel_(oldAsyncSocket->ipv6FlowLabel_),
       observerContainer_(this, std::move(oldAsyncSocket->observerContainer_)) {
   // delay detaching network socket until observers moved to prevent spurious
   // detachFd and close notifications
@@ -1017,11 +1018,15 @@ void AsyncSocket::connect(
 
   addr_ = address;
 
-  // Make sure we're in the uninitialized state
-  if (state_ != StateEnum::UNINIT) {
+  auto closeBoundFd = [&] {
     if (auto* fd = std::get_if<NetworkSocket>(&bindOptions)) {
       netops_->close(*fd);
     }
+  };
+
+  // Make sure we're in the uninitialized state
+  if (state_ != StateEnum::UNINIT) {
+    closeBoundFd();
     return invalidState(callback);
   }
 
@@ -1039,6 +1044,13 @@ void AsyncSocket::connect(
   auto saddr = reinterpret_cast<sockaddr*>(&addrStorage);
 
   try {
+    if (ipv6FlowLabel_ != 0 &&
+        (address.getFamily() != AF_INET6 || address.isIPv4Mapped())) {
+      closeBoundFd();
+      throw AsyncSocketException(
+          AsyncSocketException::BAD_ARGS,
+          withAddr("IPv6 flow label requires a native IPv6 destination"));
+    }
     if (auto* boundFd = std::get_if<NetworkSocket>(&bindOptions)) {
       struct sockaddr_storage peerAddr{};
       socklen_t peerLen = sizeof(peerAddr);
@@ -1046,7 +1058,7 @@ void AsyncSocket::connect(
               *boundFd,
               reinterpret_cast<struct sockaddr*>(&peerAddr),
               &peerLen) == 0) {
-        netops_->close(*boundFd);
+        closeBoundFd();
         throw AsyncSocketException(
             AsyncSocketException::INVALID_STATE,
             withAddr("boundFd is already connected"));
@@ -1195,7 +1207,7 @@ void AsyncSocket::connect(
     }
 
     // Perform the connect()
-    address.getAddress(&addrStorage);
+    auto addrLen = getConnectAddress(addrStorage);
 
     assert(eventBase_ != nullptr);
     if (useIoUring_ && !iouSendHandle_) {
@@ -1207,7 +1219,7 @@ void AsyncSocket::connect(
       state_ = StateEnum::FAST_OPEN;
       tfoInfo_.attempted = true;
     } else {
-      if (socketConnect(saddr, addr_.getActualSize()) < 0) {
+      if (socketConnect(saddr, addrLen) < 0) {
         return;
       }
     }
@@ -1247,6 +1259,30 @@ void AsyncSocket::connect(
     }
   }
   invokeConnectSuccess();
+}
+
+void AsyncSocket::setIPv6FlowLabel(uint32_t flowLabel) {
+  if (state_ != StateEnum::UNINIT) {
+    throw AsyncSocketException(
+        AsyncSocketException::INVALID_STATE,
+        "IPv6 flow label must be set before connect");
+  }
+  if (flowLabel > 0xfffff) {
+    throw AsyncSocketException(
+        AsyncSocketException::BAD_ARGS, "IPv6 flow label exceeds 20 bits");
+  }
+  ipv6FlowLabel_ = flowLabel;
+}
+
+socklen_t AsyncSocket::getConnectAddress(sockaddr_storage& storage) const {
+  auto len = addr_.getAddress(&storage);
+  if (ipv6FlowLabel_ != 0) {
+    // connect() rejects other destinations; getAddress() zeroes flowinfo.
+    DCHECK_EQ(addr_.getFamily(), AF_INET6);
+    reinterpret_cast<sockaddr_in6&>(storage).sin6_flowinfo =
+        htonl(ipv6FlowLabel_);
+  }
+  return len;
 }
 
 int AsyncSocket::socketConnect(const struct sockaddr* saddr, socklen_t len) {
@@ -4224,7 +4260,7 @@ AsyncSocket::WriteResult AsyncSocket::sendSocketMessage(
   };
   if (state_ == StateEnum::FAST_OPEN) {
     sockaddr_storage addr{};
-    auto len = addr_.getAddress(&addr);
+    auto len = getConnectAddress(addr);
     msg->msg_name = &addr;
     msg->msg_namelen = len;
     totalWritten = tfoSendMsg(fd_, msg, msg_flags);

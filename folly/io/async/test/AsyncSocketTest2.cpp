@@ -876,6 +876,148 @@ TEST_P(AsyncSocketToSTest, SetTosOrTrafficClassError) {
   EXPECT_EQ(ccb.state, StateEnum::STATE_FAILED);
 }
 
+class AsyncSocketFlowLabelTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    if (!SocketAddressTestHelper::isIPv6Enabled()) {
+      GTEST_SKIP() << "IPv6 is not available";
+    }
+  }
+};
+
+namespace {
+using FlowLabelDispatcher = NiceMock<netops::test::MockDispatcher>;
+
+std::shared_ptr<FlowLabelDispatcher> overrideDispatcher(AsyncSocket& socket) {
+  auto dispatcher = std::make_shared<FlowLabelDispatcher>();
+  dispatcher->forwardToDefaultImpl();
+  socket.setOverrideNetOpsDispatcher(dispatcher);
+  return dispatcher;
+}
+
+void expectFlowLabel(const void* address, uint32_t label) {
+  EXPECT_EQ(
+      htonl(label), static_cast<const sockaddr_in6*>(address)->sin6_flowinfo);
+}
+
+void expectFlowLabelError(
+    AsyncSocket& socket,
+    uint32_t label,
+    AsyncSocketException::AsyncSocketExceptionType type) {
+  try {
+    socket.setIPv6FlowLabel(label);
+    ADD_FAILURE() << "setIPv6FlowLabel(" << label << ") did not throw";
+  } catch (const AsyncSocketException& ex) {
+    EXPECT_EQ(type, ex.getType());
+  }
+}
+} // namespace
+
+TEST_F(AsyncSocketFlowLabelTest, ConnectUsesNetworkByteOrder) {
+  for (auto label : {1u, 0xfffffu}) {
+    EventBase evb;
+    auto socket = AsyncSocket::newSocket(&evb);
+    auto dispatcher = overrideDispatcher(*socket);
+    socket->setIPv6FlowLabel(label);
+    EXPECT_CALL(*dispatcher, connect(_, _, sizeof(sockaddr_in6)))
+        .WillOnce([label](NetworkSocket, const sockaddr* address, socklen_t) {
+          auto* ipv6 = reinterpret_cast<const sockaddr_in6*>(address);
+          EXPECT_EQ(AF_INET6, ipv6->sin6_family);
+          EXPECT_EQ(htons(443), ipv6->sin6_port);
+          expectFlowLabel(ipv6, label);
+          return 0;
+        });
+    ConnCallback callback;
+    socket->connect(&callback, SocketAddress("::1", 443));
+    EXPECT_EQ(STATE_SUCCEEDED, callback.state);
+  }
+}
+
+TEST_F(AsyncSocketFlowLabelTest, RejectsChangeAfterConnect) {
+  EventBase evb;
+  auto socket = AsyncSocket::newSocket(&evb);
+  auto dispatcher = overrideDispatcher(*socket);
+  EXPECT_CALL(*dispatcher, connect(_, _, _)).WillOnce(Return(0));
+  ConnCallback callback;
+  socket->connect(&callback, SocketAddress("::1", 443));
+  ASSERT_EQ(STATE_SUCCEEDED, callback.state);
+  expectFlowLabelError(*socket, 1, AsyncSocketException::INVALID_STATE);
+}
+
+TEST_F(AsyncSocketFlowLabelTest, InvalidLabelDoesNotChangePreviousLabel) {
+  EventBase evb;
+  auto socket = AsyncSocket::newSocket(&evb);
+  auto dispatcher = overrideDispatcher(*socket);
+  socket->setIPv6FlowLabel(123);
+  expectFlowLabelError(*socket, 0x100000, AsyncSocketException::BAD_ARGS);
+  EXPECT_CALL(*dispatcher, connect(_, _, _))
+      .WillOnce([](NetworkSocket, const sockaddr* address, socklen_t) {
+        expectFlowLabel(address, 123);
+        return 0;
+      });
+  ConnCallback callback;
+  socket->connect(&callback, SocketAddress("::1", 443));
+  EXPECT_EQ(STATE_SUCCEEDED, callback.state);
+}
+
+TEST_F(AsyncSocketFlowLabelTest, ZeroLabelClearsLabel) {
+  for (const auto* ip : {"127.0.0.1", "::1"}) {
+    EventBase evb;
+    auto socket = AsyncSocket::newSocket(&evb);
+    auto dispatcher = overrideDispatcher(*socket);
+    socket->setIPv6FlowLabel(123);
+    socket->setIPv6FlowLabel(0);
+    const SocketAddress address(ip, 443);
+    EXPECT_CALL(*dispatcher, connect(_, _, address.getActualSize()))
+        .WillOnce([](NetworkSocket, const sockaddr* addr, socklen_t) {
+          if (addr->sa_family == AF_INET6) {
+            expectFlowLabel(addr, 0);
+          }
+          return 0;
+        });
+    ConnCallback callback;
+    socket->connect(&callback, address);
+    EXPECT_EQ(STATE_SUCCEEDED, callback.state);
+  }
+}
+
+TEST(
+    AsyncSocketFlowLabelRejectionTest, NonNativeIPv6FailsBeforeSocketCreation) {
+  for (const auto* ip : {"127.0.0.1", "::ffff:127.0.0.1"}) {
+    EventBase evb;
+    auto socket = AsyncSocket::newSocket(&evb);
+    auto dispatcher = overrideDispatcher(*socket);
+    socket->setIPv6FlowLabel(1);
+    EXPECT_CALL(*dispatcher, socket(_, _, _)).Times(0);
+    EXPECT_CALL(*dispatcher, close(_)).Times(0);
+    ConnCallback callback;
+    const SocketAddress address(ip, 443);
+    socket->connect(&callback, address);
+    EXPECT_EQ(STATE_FAILED, callback.state);
+    EXPECT_EQ(AsyncSocketException::BAD_ARGS, callback.exception.getType());
+    EXPECT_THAT(callback.exception.what(), HasSubstr(address.describe()));
+    EXPECT_EQ(NetworkSocket(), socket->getNetworkSocket());
+  }
+}
+
+TEST(AsyncSocketFlowLabelRejectionTest, NonNativeIPv6ClosesBoundSocket) {
+  EventBase evb;
+  auto socket = AsyncSocket::newSocket(&evb);
+  auto dispatcher = overrideDispatcher(*socket);
+  socket->setIPv6FlowLabel(1);
+  const auto boundFd = NetworkSocket::fromFd(12345);
+  EXPECT_CALL(*dispatcher, close(boundFd)).WillOnce(Return(0));
+  ConnCallback callback;
+  socket->connect(
+      &callback,
+      SocketAddress("127.0.0.1", 443),
+      0,
+      emptySocketOptionMap,
+      AsyncSocketTransport::BindOptions{boundFd});
+  EXPECT_EQ(STATE_FAILED, callback.state);
+  EXPECT_EQ(AsyncSocketException::BAD_ARGS, callback.exception.getType());
+}
+
 /**
  * Test writing immediately after connecting, without waiting for connect
  * to finish.
@@ -4173,11 +4315,64 @@ class MockAsyncTFOSocket : public AsyncSocket {
 
   explicit MockAsyncTFOSocket(EventBase* evb) : AsyncSocket(evb) {}
 
+  explicit MockAsyncTFOSocket(AsyncSocket::UniquePtr socket)
+      : AsyncSocket(std::move(socket)) {}
+
   MOCK_METHOD(
       ssize_t,
       tfoSendMsg,
       (NetworkSocket fd, struct msghdr* msg, int msg_flags));
 };
+
+TEST_F(AsyncSocketFlowLabelTest, FastOpenTransferRetainsLabel) {
+  EventBase evb;
+  auto original = AsyncSocket::UniquePtr(new AsyncSocket(&evb));
+  original->enableTFO();
+  original->setIPv6FlowLabel(12345);
+  ConnCallback callback;
+  original->connect(&callback, SocketAddress("::1", 443));
+  ASSERT_EQ(STATE_SUCCEEDED, callback.state);
+
+  auto socket = MockAsyncTFOSocket::UniquePtr(
+      new MockAsyncTFOSocket(std::move(original)));
+  EXPECT_CALL(*socket, tfoSendMsg(_, _, _))
+      .WillOnce([](NetworkSocket, msghdr* msg, int) {
+        EXPECT_EQ(sizeof(sockaddr_in6), msg->msg_namelen);
+        expectFlowLabel(msg->msg_name, 12345);
+        return 3;
+      });
+  WriteCallback write;
+  socket->writeChain(&write, IOBuf::copyBuffer("hey"));
+  EXPECT_EQ(STATE_SUCCEEDED, write.state);
+}
+
+TEST_F(AsyncSocketFlowLabelTest, FastOpenFallbackRetainsLabel) {
+  EventBase evb;
+  auto socket = MockAsyncTFOSocket::UniquePtr(new MockAsyncTFOSocket(&evb));
+  auto dispatcher = overrideDispatcher(*socket);
+  socket->enableTFO();
+  socket->setIPv6FlowLabel(12345);
+  ConnCallback callback;
+  socket->connect(&callback, SocketAddress("::1", 443));
+  ASSERT_EQ(STATE_SUCCEEDED, callback.state);
+
+  EXPECT_CALL(*socket, tfoSendMsg(_, _, _))
+      .WillOnce([](NetworkSocket, msghdr* msg, int) {
+        expectFlowLabel(msg->msg_name, 12345);
+        errno = EOPNOTSUPP;
+        return -1;
+      });
+  EXPECT_CALL(*dispatcher, connect(_, _, sizeof(sockaddr_in6)))
+      .WillOnce([](NetworkSocket, const sockaddr* address, socklen_t) {
+        expectFlowLabel(address, 12345);
+        errno = ECONNREFUSED;
+        return -1;
+      });
+  WriteCallback write;
+  socket->writeChain(&write, IOBuf::copyBuffer("hey"));
+  EXPECT_EQ(STATE_FAILED, write.state);
+  EXPECT_EQ(ECONNREFUSED, write.exception.getErrno());
+}
 
 TEST_P(AsyncSocketTest, TestTFOUnsupported) {
   TestServer server(true);

@@ -47,6 +47,12 @@ class MockDispatcher : public Dispatcher {
       return Dispatcher::close(s);
     });
 
+    ON_CALL(*this, connect(testing::_, testing::_, testing::_))
+        .WillByDefault(
+            [this](NetworkSocket s, const sockaddr* name, socklen_t namelen) {
+              return Dispatcher::connect(s, name, namelen);
+            });
+
     ON_CALL(*this, set_socket_close_on_exec(testing::_))
         .WillByDefault([this](NetworkSocket s) {
           return Dispatcher::set_socket_close_on_exec(s);
@@ -96,6 +102,9 @@ class MockDispatcher : public Dispatcher {
       int, bind, (NetworkSocket s, const sockaddr* name, socklen_t namelen));
 
   MOCK_METHOD(int, close, (NetworkSocket s));
+
+  MOCK_METHOD(
+      int, connect, (NetworkSocket s, const sockaddr* name, socklen_t namelen));
 
   MOCK_METHOD(int, set_socket_close_on_exec, (NetworkSocket s));
 
