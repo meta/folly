@@ -23,9 +23,6 @@
 #include <folly/Conv.h>
 #include <folly/Likely.h>
 #include <folly/Portability.h>
-// TODO(T296850232): remove once manifold impl_prod (mbs_client VCR) includes
-// folly/String.h directly.
-#include <folly/String.h>
 #include <folly/detail/Iterators.h>
 #include <folly/hash/Hash.h>
 #include <folly/lang/Exception.h>
