@@ -339,7 +339,8 @@ void SingletonVault::registerSingleton(detail::SingletonHolderBase* entry) {
 
   if (FOLLY_UNLIKELY(state->registrationComplete) &&
       type_.load(std::memory_order_relaxed) == Type::Strict) {
-    LOG(ERROR) << "Registering singleton after registrationComplete().";
+    LOG(ERROR) << "Registering singleton after registrationComplete()."
+               << " Singleton type is: " << entry->type().name();
   }
 
   auto singletons = singletons_.wlock();
@@ -353,7 +354,8 @@ void SingletonVault::addEagerInitSingleton(detail::SingletonHolderBase* entry) {
 
   if (FOLLY_UNLIKELY(state->registrationComplete) &&
       type_.load(std::memory_order_relaxed) == Type::Strict) {
-    LOG(ERROR) << "Registering for eager-load after registrationComplete().";
+    LOG(ERROR) << "Registering for eager-load after registrationComplete()."
+               << " Singleton type is: " << entry->type().name();
   }
 
   CHECK_THROW(singletons_.rlock()->count(entry->type()), std::logic_error);
@@ -370,7 +372,8 @@ void SingletonVault::addEagerInitOnReenableSingleton(
   if (FOLLY_UNLIKELY(state->registrationComplete) &&
       type_.load(std::memory_order_relaxed) == Type::Strict) {
     LOG(ERROR)
-        << "Registering for eager-load on re-enable after registrationComplete().";
+        << "Registering for eager-load on re-enable after registrationComplete()."
+        << " Singleton type is: " << entry->type().name();
   }
 
   CHECK_THROW(singletons_.rlock()->count(entry->type()), std::logic_error);

@@ -260,6 +260,28 @@ TEST(Singleton, NaughtyUsage) {
       [] { SingletonNaughtyUsage2<Watchdog> w3; }(), kDoubleRegistration);
 }
 
+struct LateRegistrationTag {};
+template <typename T, typename Tag = detail::DefaultTag>
+using SingletonLateRegistration = Singleton<T, Tag, LateRegistrationTag>;
+
+TEST(Singleton, LateRegistrationLogsType) {
+  auto& vault = *SingletonVault::singleton<LateRegistrationTag>();
+  vault.setType(SingletonVault::Type::Strict);
+  vault.registrationComplete();
+
+  testing::internal::CaptureStderr();
+  SingletonLateRegistration<Watchdog> watchdog_singleton;
+  const auto output = testing::internal::GetCapturedStderr();
+
+  EXPECT_THAT(
+      output,
+      testing::HasSubstr(
+          "Registering singleton after registrationComplete(). "
+          "Singleton type is: Watchdog"));
+
+  vault.destroyInstances();
+}
+
 struct SharedPtrUsageTag {};
 template <typename T, typename Tag = detail::DefaultTag>
 using SingletonSharedPtrUsage = Singleton<T, Tag, SharedPtrUsageTag>;
