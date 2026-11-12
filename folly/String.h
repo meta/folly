@@ -512,8 +512,8 @@ std::string prettyPrint(double val, PrettyType, bool addSpace = true);
 /**
  * @overloadbrief Reverse prettyPrint.
  *
- * This utility converts StringPiece in pretty format (look above) to double,
- * with progress information. Alters the  StringPiece parameter
+ * This utility converts a string view in pretty format (look above) to double,
+ * with progress information. Alters the string view parameter
  * to get rid of the already-parsed characters.
  * Expects string in form <floating point number> {space}* [<suffix>]
  * If string is not in correct format, utility finds longest valid prefix and
@@ -528,14 +528,14 @@ std::string prettyPrint(double val, PrettyType, bool addSpace = true);
  * 'abc' => throws std::range_error
  */
 double prettyToDouble(
-    folly::StringPiece* const prettyString, const PrettyType type);
+    std::string_view* const prettyString, const PrettyType type);
 
 /**
- * Same as prettyToDouble(folly::StringPiece*, PrettyType), but
+ * Same as prettyToDouble(std::string_view*, PrettyType), but
  * expects whole string to be correctly parseable. Throws std::range_error
  * otherwise
  */
-double prettyToDouble(folly::StringPiece prettyString, const PrettyType type);
+double prettyToDouble(std::string_view prettyString, const PrettyType type);
 
 /**
  * @overloadbrief Write a hex dump of size bytes starting at ptr to out.
@@ -548,7 +548,7 @@ double prettyToDouble(folly::StringPiece prettyString, const PrettyType type);
  *
  * that is, we write 16 bytes per line, both as hex bytes and as printable
  * characters.  Non-printable characters are replaced with '.'
- * Lines are written to out one by one (one StringPiece at a time) without
+ * Lines are written to out one by one (one string view at a time) without
  * delimiters.
  */
 template <class OutIt>

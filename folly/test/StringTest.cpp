@@ -688,7 +688,7 @@ TEST(PrettyToDouble, Basic) {
   EXPECT_THROW(prettyToDouble("10 Mx", PRETTY_SI), std::range_error);
   EXPECT_THROW(prettyToDouble("10 M x", PRETTY_SI), std::range_error);
 
-  StringPiece testString = "10Mx";
+  std::string_view testString = "10Mx";
   EXPECT_DOUBLE_EQ(prettyToDouble(&testString, PRETTY_UNITS_METRIC), 10e6);
   EXPECT_EQ(testString, "x");
 }

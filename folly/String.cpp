@@ -431,10 +431,10 @@ std::string prettyPrint(double val, PrettyType type, bool addSpace) {
 // TODO:
 // 1) Benchmark & optimize
 double prettyToDouble(
-    folly::StringPiece* const prettyString, const PrettyType type) {
+    std::string_view* const prettyString, const PrettyType type) {
   auto value = folly::to<double>(prettyString);
   while (!prettyString->empty() && std::isspace(prettyString->front())) {
-    prettyString->advance(1); // Skipping spaces between number and suffix
+    prettyString->remove_prefix(1); // Skipping spaces between number and suffix
   }
   const PrettySuffix* suffixes = kPrettySuffixes[type];
   int longestPrefixLen = -1;
@@ -445,7 +445,7 @@ double prettyToDouble(
         longestPrefixLen = 0; // No characters to skip
         bestPrefixId = j;
       }
-    } else if (prettyString->startsWith(suffixes[j].suffix)) {
+    } else if (prettyString->starts_with(suffixes[j].suffix)) {
       int suffixLen = int(strlen(suffixes[j].suffix));
       // We are looking for a longest suffix matching prefix of the string
       // after numeric value. We need this in case suffixes have common prefix.
@@ -460,13 +460,13 @@ double prettyToDouble(
         folly::to<std::string>(
             "Unable to parse suffix \"", *prettyString, "\""));
   }
-  prettyString->advance(size_t(longestPrefixLen));
+  prettyString->remove_prefix(size_t(longestPrefixLen));
   return suffixes[bestPrefixId].val != 0.
       ? value * suffixes[bestPrefixId].val
       : value;
 }
 
-double prettyToDouble(folly::StringPiece prettyString, const PrettyType type) {
+double prettyToDouble(std::string_view prettyString, const PrettyType type) {
   double result = prettyToDouble(&prettyString, type);
   detail::enforceWhitespace(prettyString);
   return result;
@@ -474,7 +474,7 @@ double prettyToDouble(folly::StringPiece prettyString, const PrettyType type) {
 
 std::string hexDump(const void* ptr, size_t size) {
   std::ostringstream os;
-  hexDump(ptr, size, std::ostream_iterator<StringPiece>(os, "\n"));
+  hexDump(ptr, size, std::ostream_iterator<std::string_view>(os, "\n"));
   return os.str();
 }
 
