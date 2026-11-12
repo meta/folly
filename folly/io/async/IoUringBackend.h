@@ -290,16 +290,6 @@ class IoUringBackend : public EventBaseBackendBase {
     std::array<int, 2> fds_{{-1, -1}};
   };
 
-  struct UserData {
-    uintptr_t value;
-    explicit UserData(void* p) noexcept
-        : value{reinterpret_cast<uintptr_t>(p)} {}
-    /* implicit */ operator uint64_t() const noexcept { return value; }
-    /* implicit */ operator void*() const noexcept {
-      return reinterpret_cast<void*>(value);
-    }
-  };
-
   static uint32_t getPollFlags(short events) {
     uint32_t ret = 0;
     if (events & EV_READ) {
@@ -505,7 +495,7 @@ class IoUringBackend : public EventBaseBackendBase {
 
     FOLLY_ALWAYS_INLINE void prepCancel(io_uring_sqe* sqe, IoSqe* cancel_sqe) {
       CHECK(sqe);
-      ::io_uring_prep_cancel(sqe, UserData{cancel_sqe}, 0);
+      ::io_uring_prep_cancel(sqe, cancel_sqe, 0);
       ::io_uring_sqe_set_data(sqe, this);
     }
   };
