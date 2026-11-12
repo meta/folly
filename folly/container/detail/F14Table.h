@@ -1473,11 +1473,11 @@ struct SizeAndChunkShiftAndPackedBegin {
   typename ItemIter::Packed packedBegin_{};
 
  public:
-  auto size() const { return sizeAndChunkShift_.size(); }
+  uint64_t size() const { return sizeAndChunkShift_.size(); }
 
-  auto chunkShift() const { return sizeAndChunkShift_.chunkShift(); }
+  uint8_t chunkShift() const { return sizeAndChunkShift_.chunkShift(); }
 
-  auto chunkCount() const { return sizeAndChunkShift_.chunkCount(); }
+  std::size_t chunkCount() const { return sizeAndChunkShift_.chunkCount(); }
 
   void setSize(uint64_t sz) { sizeAndChunkShift_.setSize(sz); }
 
@@ -1505,11 +1505,11 @@ struct SizeAndChunkShiftAndPackedBegin<ItemIter, false> {
   SizeAndChunkShift sizeAndChunkShift_;
 
  public:
-  auto size() const { return sizeAndChunkShift_.size(); }
+  uint64_t size() const { return sizeAndChunkShift_.size(); }
 
-  auto chunkShift() const { return sizeAndChunkShift_.chunkShift(); }
+  uint8_t chunkShift() const { return sizeAndChunkShift_.chunkShift(); }
 
-  auto chunkCount() const { return sizeAndChunkShift_.chunkCount(); }
+  std::size_t chunkCount() const { return sizeAndChunkShift_.chunkCount(); }
 
   void setSize(uint64_t sz) { sizeAndChunkShift_.setSize(sz); }
 
@@ -1589,11 +1589,11 @@ class F14Table : public Policy {
     return static_cast<Chunk*>(std::to_address(chunks_));
   }
 
-  auto chunkShift() const {
+  uint8_t chunkShift() const {
     return sizeAndChunkShiftAndPackedBegin_.chunkShift();
   }
 
-  auto chunkCount() const {
+  std::size_t chunkCount() const {
     return sizeAndChunkShiftAndPackedBegin_.chunkCount();
   }
 
