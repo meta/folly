@@ -987,6 +987,17 @@ template <typename Int>
 struct is_non_bool_integral //
     : std::bool_constant<is_non_bool_integral_v<Int>> {};
 
+/// is_non_bool_unsigned_v
+///
+/// A common need.
+template <typename Int>
+inline constexpr bool is_non_bool_unsigned_v =
+    !std::is_same_v<bool, std::remove_cv_t<Int>> && std::is_unsigned_v<Int>;
+
+template <typename Int>
+struct is_non_bool_unsigned //
+    : std::bool_constant<is_non_bool_unsigned_v<Int>> {};
+
 //  Some compilers have signed __int128 and unsigned __int128 types, and some
 //  libraries with some compilers have traits for those types. It's a mess.
 //  Import things into folly and then fill in whatever is missing.

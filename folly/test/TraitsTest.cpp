@@ -263,6 +263,15 @@ TEST(Traits, is_non_bool_integral) {
   EXPECT_FALSE((folly::is_non_bool_integral_v<bool const volatile>));
 }
 
+TEST(Traits, is_non_bool_unsigned) {
+  EXPECT_TRUE((folly::is_non_bool_unsigned_v<unsigned>));
+  EXPECT_TRUE((folly::is_non_bool_unsigned_v<unsigned const volatile>));
+  EXPECT_FALSE((folly::is_non_bool_unsigned_v<int>));
+  EXPECT_FALSE((folly::is_non_bool_unsigned_v<float>));
+  EXPECT_FALSE((folly::is_non_bool_unsigned_v<bool>));
+  EXPECT_FALSE((folly::is_non_bool_unsigned_v<bool const volatile>));
+}
+
 #if FOLLY_HAVE_INT128_T
 
 TEST(Traits, int128) {
