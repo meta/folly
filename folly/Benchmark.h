@@ -87,9 +87,6 @@ class UserMetric {
   friend bool operator==(const UserMetric& x, const UserMetric& y) {
     return x.value == y.value && x.type == y.type;
   }
-  friend bool operator!=(const UserMetric& x, const UserMetric& y) {
-    return !(x == y);
-  }
 
  private:
   double convert_helper(double val) { return val; }
@@ -123,9 +120,6 @@ struct BenchmarkResult {
   friend std::ostream& operator<<(std::ostream&, const BenchmarkResult&);
 
   friend bool operator==(const BenchmarkResult&, const BenchmarkResult&);
-  friend bool operator!=(const BenchmarkResult& x, const BenchmarkResult& y) {
-    return !(x == y);
-  }
 };
 
 struct BenchmarkSuspenderBase {

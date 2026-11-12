@@ -227,9 +227,6 @@ class unique_hash_key {
   friend auto operator==(self const& a, self const& b) noexcept {
     return a.data_ == b.data_;
   }
-  friend auto operator!=(self const& a, self const& b) noexcept {
-    return a.data_ != b.data_;
-  }
 };
 
 /// unique_hash_key_with

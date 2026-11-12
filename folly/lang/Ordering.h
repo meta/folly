@@ -128,9 +128,6 @@ class partial_ordering : private detail::partial_ordering_<partial_ordering> {
   friend bool operator==(partial_ordering a, partial_ordering b) noexcept {
     return a.value_ == b.value_;
   }
-  friend bool operator!=(partial_ordering a, partial_ordering b) noexcept {
-    return a.value_ != b.value_;
-  }
 
  private:
   static constexpr int8_t undef = 2;

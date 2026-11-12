@@ -343,9 +343,6 @@ class LifoSemHead {
   inline constexpr bool operator==(const LifoSemHead& rhs) const {
     return bits == rhs.bits;
   }
-  inline constexpr bool operator!=(const LifoSemHead& rhs) const {
-    return !(*this == rhs);
-  }
 };
 
 /// LifoSemBase is the engine for several different types of LIFO

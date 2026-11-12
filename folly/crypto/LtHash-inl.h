@@ -272,11 +272,6 @@ bool LtHash<B, N>::checksumEquals(folly::ByteRange otherChecksum) const {
 }
 
 template <std::size_t B, std::size_t N>
-bool LtHash<B, N>::operator!=(const LtHash<B, N>& that) const {
-  return !(*this == that);
-}
-
-template <std::size_t B, std::size_t N>
 void LtHash<B, N>::reset() {
   std::memset(checksum_.writableData(), 0, checksum_.length());
 }

@@ -219,11 +219,6 @@ class LtHash {
   bool checksumEquals(folly::ByteRange otherChecksum) const;
 
   /**
-   * Inequality comparison operator.
-   */
-  bool operator!=(const LtHash<B, N>& that) const;
-
-  /**
    * Sets the initial checksum value to use for processing objects in the
    * xxxObject() calls.
    */
