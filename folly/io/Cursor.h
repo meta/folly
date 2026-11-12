@@ -392,9 +392,6 @@ class CursorBase {
     return (crtPos == crtPosOther) && (crtBuf == crtBufOther);
   }
 
-  /// @copydoc operator==
-  bool operator!=(const CursorBase& other) const { return !operator==(other); }
-
   /**
    * Attempt to read from the cursor.
    *

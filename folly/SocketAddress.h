@@ -702,9 +702,6 @@ class SocketAddress {
   std::string describe() const;
 
   bool operator==(const SocketAddress& other) const;
-  bool operator!=(const SocketAddress& other) const {
-    return !(*this == other);
-  }
 
   /**
    * Check whether the first N bits of this address match the first N

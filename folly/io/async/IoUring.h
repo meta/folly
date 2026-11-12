@@ -45,10 +45,6 @@ class IoUringOp : public AsyncBaseOp {
     bool operator==(const Options& options) const {
       return sqe128 == options.sqe128 && cqe32 == options.cqe32;
     }
-
-    bool operator!=(const Options& options) const {
-      return !operator==(options);
-    }
   };
 
   IoUringOp(

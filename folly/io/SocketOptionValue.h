@@ -52,11 +52,6 @@ class SocketOptionValue {
   friend bool operator==(const SocketOptionValue& lhs, int rhs);
   friend bool operator==(const SocketOptionValue& lhs, const std::string& rhs);
 
-  friend bool operator!=(
-      const SocketOptionValue& lhs, const SocketOptionValue& rhs);
-  friend bool operator!=(const SocketOptionValue& lhs, int rhs);
-  friend bool operator!=(const SocketOptionValue& lhs, const std::string& rhs);
-
  private:
   std::variant<int, std::string> val_;
 };

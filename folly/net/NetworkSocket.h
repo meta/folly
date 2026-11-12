@@ -71,11 +71,6 @@ struct NetworkSocket {
       const NetworkSocket& a, const NetworkSocket& b) noexcept {
     return a.data == b.data;
   }
-
-  friend constexpr bool operator!=(
-      const NetworkSocket& a, const NetworkSocket& b) noexcept {
-    return !(a == b);
-  }
 };
 
 template <class CharT, class Traits>

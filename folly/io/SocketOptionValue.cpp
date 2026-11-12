@@ -76,18 +76,6 @@ bool operator==(const SocketOptionValue& lhs, const std::string& rhs) {
   return (lhs.asString() == rhs);
 }
 
-bool operator!=(const SocketOptionValue& lhs, const SocketOptionValue& rhs) {
-  return !(lhs == rhs);
-}
-
-bool operator!=(const SocketOptionValue& lhs, int rhs) {
-  return !(lhs == rhs);
-}
-
-bool operator!=(const SocketOptionValue& lhs, const std::string& rhs) {
-  return !(lhs == rhs);
-}
-
 void toAppend(const SocketOptionValue& val, std::string* result) {
   result->append(val.toString());
 }
