@@ -1,5 +1,3 @@
-#include <fmt/format.h>
-
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -24,6 +22,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <fmt/format.h>
 #include <glog/logging.h>
 #include <folly/Benchmark.h>
 #include <folly/BenchmarkUtil.h>
