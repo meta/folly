@@ -28,20 +28,8 @@ namespace folly {
 namespace detail {
 
 template <typename C>
-using detect_capacity = decltype(FOLLY_DECLVAL(C).capacity());
-
-template <typename C>
-using detect_bucket_count = decltype(FOLLY_DECLVAL(C).bucket_count());
-
-template <typename C>
-using detect_max_load_factor = decltype(FOLLY_DECLVAL(C).max_load_factor());
-
-template <typename C, typename... A>
-using detect_reserve = decltype(FOLLY_DECLVAL(C).reserve(FOLLY_DECLVAL(A)...));
-
-template <typename C>
-using container_detect_reserve =
-    detect_reserve<C, typename std::remove_cvref_t<C>::size_type>;
+inline constexpr bool container_has_reserve_v =
+    requires(C& c, typename C::size_type const n) { c.reserve(n); };
 
 } // namespace detail
 
@@ -62,13 +50,16 @@ struct grow_capacity_by_fn {
       folly::throw_exception<std::length_error>("max_size exceeded");
     }
 
-    if constexpr (folly::is_detected_v<detail::detect_capacity, C&>) {
+    constexpr bool has_capacity = requires { c.capacity(); };
+    constexpr bool has_bucket_count = requires {
+      c.bucket_count();
+      c.max_load_factor();
+    };
+    if constexpr (has_capacity) {
       if (sz + n <= c.capacity()) {
         return;
       }
-    } else if constexpr (
-        folly::is_detected_v<detail::detect_bucket_count, C&> &&
-        folly::is_detected_v<detail::detect_max_load_factor, C&>) {
+    } else if constexpr (has_bucket_count) {
       if (sz + n <= c.bucket_count() * c.max_load_factor()) {
         return;
       }
@@ -94,9 +85,8 @@ inline constexpr grow_capacity_by_fn grow_capacity_by{};
 struct reserve_if_available_fn {
   template <typename C>
   constexpr auto operator()(C& c, typename C::size_type const n) const
-      noexcept(!folly::is_detected_v<detail::container_detect_reserve, C&>) {
-    constexpr auto match =
-        folly::is_detected_v<detail::container_detect_reserve, C&>;
+      noexcept(!detail::container_has_reserve_v<C>) {
+    constexpr auto match = detail::container_has_reserve_v<C>;
     if constexpr (match) {
       c.reserve(n);
     }
