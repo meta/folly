@@ -59,6 +59,70 @@ TEST(ExceptionWrapper, nothrow) {
   EXPECT_TRUE(std::is_nothrow_copy_assignable<exception_wrapper>::value);
 }
 
+namespace {
+struct NonStdException {};
+struct NonCopyableException : std::exception {
+  NonCopyableException() = default;
+  NonCopyableException(const NonCopyableException&) = delete;
+};
+class WrapperConstructibleException : public std::runtime_error {
+ public:
+  explicit WrapperConstructibleException(const std::string& message = "")
+      : std::runtime_error(message) {}
+  explicit WrapperConstructibleException(const exception_wrapper& ew)
+      : std::runtime_error(ew.what().toStdString()) {}
+};
+class DerivedWrapperConstructibleException
+    : public WrapperConstructibleException {
+ public:
+  explicit DerivedWrapperConstructibleException(const std::string& message = "")
+      : WrapperConstructibleException(message) {}
+  explicit DerivedWrapperConstructibleException(const exception_wrapper& ew)
+      : WrapperConstructibleException(ew) {}
+};
+} // namespace
+
+TEST(ExceptionWrapper, constructorConstraints) {
+  static_assert(std::is_convertible_v<std::runtime_error, exception_wrapper>);
+  static_assert(
+      std::is_convertible_v<const std::runtime_error&, exception_wrapper>);
+  static_assert(!std::is_constructible_v<exception_wrapper, NonStdException>);
+  static_assert(
+      std::is_constructible_v<
+          exception_wrapper,
+          std::in_place_t,
+          NonStdException>);
+  static_assert(
+      std::is_constructible_v<
+          exception_wrapper,
+          std::in_place_type_t<int>,
+          int>);
+  static_assert(
+      !std::is_constructible_v<exception_wrapper, AbstractIntException&>);
+  static_assert(
+      !std::is_constructible_v<exception_wrapper, NonCopyableException>);
+  static_assert(
+      !std::is_constructible_v<
+          exception_wrapper,
+          std::in_place_t,
+          NonCopyableException>);
+  static_assert(
+      !std::is_constructible_v<
+          exception_wrapper,
+          std::in_place_type_t<NonCopyableException>>);
+  static_assert(
+      !std::is_constructible_v<
+          exception_wrapper,
+          std::in_place_t,
+          exception_wrapper>);
+}
+
+TEST(ExceptionWrapper, exceptionConstructibleFromWrapper) {
+  auto ep = std::make_exception_ptr(DerivedWrapperConstructibleException());
+  exception_wrapper ew{ep};
+  EXPECT_TRUE(ew.is_compatible_with<DerivedWrapperConstructibleException>());
+}
+
 // Tests that when we call throw_exception, the proper type is thrown (derived)
 TEST(ExceptionWrapper, throwTest) {
   std::runtime_error e("payload");

@@ -75,26 +75,23 @@ inline exception_wrapper::exception_wrapper(std::exception_ptr&& ptr) noexcept
 template <
     class Ex,
     class Ex_,
-    FOLLY_REQUIRES_DEF(
+    std::enable_if_t<
         std::conjunction_v<
             exception_wrapper::IsStdException<Ex_>,
-            exception_wrapper::IsRegularExceptionType<Ex_>>)>
+            exception_wrapper::IsRegularExceptionType<Ex_>>,
+        int>>
 inline exception_wrapper::exception_wrapper(Ex&& ex)
     : ptr_{make_exception_ptr_with(std::in_place, std::forward<Ex>(ex))} {}
 
-template <
-    class Ex,
-    class Ex_,
-    FOLLY_REQUIRES_DEF(exception_wrapper::IsRegularExceptionType<Ex_>::value)>
+template <class Ex>
 inline exception_wrapper::exception_wrapper(std::in_place_t, Ex&& ex)
+  requires(IsRegularExceptionType<std::decay_t<Ex>>::value)
     : ptr_{make_exception_ptr_with(std::in_place, std::forward<Ex>(ex))} {}
 
-template <
-    class Ex,
-    typename... As,
-    FOLLY_REQUIRES_DEF(exception_wrapper::IsRegularExceptionType<Ex>::value)>
+template <class Ex, typename... As>
 inline exception_wrapper::exception_wrapper(
     std::in_place_type_t<Ex>, As&&... as)
+  requires(IsRegularExceptionType<Ex>::value)
     : ptr_{make_exception_ptr_with(
           std::in_place_type<Ex>, std::forward<As>(as)...)} {}
 

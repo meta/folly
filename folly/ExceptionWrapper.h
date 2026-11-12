@@ -41,11 +41,6 @@
 
 namespace folly {
 
-#define FOLLY_REQUIRES_DEF(...) \
-  std::enable_if_t<static_cast<bool>(__VA_ARGS__), long>
-
-#define FOLLY_REQUIRES(...) FOLLY_REQUIRES_DEF(__VA_ARGS__) = __LINE__
-
 //! Throwing exceptions can be a convenient way to handle errors. Storing
 //! exceptions in an `exception_ptr` makes it easy to handle exceptions in a
 //! different thread or at a later time. `exception_ptr` can also be used in a
@@ -162,11 +157,16 @@ class exception_wrapper final {
   //! \post `type() == &typeid(ex)`
   //! \note Exceptions of types derived from `std::exception` can be implicitly
   //!     converted to an `exception_wrapper`.
+  //! \note This uses SFINAE rather than a `requires`-clause: checking whether
+  //!     an exception type constructible from `exception_wrapper` is copyable
+  //!     recurses into this constructor, which SFINAE tolerates but constraint
+  //!     satisfaction rejects.
   template <
       class Ex,
       class Ex_ = std::decay_t<Ex>,
-      FOLLY_REQUIRES(
-          std::conjunction_v<IsStdException<Ex_>, IsRegularExceptionType<Ex_>>)>
+      std::enable_if_t<
+          std::conjunction_v<IsStdException<Ex_>, IsRegularExceptionType<Ex_>>,
+          int> = 0>
   /* implicit */ exception_wrapper(Ex&& ex);
 
   //! \pre `typeid(ex) == typeid(typename decay<Ex>::type)`
@@ -175,17 +175,13 @@ class exception_wrapper final {
   //! \note Exceptions of types not derived from `std::exception` can still be
   //!     used to construct an `exception_wrapper`, but you must specify
   //!     `std::in_place` as the first parameter.
-  template <
-      class Ex,
-      class Ex_ = std::decay_t<Ex>,
-      FOLLY_REQUIRES(IsRegularExceptionType<Ex_>::value)>
-  exception_wrapper(std::in_place_t, Ex&& ex);
+  template <class Ex>
+  exception_wrapper(std::in_place_t, Ex&& ex)
+    requires(IsRegularExceptionType<std::decay_t<Ex>>::value);
 
-  template <
-      class Ex,
-      typename... As,
-      FOLLY_REQUIRES(IsRegularExceptionType<Ex>::value)>
-  exception_wrapper(std::in_place_type_t<Ex>, As&&... as);
+  template <class Ex, typename... As>
+  exception_wrapper(std::in_place_type_t<Ex>, As&&... as)
+    requires(IsRegularExceptionType<Ex>::value);
 
   //! Swaps the value of `*this` with the value of `that`
   void swap(exception_wrapper& that) noexcept;
@@ -414,6 +410,3 @@ struct fmt::formatter<folly::exception_wrapper> : formatter<folly::fbstring> {
 };
 
 #include <folly/ExceptionWrapper-inl.h>
-
-#undef FOLLY_REQUIRES
-#undef FOLLY_REQUIRES_DEF
