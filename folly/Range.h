@@ -40,6 +40,7 @@
 #include <array>
 #include <cassert>
 #include <climits>
+#include <compare>
 #include <cstddef>
 #include <cstring>
 #include <iosfwd>
@@ -1371,100 +1372,29 @@ inline bool operator==(const Range<Iter>& lhs, const Range<Iter>& rhs) {
 }
 
 template <class Iter>
-inline bool operator!=(const Range<Iter>& lhs, const Range<Iter>& rhs) {
-  return !(operator==(lhs, rhs));
-}
-
-template <class Iter>
-inline bool operator<(const Range<Iter>& lhs, const Range<Iter>& rhs) {
-  return lhs.compare(rhs) < 0;
-}
-
-template <class Iter>
-inline bool operator<=(const Range<Iter>& lhs, const Range<Iter>& rhs) {
-  return lhs.compare(rhs) <= 0;
-}
-
-template <class Iter>
-inline bool operator>(const Range<Iter>& lhs, const Range<Iter>& rhs) {
-  return lhs.compare(rhs) > 0;
-}
-
-template <class Iter>
-inline bool operator>=(const Range<Iter>& lhs, const Range<Iter>& rhs) {
-  return lhs.compare(rhs) >= 0;
+inline std::strong_ordering operator<=>(
+    const Range<Iter>& lhs, const Range<Iter>& rhs) {
+  return lhs.compare(rhs) <=> 0;
 }
 
 /**
- * Specializations of comparison operators for StringPiece
+ * Comparison operators through conversion for Range<const char*>
  */
 
-namespace detail {
-
-template <class A, class B>
-struct ComparableAsStringPiece {
-  enum {
-    value = (std::is_convertible<A, StringPiece>::value &&
-             std::is_same<B, StringPiece>::value) ||
-        (std::is_convertible<B, StringPiece>::value &&
-         std::is_same<A, StringPiece>::value)
-  };
-};
-
-} // namespace detail
-
-/**
- * operator== through conversion for Range<const char*>
- */
-template <class T, class U>
-std::enable_if_t<detail::ComparableAsStringPiece<T, U>::value, bool> operator==(
-    const T& lhs, const U& rhs) {
-  return StringPiece(lhs) == StringPiece(rhs);
+template <class Iter, class T>
+  requires(
+      std::is_same_v<Iter, const char*> &&
+      std::is_convertible_v<T, StringPiece>)
+bool operator==(const Range<Iter>& lhs, const T& rhs) {
+  return lhs == StringPiece(rhs);
 }
 
-/**
- * operator!= through conversion for Range<const char*>
- */
-template <class T, class U>
-std::enable_if_t<detail::ComparableAsStringPiece<T, U>::value, bool> operator!=(
-    const T& lhs, const U& rhs) {
-  return StringPiece(lhs) != StringPiece(rhs);
-}
-
-/**
- * operator< through conversion for Range<const char*>
- */
-template <class T, class U>
-std::enable_if_t<detail::ComparableAsStringPiece<T, U>::value, bool> operator<(
-    const T& lhs, const U& rhs) {
-  return StringPiece(lhs) < StringPiece(rhs);
-}
-
-/**
- * operator> through conversion for Range<const char*>
- */
-template <class T, class U>
-std::enable_if_t<detail::ComparableAsStringPiece<T, U>::value, bool> operator>(
-    const T& lhs, const U& rhs) {
-  return StringPiece(lhs) > StringPiece(rhs);
-}
-
-/**
- * operator< through conversion for Range<const char*>
- */
-template <class T, class U>
-std::enable_if_t<detail::ComparableAsStringPiece<T, U>::value, bool> operator<=(
-    const T& lhs, const U& rhs) {
-  return StringPiece(lhs) <= StringPiece(rhs);
-}
-
-/**
- * operator> through conversion for Range<const char*>
- */
-template <class T, class U>
-std::enable_if_t<detail::ComparableAsStringPiece<T, U>::value, bool> operator>=(
-    const T& lhs, const U& rhs) {
-  return StringPiece(lhs) >= StringPiece(rhs);
+template <class Iter, class T>
+  requires(
+      std::is_same_v<Iter, const char*> &&
+      std::is_convertible_v<T, StringPiece>)
+std::strong_ordering operator<=>(const Range<Iter>& lhs, const T& rhs) {
+  return lhs <=> StringPiece(rhs);
 }
 
 /**
