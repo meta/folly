@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <concepts>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -70,61 +71,73 @@ namespace folly {
 namespace dynamicconverter_detail {
 
 template <typename T>
-using detect_member_type_value_type = typename T::value_type;
-template <typename T>
-using detect_member_type_iterator = typename T::iterator;
-template <typename T>
-using detect_member_type_mapped_type = typename T::mapped_type;
-template <typename T>
-using detect_member_type_key_type = typename T::key_type;
-template <typename T>
-using detect_like_pointer =
-    decltype((static_cast<bool>(std::declval<const T&>()), *std::declval<const T&>()), void());
-template <typename T>
-using detect_like_optional =
-    decltype(T(std::declval<typename T::value_type>()));
-
-template <typename T>
-struct iterator_class_is_container {
-  using some_iterator = typename T::iterator;
-  enum {
-    value = is_detected_v<detect_member_type_value_type, T> &&
-        std::is_constructible<T, some_iterator, some_iterator>::value
-  };
+concept dyn_range = requires {
+  typename T::value_type;
+  typename T::iterator;
 };
+
+// Customization point: specialize with value = false to keep a type with an
+// iterator from being treated as a container.
+template <typename T>
+struct iterator_class_is_container
+    : std::bool_constant<(
+          dyn_range<T> &&
+          std::is_constructible_v<
+              T,
+              typename T::iterator,
+              typename T::iterator>)> {};
 
 template <typename T>
 using class_is_container = std::conjunction<
-    is_detected<detect_member_type_iterator, T>,
+    std::bool_constant<(requires { typename T::iterator; })>,
     iterator_class_is_container<T>>;
 
 template <typename T>
-using is_range = StrictConjunction<
-    is_detected<detect_member_type_value_type, T>,
-    is_detected<detect_member_type_iterator, T>>;
+concept dyn_container = std::is_class_v<T> && class_is_container<T>::value;
+
+// Ranges other than strings, which convert to dynamic as strings.
+template <typename T>
+concept dyn_array =
+    dyn_range<T> && !std::is_constructible_v<StringPiece, const T&>;
 
 template <typename T>
-using is_container = StrictConjunction<std::is_class<T>, class_is_container<T>>;
+concept dyn_map = dyn_array<T> && requires { typename T::mapped_type; };
 
 template <typename T>
-using is_map = StrictConjunction<
-    is_range<T>,
-    is_detected<detect_member_type_mapped_type, T>>;
+concept dyn_dereferenceable = requires(const T& t) {
+  static_cast<bool>(t);
+  *t;
+};
+
+// Excludes string literals.
+template <typename T>
+concept dyn_like_pointer =
+    !std::is_convertible_v<T, StringPiece> && dyn_dereferenceable<T>;
+
+template <typename T>
+concept dyn_optional = dyn_dereferenceable<T> && requires {
+  T(std::declval<typename T::value_type>());
+};
+
+template <typename T>
+using is_range = std::bool_constant<dyn_range<T>>;
+
+template <typename T>
+using is_container = std::bool_constant<dyn_container<T>>;
+
+template <typename T>
+using is_map =
+    std::bool_constant<(dyn_range<T> && requires { typename T::mapped_type; })>;
 
 template <typename T>
 using is_associative =
-    StrictConjunction<is_range<T>, is_detected<detect_member_type_key_type, T>>;
+    std::bool_constant<(dyn_range<T> && requires { typename T::key_type; })>;
 
 template <typename T>
-using is_like_pointer = std::conjunction<
-    // Exclude string literals.
-    std::negation<std::is_convertible<T, StringPiece>>,
-    is_detected<detect_like_pointer, T>>;
+using is_like_pointer = std::bool_constant<dyn_like_pointer<T>>;
 
 template <typename T>
-using is_optional = std::conjunction<
-    is_detected<detect_like_pointer, T>,
-    is_detected<detect_like_optional, T>>;
+using is_optional = std::bool_constant<dyn_optional<T>>;
 
 } // namespace dynamicconverter_detail
 
@@ -196,18 +209,15 @@ struct DynamicConverter<bool> {
 
 // integrals
 template <typename T>
-struct DynamicConverter<
-    T,
-    typename std::enable_if<
-        std::is_integral<T>::value && !std::is_same<T, bool>::value>::type> {
+  requires std::integral<T>
+struct DynamicConverter<T, void> {
   static T convert(const dynamic& d) { return folly::to<T>(d.asInt()); }
 };
 
 // enums
 template <typename T>
-struct DynamicConverter<
-    T,
-    typename std::enable_if<std::is_enum<T>::value>::type> {
+  requires std::is_enum_v<T>
+struct DynamicConverter<T, void> {
   static T convert(const dynamic& d) {
     using type = typename std::underlying_type<T>::type;
     return static_cast<T>(DynamicConverter<type>::convert(d));
@@ -216,9 +226,8 @@ struct DynamicConverter<
 
 // floating point
 template <typename T>
-struct DynamicConverter<
-    T,
-    typename std::enable_if<std::is_floating_point<T>::value>::type> {
+  requires std::floating_point<T>
+struct DynamicConverter<T, void> {
   static T convert(const dynamic& d) { return folly::to<T>(d.asDouble()); }
 };
 
@@ -251,10 +260,8 @@ struct DynamicConverter<std::pair<F, S>> {
 
 // optionals and other pointer-like types.
 template <typename T>
-struct DynamicConverter<
-    T,
-    typename std::enable_if<
-        dynamicconverter_detail::is_optional<T>::value>::type> {
+  requires dynamicconverter_detail::dyn_optional<T>
+struct DynamicConverter<T, void> {
   static T convert(const dynamic& d) {
     if (d.isNull()) {
       return {};
@@ -265,10 +272,8 @@ struct DynamicConverter<
 
 // containers
 template <typename C>
-struct DynamicConverter<
-    C,
-    typename std::enable_if<
-        dynamicconverter_detail::is_container<C>::value>::type> {
+  requires dynamicconverter_detail::dyn_container<C>
+struct DynamicConverter<C, void> {
   static C convert(const dynamic& d) {
     auto elements =
         dynamicconverter_detail::convertElements<typename C::value_type>(d);
@@ -293,28 +298,22 @@ struct DynamicConstructor {
 };
 
 // identity
-template <typename C>
-struct DynamicConstructor<
-    C,
-    typename std::enable_if<std::is_same<C, dynamic>::value>::type> {
-  static dynamic construct(const C& x) { return x; }
+template <>
+struct DynamicConstructor<dynamic, void> {
+  static dynamic construct(const dynamic& x) { return x; }
 };
 
 // enums
 template <typename C>
-struct DynamicConstructor<
-    C,
-    typename std::enable_if<std::is_enum<C>::value>::type> {
+  requires std::is_enum_v<C>
+struct DynamicConstructor<C, void> {
   static dynamic construct(const C& x) { return dynamic(to_underlying(x)); }
 };
 
 // maps
 template <typename C>
-struct DynamicConstructor<
-    C,
-    typename std::enable_if<
-        !std::is_same<C, dynamic>::value &&
-        dynamicconverter_detail::is_map<C>::value>::type> {
+  requires dynamicconverter_detail::dyn_map<C>
+struct DynamicConstructor<C, void> {
   static dynamic construct(const C& x) {
     dynamic d = dynamic::object;
     for (const auto& pair : x) {
@@ -326,13 +325,8 @@ struct DynamicConstructor<
 
 // other ranges
 template <typename C>
-struct DynamicConstructor<
-    C,
-    typename std::enable_if<
-        !std::is_same<C, dynamic>::value &&
-        !dynamicconverter_detail::is_map<C>::value &&
-        !std::is_constructible<StringPiece, const C&>::value &&
-        dynamicconverter_detail::is_range<C>::value>::type> {
+  requires dynamicconverter_detail::dyn_array<C>
+struct DynamicConstructor<C, void> {
   static dynamic construct(const C& x) {
     dynamic d = dynamic::array;
     for (const auto& item : x) {
@@ -355,10 +349,8 @@ struct DynamicConstructor<std::pair<A, B>, void> {
 
 // optionals and other pointer-like types.
 template <typename T>
-struct DynamicConstructor<
-    T,
-    typename std::enable_if<
-        dynamicconverter_detail::is_like_pointer<T>::value>::type> {
+  requires dynamicconverter_detail::dyn_like_pointer<T>
+struct DynamicConstructor<T, void> {
   static dynamic construct(const T& x) { return x ? toDynamic(*x) : dynamic(); }
 };
 
