@@ -274,27 +274,23 @@ namespace detail {
 FOLLY_CREATE_MEMBER_INVOKER(AllocatorConstruct_, construct);
 FOLLY_CREATE_MEMBER_INVOKER(AllocatorDestroy_, destroy);
 
-template <typename Void, typename Alloc, typename... Args>
+template <typename Alloc, typename... Args>
 struct AllocatorCustomizesConstruct_
     : folly::is_invocable<AllocatorConstruct_, Alloc, Args...> {};
 
 template <typename Alloc, typename... Args>
-struct AllocatorCustomizesConstruct_<
-    std::void_t<typename Alloc::folly_has_default_object_construct>,
-    Alloc,
-    Args...>
+  requires requires { typename Alloc::folly_has_default_object_construct; }
+struct AllocatorCustomizesConstruct_<Alloc, Args...>
     : std::negation<typename Alloc::folly_has_default_object_construct> {};
 
-template <typename Void, typename Alloc, typename... Args>
+template <typename Alloc, typename... Args>
 struct AllocatorCustomizesDestroy_
     : folly::is_invocable<AllocatorDestroy_, Alloc, Args...> {};
 
 template <typename Alloc, typename... Args>
-struct AllocatorCustomizesDestroy_<
-    std::void_t<typename Alloc::folly_has_default_object_destroy>,
-    Alloc,
-    Args...> : std::negation<typename Alloc::folly_has_default_object_destroy> {
-};
+  requires requires { typename Alloc::folly_has_default_object_destroy; }
+struct AllocatorCustomizesDestroy_<Alloc, Args...>
+    : std::negation<typename Alloc::folly_has_default_object_destroy> {};
 } // namespace detail
 
 /**
@@ -315,8 +311,8 @@ struct AllocatorCustomizesDestroy_<
  */
 template <typename Alloc, typename T, typename... Args>
 struct AllocatorHasDefaultObjectConstruct
-    : std::negation<
-          detail::AllocatorCustomizesConstruct_<void, Alloc, T*, Args...>> {};
+    : std::negation<detail::AllocatorCustomizesConstruct_<Alloc, T*, Args...>> {
+};
 
 template <typename Value, typename T, typename... Args>
 struct AllocatorHasDefaultObjectConstruct<std::allocator<Value>, T, Args...>
@@ -339,7 +335,7 @@ struct AllocatorHasDefaultObjectConstruct<std::allocator<Value>, T, Args...>
  */
 template <typename Alloc, typename T>
 struct AllocatorHasDefaultObjectDestroy
-    : std::negation<detail::AllocatorCustomizesDestroy_<void, Alloc, T*>> {};
+    : std::negation<detail::AllocatorCustomizesDestroy_<Alloc, T*>> {};
 
 template <typename Value, typename T>
 struct AllocatorHasDefaultObjectDestroy<std::allocator<Value>, T>

@@ -404,14 +404,13 @@ template <typename Hasher, typename Key>
 struct IsAvalanchingHasher;
 
 namespace detail {
-template <typename Hasher, typename Void = void>
+template <typename Hasher>
 struct IsAvalanchingHasherFromMemberType
     : std::bool_constant<!require_sizeof<Hasher>> {};
 
 template <typename Hasher>
-struct IsAvalanchingHasherFromMemberType<
-    Hasher,
-    std::void_t<typename Hasher::folly_is_avalanching>>
+  requires requires { typename Hasher::folly_is_avalanching; }
+struct IsAvalanchingHasherFromMemberType<Hasher>
     : std::bool_constant<Hasher::folly_is_avalanching::value> {};
 } // namespace detail
 
