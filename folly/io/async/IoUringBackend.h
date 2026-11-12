@@ -244,19 +244,32 @@ class IoUringBackend : public EventBaseBackendBase {
     auto operator<=>(const CqeStats&) const = default;
   };
 
+  struct RingStats {
+    uint32_t sqPeak{0};
+    uint32_t cqPeak{0};
+    uint32_t sqFullCount{0};
+    uint32_t cqOverflowCount{0};
+
+    auto operator<=>(const RingStats&) const = default;
+  };
+
   struct IoUringStats {
     IoUringZeroCopyBufferPool::Stats zcrx;
     IoUringBufferProvider::Stats providedBuffer;
     CqeStats cqe;
+    RingStats ring;
 
     auto operator<=>(const IoUringStats&) const = default;
   };
 
   CqeStats getCqeStats() { return std::exchange(cqeStats_, {}); }
 
+  RingStats getRingStats() { return std::exchange(ringStats_, {}); }
+
   IoUringStats getStats() {
     IoUringStats stats;
     stats.cqe = getCqeStats();
+    stats.ring = getRingStats();
     if (zcBufferPool_) {
       zcBufferPool_->getStats(stats.zcrx);
     }
@@ -839,6 +852,9 @@ class IoUringBackend : public EventBaseBackendBase {
 
   io_uring_sqe* getUntrackedSqe();
   io_uring_sqe* getSqe();
+  void recordSqState() noexcept;
+  void recordCqPeak() noexcept;
+  void recordCqOverflow() noexcept;
 
   // Wait helpers
   int waitForRequestBatch(uint32_t numSendEvents) noexcept;
@@ -896,6 +912,7 @@ class IoUringBackend : public EventBaseBackendBase {
   // socket writability must not inflate the request batch target.
   uint32_t numSendEventsSinceReap_{0};
   CqeStats cqeStats_;
+  RingStats ringStats_;
 
   // io_uring related
   io_uring_params params_{};

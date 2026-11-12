@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <folly/portability/SysResource.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <thread>
@@ -393,6 +394,12 @@ bool IoUringBackend::FdRegistry::free(IoUringFdRegistrationRecord* record) {
 
 FOLLY_ALWAYS_INLINE io_uring_sqe* IoUringBackend::getUntrackedSqe() {
   io_uring_sqe* ret = ::io_uring_get_sqe(&ioRing_);
+  if (!ret) {
+    ++ringStats_.sqFullCount;
+    if (options_.flags & Options::Flags::POLL_SQ) {
+      ringStats_.sqPeak = ioRing_.sq.ring_entries;
+    }
+  }
   // if running with SQ poll enabled
   // we might have to wait for an sq entry to available
   // before we can submit another one
@@ -408,7 +415,24 @@ FOLLY_ALWAYS_INLINE io_uring_sqe* IoUringBackend::getUntrackedSqe() {
   }
 
   ++waitingToSubmit_;
+  if (options_.flags & Options::Flags::POLL_SQ) {
+    recordSqState();
+  }
   return ret;
+}
+
+FOLLY_ALWAYS_INLINE void IoUringBackend::recordSqState() noexcept {
+  const auto occupied = ::io_uring_sq_ready(&ioRing_);
+  ringStats_.sqPeak = std::max(ringStats_.sqPeak, occupied);
+}
+
+FOLLY_ALWAYS_INLINE void IoUringBackend::recordCqPeak() noexcept {
+  const auto occupied = ::io_uring_cq_ready(&ioRing_);
+  ringStats_.cqPeak = std::max(ringStats_.cqPeak, occupied);
+}
+
+FOLLY_ALWAYS_INLINE void IoUringBackend::recordCqOverflow() noexcept {
+  ringStats_.cqOverflowCount += ::io_uring_cq_has_overflow(&ioRing_);
 }
 
 FOLLY_ALWAYS_INLINE io_uring_sqe* IoUringBackend::getSqe() {
@@ -621,6 +645,7 @@ void IoUringBackend::cleanup() {
 
     bool const canContinue = ret != -EEXIST && ret != -EBADR;
     if (canContinue) {
+      recordCqOverflow();
       ::io_uring_wait_cqe(&ioRing_, &cqe);
     }
     internalProcessCqe(
@@ -1466,6 +1491,7 @@ int IoUringBackend::waitForRequestBatch(uint32_t numSendEvents) noexcept {
           .count();
 
   io_uring_cqe* batchCqe = nullptr;
+  recordCqOverflow();
   const int res = ::io_uring_wait_cqes(
       &ioRing_,
       &batchCqe,
@@ -1492,14 +1518,17 @@ int IoUringBackend::doInnerWait(io_uring_cqe*& cqe) noexcept {
 
   if (waitingToSubmit_) {
     submitBusyCheck(waitingToSubmit_, WaitForEventsMode::WAIT);
+    recordCqOverflow();
     return ::io_uring_peek_cqe(&ioRing_, &cqe);
   } else if (useReqBatching()) {
     struct __kernel_timespec timeout{};
     timeout.tv_sec = 0;
     timeout.tv_nsec = options_.timeout.count() * 1000;
+    recordCqOverflow();
     return ::io_uring_wait_cqes(
         &ioRing_, &cqe, options_.batchSize, &timeout, nullptr);
   } else {
+    recordCqOverflow();
     return ::io_uring_wait_cqe(&ioRing_, &cqe);
   }
 }
@@ -1513,8 +1542,10 @@ int IoUringBackend::waitForFirstCompletionThenBatch(
     if (ret < 0) {
       return ret;
     }
+    recordCqOverflow();
     ret = ::io_uring_peek_cqe(&ioRing_, &cqe);
   } else {
+    recordCqOverflow();
     ret = ::io_uring_wait_cqe(&ioRing_, &cqe);
   }
 
@@ -1546,6 +1577,7 @@ int IoUringBackend::doWait(io_uring_cqe*& cqe) {
 }
 
 int IoUringBackend::doPeek(io_uring_cqe*& cqe) noexcept {
+  recordCqOverflow();
   if (usingDeferTaskrun_) {
     return ::io_uring_get_events(&ioRing_);
   }
@@ -1578,6 +1610,7 @@ size_t IoUringBackend::getActiveEvents(WaitForEventsMode waitForEvents) {
         if (waitingToSubmit_) {
           submitBusyCheck(waitingToSubmit_, WaitForEventsMode::DONT_WAIT);
         }
+        recordCqOverflow();
         do {
           ret = ::io_uring_peek_cqe(&ioRing_, &cqe);
           asm_volatile_pause();
@@ -1671,6 +1704,8 @@ unsigned int IoUringBackend::internalProcessCqe(
     if (!loop_count) {
       break;
     }
+    recordCqPeak();
+    recordCqOverflow();
     io_uring_cq_advance(&ioRing_, loop_count);
     if (count >= maxGet) {
       break;
@@ -1679,6 +1714,7 @@ unsigned int IoUringBackend::internalProcessCqe(
     // io_uring_peek_cqe will check for any overflows and copy them to the cq
     // ring.
     if (mode != InternalProcessCqeMode::AVAILABLE_ONLY) {
+      recordCqOverflow();
       int ret = ::io_uring_peek_cqe(&ioRing_, &cqe);
       if (ret == -EBADR) {
         // cannot recover from droped CQE
@@ -1708,6 +1744,8 @@ int IoUringBackend::submitEager() {
   int res;
   DCHECK(!isSubmitting()) << "mid processing a submit, cannot submit";
   do {
+    recordSqState();
+    recordCqOverflow();
     res = ::io_uring_submit(&ioRing_);
   } while (res == -EINTR);
   VLOG(2) << "IoUringBackend::submitEager() " << waitingToSubmit_;
@@ -1725,6 +1763,8 @@ int IoUringBackend::submitBusyCheck(
   DCHECK(!isSubmitting()) << "mid processing a submit, cannot submit";
   while (i < num) {
     VLOG(2) << "IoUringBackend::submit() " << waitingToSubmit_;
+    recordSqState();
+    recordCqOverflow();
 
     if (waitForEvents == WaitForEventsMode::WAIT) {
       if (options_.flags & Options::Flags::POLL_CQ) {
@@ -1797,6 +1837,7 @@ int IoUringBackend::submitBusyCheck(
     if (waitForEvents == WaitForEventsMode::WAIT &&
         options_.flags & Options::Flags::POLL_CQ && i == num) {
       io_uring_cqe* cqe = nullptr;
+      recordCqOverflow();
       while (!cqe) {
         ::io_uring_peek_cqe(&ioRing_, &cqe);
       }
