@@ -43,6 +43,15 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "uniform_real_distribution_test",
+    srcs = ["UniformRealDistributionTest.cpp"],
+    deps = [
+        "//folly/portability:gtest",
+        "//folly/random:uniform_real_distribution",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "xoshiro256pp_test",
     srcs = ["Xoshiro256ppTest.cpp"],
     deps = [

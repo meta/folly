@@ -21,7 +21,10 @@
 #pragma once
 #define FOLLY_RANDOM_H_
 
+#include <cassert>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <type_traits>
 
@@ -29,6 +32,7 @@
 #include <folly/Traits.h>
 #include <folly/functional/Invoke.h>
 #include <folly/lang/Bits.h>
+#include <folly/random/UniformRealDistribution.h>
 #include <folly/random/xoshiro256pp.h>
 
 #if defined(FOLLY_HAVE_EXTRANDOM_SFMT19937) && FOLLY_HAVE_EXTRANDOM_SFMT19937
@@ -197,6 +201,7 @@ class Random {
 
   /**
    * Returns a secure double in [min, max), if min == max, returns min.
+   * Reversed bounds sample (max, min]. Bounds must be finite.
    */
   static double secureRandDouble(double min, double max) {
     SecureRNG<uint64_t> srng;
@@ -393,18 +398,13 @@ class Random {
    */
   template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
   static double randDouble01(RNG&& rng) {
-    // Assuming 64-bit IEEE754 doubles, numbers in the form k/2^53 can be
-    // represented exactly, so we can sample uniformly in [0, 1) by sampling an
-    // integer in [0, 2^53) and scaling accordingly. This is the highest
-    // precision we can obtain if we want a symmetric output distribution.
-    // See https://prng.di.unimi.it/#remarks for more details.
-    static_assert(
-        std::numeric_limits<double>::digits == 53, "Unsupported double type");
-    return (rand64(std::forward<RNG>(rng)) >> 11) * 0x1.0p-53;
+    auto& engine = rng;
+    return detail::uniform_real_distribution_canonical<double>(engine);
   }
 
   /**
    * Returns a double in [min, max), if min == max, returns min.
+   * Reversed bounds sample (max, min]. Bounds must be finite.
    */
   static double randDouble(double min, double max) {
     return randDouble(min, max, ThreadLocalPRNG());
@@ -412,13 +412,22 @@ class Random {
 
   /**
    * Returns a double in [min, max), if min == max, returns min.
+   * Reversed bounds sample (max, min]. Bounds must be finite.
    */
   template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
   static double randDouble(double min, double max, RNG&& rng) {
     if (std::fabs(max - min) < std::numeric_limits<double>::epsilon()) {
       return min;
     }
-    return std::uniform_real_distribution<double>(min, max)(rng);
+    if (min > max || !std::isfinite(max - min)) {
+      assert(std::isfinite(min) && std::isfinite(max));
+      auto value = randDouble01(std::forward<RNG>(rng));
+      auto result = std::lerp(min, max, value);
+      auto inRange = min > max ? result > max : result < max;
+      return inRange ? result : std::nextafter(max, min);
+    }
+    auto& engine = rng;
+    return uniform_real_distribution<double>(min, max)(engine);
   }
 };
 

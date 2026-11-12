@@ -241,6 +241,7 @@ fb_dirsync_cpp_library(
         ":traits",
         "//folly/functional:invoke",
         "//folly/lang:bits",
+        "//folly/random:uniform_real_distribution",
         "//folly/random:xoshiro256pp",
     ] + select({
         "DEFAULT": [],

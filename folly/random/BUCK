@@ -45,6 +45,13 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
+    name = "uniform_real_distribution",
+    headers = ["UniformRealDistribution.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
+    use_raw_headers = True,
+)
+
+fb_dirsync_cpp_library(
     name = "xoshiro256pp",
     headers = [
         "xoshiro256pp.h",

@@ -39,6 +39,11 @@ folly_add_library(
 )
 
 folly_add_library(
+  NAME uniform_real_distribution
+  HEADERS UniformRealDistribution.h
+)
+
+folly_add_library(
   NAME xoshiro256pp
   HEADERS xoshiro256pp.h
   EXPORTED_DEPS

@@ -144,6 +144,29 @@ BENCHMARK(threadprng, n) {
 BENCHMARK(RandomDouble) {
   doNotOptimizeAway(Random::randDouble01());
 }
+BENCHMARK(RandomDoubleRange) {
+  doNotOptimizeAway(Random::randDouble(-5.0, 17.0));
+}
+
+namespace {
+FOLLY_NOINLINE double stdUniformDouble(ThreadLocalPRNG& rng) {
+  return std::uniform_real_distribution<double>(-5.0, 17.0)(rng);
+}
+
+FOLLY_NOINLINE double follyUniformDouble(ThreadLocalPRNG& rng) {
+  return uniform_real_distribution<double>(-5.0, 17.0)(rng);
+}
+} // namespace
+
+BENCHMARK(StdUniformDouble) {
+  ThreadLocalPRNG rng;
+  doNotOptimizeAway(stdUniformDouble(rng));
+}
+BENCHMARK_RELATIVE(FollyUniformDouble) {
+  ThreadLocalPRNG rng;
+  doNotOptimizeAway(follyUniformDouble(rng));
+}
+
 BENCHMARK(Random32) {
   doNotOptimizeAway(Random::rand32());
 }

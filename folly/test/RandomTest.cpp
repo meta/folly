@@ -17,6 +17,8 @@
 #include <folly/Random.h>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <random>
 #include <thread>
 #include <unordered_set>
@@ -249,6 +251,101 @@ TEST(Random, randDouble01) {
   }
 
   EXPECT_EQ(kSeenBoth, seenSoFar);
+}
+
+TEST(Random, randDouble) {
+  // Very basic test that we see at least one number in the bottom tenth of the
+  // range and one in the top tenth, to verify that the output spans the
+  // requested range and is not constant.
+  auto constexpr kSeenHigh{1};
+  auto constexpr kSeenLow{2};
+  auto constexpr kSeenBoth{kSeenHigh | kSeenLow};
+
+  auto constexpr kMin{-5.0};
+  auto constexpr kMax{17.0};
+
+  auto seenSoFar{0};
+  for (auto i = 0; i < 1000; ++i) {
+    auto value = folly::Random::randDouble(kMin, kMax);
+    ASSERT_GE(value, kMin);
+    ASSERT_LT(value, kMax);
+    if (value > kMax - 0.1 * (kMax - kMin)) {
+      seenSoFar |= kSeenHigh;
+    } else if (value < kMin + 0.1 * (kMax - kMin)) {
+      seenSoFar |= kSeenLow;
+    }
+  }
+
+  EXPECT_EQ(kSeenBoth, seenSoFar);
+}
+
+TEST(Random, randDoubleReversedRange) {
+  std::mt19937 rng(123);
+  auto copy = rng;
+  bool seenLow = false;
+  bool seenHigh = false;
+  for (int i = 0; i < 100; ++i) {
+    auto value = Random::randDouble(10, 0, rng);
+    EXPECT_EQ(value, std::lerp(10.0, 0.0, Random::randDouble01(copy)));
+    ASSERT_GT(value, 0);
+    ASSERT_LE(value, 10);
+    seenLow |= value < 1;
+    seenHigh |= value > 9;
+  }
+  EXPECT_EQ(rng, copy);
+  EXPECT_TRUE(seenLow);
+  EXPECT_TRUE(seenHigh);
+
+  rng.seed(123);
+  copy = rng;
+  double max = std::numeric_limits<double>::max();
+  auto value = Random::randDouble(max, -max, rng);
+  EXPECT_EQ(value, std::lerp(max, -max, Random::randDouble01(copy)));
+  EXPECT_TRUE(std::isfinite(value));
+  EXPECT_GT(value, -max);
+  EXPECT_LE(value, max);
+
+  auto adjacent = std::nextafter(1.0, 2.0);
+  EXPECT_EQ(Random::randDouble(adjacent, 1, rng), adjacent);
+}
+
+TEST(Random, randDoubleEmptyRange) {
+  EXPECT_EQ(3.5, folly::Random::randDouble(3.5, 3.5));
+  EXPECT_EQ(0.0, folly::Random::randDouble(0.0, 0.0));
+}
+
+TEST(Random, randDoubleOverflowingSpan) {
+  std::mt19937 rng(123);
+  auto copy = rng;
+  auto max = std::numeric_limits<double>::max();
+  for (int i = 0; i < 100; ++i) {
+    auto value = Random::randDouble(-max, max, rng);
+    EXPECT_EQ(value, std::lerp(-max, max, Random::randDouble01(copy)));
+    EXPECT_TRUE(std::isfinite(value));
+    EXPECT_GE(value, -max);
+    EXPECT_LT(value, max);
+  }
+  EXPECT_EQ(rng, copy);
+  EXPECT_TRUE(std::isfinite(Random::randDouble(-max, max, std::mt19937{})));
+}
+
+TEST(Random, randDoubleSharesCanonicalGenerator) {
+  std::mt19937 rng(123);
+  auto copy = rng;
+  for (int i = 0; i < 100; ++i) {
+    auto expected = (Random::rand64(copy) >> 11) * 0x1p-53;
+    EXPECT_EQ(Random::randDouble01(rng), expected);
+  }
+  EXPECT_EQ(rng, copy);
+
+  copy = rng;
+  uniform_real_distribution<double> dist(-5, 17);
+  for (int i = 0; i < 100; ++i) {
+    EXPECT_EQ(Random::randDouble(-5, 17, rng), dist(copy));
+  }
+  EXPECT_EQ(rng, copy);
+  Random::randDouble01(std::mt19937{});
+  Random::randDouble(-5, 17, std::mt19937{});
 }
 
 #ifndef _WIN32

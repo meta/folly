@@ -1025,6 +1025,7 @@ folly_add_library(
     folly_functional_invoke
     folly_lang_bits
     folly_portability
+    folly_random_uniform_real_distribution
     folly_random_xoshiro256pp
     folly_traits
 )
