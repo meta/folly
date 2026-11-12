@@ -119,13 +119,6 @@ inline bool operator==(
   return lhs.error() == rhs.error();
 }
 
-template <
-    class Error FOLLY_REQUIRES_TRAILING(IsEqualityComparable<Error>::value)>
-inline bool operator!=(
-    const Unexpected<Error>& lhs, const Unexpected<Error>& rhs) {
-  return !(lhs == rhs);
-}
-
 /**
  * For constructing an Unexpected object from an error code. Unexpected objects
  * are implicitly convertible to Expected object in the error state. Usage is
@@ -1469,14 +1462,6 @@ operator==(
   return lhs.value_ == rhs.value_;
 }
 
-template <
-    class Value,
-    class Error FOLLY_REQUIRES_TRAILING(IsEqualityComparable<Value>::value)>
-inline bool operator!=(
-    const Expected<Value, Error>& lhs, const Expected<Value, Error>& rhs) {
-  return !(rhs == lhs);
-}
-
 template <class Value, class Error>
 inline typename std::enable_if<IsLessThanComparable<Value>::value, bool>::type
 operator<(
@@ -1558,8 +1543,6 @@ makeExpected(Value&& val) {
 template <class Value, class Error>
 bool operator==(const Expected<Value, Error>&, const Value& other) = delete;
 template <class Value, class Error>
-bool operator!=(const Expected<Value, Error>&, const Value& other) = delete;
-template <class Value, class Error>
 bool operator<(const Expected<Value, Error>&, const Value& other) = delete;
 template <class Value, class Error>
 bool operator<=(const Expected<Value, Error>&, const Value& other) = delete;
@@ -1567,10 +1550,6 @@ template <class Value, class Error>
 bool operator>=(const Expected<Value, Error>&, const Value& other) = delete;
 template <class Value, class Error>
 bool operator>(const Expected<Value, Error>&, const Value& other) = delete;
-template <class Value, class Error>
-bool operator==(const Value& other, const Expected<Value, Error>&) = delete;
-template <class Value, class Error>
-bool operator!=(const Value& other, const Expected<Value, Error>&) = delete;
 template <class Value, class Error>
 bool operator<(const Value& other, const Expected<Value, Error>&) = delete;
 template <class Value, class Error>
