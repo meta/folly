@@ -24,14 +24,6 @@
 #include <intrin.h>
 #include <stdint.h>
 
-// MSVC had added support for __builtin_clz etc. in 16.3 (1923) but it will be
-// removed in 16.8 (1928).
-#if (_MSC_VER >= 1923) && (_MSC_VER < 1928)
-#define FOLLY_DETAILFOLLY_DETAIL_MSC_BUILTIN_SUPPORT 1
-#else
-#define FOLLY_DETAILFOLLY_DETAIL_MSC_BUILTIN_SUPPORT 0
-#endif
-
 namespace folly {
 namespace portability {
 namespace detail {
@@ -51,7 +43,6 @@ FOLLY_ALWAYS_INLINE void __builtin___clear_cache(char* begin, char* end) {
   }
 }
 
-#if !defined(_MSC_VER) || !defined(FOLLY_DETAIL_MSC_BUILTIN_SUPPORT)
 FOLLY_ALWAYS_INLINE int __builtin_clz(unsigned int x) {
   unsigned long index;
   return int(_BitScanReverse(&index, (unsigned long)x) ? 31 - index : 32);
@@ -103,7 +94,6 @@ FOLLY_ALWAYS_INLINE int __builtin_ctzll(unsigned long long x) {
   return int(_BitScanForward64(&index, x) ? index : 64);
 }
 #endif
-#endif // !defined(_MSC_VER) || !defined(FOLLY_DETAIL_MSC_BUILTIN_SUPPORT)
 
 FOLLY_ALWAYS_INLINE int __builtin_ffs(int x) {
   unsigned long index;
@@ -133,15 +123,12 @@ FOLLY_ALWAYS_INLINE int __builtin_popcount(unsigned int x) {
   return int(__popcnt(x));
 }
 
-#if !defined(_MSC_VER) || !defined(FOLLY_DETAIL_MSC_BUILTIN_SUPPORT)
 FOLLY_ALWAYS_INLINE int __builtin_popcountl(unsigned long x) {
   static_assert(sizeof(x) == 4);
   return int(__popcnt(x));
 }
-#endif // !defined(_MSC_VER) || !defined(FOLLY_DETAIL_MSC_BUILTIN_SUPPORT)
 #endif // defined(_M_IX86) || defined(_M_X64)
 
-#if !defined(_MSC_VER) || !defined(FOLLY_DETAIL_MSC_BUILTIN_SUPPORT)
 #if defined(_M_IX86)
 FOLLY_ALWAYS_INLINE int __builtin_popcountll(unsigned long long x) {
   return int(__popcnt((unsigned int)(x >> 32))) +
@@ -152,7 +139,6 @@ FOLLY_ALWAYS_INLINE int __builtin_popcountll(unsigned long long x) {
   return int(__popcnt64(x));
 }
 #endif
-#endif // !defined(_MSC_VER) || !defined(FOLLY_DETAIL_MSC_BUILTIN_SUPPORT)
 
 FOLLY_ALWAYS_INLINE void* __builtin_return_address(unsigned int frame) {
   // I really hope frame is zero...
@@ -161,5 +147,3 @@ FOLLY_ALWAYS_INLINE void* __builtin_return_address(unsigned int frame) {
   return _ReturnAddress();
 }
 #endif
-
-#undef FOLLY_DETAIL_MSC_BUILTIN_SUPPORT
