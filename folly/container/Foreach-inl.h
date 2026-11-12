@@ -50,62 +50,34 @@ auto adl_get(Type&& instance) -> decltype(get<Index>(std::declval<Type>())) {
 
 } // namespace adl
 
-/**
- * Enable if the tuple supports fetching via a member get<>()
- */
 template <typename T>
-using EnableIfMemberGetFound =
-    std::void_t<decltype(std::declval<T>().template get<0>())>;
-template <typename, typename T>
-struct IsMemberGetFound : std::bool_constant<!require_sizeof<T>> {};
-template <typename T>
-struct IsMemberGetFound<EnableIfMemberGetFound<T>, T> : std::true_type {};
+inline constexpr bool has_member_get_v = require_sizeof<T> != 0 && requires {
+  std::declval<T>().template get<0>();
+};
 
 /**
  * A get that tries member get<> first and if that is not found tries ADL get<>.
  * This mechanism is as found in the structured bindings proposal here 11.5.3.
  * http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4659.pdf
  */
-template <
-    std::size_t Index,
-    typename Type,
-    std::enable_if_t<!IsMemberGetFound<void, Type>::value, int> = 0>
-auto get_impl(Type&& instance)
-    -> decltype(adl::adl_get<Index>(static_cast<Type&&>(instance))) {
-  return adl::adl_get<Index>(static_cast<Type&&>(instance));
+template <std::size_t Index, typename Type>
+decltype(auto) get_impl(Type&& instance) {
+  if constexpr (has_member_get_v<Type>) {
+    return static_cast<Type&&>(instance).template get<Index>();
+  } else {
+    return adl::adl_get<Index>(static_cast<Type&&>(instance));
+  }
 }
-template <
-    std::size_t Index,
-    typename Type,
-    std::enable_if_t<IsMemberGetFound<void, Type>::value, int> = 0>
-auto get_impl(Type&& instance)
-    -> decltype(static_cast<Type&&>(instance).template get<Index>()) {
-  return static_cast<Type&&>(instance).template get<Index>();
-}
-
-/**
- * Check if the sequence is a tuple
- */
-template <typename Type, typename T = typename std::decay<Type>::type>
-using EnableIfTuple = std::void_t<
-    decltype(get_impl<0>(std::declval<T>())),
-    decltype(std::tuple_size<T>::value)>;
-template <typename, typename T>
-struct IsTuple : std::bool_constant<!require_sizeof<T>> {};
-template <typename T>
-struct IsTuple<EnableIfTuple<T>, T> : std::true_type {};
 
 /**
  * Check if the sequence is a range
  */
-template <typename Type, typename T = typename std::decay<Type>::type>
-using EnableIfRange = std::void_t<
-    decltype(access::begin(std::declval<T&>())),
-    decltype(access::end(std::declval<T&>()))>;
-template <typename, typename T>
-struct IsRange : std::bool_constant<!require_sizeof<T>> {};
-template <typename T>
-struct IsRange<EnableIfRange<T>, T> : std::true_type {};
+template <typename Sequence>
+inline constexpr bool is_range_v =
+    require_sizeof<Sequence> != 0 && requires(std::decay_t<Sequence>& seq) {
+      access::begin(seq);
+      access::end(seq);
+    };
 
 struct TupleTag {};
 struct RangeTag {};
@@ -115,7 +87,7 @@ struct RangeTag {};
  */
 template <typename Sequence>
 using SequenceTag =
-    std::conditional_t<IsRange<void, Sequence>::value, RangeTag, TupleTag>;
+    std::conditional_t<is_range_v<Sequence>, RangeTag, TupleTag>;
 
 struct BeginAddTag {};
 struct IndexingTag {};
@@ -132,22 +104,16 @@ using ForEachImplTag = std::conditional_t<
             index_constant<1>,
             void>>>;
 
-template <
-    typename Func,
-    typename... Args,
-    std::enable_if_t<is_invocable_r_v<LoopControl, Func, Args...>, int> = 0>
+template <typename Func, typename... Args>
 LoopControl invoke_returning_loop_control(Func&& f, Args&&... a) {
-  return static_cast<Func&&>(f)(static_cast<Args&&>(a)...);
-}
-template <
-    typename Func,
-    typename... Args,
-    std::enable_if_t<!is_invocable_r_v<LoopControl, Func, Args...>, int> = 0>
-LoopControl invoke_returning_loop_control(Func&& f, Args&&... a) {
-  static_assert(
-      std::is_void<invoke_result_t<Func, Args...>>::value,
-      "return either LoopControl or void");
-  return static_cast<Func&&>(f)(static_cast<Args&&>(a)...), loop_continue;
+  if constexpr (is_invocable_r_v<LoopControl, Func, Args...>) {
+    return static_cast<Func&&>(f)(static_cast<Args&&>(a)...);
+  } else {
+    static_assert(
+        std::is_void<invoke_result_t<Func, Args...>>::value,
+        "return either LoopControl or void");
+    return static_cast<Func&&>(f)(static_cast<Args&&>(a)...), loop_continue;
+  }
 }
 
 /**
