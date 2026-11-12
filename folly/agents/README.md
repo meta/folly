@@ -18,7 +18,7 @@ read the [tutorial](TUTORIAL.md).
 
 ### Meta-internal installation
 
-Tell your agent to "follow fbcode/folly/agents/facebook/INSTALL.md".
+Tell your agent to "follow xplat/folly/agents/facebook/INSTALL.md".
 
 ### OSS installation
 
