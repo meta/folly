@@ -114,6 +114,14 @@ std::list<char> RandomList(unsigned int maxSize) {
 }
 } // namespace
 
+template <class T1, class T2>
+constexpr bool kCanReplaceIteratorRange = requires(fbstring& s, T1 a, T2 b) {
+  s.replace(s.begin(), s.end(), a, b);
+};
+
+static_assert(kCanReplaceIteratorRange<const char*, int>);
+static_assert(!kCanReplaceIteratorRange<int, const char*>);
+
 ////////////////////////////////////////////////////////////////////////////////
 // Tests begin here
 ////////////////////////////////////////////////////////////////////////////////
