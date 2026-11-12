@@ -137,7 +137,6 @@ fb_dirsync_cpp_library(
     srcs = ["HugePages.cpp"],
     headers = ["HugePages.h"],
     deps = [
-        "fbsource//third-party/boost:boost",  # @manual
         "//folly:conv",
         "//folly:exception",
         "//folly:string",

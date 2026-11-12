@@ -39,7 +39,6 @@ folly_add_library(
   SRCS HugePages.cpp
   HEADERS HugePages.h
   DEPS
-    Boost::headers
     folly_conv
     folly_exception
     folly_gen_base
