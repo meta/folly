@@ -315,19 +315,6 @@ class FunctionTraitsSharedProxy {
       FunctionTraitsSharedProxy const& proxy, std::nullptr_t) noexcept {
     return proxy.sp_ == nullptr;
   }
-  friend bool operator!=(
-      FunctionTraitsSharedProxy const& proxy, std::nullptr_t) noexcept {
-    return proxy.sp_ != nullptr;
-  }
-
-  friend bool operator==(
-      std::nullptr_t, FunctionTraitsSharedProxy const& proxy) noexcept {
-    return proxy.sp_ == nullptr;
-  }
-  friend bool operator!=(
-      std::nullptr_t, FunctionTraitsSharedProxy const& proxy) noexcept {
-    return proxy.sp_ != nullptr;
-  }
 };
 
 template <
@@ -940,21 +927,6 @@ bool operator==(const Function<FunctionType>& fn, std::nullptr_t) {
   return !fn;
 }
 
-template <typename FunctionType>
-bool operator==(std::nullptr_t, const Function<FunctionType>& fn) {
-  return !fn;
-}
-
-template <typename FunctionType>
-bool operator!=(const Function<FunctionType>& fn, std::nullptr_t) {
-  return !(fn == nullptr);
-}
-
-template <typename FunctionType>
-bool operator!=(std::nullptr_t, const Function<FunctionType>& fn) {
-  return !(nullptr == fn);
-}
-
 /**
  * Casts a `folly::Function` from non-const to a const signature.
  *
@@ -1175,19 +1147,6 @@ class FunctionRef<ReturnType(Args...)> final {
   constexpr friend bool operator==(
       FunctionRef<ReturnType(Args...)> ref, std::nullptr_t) noexcept {
     return ref.object_ == nullptr;
-  }
-  constexpr friend bool operator!=(
-      FunctionRef<ReturnType(Args...)> ref, std::nullptr_t) noexcept {
-    return ref.object_ != nullptr;
-  }
-
-  constexpr friend bool operator==(
-      std::nullptr_t, FunctionRef<ReturnType(Args...)> ref) noexcept {
-    return ref.object_ == nullptr;
-  }
-  constexpr friend bool operator!=(
-      std::nullptr_t, FunctionRef<ReturnType(Args...)> ref) noexcept {
-    return ref.object_ != nullptr;
   }
 };
 
