@@ -22,19 +22,11 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <numbers>
 #include <type_traits>
 
 #include <folly/Portability.h>
 #include <folly/lang/CheckedMath.h>
-
-namespace folly {
-
-/// numbers
-///
-/// mimic: std::numbers, C++20 (partial)
-namespace numbers {
-
-namespace detail {
 
 // Apple Clang in Xcode 16.3 thru 26.3 reports Clang 17, when it is actually
 // based on upstream Clang 19
@@ -53,36 +45,7 @@ namespace detail {
 #define FOLLY_DETAIL_STRCMP ::std::strcmp
 #endif
 
-template <typename T>
-using enable_if_floating_t =
-    std::enable_if_t<std::is_floating_point<T>::value, T>;
-} // namespace detail
-
-/// e_v
-///
-/// mimic: std::numbers::e_v, C++20
-template <typename T>
-inline constexpr T e_v = detail::enable_if_floating_t<T>(
-    2.71828182845904523536028747135266249775724709369995L);
-
-/// ln2_v
-///
-/// mimic: std::numbers::ln2_v, C++20
-template <typename T>
-inline constexpr T ln2_v = detail::enable_if_floating_t<T>(
-    0.69314718055994530941723212145817656807550013436025L);
-
-/// e
-///
-/// mimic: std::numbers::e, C++20
-inline constexpr double e = e_v<double>;
-
-/// ln2
-///
-/// mimic: std::numbers::ln2, C++20
-inline constexpr double ln2 = ln2_v<double>;
-
-} // namespace numbers
+namespace folly {
 
 /// floating_point_integral_constant
 ///
@@ -515,7 +478,7 @@ template <typename T, typename N>
   requires(std::floating_point<T> && std::integral<N> && !std::same_as<N, bool>)
 constexpr T constexpr_exp(N const power) {
   auto const npower = constexpr_abs(power);
-  auto const result = detail::constexpr_ipow(numbers::e_v<T>, npower);
+  auto const result = detail::constexpr_ipow(std::numbers::e_v<T>, npower);
   return power < N(0) ? T(1) / result : result;
 }
 template <typename N>
@@ -612,7 +575,7 @@ constexpr T constexpr_log(T const num) {
     delta = T(2) * (scaled - expterm) / (scaled + expterm);
     sum += delta;
   }
-  auto const ln2 = numbers::ln2_v<T>;
+  auto const ln2 = std::numbers::ln2_v<T>;
   return sum - growth.power * ln2 + shrink.power * ln2;
 }
 
