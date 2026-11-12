@@ -90,18 +90,6 @@ namespace folly {
 
 namespace detail {
 
-template <typename, typename Compare, typename Key, typename T>
-struct sorted_vector_enable_if_is_transparent {};
-
-template <typename Compare, typename Key, typename T>
-struct sorted_vector_enable_if_is_transparent<
-    std::void_t<typename Compare::is_transparent>,
-    Compare,
-    Key,
-    T> {
-  using type = T;
-};
-
 // This wrapper goes around a GrowthPolicy and provides iterator
 // preservation semantics, but only if the growth policy is not the
 // default (i.e. nothing).
@@ -278,10 +266,6 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   detail::growth_policy_wrapper<GrowthPolicy>& get_growth_policy() {
     return *this;
   }
-
-  template <typename K, typename V, typename C = Compare>
-  using if_is_transparent =
-      _t<detail::sorted_vector_enable_if_is_transparent<void, C, K, V>>;
 
   struct EBO;
 
@@ -661,14 +645,14 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, iterator> find(const K& key)
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires is_transparent_v<Compare>
+  iterator find(const K& key) [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return find_(*this, key);
   }
 
   template <typename K>
-  if_is_transparent<K, const_iterator> find(const K& key) const
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires is_transparent_v<Compare>
+  const_iterator find(const K& key) const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return find_(*this, key);
   }
 
@@ -699,8 +683,8 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  std::pair<if_is_transparent<K, iterator>, if_is_transparent<K, iterator>>
-  find(const K& key1, const K& key2) {
+    requires is_transparent_v<Compare>
+  std::pair<iterator, iterator> find(const K& key1, const K& key2) {
     if (key_comp()(key2, key1)) {
       auto iterators = find2_(*this, key2, key1);
       access::swap(iterators.first, iterators.second);
@@ -711,10 +695,9 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  std::pair<
-      if_is_transparent<K, const_iterator>,
-      if_is_transparent<K, const_iterator>>
-  find(const K& key1, const K& key2) const {
+    requires is_transparent_v<Compare>
+  std::pair<const_iterator, const_iterator> find(
+      const K& key1, const K& key2) const {
     if (key_comp()(key2, key1)) {
       auto iterators = find2_(*this, key2, key1);
       access::swap(iterators.first, iterators.second);
@@ -725,14 +708,16 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, size_type> count(const K& key) const {
+    requires is_transparent_v<Compare>
+  size_type count(const K& key) const {
     return find(key) == end() ? 0 : 1;
   }
 
   bool contains(const key_type& key) const { return find(key) != end(); }
 
   template <typename K>
-  if_is_transparent<K, bool> contains(const K& key) const {
+    requires is_transparent_v<Compare>
+  bool contains(const K& key) const {
     return find(key) != end();
   }
 
@@ -746,13 +731,14 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, iterator> lower_bound(const K& key)
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires is_transparent_v<Compare>
+  iterator lower_bound(const K& key) [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return std::lower_bound(begin(), end(), key, key_comp());
   }
 
   template <typename K>
-  if_is_transparent<K, const_iterator> lower_bound(const K& key) const
+    requires is_transparent_v<Compare>
+  const_iterator lower_bound(const K& key) const
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return std::lower_bound(begin(), end(), key, key_comp());
   }
@@ -767,13 +753,14 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, iterator> upper_bound(const K& key)
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires is_transparent_v<Compare>
+  iterator upper_bound(const K& key) [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return std::upper_bound(begin(), end(), key, key_comp());
   }
 
   template <typename K>
-  if_is_transparent<K, const_iterator> upper_bound(const K& key) const
+    requires is_transparent_v<Compare>
+  const_iterator upper_bound(const K& key) const
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return std::upper_bound(begin(), end(), key, key_comp());
   }
@@ -788,14 +775,14 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, std::pair<iterator, iterator>> equal_range(
-      const K& key) {
+    requires is_transparent_v<Compare>
+  std::pair<iterator, iterator> equal_range(const K& key) {
     return std::equal_range(begin(), end(), key, key_comp());
   }
 
   template <typename K>
-  if_is_transparent<K, std::pair<const_iterator, const_iterator>> equal_range(
-      const K& key) const {
+    requires is_transparent_v<Compare>
+  std::pair<const_iterator, const_iterator> equal_range(const K& key) const {
     return std::equal_range(begin(), end(), key, key_comp());
   }
 
@@ -1022,10 +1009,6 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
   detail::growth_policy_wrapper<GrowthPolicy>& get_growth_policy() {
     return *this;
   }
-
-  template <typename K, typename V, typename C = Compare>
-  using if_is_transparent =
-      _t<detail::sorted_vector_enable_if_is_transparent<void, C, K, V>>;
 
   struct EBO;
 
@@ -1452,14 +1435,14 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, iterator> find(const K& key)
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires is_transparent_v<Compare>
+  iterator find(const K& key) [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return find_(*this, key);
   }
 
   template <typename K>
-  if_is_transparent<K, const_iterator> find(const K& key) const
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires is_transparent_v<Compare>
+  const_iterator find(const K& key) const [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return find_(*this, key);
   }
 
@@ -1486,8 +1469,8 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  std::pair<if_is_transparent<K, iterator>, if_is_transparent<K, iterator>>
-  find(const K& key1, const K& key2) {
+    requires is_transparent_v<Compare>
+  std::pair<iterator, iterator> find(const K& key1, const K& key2) {
     if (key_comp()(key2, key1)) {
       auto iterators = find2_(*this, key2, key1);
       access::swap(iterators.first, iterators.second);
@@ -1498,10 +1481,9 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  std::pair<
-      if_is_transparent<K, const_iterator>,
-      if_is_transparent<K, const_iterator>>
-  find(const K& key1, const K& key2) const {
+    requires is_transparent_v<Compare>
+  std::pair<const_iterator, const_iterator> find(
+      const K& key1, const K& key2) const {
     if (key_comp()(key2, key1)) {
       auto iterators = find2_(*this, key2, key1);
       access::swap(iterators.first, iterators.second);
@@ -1533,14 +1515,16 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, size_type> count(const K& key) const {
+    requires is_transparent_v<Compare>
+  size_type count(const K& key) const {
     return find(key) == end() ? 0 : 1;
   }
 
   bool contains(const key_type& key) const { return find(key) != end(); }
 
   template <typename K>
-  if_is_transparent<K, bool> contains(const K& key) const {
+    requires is_transparent_v<Compare>
+  bool contains(const K& key) const {
     return find(key) != end();
   }
 
@@ -1554,13 +1538,14 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, iterator> lower_bound(const K& key)
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires is_transparent_v<Compare>
+  iterator lower_bound(const K& key) [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return lower_bound(*this, key);
   }
 
   template <typename K>
-  if_is_transparent<K, const_iterator> lower_bound(const K& key) const
+    requires is_transparent_v<Compare>
+  const_iterator lower_bound(const K& key) const
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return lower_bound(*this, key);
   }
@@ -1575,13 +1560,14 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, iterator> upper_bound(const K& key)
-      [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
+    requires is_transparent_v<Compare>
+  iterator upper_bound(const K& key) [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return upper_bound(*this, key);
   }
 
   template <typename K>
-  if_is_transparent<K, const_iterator> upper_bound(const K& key) const
+    requires is_transparent_v<Compare>
+  const_iterator upper_bound(const K& key) const
       [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]] {
     return upper_bound(*this, key);
   }
@@ -1596,14 +1582,14 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
   }
 
   template <typename K>
-  if_is_transparent<K, std::pair<iterator, iterator>> equal_range(
-      const K& key) {
+    requires is_transparent_v<Compare>
+  std::pair<iterator, iterator> equal_range(const K& key) {
     return equal_range(*this, key);
   }
 
   template <typename K>
-  if_is_transparent<K, std::pair<const_iterator, const_iterator>> equal_range(
-      const K& key) const {
+    requires is_transparent_v<Compare>
+  std::pair<const_iterator, const_iterator> equal_range(const K& key) const {
     return equal_range(*this, key);
   }
 
