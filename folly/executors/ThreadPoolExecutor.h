@@ -276,6 +276,10 @@ class ThreadPoolExecutor : public DefaultKeepAliveExecutor {
     folly::Baton<> readyBaton;
     std::exception_ptr startupException;
     bool cancelledBeforeReady{false};
+    // Membership in the owning executor's ThreadList. Written by
+    // ThreadList::add/remove under the threadListLock_ write side and read
+    // under the read side.
+    bool inThreadList{false};
   };
 
   using ThreadPtr = std::shared_ptr<Thread>;
@@ -378,6 +382,7 @@ class ThreadPoolExecutor : public DefaultKeepAliveExecutor {
     void add(const ThreadPtr& state) {
       auto it = std::lower_bound(vec_.begin(), vec_.end(), state, Compare{});
       vec_.insert(it, state);
+      state->inThreadList = true;
     }
 
     void remove(const ThreadPtr& state) {
@@ -386,11 +391,8 @@ class ThreadPoolExecutor : public DefaultKeepAliveExecutor {
       CHECK(itPair.first != vec_.end());
       CHECK(std::next(itPair.first) == itPair.second);
       vec_.erase(itPair.first);
+      state->inThreadList = false;
       pastCpuUsed_ += state->usedCpuTime();
-    }
-
-    bool contains(const ThreadPtr& ts) const {
-      return std::binary_search(vec_.cbegin(), vec_.cend(), ts, Compare{});
     }
 
     const std::vector<ThreadPtr>& get() const { return vec_; }

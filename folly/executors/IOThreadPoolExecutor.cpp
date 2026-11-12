@@ -177,7 +177,7 @@ IOThreadPoolExecutor::pickThread() {
   // task is added by the clean up operations on thread destruction, thisThread_
   // is not an available thread anymore, thus, always check whether or not
   // thisThread_ is an available thread before choosing it.
-  if (me && threadList_.contains(me)) {
+  if (me && me->inThreadList) {
     return me;
   }
   auto n = ths.size();
