@@ -136,7 +136,6 @@ fb_dirsync_cpp_library(
     use_export_header_unit = True,
     use_raw_headers = True,
     deps = [
-        "//folly:constexpr_math",
         "//folly:demangle",
         "//folly:exception",
         "//folly:file_util",

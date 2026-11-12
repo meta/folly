@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <compare>
 #include <concepts>
 #include <cstddef>
@@ -1558,7 +1559,7 @@ class hive {
           "capacity limits");
     }
     const SkipType blockCapacity = static_cast<SkipType>(
-        constexpr_clamp(requested, minBlockCapacity_, ceiling));
+        std::clamp(requested, minBlockCapacity_, ceiling));
     const std::size_t skipfieldLength =
         static_cast<std::size_t>(blockCapacity) + 1;
 
@@ -1678,7 +1679,7 @@ class hive {
   constexpr std::size_t nextBlockCapacity() const noexcept {
     // Each new block is as large as everything allocated so far, so total
     // capacity doubles, bounded by the block capacity limits.
-    return constexpr_clamp(capacity_, minBlockCapacity_, maxBlockCapacity_);
+    return std::clamp(capacity_, minBlockCapacity_, maxBlockCapacity_);
   }
 
   constexpr Block* acquireBlock(bool& fromSpare) {

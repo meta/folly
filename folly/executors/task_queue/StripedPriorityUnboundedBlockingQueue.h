@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include <folly/ConstexprMath.h>
 #include <folly/Executor.h>
 #include <folly/GLog.h>
@@ -109,7 +111,7 @@ class StripedPriorityUnboundedBlockingQueue : public BlockingQueue<T> {
   size_t translatePriority(int8_t const priority) {
     int8_t const hi = (numPriorities_ + 1) / 2 - 1;
     int8_t const lo = hi - (numPriorities_ - 1);
-    return hi - constexpr_clamp(priority, lo, hi);
+    return hi - std::clamp(priority, lo, hi);
   }
 
   T dequeue(size_t stripeIdx) {

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstdint>
@@ -341,7 +342,7 @@ FOLLY_ERASE bool atomic_fetch_bit_op_native_(
   }
   auto address = reinterpret_cast<std::uintptr_t>(&atomic);
   // there is a minimum word size - if too small, enlarge
-  constexpr auto word_size = constexpr_clamp(atomic_size, lo_size, hi_size);
+  constexpr auto word_size = std::clamp(atomic_size, lo_size, hi_size);
   using word_type = uint_bits_t<word_size * 8>;
   auto adjust = std::size_t(address % lo_size);
   // when the adjustment is not known at compile-time, the extra calculations

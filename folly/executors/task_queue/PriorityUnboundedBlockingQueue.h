@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <stdexcept>
 
 #include <folly/ConstexprMath.h>
@@ -81,7 +82,7 @@ class PriorityUnboundedBlockingQueue : public BlockingQueue<T> {
     assert(priorities <= 255);
     int8_t const hi = (priorities + 1) / 2 - 1;
     int8_t const lo = hi - (priorities - 1);
-    return hi - constexpr_clamp(priority, lo, hi);
+    return hi - std::clamp(priority, lo, hi);
   }
 
   T dequeue() {

@@ -147,7 +147,6 @@ folly_add_library(
     StreamHandlerFactory.h
     xlog.h
   DEPS
-    folly_constexpr_math
     folly_container_reserve
     folly_demangle
     folly_exception

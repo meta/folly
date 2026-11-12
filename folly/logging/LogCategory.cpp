@@ -16,10 +16,10 @@
 
 #include <folly/logging/LogCategory.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 
-#include <folly/ConstexprMath.h>
 #include <folly/ExceptionString.h>
 #include <folly/FileUtil.h>
 #include <folly/MapUtil.h>
@@ -194,7 +194,7 @@ void LogCategory::setLevelLocked(LogLevel level, bool inherit) {
   //
   // This makes sure that UNINITIALIZED is always less than any valid level
   // value, and that level values cannot conflict with our flag bits.
-  level = constexpr_clamp(level, LogLevel::MIN_LEVEL, LogLevel::MAX_LEVEL);
+  level = std::clamp(level, LogLevel::MIN_LEVEL, LogLevel::MAX_LEVEL);
 
   // Make sure the inherit flag is always off for the root logger.
   if (!parent_) {

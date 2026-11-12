@@ -16,6 +16,7 @@
 
 #include <folly/ConstexprMath.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -1493,7 +1494,7 @@ constexpr auto kUInt8Max = std::numeric_limits<uint8_t>::max();
 TEST_F(ConstexprMathTest, constexpr_add_overflow_clamped) {
   for (int a = kInt8Min; a <= kInt8Max; a++) {
     for (int b = kInt8Min; b <= kInt8Max; b++) {
-      int c = folly::constexpr_clamp(a + b, int(kInt8Min), int(kInt8Max));
+      int c = std::clamp(a + b, int(kInt8Min), int(kInt8Max));
       int8_t a1 = a;
       int8_t b1 = b;
       int8_t c1 = folly::constexpr_add_overflow_clamped(a1, b1);
@@ -1505,7 +1506,7 @@ TEST_F(ConstexprMathTest, constexpr_add_overflow_clamped) {
 
   for (int a = 0; a <= kUInt8Max; a++) {
     for (int b = 0; b <= kUInt8Max; b++) {
-      int c = folly::constexpr_clamp(a + b, 0, int(kUInt8Max));
+      int c = std::clamp(a + b, 0, int(kUInt8Max));
       uint8_t a1 = a;
       uint8_t b1 = b;
       uint8_t c1 = folly::constexpr_add_overflow_clamped(a1, b1);
@@ -1539,7 +1540,7 @@ TEST_F(ConstexprMathTest, constexpr_add_overflow_clamped) {
 TEST_F(ConstexprMathTest, constexpr_sub_overflow_clamped) {
   for (int a = kInt8Min; a <= kInt8Max; a++) {
     for (int b = kInt8Min; b <= kInt8Max; b++) {
-      int c = folly::constexpr_clamp(a - b, int(kInt8Min), int(kInt8Max));
+      int c = std::clamp(a - b, int(kInt8Min), int(kInt8Max));
       int8_t a1 = a;
       int8_t b1 = b;
       int8_t c1 = folly::constexpr_sub_overflow_clamped(a1, b1);
@@ -1551,7 +1552,7 @@ TEST_F(ConstexprMathTest, constexpr_sub_overflow_clamped) {
 
   for (int a = 0; a <= kUInt8Max; a++) {
     for (int b = 0; b <= kUInt8Max; b++) {
-      int c = folly::constexpr_clamp(a - b, 0, int(kUInt8Max));
+      int c = std::clamp(a - b, 0, int(kUInt8Max));
       uint8_t a1 = a;
       uint8_t b1 = b;
       uint8_t c1 = folly::constexpr_sub_overflow_clamped(a1, b1);
