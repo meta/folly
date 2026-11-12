@@ -19,6 +19,7 @@
 #include <folly/Traits.h>
 #include <folly/coro/Coroutine.h>
 
+#include <concepts>
 #include <type_traits>
 
 #if FOLLY_HAS_COROUTINES
@@ -47,6 +48,25 @@ inline constexpr bool is_coroutine_handle_v = folly::is_instantiation_of_v< //
     coroutine_handle,
     T>;
 
+template <typename T>
+concept awaiter_ =
+    !std::is_void_v<T> && require_sizeof<T> != 0 && requires(T& t) {
+      { t.await_ready() } -> std::same_as<bool>;
+      t.await_resume();
+    };
+
+template <typename Awaitable>
+concept has_member_operator_co_await_ = !std::is_void_v<Awaitable> &&
+    require_sizeof<Awaitable> != 0 && requires(Awaitable&& awaitable) {
+      { static_cast<Awaitable&&>(awaitable).operator co_await() } -> awaiter_;
+    };
+
+template <typename Awaitable>
+concept has_free_operator_co_await_ = !std::is_void_v<Awaitable> &&
+    require_sizeof<Awaitable> != 0 && requires(Awaitable&& awaitable) {
+      { operator co_await(static_cast<Awaitable&&>(awaitable)) } -> awaiter_;
+    };
+
 } // namespace detail
 
 /// is_awaiter<T>::value
@@ -67,54 +87,11 @@ inline constexpr bool is_coroutine_handle_v = folly::is_instantiation_of_v< //
 /// we don't yet know the promise type to use and some await_suspend()
 /// implementations have particular requirements on the promise (eg. the
 /// stack-aware awaiters may require the .getAsyncFrame() method)
-template <typename T, typename = void>
-struct is_awaiter : std::bool_constant<!require_sizeof<T>> {};
+template <typename T>
+inline constexpr bool is_awaiter_v = detail::awaiter_<T>;
 
 template <typename T>
-struct is_awaiter<T, std::enable_if_t<std::is_void_v<T>>> : std::false_type {};
-
-template <typename T>
-struct is_awaiter<
-    T,
-    std::void_t<
-        decltype(std::declval<T&>().await_ready()),
-        decltype(std::declval<T&>().await_resume())>>
-    : std::is_same<bool, decltype(std::declval<T&>().await_ready())> {};
-
-template <typename T>
-constexpr bool is_awaiter_v = is_awaiter<T>::value;
-
-namespace detail {
-
-template <typename Awaitable, typename = void>
-struct _has_member_operator_co_await
-    : std::bool_constant<!require_sizeof<Awaitable>> {};
-
-template <typename T>
-struct _has_member_operator_co_await<T, std::enable_if_t<std::is_void_v<T>>>
-    : std::false_type {};
-
-template <typename Awaitable>
-struct _has_member_operator_co_await<
-    Awaitable,
-    std::void_t<decltype(std::declval<Awaitable>().operator co_await())>>
-    : is_awaiter<decltype(std::declval<Awaitable>().operator co_await())> {};
-
-template <typename Awaitable, typename = void>
-struct _has_free_operator_co_await
-    : std::bool_constant<!require_sizeof<Awaitable>> {};
-
-template <typename T>
-struct _has_free_operator_co_await<T, std::enable_if_t<std::is_void_v<T>>>
-    : std::false_type {};
-
-template <typename Awaitable>
-struct _has_free_operator_co_await<
-    Awaitable,
-    std::void_t<decltype(operator co_await(std::declval<Awaitable>()))>>
-    : is_awaiter<decltype(operator co_await(std::declval<Awaitable>()))> {};
-
-} // namespace detail
+struct is_awaiter : std::bool_constant<is_awaiter_v<T>> {};
 
 /// is_awaitable<T>::value
 /// is_awaitable_v<T>
@@ -127,14 +104,12 @@ struct _has_free_operator_co_await<
 /// member operator co_await() or a free-function operator co_await() that
 /// returns an Awaiter.
 template <typename T>
-struct is_awaitable
-    : std::disjunction<
-          detail::_has_member_operator_co_await<T>,
-          detail::_has_free_operator_co_await<T>,
-          is_awaiter<T>> {};
+inline constexpr bool is_awaitable_v =
+    detail::has_member_operator_co_await_<T> ||
+    detail::has_free_operator_co_await_<T> || detail::awaiter_<T>;
 
 template <typename T>
-constexpr bool is_awaitable_v = is_awaitable<T>::value;
+struct is_awaitable : std::bool_constant<is_awaitable_v<T>> {};
 
 /// get_awaiter(Awaitable&&) -> awaiter_type_t<Awaitable>
 ///
@@ -144,37 +119,16 @@ constexpr bool is_awaitable_v = is_awaitable<T>::value;
 ///
 /// This encapsulates calling 'operator co_await()' if it exists.
 struct get_awaiter_fn {
-  template <
-      typename Awaitable,
-      std::enable_if_t<
-          std::conjunction_v<
-              is_awaiter<Awaitable>,
-              std::negation<detail::_has_free_operator_co_await<Awaitable>>,
-              std::negation<detail::_has_member_operator_co_await<Awaitable>>>,
-          int> = 0>
-  Awaitable& operator()(Awaitable&& awaitable) const {
-    return static_cast<Awaitable&>(awaitable);
-  }
-
-  template <
-      typename Awaitable,
-      std::enable_if_t<
-          detail::_has_member_operator_co_await<Awaitable>::value,
-          int> = 0>
+  template <typename Awaitable>
+    requires is_awaitable_v<Awaitable>
   decltype(auto) operator()(Awaitable&& awaitable) const {
-    return static_cast<Awaitable&&>(awaitable).operator co_await();
-  }
-
-  template <
-      typename Awaitable,
-      std::enable_if_t<
-          std::conjunction<
-              detail::_has_free_operator_co_await<Awaitable>,
-              std::negation<detail::_has_member_operator_co_await<Awaitable>>>::
-              value,
-          int> = 0>
-  decltype(auto) operator()(Awaitable&& awaitable) const {
-    return operator co_await(static_cast<Awaitable&&>(awaitable));
+    if constexpr (detail::has_member_operator_co_await_<Awaitable>) {
+      return static_cast<Awaitable&&>(awaitable).operator co_await();
+    } else if constexpr (detail::has_free_operator_co_await_<Awaitable>) {
+      return operator co_await(static_cast<Awaitable&&>(awaitable));
+    } else {
+      return static_cast<Awaitable&>(awaitable);
+    }
   }
 };
 constexpr inline get_awaiter_fn get_awaiter{};
@@ -214,13 +168,9 @@ using await_result_t = typename await_result<Awaitable>::type;
 
 namespace detail {
 
-template <typename Promise, typename = void>
-constexpr bool promiseHasAsyncFrame_v = !require_sizeof<Promise>;
-
 template <typename Promise>
-constexpr bool promiseHasAsyncFrame_v<
-    Promise,
-    std::void_t<decltype(std::declval<Promise&>().getAsyncFrame())>> = true;
+inline constexpr bool promiseHasAsyncFrame_v = require_sizeof<Promise> != 0 &&
+    requires(Promise& promise) { promise.getAsyncFrame(); };
 
 } // namespace detail
 
