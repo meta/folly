@@ -207,9 +207,7 @@ folly_add_library(
 folly_add_library(
   NAME intrusive_list
   HEADERS IntrusiveList.h
-  EXPORTED_DEPS
-    Boost::headers
-    folly_container_detail_intrusive_list
+  EXPORTED_DEPS folly_container_detail_intrusive_list
 )
 
 folly_add_library(

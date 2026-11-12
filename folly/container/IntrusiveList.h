@@ -23,10 +23,6 @@
 
 #include <folly/container/detail/IntrusiveList.h>
 
-// Some code outside folly uses boost::intrusive without including it and gets
-// it through this header.
-#include <boost/intrusive/list.hpp>
-
 namespace folly {
 
 /**
