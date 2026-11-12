@@ -192,6 +192,12 @@ bool ThreadEntry::cachedInSetMatchesElementsArray(uint32_t id) {
     return true;
   }
 
+  // Without the fork guard, a fork() while this thread holds the set's read
+  // lock leaves the child's copy locked forever, hanging onForkChild().
+  std::shared_lock forkRlock(meta->forkHandlerLock_, std::try_to_lock);
+  if (!forkRlock) {
+    return true;
+  }
   auto rlock = meta->allId2ThreadEntrySets_[id].tryRLock();
   if (!rlock) {
     // Try lock failed. Skip checking in this case. Avoids
