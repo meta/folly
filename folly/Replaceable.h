@@ -125,47 +125,6 @@ template <class T>
 class Replaceable;
 
 namespace replaceable_detail {
-/* Mixin template to give `Replaceable<T>` a trivial destructor if `T` has a
- * trivial destructor, a user-provided one if `T` is otherwise destructible,
- * and a deleted one if `T` is not destructible.
- */
-template <
-    class T,
-    bool = std::is_destructible<T>::value,
-    bool = std::is_trivially_destructible<T>::value>
-struct dtor_mixin;
-
-/* Destructible and trivially destructible */
-template <class T>
-struct dtor_mixin<T, true, true> {};
-
-/* Destructible and not trivially destructible */
-template <class T>
-struct dtor_mixin<T, true, false> {
-  dtor_mixin() = default;
-  dtor_mixin(dtor_mixin&&) = default;
-  dtor_mixin(dtor_mixin const&) = default;
-  dtor_mixin& operator=(dtor_mixin&&) = default;
-  dtor_mixin& operator=(dtor_mixin const&) = default;
-  ~dtor_mixin() noexcept(std::is_nothrow_destructible<T>::value) {
-    T* destruct_ptr = std::launder(
-        reinterpret_cast<T*>(
-            reinterpret_cast<Replaceable<T>*>(this)->storage_));
-    destruct_ptr->~T();
-  }
-};
-
-/* Not destructible */
-template <class T, bool A>
-struct dtor_mixin<T, false, A> {
-  dtor_mixin() = default;
-  dtor_mixin(dtor_mixin&&) = default;
-  dtor_mixin(dtor_mixin const&) = default;
-  dtor_mixin& operator=(dtor_mixin&&) = default;
-  dtor_mixin& operator=(dtor_mixin const&) = default;
-  ~dtor_mixin() = delete;
-};
-
 template <typename T>
 struct is_constructible_from_replaceable
     : std::bool_constant<
@@ -204,7 +163,7 @@ constexpr Replaceable<T> make_replaceable(
 }
 
 template <class T>
-class alignas(T) Replaceable : public replaceable_detail::dtor_mixin<T> {
+class alignas(T) Replaceable {
  public:
   using value_type = T;
 
@@ -252,7 +211,19 @@ class alignas(T) Replaceable : public replaceable_detail::dtor_mixin<T> {
     return *this;
   }
 
-  ~Replaceable() = default;
+  ~Replaceable()
+    requires std::is_trivially_destructible_v<T>
+  = default;
+
+  ~Replaceable() noexcept(std::is_nothrow_destructible_v<T>)
+    requires(std::is_destructible_v<T> && !std::is_trivially_destructible_v<T>)
+  {
+    std::launder(reinterpret_cast<T*>(storage_))->~T();
+  }
+
+  ~Replaceable()
+    requires(!std::is_destructible_v<T>)
+  = delete;
 
   /**
    * Constructors; these are modeled very closely on the definition of
@@ -408,7 +379,6 @@ class alignas(T) Replaceable : public replaceable_detail::dtor_mixin<T> {
   }
 
  private:
-  friend struct replaceable_detail::dtor_mixin<T>;
   aligned_storage_for_t<T> storage_[1];
 };
 
