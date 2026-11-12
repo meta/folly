@@ -179,11 +179,6 @@ inline bool operator==(
   return a.state_ == b.state_;
 }
 
-inline bool operator!=(
-    const CancellationToken& a, const CancellationToken& b) noexcept {
-  return !(a == b);
-}
-
 inline CancellationSource::CancellationSource()
     : state_(detail::CancellationState::create()) {}
 

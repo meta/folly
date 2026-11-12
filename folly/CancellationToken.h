@@ -128,8 +128,6 @@ class CancellationToken {
 
 bool operator==(
     const CancellationToken& a, const CancellationToken& b) noexcept;
-bool operator!=(
-    const CancellationToken& a, const CancellationToken& b) noexcept;
 
 /**
  * A CancellationSource object provides the ability to request cancellation of
@@ -250,8 +248,6 @@ class CancellationSource {
 };
 
 bool operator==(
-    const CancellationSource& a, const CancellationSource& b) noexcept;
-bool operator!=(
     const CancellationSource& a, const CancellationSource& b) noexcept;
 
 /**
