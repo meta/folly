@@ -89,6 +89,17 @@ fb_dirsync_cpp_binary(
     ],
 )
 
+fb_dirsync_cpp_benchmark(
+    name = "atomic_shared_ptr_bench",
+    srcs = ["AtomicSharedPtrBench.cpp"],
+    deps = [
+        "//folly:benchmark",
+        "//folly/concurrency:atomic_shared_ptr",
+        "//folly/init:init",
+        "//folly/synchronization/test:barrier",
+    ],
+)
+
 fb_dirsync_cpp_unittest(
     name = "core_cached_shared_ptr_test",
     srcs = ["CoreCachedSharedPtrTest.cpp"],
