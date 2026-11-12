@@ -830,11 +830,9 @@ class Range {
     return Range(b_ + first, std::min(length, size() - first));
   }
 
-  template <
-      typename...,
-      typename T = Iter,
-      std::enable_if_t<detail::range_is_char_type_v_<T>, int> = 0>
-  Range substr(size_type first, size_type length = npos) const {
+  Range substr(size_type first, size_type length = npos) const
+    requires detail::range_is_char_type_v_<Iter>
+  {
     return subpiece(first, length);
   }
 
@@ -990,11 +988,9 @@ class Range {
     return startsWith(other);
   }
   bool starts_with(const value_type& c) const noexcept { return startsWith(c); }
-  template <
-      typename...,
-      typename T = Iter,
-      std::enable_if_t<detail::range_is_char_type_v_<T>, int> = 0>
-  bool starts_with(const value_type* other) const {
+  bool starts_with(const value_type* other) const
+    requires detail::range_is_char_type_v_<Iter>
+  {
     return startsWith(other);
   }
 
@@ -1027,11 +1023,9 @@ class Range {
     return endsWith(other);
   }
   bool ends_with(const value_type& c) const noexcept { return endsWith(c); }
-  template <
-      typename...,
-      typename T = Iter,
-      std::enable_if_t<detail::range_is_char_type_v_<T>, int> = 0>
-  bool ends_with(const value_type* other) const {
+  bool ends_with(const value_type* other) const
+    requires detail::range_is_char_type_v_<Iter>
+  {
     return endsWith(other);
   }
 
