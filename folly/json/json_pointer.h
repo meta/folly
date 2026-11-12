@@ -71,10 +71,6 @@ class json_pointer {
     return lhs.tokens_ == rhs.tokens_;
   }
 
-  friend bool operator!=(json_pointer const& lhs, json_pointer const& rhs) {
-    return lhs.tokens_ != rhs.tokens_;
-  }
-
  private:
   explicit json_pointer(std::vector<std::string>) noexcept;
 

@@ -300,9 +300,6 @@ struct dynamic {
    * different types will always return false.
    */
   friend bool operator==(dynamic const& a, dynamic const& b);
-  friend bool operator!=(dynamic const& a, dynamic const& b) {
-    return !(a == b);
-  }
 
   /*
    * For all types except object this returns the natural ordering on

@@ -83,10 +83,6 @@ class json_patch {
       return lhs.op_code == rhs.op_code && lhs.path == rhs.path &&
           lhs.from == rhs.from && lhs.value == rhs.value;
     }
-    friend bool operator!=(
-        patch_operation const& lhs, patch_operation const& rhs) {
-      return !(lhs == rhs);
-    }
   };
 
   json_patch() = default;
