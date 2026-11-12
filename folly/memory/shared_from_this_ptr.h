@@ -120,15 +120,6 @@ class shared_from_this_ptr {
   friend bool operator==(holder const& holder, std::nullptr_t) noexcept {
     return holder.ptr_ == nullptr;
   }
-  friend bool operator!=(holder const& holder, std::nullptr_t) noexcept {
-    return holder.ptr_ != nullptr;
-  }
-  friend bool operator==(std::nullptr_t, holder const& holder) noexcept {
-    return nullptr == holder.ptr_;
-  }
-  friend bool operator!=(std::nullptr_t, holder const& holder) noexcept {
-    return nullptr != holder.ptr_;
-  }
 
   friend void swap(holder& a, holder& b) noexcept { a.swap(b); }
 };

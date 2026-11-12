@@ -517,43 +517,8 @@ inline bool operator==(
 
 template <typename T, typename RefCount>
 inline bool operator==(
-    std::nullptr_t, const ReadMostlyMainPtr<T, RefCount>& ptr) {
-  return ptr.get() == nullptr;
-}
-
-template <typename T, typename RefCount>
-inline bool operator==(
     const ReadMostlySharedPtr<T, RefCount>& ptr, std::nullptr_t) {
   return ptr.get() == nullptr;
 }
 
-template <typename T, typename RefCount>
-inline bool operator==(
-    std::nullptr_t, const ReadMostlySharedPtr<T, RefCount>& ptr) {
-  return ptr.get() == nullptr;
-}
-
-template <typename T, typename RefCount>
-inline bool operator!=(
-    const ReadMostlyMainPtr<T, RefCount>& ptr, std::nullptr_t) {
-  return !(ptr == nullptr);
-}
-
-template <typename T, typename RefCount>
-inline bool operator!=(
-    std::nullptr_t, const ReadMostlyMainPtr<T, RefCount>& ptr) {
-  return !(ptr == nullptr);
-}
-
-template <typename T, typename RefCount>
-inline bool operator!=(
-    const ReadMostlySharedPtr<T, RefCount>& ptr, std::nullptr_t) {
-  return !(ptr == nullptr);
-}
-
-template <typename T, typename RefCount>
-inline bool operator!=(
-    std::nullptr_t, const ReadMostlySharedPtr<T, RefCount>& ptr) {
-  return !(ptr == nullptr);
-}
 } // namespace folly

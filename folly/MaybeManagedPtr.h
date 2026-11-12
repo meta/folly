@@ -97,22 +97,6 @@ class MaybeManagedPtr {
   bool operator==(const std::shared_ptr<T>& rhs) const { return t_ == rhs; }
 
   /**
-   * Boolean not equal to operator
-   *
-   * @return             Returns true if the underlying shared pointer is not
-   * equal to rhs.
-   */
-  bool operator!=(T* rhs) const { return !(t_.get() == rhs); }
-
-  /**
-   * Boolean not equal to operator
-   *
-   * @return             Returns true if the underlying shared pointer is not
-   * equal to rhs.
-   */
-  bool operator!=(const std::shared_ptr<T>& rhs) const { return !(t_ == rhs); }
-
-  /**
    * Pointer type conversion operator
    *
    * @return             Returns a pointer to the element contained in
