@@ -535,13 +535,6 @@ class IPAddressV6 {
       const IPAddressV6& addr1, const IPAddressV6& addr2) {
     return addr1.tie() == addr2.tie();
   }
-  /**
-   * Return true if the two addresses are not equal.
-   */
-  friend inline bool operator!=(
-      const IPAddressV6& addr1, const IPAddressV6& addr2) {
-    return addr1.tie() != addr2.tie();
-  }
 
   /**
    * Three-way comparison for IPAddressV6.

@@ -456,13 +456,6 @@ inline bool operator==(const IPAddressV4& addr1, const IPAddressV4& addr2) {
 }
 
 /**
- * Return true if addr1 != addr2.
- */
-inline bool operator!=(const IPAddressV4& addr1, const IPAddressV4& addr2) {
-  return !(addr1 == addr2);
-}
-
-/**
  * Three-way comparison for IPAddressV4.
  */
 inline auto operator<=>(const IPAddressV4& a, const IPAddressV4& b) noexcept {

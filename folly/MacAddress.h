@@ -195,8 +195,6 @@ class MacAddress {
     return packedBytes() == other.packedBytes();
   }
 
-  bool operator!=(const MacAddress& other) const { return !(*this == other); }
-
   auto operator<=>(const MacAddress& other) const noexcept {
     return u64HBO() <=> other.u64HBO();
   }

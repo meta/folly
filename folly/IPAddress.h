@@ -617,15 +617,6 @@ void toAppend(IPAddress addr, fbstring* result);
 bool operator==(const IPAddress& addr1, const IPAddress& addr2);
 
 /**
- * Return true if two address are not equal
- *
- * V4-to-V6-mapped addresses are compared as V4 addresses.
- */
-inline bool operator!=(const IPAddress& addr1, const IPAddress& addr2) {
-  return !(addr1 == addr2);
-}
-
-/**
  * Three-way comparison for IPAddress.
  *
  * V4-to-V6-mapped addresses are compared as V4 addresses.
