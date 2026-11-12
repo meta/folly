@@ -1336,7 +1336,7 @@ futures::detail::DeferredWrapper stealDeferredExecutor(Future<T>&) {
 template <typename... Ts>
 void stealDeferredExecutorsVariadic(
     std::vector<futures::detail::DeferredWrapper>& executors, Ts&... ts) {
-  foreach(
+  futures::detail::foreach(
       [&](auto, auto& future) {
         if (auto executor = stealDeferredExecutor(future)) {
           executors.push_back(std::move(executor));
