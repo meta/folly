@@ -117,7 +117,6 @@ class CxxHugePageAllocator {
   }
 
   friend bool operator==(Self const&, Self const&) noexcept { return true; }
-  friend bool operator!=(Self const&, Self const&) noexcept { return false; }
 };
 
 } // namespace folly

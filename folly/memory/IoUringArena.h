@@ -77,11 +77,6 @@ class CxxIoUringAllocator {
       CxxIoUringAllocator const&, CxxIoUringAllocator const&) noexcept {
     return true;
   }
-
-  friend bool operator!=(
-      CxxIoUringAllocator const&, CxxIoUringAllocator const&) noexcept {
-    return false;
-  }
 };
 
 } // namespace folly

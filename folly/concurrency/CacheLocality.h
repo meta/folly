@@ -468,9 +468,6 @@ class CoreAllocator : private std::allocator<T> {
   friend bool operator==(const CoreAllocator&, const CoreAllocator&) noexcept {
     return true;
   }
-  friend bool operator!=(const CoreAllocator&, const CoreAllocator&) noexcept {
-    return false;
-  }
 
   template <typename U>
   struct rebind {

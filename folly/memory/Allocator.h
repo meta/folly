@@ -64,7 +64,6 @@ class SysAllocator {
   void deallocate(T* p, size_t count) { sizedFree(p, count * sizeof(T)); }
 
   friend bool operator==(Self const&, Self const&) noexcept { return true; }
-  friend bool operator!=(Self const&, Self const&) noexcept { return false; }
 };
 
 class DefaultAlign {
@@ -82,9 +81,6 @@ class DefaultAlign {
   friend bool operator==(Self const& a, Self const& b) noexcept {
     return a.align_ == b.align_;
   }
-  friend bool operator!=(Self const& a, Self const& b) noexcept {
-    return a.align_ != b.align_;
-  }
 };
 
 template <std::size_t Align>
@@ -98,7 +94,6 @@ class FixedAlign {
   constexpr std::size_t operator()() const noexcept { return Align; }
 
   friend bool operator==(Self const&, Self const&) noexcept { return true; }
-  friend bool operator!=(Self const&, Self const&) noexcept { return false; }
 };
 
 /**
@@ -112,7 +107,6 @@ class FixedAlign {
  *     * taking the type alignment and returning the allocation alignment
  *   * be noexcept-copy-constructible
  *   * have noexcept operator==
- *   * have noexcept operator!=
  *   * not be final
  *
  * DefaultAlign and FixedAlign<std::size_t>, provided above, are valid policies.
@@ -167,9 +161,6 @@ class AlignedSysAllocator : private Align {
 
   friend bool operator==(Self const& a, Self const& b) noexcept {
     return a.align() == b.align();
-  }
-  friend bool operator!=(Self const& a, Self const& b) noexcept {
-    return a.align() != b.align();
   }
 };
 
@@ -240,9 +231,6 @@ class CxxAllocatorAdaptor : private std::allocator<T> {
 
   friend bool operator==(Self const& a, Self const& b) noexcept {
     return a.inner_ == b.inner_;
-  }
-  friend bool operator!=(Self const& a, Self const& b) noexcept {
-    return a.inner_ != b.inner_;
   }
 
   template <typename U>

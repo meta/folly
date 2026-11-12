@@ -76,11 +76,6 @@ class reentrant_allocator_base {
       reentrant_allocator_base const& b) noexcept {
     return a.meta_ == b.meta_;
   }
-  friend bool operator!=(
-      reentrant_allocator_base const& a,
-      reentrant_allocator_base const& b) noexcept {
-    return a.meta_ != b.meta_;
-  }
 
  private:
   //  For small sizes, maintain a shared list of segments. Segments are each
@@ -239,10 +234,6 @@ class reentrant_allocator : private detail::reentrant_allocator_base {
   friend bool operator==(
       reentrant_allocator<A> const& a,
       reentrant_allocator<B> const& b) noexcept;
-  template <typename A, typename B>
-  friend bool operator!=(
-      reentrant_allocator<A> const& a,
-      reentrant_allocator<B> const& b) noexcept;
 };
 
 template <typename A, typename B>
@@ -250,12 +241,6 @@ FOLLY_ERASE bool operator==(
     reentrant_allocator<A> const& a, reentrant_allocator<B> const& b) noexcept {
   using base = detail::reentrant_allocator_base;
   return static_cast<base const&>(a) == static_cast<base const&>(b);
-}
-template <typename A, typename B>
-FOLLY_ERASE bool operator!=(
-    reentrant_allocator<A> const& a, reentrant_allocator<B> const& b) noexcept {
-  using base = detail::reentrant_allocator_base;
-  return static_cast<base const&>(a) != static_cast<base const&>(b);
 }
 
 } // namespace folly
