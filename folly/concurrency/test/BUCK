@@ -78,6 +78,7 @@ fb_dirsync_cpp_unittest(
         "//folly/portability:gflags",
         "//folly/portability:gtest",
         "//folly/test:deterministic_schedule",
+        "//xplat/folly/synchronization/detail:atomic_utils",
     ],
 )
 

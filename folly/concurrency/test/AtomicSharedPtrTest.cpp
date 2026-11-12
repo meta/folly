@@ -16,7 +16,9 @@
 
 #include <folly/concurrency/AtomicSharedPtr.h>
 
+#include <array>
 #include <atomic>
+#include <barrier>
 #include <memory>
 #include <thread>
 
@@ -25,6 +27,7 @@
 #include <folly/portability/Config.h>
 #include <folly/portability/GFlags.h>
 #include <folly/portability/GTest.h>
+#include <folly/synchronization/detail/AtomicUtils.h>
 #include <folly/test/DeterministicSchedule.h>
 
 using namespace folly;
@@ -377,6 +380,198 @@ TEST(AtomicSharedPtr, StressTest) {
   for (auto& t : threads) {
     t.join();
   }
+}
+
+#if FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED
+
+namespace {
+std::atomic<unsigned>& atomic_accesses() {
+  static std::atomic<unsigned> count{0};
+  return count;
+}
+
+template <typename T>
+class access_counting_atomic : public std::atomic<T> {
+  using Base = std::atomic<T>;
+
+ public:
+  using Base::Base;
+  T load(std::memory_order order) const noexcept {
+    ++atomic_accesses();
+    return Base::load(order);
+  }
+  void store(T value, std::memory_order order = std::memory_order_seq_cst) {
+    ++atomic_accesses();
+    Base::store(value, order);
+  }
+  T exchange(T value, std::memory_order order) {
+    ++atomic_accesses();
+    return Base::exchange(value, order);
+  }
+  bool compare_exchange_weak(
+      T& expected,
+      T desired,
+      std::memory_order success,
+      std::memory_order failure) {
+    ++atomic_accesses();
+    return Base::compare_exchange_weak(expected, desired, success, failure);
+  }
+  bool compare_exchange_weak(T& expected, T desired, std::memory_order order) {
+    const auto failure = folly::detail::default_failure_memory_order(order);
+    return compare_exchange_weak(expected, desired, order, failure);
+  }
+};
+} // namespace
+
+TEST(AtomicSharedPtr, InjectedAtomicObservesAllLoads) {
+  atomic_shared_ptr<int, access_counting_atomic> ptr;
+  atomic_accesses().store(0);
+  EXPECT_EQ(ptr.load().get(), nullptr);
+  EXPECT_GT(atomic_accesses().load(), 0);
+  ptr.store(std::make_shared<int>(7));
+  atomic_accesses().store(0);
+  EXPECT_EQ(*ptr.load(), 7);
+  EXPECT_GT(atomic_accesses().load(), 1);
+}
+
+TEST(AtomicSharedPtr, DeterministicSharedPtrAliases) {
+  DSched sched(DSched::uniform(FLAGS_seed));
+  auto owner = std::make_shared<std::pair<int, int>>(7, 11);
+  int value = 13;
+  const std::array values{
+      std::shared_ptr<int>(owner, &owner->first),
+      std::shared_ptr<int>(owner, &owner->second),
+      std::shared_ptr<int>(owner, nullptr),
+      std::shared_ptr<int>(std::shared_ptr<int>{}, &value),
+      std::shared_ptr<int>{},
+  };
+  atomic_shared_ptr<int, DeterministicAtomic> ptr(values[0]);
+  std::vector<std::thread> threads;
+  for (unsigned tid = 0; tid < 4; ++tid) {
+    threads.emplace_back(DSched::thread([&, tid] {
+      for (unsigned i = 0; i < 100; ++i) {
+        auto loaded = ptr.load();
+        if (loaded.get()) {
+          EXPECT_TRUE(*loaded == 7 || *loaded == 11 || *loaded == 13);
+        }
+        if (loaded.get() == &value) {
+          EXPECT_EQ(loaded.use_count(), 0);
+        }
+        ptr.compare_exchange_strong(loaded, values[(i + tid) % values.size()]);
+      }
+    }));
+  }
+  for (auto& thread : threads) {
+    DSched::join(thread);
+  }
+  ptr.store({});
+  EXPECT_EQ(owner.use_count(), 4);
+}
+
+#endif
+
+TEST(AtomicSharedPtr, SameOwnerAliasBatchAccounting) {
+  auto owner = std::make_shared<std::pair<int, int>>(7, 11);
+  const std::array values{
+      std::shared_ptr<int>(owner, &owner->first),
+      std::shared_ptr<int>(owner, &owner->second),
+  };
+  {
+    atomic_shared_ptr<int> ptr(values[0]);
+    std::barrier start(3);
+    std::atomic<unsigned> loads{0};
+    auto reader = [&] {
+      start.arrive_and_wait();
+      for (unsigned i = 0; i < 65536; ++i) {
+        loads.fetch_add(1, std::memory_order_relaxed);
+        auto loaded = ptr.load(std::memory_order_acquire);
+        EXPECT_TRUE(
+            loaded.get() == &owner->first || loaded.get() == &owner->second);
+        EXPECT_TRUE(*loaded == 7 || *loaded == 11);
+      }
+    };
+    std::thread first(reader);
+    std::thread second(reader);
+    start.arrive_and_wait();
+    for (unsigned i = 1; i < 32; ++i) {
+      while (loads.load(std::memory_order_relaxed) < i * 4097) {
+        std::this_thread::yield();
+      }
+      ptr.store(values[i & 1], std::memory_order_release);
+    }
+    first.join();
+    second.join();
+    ptr.store({});
+  }
+  EXPECT_EQ(owner.use_count(), 3);
+}
+
+TEST(AtomicSharedPtr, MixedRepresentationStress) {
+  int ownerless_value = 13;
+  std::atomic<unsigned> alive{0};
+  std::atomic<unsigned> done{0};
+  std::barrier start(6);
+  atomic_shared_ptr<int> ptr;
+  std::vector<std::thread> threads;
+  auto make_owner = [&] {
+    ++alive;
+    return std::shared_ptr<std::pair<int, int>>(
+        new std::pair<int, int>(7, 11), // NOLINT
+        [&](auto* p) {
+          delete p;
+          --alive;
+        });
+  };
+  for (unsigned writer = 0; writer < 2; ++writer) {
+    threads.emplace_back([&, writer] {
+      start.arrive_and_wait();
+      for (unsigned i = 0; i < 16384; ++i) {
+        switch ((i + writer) % 5) {
+          case 0:
+            ptr.store({});
+            break;
+          case 1:
+            ptr.store(
+                std::shared_ptr<int>(std::shared_ptr<int>{}, &ownerless_value));
+            break;
+          case 2: {
+            auto owner = make_owner();
+            ptr.store(std::shared_ptr<int>(owner, &owner->first));
+            break;
+          }
+          case 3: {
+            auto owner = make_owner();
+            ptr.store(std::shared_ptr<int>(owner, &owner->second));
+            break;
+          }
+          case 4:
+            ptr.store(std::shared_ptr<int>(make_owner(), nullptr));
+            break;
+        }
+      }
+      ++done;
+    });
+  }
+  for (unsigned reader = 0; reader < 4; ++reader) {
+    threads.emplace_back([&] {
+      start.arrive_and_wait();
+      do {
+        auto loaded = ptr.load(std::memory_order_acquire);
+        if (loaded.get() == &ownerless_value) {
+          EXPECT_EQ(loaded.use_count(), 0);
+          EXPECT_EQ(*loaded, 13);
+        } else if (loaded.get()) {
+          EXPECT_GE(loaded.use_count(), 1);
+          EXPECT_TRUE(*loaded == 7 || *loaded == 11);
+        }
+      } while (done.load() != 2);
+    });
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  ptr.store({});
+  EXPECT_EQ(alive.load(), 0);
 }
 
 TEST(AtomicSharedPtr, Leak) {
