@@ -59,6 +59,7 @@
  */
 
 #include <cassert>
+#include <compare>
 #include <concepts>
 #include <cstddef>
 #include <functional>
@@ -652,18 +653,8 @@ constexpr bool operator==(const Optional<U>& a, const V& b) {
 }
 
 template <class U, class V>
-constexpr bool operator!=(const Optional<U>& a, const V& b) {
-  return !(a == b);
-}
-
-template <class U, class V>
 constexpr bool operator==(const U& a, const Optional<V>& b) {
   return b.hasValue() && b.value() == a;
-}
-
-template <class U, class V>
-constexpr bool operator!=(const U& a, const Optional<V>& b) {
-  return !(a == b);
 }
 
 template <class U, class V>
@@ -675,11 +666,6 @@ constexpr bool operator==(const Optional<U>& a, const Optional<V>& b) {
     return a.value() == b.value();
   }
   return true;
-}
-
-template <class U, class V>
-constexpr bool operator!=(const Optional<U>& a, const Optional<V>& b) {
-  return !(a == b);
 }
 
 template <class U, class V>
@@ -736,36 +722,9 @@ constexpr bool operator==(None, const Optional<V>& a) noexcept {
   return !a.hasValue();
 }
 template <class V>
-constexpr bool operator<(const Optional<V>&, None) noexcept {
-  return false;
-}
-template <class V>
-constexpr bool operator<(None, const Optional<V>& a) noexcept {
-  return a.hasValue();
-}
-template <class V>
-constexpr bool operator>(const Optional<V>& a, None) noexcept {
-  return a.hasValue();
-}
-template <class V>
-constexpr bool operator>(None, const Optional<V>&) noexcept {
-  return false;
-}
-template <class V>
-constexpr bool operator<=(None, const Optional<V>&) noexcept {
-  return true;
-}
-template <class V>
-constexpr bool operator<=(const Optional<V>& a, None) noexcept {
-  return !a.hasValue();
-}
-template <class V>
-constexpr bool operator>=(const Optional<V>&, None) noexcept {
-  return true;
-}
-template <class V>
-constexpr bool operator>=(None, const Optional<V>& a) noexcept {
-  return !a.hasValue();
+constexpr std::strong_ordering operator<=>(
+    const Optional<V>& a, None) noexcept {
+  return a.hasValue() <=> false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
