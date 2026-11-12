@@ -14,16 +14,36 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <functional>
+#include <iterator>
+#include <set>
 #include <utility>
 #include <vector>
 
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventBaseAtomicNotificationQueue.h>
+#include <folly/portability/Fcntl.h>
 #include <folly/portability/GTest.h>
 
 using namespace folly;
 using namespace std;
+
+#ifndef _WIN32
+namespace {
+// The descriptors this process has open, by number. Descriptors are handed
+// out lowest-free, so anything a test opens lands well under the bound.
+std::set<int> openFds() {
+  std::set<int> fds;
+  for (int fd = 0; fd < 4096; ++fd) {
+    if (fcntl(fd, F_GETFD) != -1) {
+      fds.insert(fd);
+    }
+  }
+  return fds;
+}
+} // namespace
+#endif
 
 template <typename Task>
 struct AtomicNotificationQueueConsumer {
@@ -277,3 +297,30 @@ TEST(AtomicNotificationQueueTest, DriveSnapshot) {
   ASSERT_EQ(std::exchange(consumed, 0), 1);
   EXPECT_TRUE(lastRan);
 }
+
+#ifndef _WIN32
+// Every descriptor the queue opens is close-on-exec: the eventfd by
+// construction, and the pipe it falls back to (macOS) on both ends. A child
+// process has no use for a wakeup descriptor, and an inherited one is leaked
+// for the child's lifetime (and across an in-place exec, forever).
+TEST(AtomicNotificationQueueTest, FdsAreCloseOnExec) {
+  const auto before = openFds();
+  vector<int> data;
+  AtomicNotificationQueueConsumer<int> consumer{data};
+  EventBaseAtomicNotificationQueue<int, decltype(consumer)> queue{
+      std::move(consumer)};
+  const auto after = openFds();
+
+  std::vector<int> opened;
+  std::set_difference(
+      after.begin(),
+      after.end(),
+      before.begin(),
+      before.end(),
+      std::back_inserter(opened));
+  ASSERT_FALSE(opened.empty());
+  for (int fd : opened) {
+    EXPECT_TRUE(fcntl(fd, F_GETFD) & FD_CLOEXEC) << "fd " << fd;
+  }
+}
+#endif

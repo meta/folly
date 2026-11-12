@@ -36,6 +36,8 @@
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
 #include <folly/io/async/Request.h>
+#include <folly/net/NetOps.h>
+#include <folly/net/NetworkSocket.h>
 #include <folly/portability/Fcntl.h>
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
@@ -294,6 +296,16 @@ class NotificationQueue {
             "Failed to create pipe for NotificationQueue", errno);
       }
       try {
+        // close-on-exec on both ends, as EFD_CLOEXEC gives the eventfd: a
+        // child process has no use for the wakeup pipe, and an inherited pair
+        // is leaked for the child's lifetime
+        for (int fd : pipeFds_) {
+          if (netops::set_socket_close_on_exec(NetworkSocket::fromFd(fd)) !=
+              0) {
+            folly::throwSystemError(
+                "failed to set FD_CLOEXEC on NotificationQueue pipe", errno);
+          }
+        }
         // put both ends of the pipe into non-blocking mode
         if (fcntl(pipeFds_[0], F_SETFL, O_RDONLY | O_NONBLOCK) != 0) {
           folly::throwSystemError(

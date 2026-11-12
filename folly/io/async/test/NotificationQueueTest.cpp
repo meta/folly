@@ -18,11 +18,15 @@
 
 #include <sys/types.h>
 
+#include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <list>
+#include <set>
 #include <thread>
 
 #include <folly/io/async/ScopedEventBaseThread.h>
+#include <folly/portability/Fcntl.h>
 #include <folly/portability/GTest.h>
 #include <folly/synchronization/Baton.h>
 
@@ -34,6 +38,22 @@ using namespace std;
 using namespace folly;
 
 using IntQueue = NotificationQueue<int>;
+
+#ifndef _WIN32
+namespace {
+// The descriptors this process has open, by number. Descriptors are handed
+// out lowest-free, so anything a test opens lands well under the bound.
+std::set<int> openFds() {
+  std::set<int> fds;
+  for (int fd = 0; fd < 4096; ++fd) {
+    if (fcntl(fd, F_GETFD) != -1) {
+      fds.insert(fd);
+    }
+  }
+  return fds;
+}
+} // namespace
+#endif
 
 class QueueConsumer : public IntQueue::Consumer {
  public:
@@ -560,6 +580,27 @@ TEST(NotificationQueueTest, DestroyCallbackPipe) {
 }
 
 #ifndef _WIN32
+// Both ends of the wakeup pipe are close-on-exec, like the eventfd: a child
+// process has no use for them, and an inherited pair is leaked for the
+// child's lifetime (and across an in-place exec, forever).
+TEST(NotificationQueueTest, PipeFdsAreCloseOnExec) {
+  const auto before = openFds();
+  IntQueue queue(0, IntQueue::FdType::PIPE);
+  const auto after = openFds();
+
+  std::vector<int> opened;
+  std::set_difference(
+      after.begin(),
+      after.end(),
+      before.begin(),
+      before.end(),
+      std::back_inserter(opened));
+  ASSERT_EQ(2, opened.size());
+  for (int fd : opened) {
+    EXPECT_TRUE(fcntl(fd, F_GETFD) & FD_CLOEXEC) << "fd " << fd;
+  }
+}
+
 /*
  * Test code that creates a NotificationQueue, then forks, and incorrectly
  * tries to send a message to the queue from the child process.
