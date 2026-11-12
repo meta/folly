@@ -652,9 +652,6 @@ class small_vector
     return std::lexicographical_compare(begin(), end(), o.begin(), o.end());
   }
 
-  friend bool operator!=(small_vector const& a, small_vector const& b) {
-    return !(a == b);
-  }
   friend bool operator>(small_vector const& a, small_vector const& b) {
     return b < a;
   }
