@@ -51,26 +51,20 @@ namespace folly {
 
 namespace detail {
 
-template <typename, typename Mutex>
-inline constexpr bool kSynchronizedMutexIsUnique = false;
 template <typename Mutex>
-inline constexpr bool kSynchronizedMutexIsUnique<
-    decltype(void(std::declval<Mutex&>().lock())),
-    Mutex> = true;
+inline constexpr bool kSynchronizedMutexIsUnique = requires(Mutex& mutex) {
+  mutex.lock();
+};
 
-template <typename, typename Mutex>
-inline constexpr bool kSynchronizedMutexIsShared = false;
 template <typename Mutex>
-inline constexpr bool kSynchronizedMutexIsShared<
-    decltype(void(std::declval<Mutex&>().lock_shared())),
-    Mutex> = true;
+inline constexpr bool kSynchronizedMutexIsShared = requires(Mutex& mutex) {
+  mutex.lock_shared();
+};
 
-template <typename, typename Mutex>
-inline constexpr bool kSynchronizedMutexIsUpgrade = false;
 template <typename Mutex>
-inline constexpr bool kSynchronizedMutexIsUpgrade<
-    decltype(void(std::declval<Mutex&>().lock_upgrade())),
-    Mutex> = true;
+inline constexpr bool kSynchronizedMutexIsUpgrade = requires(Mutex& mutex) {
+  mutex.lock_upgrade();
+};
 
 /**
  * An enum to describe the "level" of a mutex.  The supported levels are
@@ -83,9 +77,9 @@ enum class SynchronizedMutexLevel { Unknown, Unique, Shared, Upgrade };
 
 template <typename Mutex>
 inline constexpr SynchronizedMutexLevel kSynchronizedMutexLevel =
-    kSynchronizedMutexIsUpgrade<void, Mutex>  ? SynchronizedMutexLevel::Upgrade
-    : kSynchronizedMutexIsShared<void, Mutex> ? SynchronizedMutexLevel::Shared
-    : kSynchronizedMutexIsUnique<void, Mutex>
+    kSynchronizedMutexIsUpgrade<Mutex>  ? SynchronizedMutexLevel::Upgrade
+    : kSynchronizedMutexIsShared<Mutex> ? SynchronizedMutexLevel::Shared
+    : kSynchronizedMutexIsUnique<Mutex>
     ? SynchronizedMutexLevel::Unique
     : SynchronizedMutexLevel::Unknown;
 

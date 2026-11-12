@@ -103,7 +103,7 @@ void runParallel(size_t numThreads, const Function& function) {
 
 // testBasic() version for shared lock types
 template <class Mutex>
-std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<void, Mutex>>
+std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<Mutex>>
 testBasicImpl() {
   folly::Synchronized<std::vector<int>, Mutex> obj;
   const auto& constObj = obj;
@@ -155,7 +155,7 @@ testBasicImpl() {
 
 // testBasic() version for non-shared lock types
 template <class Mutex>
-std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<void, Mutex>>
+std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<Mutex>>
 testBasicImpl() {
   folly::Synchronized<std::vector<int>, Mutex> obj;
   const auto& constObj = obj;
@@ -200,7 +200,7 @@ void testBasic() {
 
 // testWithLock() version for shared lock types
 template <class Mutex>
-std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<void, Mutex>>
+std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<Mutex>>
 testWithLock() {
   folly::Synchronized<std::vector<int>, Mutex> obj;
   const auto& constObj = obj;
@@ -291,7 +291,7 @@ testWithLock() {
 
 // testWithLock() version for non-shared lock types
 template <class Mutex>
-std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<void, Mutex>>
+std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<Mutex>>
 testWithLock() {
   folly::Synchronized<std::vector<int>, Mutex> obj;
 
@@ -372,7 +372,7 @@ void testUnlockCommon() {
 
 // testUnlock() version for shared lock types
 template <class Mutex>
-std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<void, Mutex>>
+std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<Mutex>>
 testUnlock() {
   folly::Synchronized<int, Mutex> value{10};
   {
@@ -405,7 +405,7 @@ testUnlock() {
 
 // testUnlock() version for non-shared lock types
 template <class Mutex>
-std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<void, Mutex>>
+std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<Mutex>>
 testUnlock() {
   folly::Synchronized<int, Mutex> value{10};
   {
