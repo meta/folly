@@ -171,7 +171,7 @@ FOLLY_EXTERNAL_RAPIDHASH_INLINE_CONSTEXPR uint64_t rapidhash_internal(
   seed ^= rapidhash_mix(seed ^ secret[2], secret[1]);
   uint64_t a = 0, b = 0;
   size_t i = len;
-  if (FOLLY_LIKELY(len <= 16)) {
+  if (len <= 16) [[likely]] {
     if (len >= 4) {
       seed ^= len;
       if (len >= 8) {
@@ -318,7 +318,7 @@ FOLLY_EXTERNAL_RAPIDHASH_INLINE_CONSTEXPR uint64_t rapidhashMicro_internal(
   seed ^= rapidhash_mix(seed ^ secret[2], secret[1]);
   uint64_t a = 0, b = 0;
   size_t i = len;
-  if (FOLLY_LIKELY(len <= 16)) {
+  if (len <= 16) [[likely]] {
     if (len >= 4) {
       seed ^= len;
       if (len >= 8) {
@@ -388,7 +388,7 @@ FOLLY_EXTERNAL_RAPIDHASH_INLINE_CONSTEXPR uint64_t rapidhashNano_internal(
   seed ^= rapidhash_mix(seed ^ secret[2], secret[1]);
   uint64_t a = 0, b = 0;
   size_t i = len;
-  if (FOLLY_LIKELY(len <= 16)) {
+  if (len <= 16) [[likely]] {
     if (len >= 4) {
       seed ^= len;
       if (len >= 8) {

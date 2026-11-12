@@ -90,7 +90,7 @@ size_t qfind_first_byte_of_needles16(
 
 size_t qfind_first_byte_of_sve2(
     const std::string_view haystack, const std::string_view needles) {
-  if (FOLLY_UNLIKELY(needles.empty() || haystack.empty())) {
+  if (needles.empty() || haystack.empty()) [[unlikely]] {
     return std::string::npos;
   } else if (needles.size() <= 16) {
     return qfind_first_byte_of_needles16(haystack, needles);
