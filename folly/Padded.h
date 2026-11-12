@@ -71,7 +71,6 @@ class Node {
   bool operator==(const Node& other) const {
     return memcmp(data(), other.data(), sizeof(T) * kElementCount) == 0;
   }
-  bool operator!=(const Node& other) const { return !(*this == other); }
 
   /**
    * Return the number of nodes needed to represent n values.  Rounds up.

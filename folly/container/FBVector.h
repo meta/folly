@@ -1621,8 +1621,6 @@ class fbvector {
     return size() == other.size() && std::equal(begin(), end(), other.begin());
   }
 
-  bool operator!=(const fbvector& other) const { return !(*this == other); }
-
   bool operator<(const fbvector& other) const {
     return std::lexicographical_compare(
         begin(), end(), other.begin(), other.end());

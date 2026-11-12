@@ -354,8 +354,6 @@ class tape {
     return x.markers_ == y.markers_ && x.data_ == y.data_;
   }
 
-  friend bool operator!=(const tape& x, const tape& y) { return !(x == y); }
-
   friend bool operator<(const tape& x, const tape& y) {
     return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end());
   }
