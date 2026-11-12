@@ -125,18 +125,9 @@ template <class T>
 class Replaceable;
 
 namespace replaceable_detail {
-/* Mixin templates to give `replaceable<T>` the following properties:
- *
- * 1. Trivial destructor if `T` has a trivial destructor; user-provided
- *    otherwise
- * 2. Move constructor if `T` has a move constructor; deleted otherwise
- * 3. Move assignment operator if `T` has a move constructor; deleted
- *    otherwise
- * 4. Copy constructor if `T` has a copy constructor; deleted otherwise
- * 5. Copy assignment operator if `T` has a copy constructor; deleted
- *    otherwise
- *
- * Has to be done in this way because we can't `enable_if` them away
+/* Mixin template to give `Replaceable<T>` a trivial destructor if `T` has a
+ * trivial destructor, a user-provided one if `T` is otherwise destructible,
+ * and a deleted one if `T` is not destructible.
  */
 template <
     class T,
@@ -173,189 +164,6 @@ struct dtor_mixin<T, false, A> {
   dtor_mixin& operator=(dtor_mixin&&) = default;
   dtor_mixin& operator=(dtor_mixin const&) = default;
   ~dtor_mixin() = delete;
-};
-
-template <
-    class T,
-    bool = std::is_default_constructible<T>::value,
-    bool = std::is_move_constructible<T>::value>
-struct default_and_move_ctor_mixin;
-
-/* Not default-constructible and not move-constructible */
-template <class T>
-struct default_and_move_ctor_mixin<T, false, false> {
-  default_and_move_ctor_mixin() = delete;
-  default_and_move_ctor_mixin(default_and_move_ctor_mixin&&) = delete;
-  default_and_move_ctor_mixin(default_and_move_ctor_mixin const&) = default;
-  default_and_move_ctor_mixin& operator=(default_and_move_ctor_mixin&&) =
-      default;
-  default_and_move_ctor_mixin& operator=(default_and_move_ctor_mixin const&) =
-      default;
-
- protected:
-  inline explicit default_and_move_ctor_mixin(int) {}
-};
-
-/* Default-constructible and move-constructible */
-template <class T>
-struct default_and_move_ctor_mixin<T, true, true> {
-  inline default_and_move_ctor_mixin() noexcept(
-      std::is_nothrow_constructible<T>::value) {
-    ::new (reinterpret_cast<Replaceable<T>*>(this)->storage_) T();
-  }
-  inline default_and_move_ctor_mixin(
-      default_and_move_ctor_mixin&&
-          other) noexcept(std::is_nothrow_constructible<T, T&&>::value) {
-    ::new (reinterpret_cast<Replaceable<T>*>(this)->storage_)
-        T(*std::move(reinterpret_cast<Replaceable<T>&>(other)));
-  }
-  default_and_move_ctor_mixin(default_and_move_ctor_mixin const&) = default;
-  default_and_move_ctor_mixin& operator=(default_and_move_ctor_mixin&&) =
-      default;
-  inline default_and_move_ctor_mixin& operator=(
-      default_and_move_ctor_mixin const&) = default;
-
- protected:
-  inline explicit default_and_move_ctor_mixin(int) {}
-};
-
-/* Default-constructible and not move-constructible */
-template <class T>
-struct default_and_move_ctor_mixin<T, true, false> {
-  inline default_and_move_ctor_mixin() noexcept(
-      std::is_nothrow_constructible<T>::value) {
-    ::new (reinterpret_cast<Replaceable<T>*>(this)->storage_) T();
-  }
-  default_and_move_ctor_mixin(default_and_move_ctor_mixin&&) = delete;
-  default_and_move_ctor_mixin(default_and_move_ctor_mixin const&) = default;
-  default_and_move_ctor_mixin& operator=(default_and_move_ctor_mixin&&) =
-      default;
-  default_and_move_ctor_mixin& operator=(default_and_move_ctor_mixin const&) =
-      default;
-
- protected:
-  inline explicit default_and_move_ctor_mixin(int) {}
-};
-
-/* Not default-constructible but is move-constructible */
-template <class T>
-struct default_and_move_ctor_mixin<T, false, true> {
-  default_and_move_ctor_mixin() = delete;
-  inline default_and_move_ctor_mixin(
-      default_and_move_ctor_mixin&&
-          other) noexcept(std::is_nothrow_constructible<T, T&&>::value) {
-    ::new (reinterpret_cast<Replaceable<T>*>(this)->storage_)
-        T(*std::move(reinterpret_cast<Replaceable<T>&>(other)));
-  }
-  default_and_move_ctor_mixin(default_and_move_ctor_mixin const&) = default;
-  default_and_move_ctor_mixin& operator=(default_and_move_ctor_mixin&&) =
-      default;
-  default_and_move_ctor_mixin& operator=(default_and_move_ctor_mixin const&) =
-      default;
-
- protected:
-  inline explicit default_and_move_ctor_mixin(int) {}
-};
-
-template <
-    class T,
-    bool = (std::is_destructible<T>::value) &&
-        (std::is_move_constructible<T>::value)>
-struct move_assignment_mixin;
-
-/* Not (destructible and move-constructible) */
-template <class T>
-struct move_assignment_mixin<T, false> {
-  move_assignment_mixin() = default;
-  move_assignment_mixin(move_assignment_mixin&&) = default;
-  move_assignment_mixin(move_assignment_mixin const&) = default;
-  move_assignment_mixin& operator=(move_assignment_mixin&&) = delete;
-  move_assignment_mixin& operator=(move_assignment_mixin const&) = default;
-};
-
-/* Both destructible and move-constructible */
-template <class T>
-struct move_assignment_mixin<T, true> {
-  move_assignment_mixin() = default;
-  move_assignment_mixin(move_assignment_mixin&&) = default;
-  move_assignment_mixin(move_assignment_mixin const&) = default;
-  inline move_assignment_mixin&
-  operator=(move_assignment_mixin&& other) noexcept(
-      std::is_nothrow_destructible<T>::value &&
-      std::is_nothrow_move_constructible<T>::value) {
-    T* destruct_ptr = std::launder(
-        reinterpret_cast<T*>(
-            reinterpret_cast<Replaceable<T>*>(this)->storage_));
-    destruct_ptr->~T();
-    ::new (reinterpret_cast<Replaceable<T>*>(this)->storage_)
-        T(*std::move(reinterpret_cast<Replaceable<T>&>(other)));
-    return *this;
-  }
-  move_assignment_mixin& operator=(move_assignment_mixin const&) = default;
-};
-
-template <class T, bool = std::is_copy_constructible<T>::value>
-struct copy_ctor_mixin;
-
-/* Not copy-constructible */
-template <class T>
-struct copy_ctor_mixin<T, false> {
-  copy_ctor_mixin() = default;
-  copy_ctor_mixin(copy_ctor_mixin&&) = default;
-  copy_ctor_mixin(copy_ctor_mixin const&) = delete;
-  copy_ctor_mixin& operator=(copy_ctor_mixin&&) = default;
-  copy_ctor_mixin& operator=(copy_ctor_mixin const&) = delete;
-};
-
-/* Copy-constructible */
-template <class T>
-struct copy_ctor_mixin<T, true> {
-  copy_ctor_mixin() = default;
-  inline copy_ctor_mixin(copy_ctor_mixin const& other) noexcept(
-      std::is_nothrow_constructible<T, T const&>::value) {
-    ::new (reinterpret_cast<Replaceable<T>*>(this)->storage_)
-        T(*reinterpret_cast<Replaceable<T> const&>(other));
-  }
-  copy_ctor_mixin(copy_ctor_mixin&&) = default;
-  copy_ctor_mixin& operator=(copy_ctor_mixin&&) = default;
-  copy_ctor_mixin& operator=(copy_ctor_mixin const&) = default;
-};
-
-template <
-    class T,
-    bool = (std::is_destructible<T>::value) &&
-        (std::is_copy_constructible<T>::value)>
-struct copy_assignment_mixin;
-
-/* Not (destructible and copy-constructible) */
-template <class T>
-struct copy_assignment_mixin<T, false> {
-  copy_assignment_mixin() = default;
-  copy_assignment_mixin(copy_assignment_mixin&&) = default;
-  copy_assignment_mixin(copy_assignment_mixin const&) = default;
-  copy_assignment_mixin& operator=(copy_assignment_mixin&&) = default;
-  copy_assignment_mixin& operator=(copy_assignment_mixin const&) = delete;
-};
-
-/* Both destructible and copy-constructible */
-template <class T>
-struct copy_assignment_mixin<T, true> {
-  copy_assignment_mixin() = default;
-  copy_assignment_mixin(copy_assignment_mixin&&) = default;
-  copy_assignment_mixin(copy_assignment_mixin const&) = default;
-  copy_assignment_mixin& operator=(copy_assignment_mixin&&) = default;
-  inline copy_assignment_mixin&
-  operator=(copy_assignment_mixin const& other) noexcept(
-      std::is_nothrow_destructible<T>::value &&
-      std::is_nothrow_copy_constructible<T>::value) {
-    T* destruct_ptr = std::launder(
-        reinterpret_cast<T*>(
-            reinterpret_cast<Replaceable<T>*>(this)->storage_));
-    destruct_ptr->~T();
-    ::new (reinterpret_cast<Replaceable<T>*>(this)->storage_)
-        T(*reinterpret_cast<Replaceable<T> const&>(other));
-    return *this;
-  }
 };
 
 template <typename T>
@@ -396,37 +204,54 @@ constexpr Replaceable<T> make_replaceable(
 }
 
 template <class T>
-class alignas(T) Replaceable
-    : public replaceable_detail::dtor_mixin<T>,
-      public replaceable_detail::default_and_move_ctor_mixin<T>,
-      public replaceable_detail::copy_ctor_mixin<T>,
-      public replaceable_detail::move_assignment_mixin<T>,
-      public replaceable_detail::copy_assignment_mixin<T> {
-  using ctor_base = replaceable_detail::default_and_move_ctor_mixin<T>;
-
+class alignas(T) Replaceable : public replaceable_detail::dtor_mixin<T> {
  public:
   using value_type = T;
 
-  /* Rule-of-zero default- copy- and move- constructors. The ugly code to make
-   * these work are above, in namespace folly::replaceable_detail.
-   */
-  constexpr Replaceable() = default;
-  constexpr Replaceable(const Replaceable&) = default;
-  constexpr Replaceable(Replaceable&&) = default;
+  Replaceable() noexcept(std::is_nothrow_default_constructible_v<T>)
+    requires std::is_default_constructible_v<T>
+  {
+    ::new (storage_) T();
+  }
 
-  /* Rule-of-zero copy- and move- assignment operators. The ugly code to make
-   * these work are above, in namespace folly::replaceable_detail.
-   *
-   * Note - these destruct the `T` and then in-place construct a new one based
-   * on what is in the other replaceable; they do not invoke the assignment
-   * operator of `T`.
-   */
-  Replaceable& operator=(const Replaceable&) = default;
-  Replaceable& operator=(Replaceable&&) = default;
+  Replaceable(const Replaceable& other) noexcept(
+      std::is_nothrow_copy_constructible_v<T>)
+    requires std::is_copy_constructible_v<T>
+  {
+    ::new (storage_) T(*other);
+  }
 
-  /* Rule-of-zero destructor. The ugly code to make this work is above, in
-   * namespace folly::replaceable_detail.
+  Replaceable(Replaceable&& other) noexcept(
+      std::is_nothrow_move_constructible_v<T>)
+    requires std::is_move_constructible_v<T>
+  {
+    ::new (storage_) T(*std::move(other));
+  }
+
+  /* These destruct the `T` and then in-place construct a new one based on what
+   * is in the other replaceable; they do not invoke the assignment operator of
+   * `T`.
    */
+  Replaceable& operator=(const Replaceable& other) noexcept(
+      std::is_nothrow_destructible_v<T> &&
+      std::is_nothrow_copy_constructible_v<T>)
+    requires(std::is_destructible_v<T> && std::is_copy_constructible_v<T>)
+  {
+    std::launder(reinterpret_cast<T*>(storage_))->~T();
+    ::new (storage_) T(*other);
+    return *this;
+  }
+
+  Replaceable& operator=(Replaceable&& other) noexcept(
+      std::is_nothrow_destructible_v<T> &&
+      std::is_nothrow_move_constructible_v<T>)
+    requires(std::is_destructible_v<T> && std::is_move_constructible_v<T>)
+  {
+    std::launder(reinterpret_cast<T*>(storage_))->~T();
+    ::new (storage_) T(*std::move(other));
+    return *this;
+  }
+
   ~Replaceable() = default;
 
   /**
@@ -435,11 +260,8 @@ class alignas(T) Replaceable
    */
   template <class... Args>
     requires(std::is_constructible<T, Args && ...>::value)
-  constexpr explicit Replaceable(std::in_place_t, Args&&... args)
-      // clang-format off
-      noexcept(std::is_nothrow_constructible<T, Args&&...>::value)
-      // clang-format on
-      : ctor_base(0) {
+  constexpr explicit Replaceable(std::in_place_t, Args&&... args) noexcept(
+      std::is_nothrow_constructible<T, Args&&...>::value) {
     ::new (storage_) T(std::forward<Args>(args)...);
   }
 
@@ -452,9 +274,8 @@ class alignas(T) Replaceable
       noexcept(std::is_nothrow_constructible<
           T,
           std::initializer_list<U>,
-          Args&&...>::value)
-      // clang-format on
-      : ctor_base(0) {
+          Args&&...>::value) {
+    // clang-format on
     ::new (storage_) T(il, std::forward<Args>(args)...);
   }
 
@@ -464,11 +285,8 @@ class alignas(T) Replaceable
         !std::is_same<std::decay_t<U>, std::in_place_t>::value &&
         !std::is_same<Replaceable<T>, std::decay_t<U>>::value &&
         std::is_convertible<U &&, T>::value)
-  constexpr /* implicit */ Replaceable(U&& other)
-      // clang-format off
-      noexcept(std::is_nothrow_constructible<T, U&&>::value)
-      // clang-format on
-      : ctor_base(0) {
+  constexpr /* implicit */ Replaceable(U&& other) noexcept(
+      std::is_nothrow_constructible<T, U&&>::value) {
     ::new (storage_) T(std::forward<U>(other));
   }
 
@@ -478,11 +296,8 @@ class alignas(T) Replaceable
         !std::is_same<std::decay_t<U>, std::in_place_t>::value &&
         !std::is_same<Replaceable<T>, std::decay_t<U>>::value &&
         !std::is_convertible<U &&, T>::value)
-  constexpr explicit Replaceable(U&& other)
-      // clang-format off
-      noexcept(std::is_nothrow_constructible<T, U&&>::value)
-      // clang-format on
-      : ctor_base(0) {
+  constexpr explicit Replaceable(U&& other) noexcept(
+      std::is_nothrow_constructible<T, U&&>::value) {
     ::new (storage_) T(std::forward<U>(other));
   }
 
@@ -492,11 +307,8 @@ class alignas(T) Replaceable
         !replaceable_detail::is_constructible_from_replaceable<T>::value &&
         !replaceable_detail::is_convertible_from_replaceable<T>::value &&
         std::is_convertible<const U&, T>::value)
-  /* implicit */ Replaceable(const Replaceable<U>& other)
-      // clang-format off
-      noexcept(std::is_nothrow_constructible<T, U const&>::value)
-      // clang-format on
-      : ctor_base(0) {
+  /* implicit */ Replaceable(const Replaceable<U>& other) noexcept(
+      std::is_nothrow_constructible<T, U const&>::value) {
     ::new (storage_) T(*other);
   }
 
@@ -506,11 +318,8 @@ class alignas(T) Replaceable
         !replaceable_detail::is_constructible_from_replaceable<T>::value &&
         !replaceable_detail::is_convertible_from_replaceable<T>::value &&
         !std::is_convertible<const U&, T>::value)
-  explicit Replaceable(const Replaceable<U>& other)
-      // clang-format off
-      noexcept(std::is_nothrow_constructible<T, U const&>::value)
-      // clang-format on
-      : ctor_base(0) {
+  explicit Replaceable(const Replaceable<U>& other) noexcept(
+      std::is_nothrow_constructible<T, U const&>::value) {
     ::new (storage_) T(*other);
   }
 
@@ -520,11 +329,8 @@ class alignas(T) Replaceable
         !replaceable_detail::is_constructible_from_replaceable<T>::value &&
         !replaceable_detail::is_convertible_from_replaceable<T>::value &&
         std::is_convertible<U &&, T>::value)
-  /* implicit */ Replaceable(Replaceable<U>&& other)
-      // clang-format off
-      noexcept(std::is_nothrow_constructible<T, U&&>::value)
-      // clang-format on
-      : ctor_base(0) {
+  /* implicit */ Replaceable(Replaceable<U>&& other) noexcept(
+      std::is_nothrow_constructible<T, U&&>::value) {
     ::new (storage_) T(std::move(*other));
   }
 
@@ -534,11 +340,8 @@ class alignas(T) Replaceable
         !replaceable_detail::is_constructible_from_replaceable<T>::value &&
         !replaceable_detail::is_convertible_from_replaceable<T>::value &&
         !std::is_convertible<U &&, T>::value)
-  explicit Replaceable(Replaceable<U>&& other)
-      // clang-format off
-      noexcept(std::is_nothrow_constructible<T, U&&>::value)
-      // clang-format on
-      : ctor_base(0) {
+  explicit Replaceable(Replaceable<U>&& other) noexcept(
+      std::is_nothrow_constructible<T, U&&>::value) {
     ::new (storage_) T(std::move(*other));
   }
 
@@ -606,10 +409,6 @@ class alignas(T) Replaceable
 
  private:
   friend struct replaceable_detail::dtor_mixin<T>;
-  friend struct replaceable_detail::default_and_move_ctor_mixin<T>;
-  friend struct replaceable_detail::copy_ctor_mixin<T>;
-  friend struct replaceable_detail::move_assignment_mixin<T>;
-  friend struct replaceable_detail::copy_assignment_mixin<T>;
   aligned_storage_for_t<T> storage_[1];
 };
 
