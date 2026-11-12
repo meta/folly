@@ -1138,6 +1138,11 @@ RequestContext::ThreadLocalContext::~ThreadLocalContext() {
   }
 }
 
+/* static */ RequestContext::StaticContext&
+RequestContext::getThreadContextHolder() {
+  return getStaticContext();
+}
+
 /* static */ RequestContext::ThreadLocalContext&
 RequestContext::getStaticContext() {
   return StaticContextThreadLocal::get();

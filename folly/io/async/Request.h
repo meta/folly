@@ -524,6 +524,10 @@ class RequestContext {
       RequestContext /* Tag */>;
 
  public:
+  // The holder lives until thread exit. Local bindings may have an empty
+  // requestContext field; use accessAllThreads() to inspect their context.
+  static StaticContext& getThreadContextHolder();
+
   class StaticContextAccessor {
    private:
     using Inner = StaticContextThreadLocal::Accessor;

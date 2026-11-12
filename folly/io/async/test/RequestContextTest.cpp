@@ -1065,9 +1065,11 @@ TEST_F(RequestContextTest, AccessAllThreadsReadsSharedAndLocalBindings) {
   for (bool local : {false, true}) {
     std::atomic<int> destroyed{0};
     RequestContext* expected = nullptr;
+    RequestContext::StaticContext* cached = nullptr;
     folly::test::Barrier ready(2);
     folly::test::Barrier inspected(2);
     std::thread thread([&] {
+      cached = &RequestContext::getThreadContextHolder();
       auto inspect = [&] {
         expected = RequestContext::try_get();
         expected->setContextData(
@@ -1090,6 +1092,13 @@ TEST_F(RequestContextTest, AccessAllThreadsReadsSharedAndLocalBindings) {
       for (auto it = accessor.begin(); it != accessor.end(); ++it) {
         if (it.getRootIdInfo().tid == thread.get_id()) {
           found = true;
+          EXPECT_EQ(&*it, cached);
+          EXPECT_EQ(cached->rootId.load(std::memory_order_relaxed), 123);
+          if (local) {
+            EXPECT_EQ(cached->requestContext.get(), nullptr);
+          } else {
+            EXPECT_EQ(cached->requestContext.get(), expected);
+          }
           auto* context = it.getContext();
           EXPECT_EQ(context, expected);
           if (context) {
