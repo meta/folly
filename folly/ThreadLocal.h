@@ -377,8 +377,6 @@ class ThreadLocalPtr {
 
       bool operator==(Iterator const& rhs) const { return equal(rhs); }
 
-      bool operator!=(Iterator const& rhs) const { return !equal(rhs); }
-
       std::thread::id getThreadId() const { return iter_->threadEntry->tid(); }
 
       uint64_t getOSThreadId() const { return iter_->threadEntry->tid_os; }

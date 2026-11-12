@@ -64,9 +64,6 @@ class RegexMatchCacheDynamicBitset {
     friend bool operator==(bit_span const& a, bit_span const& b) noexcept {
       return a.as_tuple() == b.as_tuple();
     }
-    friend bool operator!=(bit_span const& a, bit_span const& b) noexcept {
-      return a.as_tuple() != b.as_tuple();
-    }
   };
 
  public:
@@ -173,9 +170,6 @@ class RegexMatchCacheDynamicBitset {
 
       friend bool operator==(self const& a, self const& b) noexcept {
         return a.index_ == b.index_;
-      }
-      friend bool operator!=(self const& a, self const& b) noexcept {
-        return a.index_ != b.index_;
       }
     };
 

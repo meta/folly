@@ -56,8 +56,6 @@ struct await_iterator {
 
   bool operator==(await_iterator other) const { return it_ == other.it_; }
 
-  bool operator!=(await_iterator other) const { return !(*this == other); }
-
   value_type operator*() const { return AwaitWrapper(it_); }
 
  private:

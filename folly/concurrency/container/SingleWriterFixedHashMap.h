@@ -298,10 +298,6 @@ class SingleWriterFixedHashMap {
       return index_ == o.index_;
     }
 
-    FOLLY_ALWAYS_INLINE bool operator!=(const Iterator& o) const {
-      return !(*this == o);
-    }
-
    private:
     friend class SingleWriterFixedHashMap;
 

@@ -619,8 +619,6 @@ class ConcurrentHashMap {
       return it_ == o.it_ && segment_ == o.segment_;
     }
 
-    bool operator!=(const ConstIterator& o) const { return !(*this == o); }
-
     ConstIterator& operator=(const ConstIterator& o) = delete;
 
     ConstIterator& operator=(ConstIterator&& o) noexcept {

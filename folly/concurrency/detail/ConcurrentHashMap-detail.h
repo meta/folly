@@ -693,8 +693,6 @@ class alignas(64) BucketTable {
 
     bool operator==(const Iterator& o) const { return node_ == o.node_; }
 
-    bool operator!=(const Iterator& o) const { return !(*this == o); }
-
     Iterator& operator=(const Iterator& o) = delete;
 
     Iterator& operator=(Iterator&& o) noexcept {
@@ -1269,8 +1267,6 @@ class alignas(64) SIMDTable {
     }
 
     bool operator==(const Iterator& o) const { return node_ == o.node_; }
-
-    bool operator!=(const Iterator& o) const { return !(*this == o); }
 
     Iterator& operator=(const Iterator& o) = delete;
 

@@ -212,10 +212,6 @@ class Generator {
       return m_promise == other.m_promise;
     }
 
-    bool operator!=(const iterator& other) const noexcept {
-      return m_promise != other.m_promise;
-    }
-
     iterator& operator++() {
       assert(m_promise != nullptr);
       assert(!m_promise->is_complete());

@@ -201,9 +201,6 @@ class atomic_grow_array : private Policy {
     friend bool operator==(down const lhs, down const rhs) noexcept {
       return lhs.index_ == rhs.index_;
     }
-    friend bool operator!=(down const lhs, down const rhs) noexcept {
-      return lhs.index_ != rhs.index_;
-    }
     friend bool operator<(down const lhs, down const rhs) noexcept {
       return lhs.index_ < rhs.index_;
     }

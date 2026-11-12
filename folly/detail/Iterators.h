@@ -100,10 +100,6 @@ class IteratorFacade {
     return equal(lhs, rhs);
   }
 
-  friend constexpr bool operator!=(D const& lhs, D const& rhs) {
-    return !(lhs == rhs);
-  }
-
   constexpr R operator*() const { return asDerivedConst().dereference(); }
 
   constexpr pointer operator->() const {

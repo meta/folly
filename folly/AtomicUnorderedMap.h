@@ -186,7 +186,6 @@ struct AtomicUnorderedInsertMap {
     bool operator==(const ConstIterator& rhs) const {
       return slot_ == rhs.slot_;
     }
-    bool operator!=(const ConstIterator& rhs) const { return !(*this == rhs); }
 
    private:
     const AtomicUnorderedInsertMap& owner_;
