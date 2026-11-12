@@ -760,9 +760,6 @@ class heap_vector_container : growth_policy_wrapper<GrowthPolicy> {
     bool operator==(const heap_iterator& rawIterator) const {
       return ptr_ == rawIterator.ptr_;
     }
-    bool operator!=(const heap_iterator& rawIterator) const {
-      return !operator==(rawIterator);
-    }
 
     heap_iterator& operator+=(const difference_type& movement) {
       size_type offset = ptr_ - cont_->begin() + 1;
@@ -1303,10 +1300,6 @@ class heap_vector_container : growth_policy_wrapper<GrowthPolicy> {
 
   bool operator==(const heap_vector_container& other) const {
     return m_.cont_ == other.m_.cont_;
-  }
-
-  bool operator!=(const heap_vector_container& other) const {
-    return !operator==(other);
   }
 
   auto operator<=>(const heap_vector_container& other) const {

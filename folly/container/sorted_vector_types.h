@@ -799,9 +799,6 @@ class sorted_vector_set : detail::growth_policy_wrapper<GrowthPolicy> {
   bool operator==(const sorted_vector_set& other) const {
     return other.m_.cont_ == m_.cont_;
   }
-  bool operator!=(const sorted_vector_set& other) const {
-    return !operator==(other);
-  }
 
   bool operator<(const sorted_vector_set& other) const {
     return m_.cont_ < other.m_.cont_;
@@ -1613,9 +1610,6 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
 
   bool operator==(const sorted_vector_map& other) const {
     return m_.cont_ == other.m_.cont_;
-  }
-  bool operator!=(const sorted_vector_map& other) const {
-    return !operator==(other);
   }
 
   bool operator<(const sorted_vector_map& other) const {
