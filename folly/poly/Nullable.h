@@ -48,20 +48,8 @@ struct INullablePointer : PolyExtends<IEqualityComparable> {
     }
 
     friend bool operator==(
-        std::nullptr_t, PolySelf<Base> const& self) noexcept {
-      return poly_empty(self);
-    }
-    friend bool operator==(
         PolySelf<Base> const& self, std::nullptr_t) noexcept {
       return poly_empty(self);
-    }
-    friend bool operator!=(
-        std::nullptr_t, PolySelf<Base> const& self) noexcept {
-      return !poly_empty(self);
-    }
-    friend bool operator!=(
-        PolySelf<Base> const& self, std::nullptr_t) noexcept {
-      return !poly_empty(self);
     }
   };
 };

@@ -82,14 +82,6 @@ bool operator==(Poly<I1> const& _this, Poly<I2> const& that) {
 template <
     class I1,
     class I2,
-    std::enable_if_t<detail::Comparable<I1, I2>::value, int> = 0>
-bool operator!=(Poly<I1> const& _this, Poly<I2> const& that) {
-  return !(_this == that);
-}
-
-template <
-    class I1,
-    class I2,
     std::enable_if_t<detail::Orderable<I1, I2>::value, int> = 0>
 bool operator<(Poly<I1> const& _this, Poly<I2> const& that) {
   if (poly_empty(that)) {
