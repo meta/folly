@@ -289,46 +289,35 @@ void Try<void>::throwUnlessValue() const {
 }
 
 template <typename F>
-typename std::enable_if<
-    !std::is_same<invoke_result_t<F>, void>::value,
-    Try<invoke_result_t<F>>>::type
-makeTryWithNoUnwrap(F&& f) noexcept {
+Try<invoke_result_t<F>> makeTryWithNoUnwrap(F&& f) noexcept {
   using ResultType = invoke_result_t<F>;
   try {
-    return Try<ResultType>(detail::TryFromFunctionTag{}, f);
+    if constexpr (std::is_void_v<ResultType>) {
+      f();
+      return Try<void>();
+    } else {
+      return Try<ResultType>(detail::TryFromFunctionTag{}, f);
+    }
   } catch (...) {
     return Try<ResultType>(exception_wrapper(current_exception()));
   }
 }
 
 template <typename F>
-typename std::
-    enable_if<std::is_same<invoke_result_t<F>, void>::value, Try<void>>::type
-    makeTryWithNoUnwrap(F&& f) noexcept {
-  try {
-    f();
-    return Try<void>();
-  } catch (...) {
-    return Try<void>(exception_wrapper(current_exception()));
-  }
-}
-
-template <typename F>
-typename std::
-    enable_if<!isTry<invoke_result_t<F>>::value, Try<invoke_result_t<F>>>::type
-    makeTryWith(F&& f) noexcept {
-  return makeTryWithNoUnwrap(std::forward<F>(f));
-}
-
-template <typename F>
-typename std::enable_if<isTry<invoke_result_t<F>>::value, invoke_result_t<F>>::
-    type
-    makeTryWith(F&& f) noexcept {
+std::conditional_t<
+    isTry<invoke_result_t<F>>::value,
+    invoke_result_t<F>,
+    Try<invoke_result_t<F>>>
+makeTryWith(F&& f) noexcept {
   using ResultType = invoke_result_t<F>;
-  try {
-    return f();
-  } catch (...) {
-    return ResultType(exception_wrapper(current_exception()));
+  if constexpr (isTry<ResultType>::value) {
+    try {
+      return f();
+    } catch (...) {
+      return ResultType(exception_wrapper(current_exception()));
+    }
+  } else {
+    return makeTryWithNoUnwrap(std::forward<F>(f));
   }
 }
 

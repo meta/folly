@@ -391,13 +391,12 @@ class Try
   }
 
   template <bool isTry, typename R>
-  typename std::enable_if<isTry, R>::type get() {
-    return std::forward<R>(*this);
-  }
-
-  template <bool isTry, typename R>
-  typename std::enable_if<!isTry, R>::type get() {
-    return std::forward<R>(value());
+  R get() {
+    if constexpr (isTry) {
+      return std::forward<R>(*this);
+    } else {
+      return std::forward<R>(value());
+    }
   }
 };
 
@@ -619,49 +618,24 @@ struct isTry<Try<T>> : std::true_type {};
 /*
  * @param f a function to execute and capture the result of (value or exception)
  *
- * @returns Try holding the result of f
+ * @returns Try holding the result of f; Try<void> if f returns void
  */
 template <typename F>
-typename std::enable_if<
-    !std::is_same<invoke_result_t<F>, void>::value,
-    Try<invoke_result_t<F>>>::type
-makeTryWithNoUnwrap(F&& f) noexcept;
-
-/*
- * Specialization of makeTryWith for void return
- *
- * @param f a function to execute and capture the result of
- *
- * @returns Try<void> holding the result of f
- */
-template <typename F>
-typename std::
-    enable_if<std::is_same<invoke_result_t<F>, void>::value, Try<void>>::type
-    makeTryWithNoUnwrap(F&& f) noexcept;
+Try<invoke_result_t<F>> makeTryWithNoUnwrap(F&& f) noexcept;
 
 /*
  * @param f a function to execute and capture the result of (value or exception)
  *
- * @returns Try holding the result of f
+ * @returns Try holding the result of f. If f returns Try<T>, the result is not
+ * double-wrapped: it is the Try<T> returned by f if f did not throw, otherwise
+ * a Try<T> containing the exception
  */
 template <typename F>
-typename std::
-    enable_if<!isTry<invoke_result_t<F>>::value, Try<invoke_result_t<F>>>::type
-    makeTryWith(F&& f) noexcept;
-
-/*
- * Specialization of makeTryWith for functions that return Try<T>
- * Causes makeTryWith to not double-wrap the try.
- *
- * @param f a function to execute and capture the result of
- *
- * @returns result of f if f did not throw. Otherwise Try<T> containing
- * exception
- */
-template <typename F>
-typename std::enable_if<isTry<invoke_result_t<F>>::value, invoke_result_t<F>>::
-    type
-    makeTryWith(F&& f) noexcept;
+std::conditional_t<
+    isTry<invoke_result_t<F>>::value,
+    invoke_result_t<F>,
+    Try<invoke_result_t<F>>>
+makeTryWith(F&& f) noexcept;
 
 /*
  * Try to in-place construct a new value from the specified arguments.
