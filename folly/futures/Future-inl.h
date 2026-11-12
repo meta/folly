@@ -398,37 +398,6 @@ class FutureBaseHelper {
 
 // then
 
-// Variant: returns a value
-// e.g. f.then([](Try<T>&& t){ return t.value(); });
-template <class T>
-template <typename F, typename R>
-typename std::enable_if< //
-    !R::ReturnsFuture::value,
-    Future<typename R::value_type>>::type
-FutureBase<T>::thenImplementation(
-    F&& func, R, futures::detail::InlineContinuation allowInline) {
-  static_assert(R::Arg::ArgsSize::value == 2, "Then must take two arguments");
-  using B = typename R::ReturnsFuture::Inner;
-  auto fp = FutureBaseHelper::makePromiseContractForThen<B>(
-      this->getCore(), this->getExecutor());
-  this->setCallback_(
-      [state = futures::detail::makeCoreCallbackState(
-           std::move(fp.promise), static_cast<F&&>(func))](
-          Executor::KeepAlive<>&& ka, Try<T>&& t) mutable {
-        if (!R::Arg::isTry() && t.hasException()) {
-          state.setException(std::move(ka), std::move(t.exception()));
-        } else {
-          auto propagateKA = ka.copy();
-          state.setTry(std::move(propagateKA), makeTryWith([&] {
-                         return detail_msvc_15_7_workaround::invoke(
-                             R{}, state, std::move(ka), std::move(t));
-                       }));
-        }
-      },
-      allowInline);
-  return std::move(fp.future);
-}
-
 // Pass through a simple future as it needs no deferral adaptation
 template <class T>
 Future<T> chainExecutor(Executor::KeepAlive<>, Future<T>&& f) {
@@ -444,14 +413,9 @@ Future<T> chainExecutor(Executor::KeepAlive<> e, SemiFuture<T>&& f) {
   return std::move(f).via(std::move(e));
 }
 
-// Variant: returns a Future
-// e.g. f.then([](T&& t){ return makeFuture<T>(t); });
 template <class T>
 template <typename F, typename R>
-typename std::enable_if< //
-    R::ReturnsFuture::value,
-    Future<typename R::value_type>>::type
-FutureBase<T>::thenImplementation(
+Future<typename R::value_type> FutureBase<T>::thenImplementation(
     F&& func, R, futures::detail::InlineContinuation allowInline) {
   static_assert(R::Arg::ArgsSize::value == 2, "Then must take two arguments");
   using B = typename R::ReturnsFuture::Inner;
@@ -463,7 +427,7 @@ FutureBase<T>::thenImplementation(
           Executor::KeepAlive<>&& ka, Try<T>&& t) mutable {
         if (!R::Arg::isTry() && t.hasException()) {
           state.setException(std::move(ka), std::move(t.exception()));
-        } else {
+        } else if constexpr (R::ReturnsFuture::value) {
           // Ensure that if function returned a SemiFuture we correctly chain
           // potential deferral.
           auto tf2 = detail_msvc_15_7_workaround::tryInvoke(
@@ -476,6 +440,12 @@ FutureBase<T>::thenImplementation(
             std::exchange(statePromise.core_, nullptr)
                 ->setProxy(std::exchange(tf3.core_, nullptr));
           }
+        } else {
+          auto propagateKA = ka.copy();
+          state.setTry(std::move(propagateKA), makeTryWith([&] {
+                         return detail_msvc_15_7_workaround::invoke(
+                             R{}, state, std::move(ka), std::move(t));
+                       }));
         }
       },
       allowInline);
@@ -593,32 +563,26 @@ SemiFuture<typename std::decay<T>::type> makeSemiFuture(T&& t) {
   return makeSemiFuture(Try<typename std::decay<T>::type>(static_cast<T&&>(t)));
 }
 
-// makeSemiFutureWith(SemiFuture<T>()) -> SemiFuture<T>
 template <class F>
-typename std::enable_if<
+SemiFuture<typename std::conditional_t<
     isFutureOrSemiFuture<std::invoke_result_t<F>>::value,
-    SemiFuture<typename std::invoke_result_t<F>::value_type>>::type
+    std::invoke_result_t<F>,
+    SemiFuture<lift_unit_t<std::invoke_result_t<F>>>>::value_type>
 makeSemiFutureWith(F&& func) {
-  using InnerType =
-      typename isFutureOrSemiFuture<std::invoke_result_t<F>>::Inner;
-  try {
-    return static_cast<F&&>(func)();
-  } catch (...) {
-    return makeSemiFuture<InnerType>(exception_wrapper(current_exception()));
+  if constexpr (FutureOrSemiFutureType<std::invoke_result_t<F>>) {
+    using InnerType =
+        typename isFutureOrSemiFuture<std::invoke_result_t<F>>::Inner;
+    try {
+      return static_cast<F&&>(func)();
+    } catch (...) {
+      return makeSemiFuture<InnerType>(exception_wrapper(current_exception()));
+    }
+  } else {
+    using LiftedResult = lift_unit_t<std::invoke_result_t<F>>;
+    return makeSemiFuture<LiftedResult>(makeTryWith([&func]() mutable {
+      return static_cast<F&&>(func)();
+    }));
   }
-}
-
-// makeSemiFutureWith(T()) -> SemiFuture<T>
-// makeSemiFutureWith(void()) -> SemiFuture<Unit>
-template <class F>
-typename std::enable_if<
-    !(isFutureOrSemiFuture<std::invoke_result_t<F>>::value),
-    SemiFuture<lift_unit_t<std::invoke_result_t<F>>>>::type
-makeSemiFutureWith(F&& func) {
-  using LiftedResult = lift_unit_t<std::invoke_result_t<F>>;
-  return makeSemiFuture<LiftedResult>(makeTryWith([&func]() mutable {
-    return static_cast<F&&>(func)();
-  }));
 }
 
 template <class T>
@@ -1108,19 +1072,14 @@ Future<T>::thenExValueInline(F&& func) && {
 
 template <class T>
 template <class ExceptionType, class F>
-typename std::enable_if<
-    isFutureOrSemiFuture<std::invoke_result_t<F, ExceptionType>>::value,
-    Future<T>>::type
-Future<T>::thenError(tag_t<ExceptionType>, F&& func) && {
+  requires std::is_invocable_v<F, ExceptionType>
+Future<T> Future<T>::thenError(tag_t<ExceptionType>, F&& func) && {
   return std::move(*this).thenErrorImpl(
       tag_t<ExceptionType>{}, std::forward<F>(func));
 }
 
 template <class T>
 template <class ExceptionType, class F>
-// typename std::enable_if<
-//     isFutureOrSemiFuture<std::invoke_result_t<F, ExceptionType>>::value,
-//     Future<T>>::type
 Future<T> Future<T>::thenErrorInline(tag_t<ExceptionType>, F&& func) && {
   return std::move(*this).thenErrorImpl(
       tag_t<ExceptionType>{},
@@ -1130,10 +1089,7 @@ Future<T> Future<T>::thenErrorInline(tag_t<ExceptionType>, F&& func) && {
 
 template <class T>
 template <class ExceptionType, class F>
-typename std::enable_if<
-    isFutureOrSemiFuture<std::invoke_result_t<F, ExceptionType>>::value,
-    Future<T>>::type
-Future<T>::thenErrorImpl(
+Future<T> Future<T>::thenErrorImpl(
     tag_t<ExceptionType>,
     F&& func,
     futures::detail::InlineContinuation allowInline) && {
@@ -1149,16 +1105,23 @@ Future<T>::thenErrorImpl(
        allowInline](Executor::KeepAlive<>&& ka, Try<T>&& t) mutable {
         if (const auto* ex = t.template tryGetExceptionObject<
                              std::remove_reference_t<ExceptionType>>()) {
-          auto tf2 = state.tryInvoke(*ex);
-          if (tf2.hasException()) {
-            state.setException(std::move(ka), std::move(tf2.exception()));
+          if constexpr (FutureOrSemiFutureType<
+                            std::invoke_result_t<F, ExceptionType>>) {
+            auto tf2 = state.tryInvoke(*ex);
+            if (tf2.hasException()) {
+              state.setException(std::move(ka), std::move(tf2.exception()));
+            } else {
+              tf2->setCallback_(
+                  [p_2 = state.stealPromise()](
+                      Executor::KeepAlive<>&& innerKA, Try<T>&& t3) mutable {
+                    p_2.setTry(std::move(innerKA), std::move(t3));
+                  },
+                  allowInline);
+            }
           } else {
-            tf2->setCallback_(
-                [p_2 = state.stealPromise()](
-                    Executor::KeepAlive<>&& innerKA, Try<T>&& t3) mutable {
-                  p_2.setTry(std::move(innerKA), std::move(t3));
-                },
-                allowInline);
+            (void)allowInline;
+            state.setTry(
+                std::move(ka), makeTryWith([&] { return state.invoke(*ex); }));
           }
         } else {
           state.setTry(std::move(ka), std::move(t));
@@ -1170,62 +1133,9 @@ Future<T>::thenErrorImpl(
 }
 
 template <class T>
-template <class ExceptionType, class F>
-typename std::enable_if<
-    !isFutureOrSemiFuture<std::invoke_result_t<F, ExceptionType>>::value,
-    Future<T>>::type
-Future<T>::thenError(tag_t<ExceptionType>, F&& func) && {
-  return std::move(*this).thenErrorImpl(
-      tag_t<ExceptionType>{}, std::forward<F>(func));
-}
-
-template <class T>
-template <class ExceptionType, class F>
-typename std::enable_if<
-    !isFutureOrSemiFuture<std::invoke_result_t<F, ExceptionType>>::value,
-    Future<T>>::type
-Future<T>::thenErrorImpl(
-    tag_t<ExceptionType>,
-    F&& func,
-    futures::detail::InlineContinuation allowInline) && {
-  Promise<T> p;
-  p.core_->initCopyInterruptHandlerFrom(this->getCore());
-  auto sf = p.getSemiFuture();
-  auto* ePtr = this->getExecutor();
-  auto e = folly::getKeepAliveToken(ePtr ? *ePtr : InlineExecutor::instance());
-
-  this->setCallback_(
-      [state = futures::detail::makeCoreCallbackState(
-           std::move(p), static_cast<F&&>(func))](
-          Executor::KeepAlive<>&& ka, Try<T>&& t) mutable {
-        if (const auto* ex = t.template tryGetExceptionObject<
-                             std::remove_reference_t<ExceptionType>>()) {
-          state.setTry(
-              std::move(ka), makeTryWith([&] { return state.invoke(*ex); }));
-        } else {
-          state.setTry(std::move(ka), std::move(t));
-        }
-      },
-      allowInline);
-
-  return std::move(sf).via(std::move(e));
-}
-
-template <class T>
 template <class F>
-typename std::enable_if<
-    isFutureOrSemiFuture<std::invoke_result_t<F, exception_wrapper>>::value,
-    Future<T>>::type
-Future<T>::thenError(F&& func) && {
-  return std::move(*this).thenErrorImpl(std::forward<F>(func));
-}
-
-template <class T>
-template <class F>
-typename std::enable_if<
-    !isFutureOrSemiFuture<std::invoke_result_t<F, exception_wrapper>>::value,
-    Future<T>>::type
-Future<T>::thenError(F&& func) && {
+  requires std::is_invocable_v<F, exception_wrapper>
+Future<T> Future<T>::thenError(F&& func) && {
   return std::move(*this).thenErrorImpl(std::forward<F>(func));
 }
 
@@ -1238,10 +1148,7 @@ Future<T> Future<T>::thenErrorInline(F&& func) && {
 
 template <class T>
 template <class F>
-typename std::enable_if<
-    isFutureOrSemiFuture<std::invoke_result_t<F, exception_wrapper>>::value,
-    Future<T>>::type
-Future<T>::thenErrorImpl(
+Future<T> Future<T>::thenErrorImpl(
     F&& func, futures::detail::InlineContinuation allowInline) && {
   auto* ePtr = this->getExecutor();
   auto e = folly::getKeepAliveToken(ePtr ? *ePtr : InlineExecutor::instance());
@@ -1252,49 +1159,27 @@ Future<T>::thenErrorImpl(
   this->setCallback_(
       [state = futures::detail::makeCoreCallbackState(
            std::move(p), static_cast<F&&>(func)),
-       allowInline](Executor::KeepAlive<>&& ka, Try<T> t) mutable {
+       allowInline](Executor::KeepAlive<>&& ka, Try<T>&& t) mutable {
         if (t.hasException()) {
-          auto tf2 = state.tryInvoke(std::move(t.exception()));
-          if (tf2.hasException()) {
-            state.setException(std::move(ka), std::move(tf2.exception()));
+          if constexpr (FutureOrSemiFutureType<
+                            std::invoke_result_t<F, exception_wrapper>>) {
+            auto tf2 = state.tryInvoke(std::move(t.exception()));
+            if (tf2.hasException()) {
+              state.setException(std::move(ka), std::move(tf2.exception()));
+            } else {
+              tf2->setCallback_(
+                  [p_2 = state.stealPromise()](
+                      Executor::KeepAlive<>&& innerKA, Try<T>&& t3) mutable {
+                    p_2.setTry(std::move(innerKA), std::move(t3));
+                  },
+                  allowInline);
+            }
           } else {
-            tf2->setCallback_(
-                [p_2 = state.stealPromise()](
-                    Executor::KeepAlive<>&& innerKA, Try<T>&& t3) mutable {
-                  p_2.setTry(std::move(innerKA), std::move(t3));
-                },
-                allowInline);
+            (void)allowInline;
+            state.setTry(std::move(ka), makeTryWith([&] {
+                           return state.invoke(std::move(t.exception()));
+                         }));
           }
-        } else {
-          state.setTry(std::move(ka), std::move(t));
-        }
-      },
-      allowInline);
-
-  return std::move(sf).via(std::move(e));
-}
-
-template <class T>
-template <class F>
-typename std::enable_if<
-    !isFutureOrSemiFuture<std::invoke_result_t<F, exception_wrapper>>::value,
-    Future<T>>::type
-Future<T>::thenErrorImpl(
-    F&& func, futures::detail::InlineContinuation allowInline) && {
-  auto* ePtr = this->getExecutor();
-  auto e = folly::getKeepAliveToken(ePtr ? *ePtr : InlineExecutor::instance());
-
-  Promise<T> p;
-  p.core_->initCopyInterruptHandlerFrom(this->getCore());
-  auto sf = p.getSemiFuture();
-  this->setCallback_(
-      [state = futures::detail::makeCoreCallbackState(
-           std::move(p), static_cast<F&&>(func))](
-          Executor::KeepAlive<>&& ka, Try<T>&& t) mutable {
-        if (t.hasException()) {
-          state.setTry(std::move(ka), makeTryWith([&] {
-                         return state.invoke(std::move(t.exception()));
-                       }));
         } else {
           state.setTry(std::move(ka), std::move(t));
         }
@@ -1361,31 +1246,25 @@ inline Future<Unit> makeFuture() {
   return makeFuture(Unit{});
 }
 
-// makeFutureWith(Future<T>()) -> Future<T>
 template <class F>
-typename std::enable_if<
+std::conditional_t<
     isFuture<std::invoke_result_t<F>>::value,
-    std::invoke_result_t<F>>::type
+    std::invoke_result_t<F>,
+    Future<lift_unit_t<std::invoke_result_t<F>>>>
 makeFutureWith(F&& func) {
-  using InnerType = typename isFuture<std::invoke_result_t<F>>::Inner;
-  try {
-    return static_cast<F&&>(func)();
-  } catch (...) {
-    return makeFuture<InnerType>(exception_wrapper(current_exception()));
+  if constexpr (FutureType<std::invoke_result_t<F>>) {
+    using InnerType = typename isFuture<std::invoke_result_t<F>>::Inner;
+    try {
+      return static_cast<F&&>(func)();
+    } catch (...) {
+      return makeFuture<InnerType>(exception_wrapper(current_exception()));
+    }
+  } else {
+    using LiftedResult = lift_unit_t<std::invoke_result_t<F>>;
+    return makeFuture<LiftedResult>(makeTryWith([&func]() mutable {
+      return static_cast<F&&>(func)();
+    }));
   }
-}
-
-// makeFutureWith(T()) -> Future<T>
-// makeFutureWith(void()) -> Future<Unit>
-template <class F>
-typename std::enable_if<
-    !(isFuture<std::invoke_result_t<F>>::value),
-    Future<lift_unit_t<std::invoke_result_t<F>>>>::type
-makeFutureWith(F&& func) {
-  using LiftedResult = lift_unit_t<std::invoke_result_t<F>>;
-  return makeFuture<LiftedResult>(makeTryWith([&func]() mutable {
-    return static_cast<F&&>(func)();
-  }));
 }
 
 template <class T>
@@ -2597,37 +2476,37 @@ auto when(bool p, F&& thunk) -> decltype(static_cast<F&&>(thunk)().unit()) {
 }
 
 template <class P, class F>
-typename std::enable_if<
-    isSemiFuture<std::invoke_result_t<F>>::value,
-    SemiFuture<Unit>>::type
+  requires FutureOrSemiFutureType<std::invoke_result_t<F>>
+std::conditional_t<
+    FutureType<std::invoke_result_t<F>>,
+    Future<Unit>,
+    SemiFuture<Unit>>
 whileDo(P&& predicate, F&& thunk) {
+  constexpr bool kIsFuture = FutureType<std::invoke_result_t<F>>;
   if (predicate()) {
     auto future = thunk();
-    return std::move(future).deferExValue(
-        [predicate_2 = static_cast<P&&>(predicate),
-         thunk_2 = static_cast<F&&>(thunk)](auto&& ex, auto&&) mutable {
-          return whileDo(
-                     static_cast<P&&>(predicate_2), static_cast<F&&>(thunk_2))
-              .via(std::move(ex));
-        });
+    if constexpr (kIsFuture) {
+      return std::move(future).thenValue(
+          [predicate_2 = static_cast<P&&>(predicate),
+           thunk_2 = static_cast<F&&>(thunk)](auto&&) mutable {
+            return whileDo(
+                static_cast<P&&>(predicate_2), static_cast<F&&>(thunk_2));
+          });
+    } else {
+      return std::move(future).deferExValue(
+          [predicate_2 = static_cast<P&&>(predicate),
+           thunk_2 = static_cast<F&&>(thunk)](auto&& ex, auto&&) mutable {
+            return whileDo(
+                       static_cast<P&&>(predicate_2), static_cast<F&&>(thunk_2))
+                .via(std::move(ex));
+          });
+    }
   }
-  return makeSemiFuture();
-}
-
-template <class P, class F>
-typename std::
-    enable_if<isFuture<std::invoke_result_t<F>>::value, Future<Unit>>::type
-    whileDo(P&& predicate, F&& thunk) {
-  if (predicate()) {
-    auto future = thunk();
-    return std::move(future).thenValue(
-        [predicate_2 = static_cast<P&&>(predicate),
-         thunk_2 = static_cast<F&&>(thunk)](auto&&) mutable {
-          return whileDo(
-              static_cast<P&&>(predicate_2), static_cast<F&&>(thunk_2));
-        });
+  if constexpr (kIsFuture) {
+    return makeFuture();
+  } else {
+    return makeSemiFuture();
   }
-  return makeFuture();
 }
 
 template <class F>
