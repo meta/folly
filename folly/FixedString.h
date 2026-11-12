@@ -343,10 +343,6 @@ struct ReverseIterator {
       ReverseIterator a, ReverseIterator b) noexcept {
     return a.p_ == b.p_;
   }
-  friend constexpr bool operator!=(
-      ReverseIterator a, ReverseIterator b) noexcept {
-    return !(a == b);
-  }
   constexpr reference operator*() const { return *(p_ - 1); }
   constexpr ReverseIterator& operator++() noexcept {
     --p_;
@@ -2589,25 +2585,9 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * Asymmetric relational operators
    */
   friend constexpr bool operator==(
-      const Char* a, const BasicFixedString& b) noexcept {
+      const BasicFixedString& a, const Char* b) noexcept {
     return detail::fixedstring::equal_(
-        a, std::char_traits<Char>::length(a), b.data_, b.size_);
-  }
-
-  /**
-   * \overload
-   */
-  friend constexpr bool operator==(
-      const BasicFixedString& a, const Char* b) noexcept {
-    return b == a;
-  }
-
-  /**
-   * \overload
-   */
-  friend constexpr bool operator==(
-      Range<const Char*> a, const BasicFixedString& b) noexcept {
-    return detail::fixedstring::equal_(a.begin(), a.size(), b.data_, b.size_);
+        a.data_, a.size_, b, std::char_traits<Char>::length(b));
   }
 
   /**
@@ -2615,47 +2595,7 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    */
   friend constexpr bool operator==(
       const BasicFixedString& a, Range<const Char*> b) noexcept {
-    return b == a;
-  }
-
-  friend constexpr bool operator!=(
-      const Char* a, const BasicFixedString& b) noexcept {
-    return !(a == b);
-  }
-
-  /**
-   * \overload
-   */
-  friend constexpr bool operator!=(
-      const BasicFixedString& a, const Char* b) noexcept {
-    return !(b == a);
-  }
-
-  /**
-   * \overload
-   */
-  friend constexpr bool operator!=(
-      Range<const Char*> a, const BasicFixedString& b) noexcept {
-    return !(a == b);
-  }
-
-  /**
-   * \overload
-   */
-  friend constexpr bool operator!=(
-      const BasicFixedString& a, Range<const Char*> b) noexcept {
-    return !(a == b);
-  }
-
-  friend constexpr std::strong_ordering operator<=>(
-      const Char* a, const BasicFixedString& b) noexcept {
-    return static_cast<int>(detail::fixedstring::compare_(
-               a,
-               0u,
-               std::char_traits<Char>::length(a),
-               b.data_,
-               0u,
-               b.size_)) <=> 0;
+    return detail::fixedstring::equal_(a.data_, a.size_, b.begin(), b.size());
   }
 
   /**
@@ -2664,15 +2604,6 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
   friend constexpr std::strong_ordering operator<=>(
       const BasicFixedString& a, const Char* b) noexcept {
     return a.compare(b) <=> 0;
-  }
-
-  /**
-   * \overload
-   */
-  friend constexpr std::strong_ordering operator<=>(
-      Range<const Char*> a, const BasicFixedString& b) noexcept {
-    return static_cast<int>(detail::fixedstring::compare_(
-               a.begin(), 0u, a.size(), b.data_, 0u, b.size_)) <=> 0;
   }
 
   /**
@@ -2760,12 +2691,6 @@ constexpr bool operator==(
       a.size(),
       detail::fixedstring::Helper::data_(b),
       b.size());
-}
-
-template <class Char, std::size_t A, std::size_t B>
-constexpr bool operator!=(
-    const BasicFixedString<Char, A>& a, const BasicFixedString<Char, B>& b) {
-  return !(a == b);
 }
 
 template <class Char, std::size_t A, std::size_t B>
