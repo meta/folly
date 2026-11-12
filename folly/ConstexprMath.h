@@ -301,44 +301,21 @@ constexpr bool constexpr_isnan(T const t) {
   return t != t; // NOLINT
 }
 
-namespace detail {
-
-template <typename T, typename = void>
-struct constexpr_abs_helper {};
-
+/// constexpr_abs
+///
+/// Returns the absolute value of t. For a signed integral type, the result has
+/// the corresponding unsigned type.
 template <typename T>
-struct constexpr_abs_helper<
-    T,
-    typename std::enable_if<std::is_floating_point<T>::value>::type> {
-  static constexpr T go(T t) { return t < static_cast<T>(0) ? -t : t; }
-};
-
-template <typename T>
-struct constexpr_abs_helper<
-    T,
-    typename std::enable_if<
-        std::is_integral<T>::value && !std::is_same<T, bool>::value &&
-        std::is_unsigned<T>::value>::type> {
-  static constexpr T go(T t) { return t; }
-};
-
-template <typename T>
-struct constexpr_abs_helper<
-    T,
-    typename std::enable_if<
-        std::is_integral<T>::value && !std::is_same<T, bool>::value &&
-        std::is_signed<T>::value>::type> {
-  static constexpr typename std::make_unsigned<T>::type go(T t) {
-    return typename std::make_unsigned<T>::type(t < static_cast<T>(0) ? -t : t);
+  requires std::floating_point<T> ||
+    (std::integral<T> && !std::same_as<T, bool>)
+constexpr auto constexpr_abs(T t) {
+  if constexpr (std::floating_point<T>) {
+    return t < static_cast<T>(0) ? -t : t;
+  } else if constexpr (std::unsigned_integral<T>) {
+    return t;
+  } else {
+    return std::make_unsigned_t<T>(t < static_cast<T>(0) ? -t : t);
   }
-};
-
-} // namespace detail
-
-template <typename T>
-constexpr auto constexpr_abs(T t)
-    -> decltype(detail::constexpr_abs_helper<T>::go(t)) {
-  return detail::constexpr_abs_helper<T>::go(t);
 }
 
 namespace detail {

@@ -277,6 +277,15 @@ TEST_F(ConstexprMathTest, constexpr_abs_signed_negative) {
   EXPECT_TRUE((std::is_same<const uint32_t, decltype(a)>::value));
 }
 
+TEST_F(ConstexprMathTest, constexpr_abs_narrow) {
+  constexpr auto u = folly::constexpr_abs(uint8_t(17));
+  constexpr auto s = folly::constexpr_abs(int8_t(-17));
+  EXPECT_EQ(17, u);
+  EXPECT_EQ(17, s);
+  EXPECT_TRUE((std::is_same<const uint8_t, decltype(u)>::value));
+  EXPECT_TRUE((std::is_same<const uint8_t, decltype(s)>::value));
+}
+
 TEST_F(ConstexprMathTest, constexpr_abs_float_positive) {
   constexpr auto v = 17.5f;
   constexpr auto a = folly::constexpr_abs(v);
