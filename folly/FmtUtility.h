@@ -454,6 +454,7 @@ class fmt_output_sink {
  private:
   static constexpr bool can_append_direct =
       requires(OutputIt out, std::string_view str) { out.append(str); };
+#if FMT_VERSION >= 120000 || FMT_VERSION < 100000
   static constexpr bool can_append_view = requires(
       OutputIt out, std::string_view str) {
     fmt::detail::get_container(out).append(str);
@@ -462,6 +463,12 @@ class fmt_output_sink {
       OutputIt out, std::string_view str) {
     fmt::detail::get_container(out).append(str.begin(), str.end());
   };
+#else
+  // fmt 10 and 11 declare get_container() for appenders but define it in
+  // terms of a container member that appenders lack there
+  static constexpr bool can_append_view = false;
+  static constexpr bool can_append_range = false;
+#endif
 
   OutputIt out_;
 };
