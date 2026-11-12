@@ -719,6 +719,22 @@ if (IS_X86_64_ARCH AND NOT MSVC)
   )
 endif ()
 
+# x86 assembly memset implementation (not supported on MSVC)
+if (IS_X86_64_ARCH AND NOT MSVC)
+  folly_add_library(
+    NAME memset_x86
+    SRCS memset.S
+  )
+  set_property(
+    TARGET folly_memset_x86_obj
+    APPEND
+    PROPERTY
+      COMPILE_OPTIONS
+      "-x"
+      "assembler-with-cpp"
+  )
+endif ()
+
 # aarch64 assembly memcpy implementation
 if (IS_AARCH64_ARCH)
   folly_add_library(
