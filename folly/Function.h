@@ -249,19 +249,17 @@ union Data {
 struct CoerceTag {};
 
 template <typename T>
-using FunctionNullptrTest =
-    decltype(static_cast<bool>(static_cast<T const&>(T(nullptr)) == nullptr));
+constexpr bool IsNullptrCompatible = requires {
+  static_cast<bool>(static_cast<T const&>(T(nullptr)) == nullptr);
+};
 
 template <typename T>
-constexpr bool IsNullptrCompatible = is_detected_v<FunctionNullptrTest, T>;
-
-template <typename T, std::enable_if_t<!IsNullptrCompatible<T>, int> = 0>
-constexpr bool isEmptyFunction(T const&) {
-  return false;
-}
-template <typename T, std::enable_if_t<IsNullptrCompatible<T>, int> = 0>
 constexpr bool isEmptyFunction(T const& t) {
-  return static_cast<bool>(t == nullptr);
+  if constexpr (IsNullptrCompatible<T>) {
+    return static_cast<bool>(t == nullptr);
+  } else {
+    return false;
+  }
 }
 
 template <typename F, typename... Args>
