@@ -15,6 +15,7 @@
  */
 
 #include <cstdio>
+#include <string_view>
 
 #include <folly/debugging/symbolizer/ElfCache.h>
 #include <folly/memory/ReentrantAllocator.h>
@@ -35,6 +36,22 @@ int main(int argc, char**) {
   ComparisonCache::Path rhs("b", 1, alloc);
   const bool less = lhs < rhs;
   std::fputs("comparison-end\n", stderr);
+  // Add entries into an empty cache, after the last entry, before the first
+  // entry, and between two entries, then find each of them again.
+  static constexpr std::string_view kPaths[] = {
+      "/nonexistent/directory/entry-b.so",
+      "/nonexistent/directory/entry-d.so",
+      "/nonexistent/directory/entry-a.so",
+      "/nonexistent/directory/entry-c.so",
+  };
+  SignalSafeElfCache cache;
+  std::fputs("lookup-begin\n", stderr);
+  for (int pass = 0; pass < 2; ++pass) {
+    for (std::string_view const path : kPaths) {
+      cache.getFile(folly::StringPiece(path.data(), path.size()));
+    }
+  }
+  std::fputs("lookup-end\n", stderr);
   return less ? 0 : 1;
 #else
   return 0;

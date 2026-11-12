@@ -16,14 +16,13 @@
 
 #pragma once
 
-#include <forward_list>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
-
-#include <boost/intrusive/avl_set.hpp>
 
 #include <folly/Optional.h>
 #include <folly/Range.h>
@@ -60,7 +59,8 @@ class SignalSafeElfCache : public ElfCacheBase {
 
   /// Eagerly resolve comparison and length-check bindings before installing
   /// signal handlers: binding resolution is not async-signal-safe. No stack
-  /// capture or symbolization is performed.
+  /// capture or symbolization is performed. Adds entries to a scratch cache,
+  /// whose allocator aborts if mmap fails.
   static void warmUp() noexcept;
 
  protected:
@@ -99,10 +99,11 @@ class SignalSafeElfCache : public ElfCacheBase {
  private:
   friend bool operator<(Path const& a, Path const& b) noexcept;
 
-  struct Entry : boost::intrusive::avl_set_base_hook<> {
+  struct Entry {
     Path path;
     std::shared_ptr<ElfFile> file;
-    bool init = false;
+    // Not part of the key, so updating it in the set is safe.
+    mutable bool init = false;
 
     explicit Entry(StringPiece p, reentrant_allocator<char> alloc) noexcept
         : path{p.data(), p.size(), alloc},
@@ -113,17 +114,22 @@ class SignalSafeElfCache : public ElfCacheBase {
     Entry(Entry&&) = delete;
     Entry& operator=(Entry&&) = delete;
 
-    friend bool operator<(Entry const& a, Entry const& b) noexcept {
-      return a.path < b.path;
+    /* implicit */ operator std::string_view() const noexcept {
+      return cstring_view(path);
     }
+  };
+
+  // Orders entries by path, and finds them by path without building one.
+  struct EntryLess {
+    using is_transparent = void;
+    bool operator()(std::string_view a, std::string_view b) const noexcept;
   };
 
   struct State {
     reentrant_allocator<void> alloc{
         reentrant_allocator_options().block_size_lg(16).large_size_lg(12)};
-    std::forward_list<Entry, reentrant_allocator<Entry>> list{alloc};
-    // note: map entry dtors check that they have already been unlinked
-    boost::intrusive::avl_set<Entry> map; // must follow list
+    // Must follow alloc, which it is constructed from.
+    std::set<Entry, EntryLess, reentrant_allocator<Entry>> entries{alloc};
   };
   Optional<State> state_;
 };

@@ -87,7 +87,6 @@ folly_add_library(
     folly_portability_sys_mman
     folly_scope_guard
   EXPORTED_DEPS
-    Boost::headers
     folly_debugging_symbolizer_elf
     folly_hash_hash
     folly_lang_cstring_view

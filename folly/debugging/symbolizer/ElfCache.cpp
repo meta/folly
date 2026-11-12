@@ -40,6 +40,21 @@ FOLLY_NOINLINE bool pathLess(
   return lhs < rhs;
 }
 
+/// Finding or adding an entry calls into the standard library's tree code.
+/// Keep it out of line so warmup runs exactly the code getFile() runs. The
+/// lower_bound() hint keeps a hit from building an entry, and it only ever
+/// makes emplace_hint() step backward from the hint.
+template <typename Entries, typename Alloc>
+FOLLY_NOINLINE typename Entries::iterator findOrAdd(
+    Entries& entries, StringPiece p, Alloc const& alloc) noexcept {
+  auto const path = std::string_view(p.data(), p.size());
+  auto it = entries.lower_bound(path);
+  if (it == entries.end() || entries.key_comp()(path, *it)) {
+    it = entries.emplace_hint(it, p, alloc);
+  }
+  return it;
+}
+
 } // namespace
 
 void SignalSafeElfCache::warmUp() noexcept {
@@ -54,6 +69,25 @@ void SignalSafeElfCache::warmUp() noexcept {
   compiler_must_not_predict(rhs);
   const bool less = pathLess(lhs, rhs);
   compiler_must_not_elide(less);
+
+  // Add entries as getFile() does: into an empty set, after the last entry,
+  // before the first one, and between two. Use paths of realistic length so
+  // that copying them takes the same branches as for a real path.
+  static constexpr std::string_view kPaths[] = {
+      "/warmup/nonexistent/directory/entry-b.so",
+      "/warmup/nonexistent/directory/entry-d.so",
+      "/warmup/nonexistent/directory/entry-a.so",
+      "/warmup/nonexistent/directory/entry-c.so",
+  };
+  State state;
+  for (std::string_view const path : kPaths) {
+    auto piece = StringPiece(path.data(), path.size());
+    compiler_must_not_predict(piece);
+    findOrAdd(state.entries, piece, state.alloc);
+  }
+  for (Entry const& entry : state.entries) {
+    compiler_must_not_elide(entry.init);
+  }
 }
 
 SignalSafeElfCache::Path::Path(
@@ -72,18 +106,12 @@ bool operator<(
   return pathLess(cstring_view(lhs), cstring_view(rhs));
 }
 
-std::shared_ptr<ElfFile> SignalSafeElfCache::getFile(StringPiece p) {
-  struct cmp {
-    bool operator()(Entry const& a, StringPiece b) const noexcept {
-      return pathLess(
-          cstring_view(a.path), std::string_view(b.data(), b.size()));
-    }
-    bool operator()(StringPiece a, Entry const& b) const noexcept {
-      return pathLess(
-          std::string_view(a.data(), a.size()), cstring_view(b.path));
-    }
-  };
+bool SignalSafeElfCache::EntryLess::operator()(
+    std::string_view a, std::string_view b) const noexcept {
+  return pathLess(a, b);
+}
 
+std::shared_ptr<ElfFile> SignalSafeElfCache::getFile(StringPiece p) {
   sigset_t newsigs;
   sigset_t oldsigs;
   if (detail::signal_safe_libc::fill_signal_set(&newsigs) != 0 ||
@@ -99,21 +127,17 @@ std::shared_ptr<ElfFile> SignalSafeElfCache::getFile(StringPiece p) {
     state_.emplace();
   }
 
-  auto pos = state_->map.find(p, cmp{});
-  if (pos == state_->map.end()) {
-    state_->list.emplace_front(p, state_->alloc);
-    pos = state_->map.insert(state_->list.front()).first;
-  }
+  Entry const& entry = *findOrAdd(state_->entries, p, state_->alloc);
 
-  if (!pos->init) {
-    int r = pos->file->openAndFollow(cstring_view(pos->path).c_str());
-    pos->init = r == ElfFile::kSuccess;
+  if (!entry.init) {
+    int r = entry.file->openAndFollow(cstring_view(entry.path).c_str());
+    entry.init = r == ElfFile::kSuccess;
   }
-  if (!pos->init) {
+  if (!entry.init) {
     return nullptr;
   }
 
-  return pos->file;
+  return entry.file;
 }
 
 std::shared_ptr<ElfFile> ElfCache::getFile(StringPiece p) {

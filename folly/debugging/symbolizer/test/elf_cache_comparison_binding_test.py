@@ -19,6 +19,10 @@ import subprocess
 import unittest
 
 
+def moving(symbols):
+    return sorted(s for s in symbols if "_Rb_tree" in s or s in ("memmove", "memcpy"))
+
+
 class ElfCacheComparisonBindingTest(unittest.TestCase):
     def test_comparison_warmup(self) -> None:
         helper = os.environ["ELF_CACHE_COMPARISON"]
@@ -31,6 +35,7 @@ class ElfCacheComparisonBindingTest(unittest.TestCase):
         if not sanitized:
             env["LD_DEBUG"] = "bindings"
 
+        cold_inserts: set[str] = set()
         for warm in (False, True):
             with self.subTest(warm=warm):
                 args = [helper] if warm else [helper, "cold"]
@@ -48,10 +53,22 @@ class ElfCacheComparisonBindingTest(unittest.TestCase):
                 trace, end, _ = after.partition("comparison-end\n")
                 self.assertTrue(begin, stderr)
                 self.assertTrue(end, stderr)
+                _, begin, after = stderr.partition("lookup-begin\n")
+                insert_trace, end, _ = after.partition("lookup-end\n")
+                self.assertTrue(begin, stderr)
+                self.assertTrue(end, stderr)
                 if not sanitized:
-                    symbols = re.findall(r"normal symbol `([^']+)'", trace)
+                    bound = re.compile(r"normal symbol `([^']+)'")
+                    symbols = bound.findall(trace)
                     comparisons = [s for s in symbols if s in ("memcmp", "strlen")]
+                    inserts = bound.findall(insert_trace)
                     if warm:
                         self.assertEqual(comparisons, [], stderr)
+                        if not moving(cold_inserts):
+                            self.skipTest(
+                                "the cold run bound no tree or copy symbols here"
+                            )
+                        self.assertEqual(moving(inserts), [], stderr)
                     else:
                         self.assertIn("memcmp", comparisons, stderr)
+                        cold_inserts = set(inserts)
