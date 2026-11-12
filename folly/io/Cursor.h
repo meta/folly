@@ -1846,8 +1846,9 @@ class QueueAppender : public Writable<QueueAppender> {
     if (length() < sizeof(T)) [[unlikely]] {
       ensureSlowNoinline(sizeof(T));
     }
-    storeUnaligned<T>(queueCache_.writableData(), value);
-    queueCache_.appendUnsafe(n);
+    uint8_t* dest = queueCache_.writableData();
+    storeUnaligned<T>(dest, value);
+    queueCache_.setWritableData(dest + n);
   }
 
   using Writable<QueueAppender>::pushAtMost;

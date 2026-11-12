@@ -237,6 +237,13 @@ class IOBufQueue {
     void appendUnsafe(size_t n) { data_.cachedRange.first += n; }
 
     /**
+     * Same as appendUnsafe(p - writableData()), but takes the new start of the
+     * cached writable tail directly. The caller must guarantee that p points
+     * within the cached range.
+     */
+    void setWritableData(uint8_t* p) { data_.cachedRange.first = p; }
+
+    /**
      * Fill the cache of writable tail from the underlying IOBufQueue.
      */
     void fillCache() { queue_->fillWritableRangeCache(data_); }
