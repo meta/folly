@@ -19,6 +19,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <numbers>
 #include <type_traits>
 
 #include <folly/lang/Bits.h>
@@ -901,23 +902,23 @@ TEST_F(ConstexprMathTest, constexpr_exp_integral) {
   }
   {
     constexpr auto n = folly::constexpr_exp(1u); // unsigned
-    EXPECT_DOUBLE_EQ(folly::numbers::e, n);
+    EXPECT_DOUBLE_EQ(std::numbers::e, n);
   }
   {
     constexpr auto n = folly::constexpr_exp(1); // signed
-    EXPECT_DOUBLE_EQ(folly::numbers::e, n);
+    EXPECT_DOUBLE_EQ(std::numbers::e, n);
   }
   {
     constexpr auto n = folly::constexpr_exp(13u); // unsigned
-    EXPECT_DOUBLE_EQ(folly::constexpr_pow(folly::numbers::e, 13u), n);
+    EXPECT_DOUBLE_EQ(folly::constexpr_pow(std::numbers::e, 13u), n);
   }
   {
     constexpr auto n = folly::constexpr_exp(13); // signed positive
-    EXPECT_DOUBLE_EQ(folly::constexpr_pow(folly::numbers::e, 13u), n);
+    EXPECT_DOUBLE_EQ(folly::constexpr_pow(std::numbers::e, 13u), n);
   }
   {
     constexpr auto n = folly::constexpr_exp(-13); // signed negative
-    EXPECT_DOUBLE_EQ(1. / folly::constexpr_pow(folly::numbers::e, 13u), n);
+    EXPECT_DOUBLE_EQ(1. / folly::constexpr_pow(std::numbers::e, 13u), n);
   }
   {
     constexpr auto n = folly::constexpr_exp(4097u); // unsigned
@@ -991,7 +992,7 @@ TEST_F(ConstexprMathTest, constexpr_exp_floating) {
   {
     constexpr auto a = folly::constexpr_exp(1.);
     EXPECT_DOUBLE_EQ(std::exp(1.), a);
-    EXPECT_DOUBLE_EQ(folly::numbers::e, a);
+    EXPECT_DOUBLE_EQ(std::numbers::e, a);
   }
   {
     constexpr auto a = folly::constexpr_exp(3.3);
@@ -1037,7 +1038,7 @@ TEST_F(ConstexprMathTest, constexpr_log) {
     EXPECT_DOUBLE_EQ(0., a);
   }
   {
-    constexpr auto a = folly::constexpr_log(folly::numbers::e);
+    constexpr auto a = folly::constexpr_log(std::numbers::e);
     EXPECT_DOUBLE_EQ(1., a);
   }
   {
