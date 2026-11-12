@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -485,10 +486,9 @@ using detected_t = detected_or_t<nonesuch, T, A...>;
 //
 //  Note: the trait type is_detected differs here by being deferred.
 template <template <typename...> class T, typename... A>
-inline constexpr bool is_detected_v =
-    detected_or<nonesuch, T, A...>::value_t::value;
+inline constexpr bool is_detected_v = requires { typename T<A...>; };
 template <template <typename...> class T, typename... A>
-struct is_detected : detected_or<nonesuch, T, A...>::value_t {};
+struct is_detected : std::bool_constant<is_detected_v<T, A...>> {};
 
 namespace detail {
 constexpr std::size_t aligned_storage_default_align(std::size_t len) {
@@ -570,22 +570,29 @@ using aligned_storage_for_t = aligned_storage_t<sizeof(T), alignof(T)>;
 
 namespace traits_detail {
 
-#define FOLLY_HAS_TRUE_XXX(name)                                             \
-  template <typename T>                                                      \
-  using detect_##name = typename T::name;                                    \
-  template <class T>                                                         \
-  struct name##_is_true : std::is_same<typename T::name, std::true_type> {}; \
-  template <class T>                                                         \
-  struct has_true_##name                                                     \
-      : std::conditional<                                                    \
-            is_detected_v<detect_##name, T>,                                 \
-            name##_is_true<T>,                                               \
-            std::false_type>::type {}
+template <class T>
+concept has_IsRelocatable = requires { typename T::IsRelocatable; };
 
-FOLLY_HAS_TRUE_XXX(IsRelocatable);
-FOLLY_HAS_TRUE_XXX(IsZeroInitializable);
+template <class T>
+concept has_true_IsRelocatable =
+    std::same_as<typename T::IsRelocatable, std::true_type>;
 
-#undef FOLLY_HAS_TRUE_XXX
+template <class T>
+concept has_IsZeroInitializable = requires { typename T::IsZeroInitializable; };
+
+template <class T>
+concept has_true_IsZeroInitializable =
+    std::same_as<typename T::IsZeroInitializable, std::true_type>;
+
+template <class T, class U>
+concept is_equality_comparable_ = requires {
+  { std::declval<T>() == std::declval<U>() } -> std::convertible_to<bool>;
+};
+
+template <class T, class U>
+concept is_less_than_comparable_ = requires {
+  { std::declval<T>() < std::declval<U>() } -> std::convertible_to<bool>;
+};
 
 } // namespace traits_detail
 
@@ -602,44 +609,25 @@ struct Ignore {
 template <class...>
 using Ignored = Ignore;
 
-namespace traits_detail_IsEqualityComparable {
-Ignore operator==(Ignore, Ignore);
-
 template <class T, class U = T>
 struct IsEqualityComparable
-    : std::is_convertible<
-          decltype(std::declval<T>() == std::declval<U>()),
-          bool> {};
-} // namespace traits_detail_IsEqualityComparable
-
-/* using override */ using traits_detail_IsEqualityComparable::
-    IsEqualityComparable;
-
-namespace traits_detail_IsLessThanComparable {
-Ignore operator<(Ignore, Ignore);
+    : std::bool_constant<traits_detail::is_equality_comparable_<T, U>> {};
 
 template <class T, class U = T>
 struct IsLessThanComparable
-    : std::is_convertible<
-          decltype(std::declval<T>() < std::declval<U>()),
-          bool> {};
-} // namespace traits_detail_IsLessThanComparable
-
-/* using override */ using traits_detail_IsLessThanComparable::
-    IsLessThanComparable;
+    : std::bool_constant<traits_detail::is_less_than_comparable_<T, U>> {};
 
 template <class T>
 struct IsRelocatable
-    : std::conditional<
-          !require_sizeof<T> ||
-              is_detected_v<traits_detail::detect_IsRelocatable, T>,
-          traits_detail::has_true_IsRelocatable<T>,
+    : std::conditional_t<
+          !require_sizeof<T> || traits_detail::has_IsRelocatable<T>,
+          std::bool_constant<traits_detail::has_true_IsRelocatable<T>>,
 #if defined(__cpp_lib_is_trivially_relocatable) // P1144
           std::is_trivially_relocatable<T>
 #else
           std::is_trivially_copyable<T>
 #endif
-          >::type {
+          > {
 };
 
 template <class T>
@@ -647,15 +635,14 @@ struct IsRelocatable<const T> : IsRelocatable<T> {};
 
 template <class T>
 struct IsZeroInitializable
-    : std::conditional<
-          !require_sizeof<T> ||
-              is_detected_v<traits_detail::detect_IsZeroInitializable, T>,
-          traits_detail::has_true_IsZeroInitializable<T>,
+    : std::conditional_t<
+          !require_sizeof<T> || traits_detail::has_IsZeroInitializable<T>,
+          std::bool_constant<traits_detail::has_true_IsZeroInitializable<T>>,
           std::bool_constant< //
               !std::is_class<T>::value && //
               !std::is_union<T>::value && //
               !std::is_member_object_pointer<T>::value && // itanium
-              true>>::type {};
+              true>> {};
 
 namespace detail {
 template <bool>
