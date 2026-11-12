@@ -134,87 +134,68 @@ template <typename P, typename... A>
 using is_nothrow = std::bool_constant<traits<P>::template nothrow_v<A...>>;
 #endif
 
-template <bool IsVoid>
-struct conv_r_;
-template <>
-struct conv_r_<true> {
-  template <bool NX, typename R, typename FR>
-  using apply = std::true_type;
-};
-template <>
-struct conv_r_<false> {
-  template <typename R>
-  static void conv(R, decay_t<R>* = nullptr) noexcept;
-  template <
-      bool NX,
-      typename R,
-      typename FR,
-      bool C = noexcept(conv<R>(FOLLY_DECLVAL(FR)))>
-  static std::bool_constant<!NX || C> test(int);
-  template <bool NX, typename R, typename FR>
-  static std::false_type test(...);
-  template <bool NX, typename R, typename FR>
-  using apply = decltype(test<NX, R, FR>(0));
-};
+template <typename R>
+void conv_r_(R, decay_t<R>* = nullptr) noexcept;
 
 template <bool NX, typename R, typename FR>
-static inline constexpr bool conv_r_v_ =
-    conv_r_<std::is_void_v<R>>::template apply<NX, R, FR>::value;
+inline constexpr bool conv_r_v_ = std::is_void_v<R> || requires {
+  conv_r_<R>(FOLLY_DECLVAL(FR));
+  requires !NX || noexcept(conv_r_<R>(FOLLY_DECLVAL(FR)));
+};
 
 //  adapted from: http://en.cppreference.com/w/cpp/types/result_of, CC-BY-SA
 
 template <typename F, typename... A>
 using invoke_result_t = typename traits<F>::template result<A...>;
 
-template <typename Void, typename F, typename... A>
+template <typename F, typename... A>
+concept invocable_ = requires { typename invoke_result_t<F, A...>; };
+
+template <typename F, typename... A>
 struct invoke_result {};
 
 template <typename F, typename... A>
-struct invoke_result<std::void_t<invoke_result_t<F, A...>>, F, A...> {
+  requires invocable_<F, A...>
+struct invoke_result<F, A...> {
   using type = invoke_result_t<F, A...>;
 };
 
-template <typename Void, typename F, typename... A>
+template <typename F, typename... A>
 inline constexpr bool is_invocable_v = ok_<bool, F, A...>{false};
 
 template <typename F, typename... A>
-inline constexpr bool
-    is_invocable_v<std::void_t<invoke_result_t<F, A...>>, F, A...> = true;
+  requires invocable_<F, A...>
+inline constexpr bool is_invocable_v<F, A...> = true;
 
-template <typename Void, typename R, typename F, typename... A>
+template <typename R, typename F, typename... A>
 inline constexpr bool is_invocable_r_v = ok_<bool, R, F, A...>{false};
 
-// clang-format off
 template <typename R, typename F, typename... A>
-inline constexpr bool
-    is_invocable_r_v<std::void_t<invoke_result_t<F, A...>>, R, F, A...> =
-        conv_r_v_<false, R, invoke_result_t<F, A...>>;
-// clang-format on
+  requires invocable_<F, A...>
+inline constexpr bool is_invocable_r_v<R, F, A...> =
+    conv_r_v_<false, R, invoke_result_t<F, A...>>;
 
-template <typename Void, typename F, typename... A>
+template <typename F, typename... A>
 inline constexpr bool is_nothrow_invocable_v = ok_<bool, F, A...>{false};
 
 template <typename F, typename... A>
-inline constexpr bool
-    is_nothrow_invocable_v<std::void_t<invoke_result_t<F, A...>>, F, A...> =
-        is_nothrow<F, A...>::value;
+  requires invocable_<F, A...>
+inline constexpr bool is_nothrow_invocable_v<F, A...> =
+    is_nothrow<F, A...>::value;
 
-template <typename Void, typename R, typename F, typename... A>
+template <typename R, typename F, typename... A>
 inline constexpr bool is_nothrow_invocable_r_v = ok_<bool, R, F, A...>{false};
 
-// clang-format off
 template <typename R, typename F, typename... A>
-inline constexpr bool
-    is_nothrow_invocable_r_v<std::void_t<invoke_result_t<F, A...>>, R, F, A...> =
-        is_nothrow<F, A...>::value &&
-            conv_r_v_<true, R, invoke_result_t<F, A...>>;
-// clang-format on
+  requires invocable_<F, A...>
+inline constexpr bool is_nothrow_invocable_r_v<R, F, A...> =
+    is_nothrow<F, A...>::value && conv_r_v_<true, R, invoke_result_t<F, A...>>;
 
 } // namespace invoke_detail
 
 //  mimic: std::invoke_result, C++17
 template <typename F, typename... A>
-using invoke_result = invoke_detail::invoke_result<void, F, A...>;
+using invoke_result = invoke_detail::invoke_result<F, A...>;
 
 //  mimic: std::invoke_result_t, C++17
 using invoke_detail::invoke_result_t;
@@ -222,12 +203,12 @@ using invoke_detail::invoke_result_t;
 //  mimic: std::is_invocable, C++17
 template <typename F, typename... A>
 struct is_invocable
-    : std::bool_constant<invoke_detail::is_invocable_v<void, F, A...>> {};
+    : std::bool_constant<invoke_detail::is_invocable_v<F, A...>> {};
 
 //  mimic: std::is_invocable_r_v, C++17
 template <typename R, typename F, typename... A>
 inline constexpr bool is_invocable_r_v =
-    invoke_detail::is_invocable_r_v<void, R, F, A...>;
+    invoke_detail::is_invocable_r_v<R, F, A...>;
 
 //  mimic: std::is_invocable_r, C++17
 template <typename R, typename F, typename... A>
@@ -236,7 +217,7 @@ struct is_invocable_r : std::bool_constant<is_invocable_r_v<R, F, A...>> {};
 //  mimic: std::is_nothrow_invocable_v, C++17
 template <typename F, typename... A>
 inline constexpr bool is_nothrow_invocable_v =
-    invoke_detail::is_nothrow_invocable_v<void, F, A...>;
+    invoke_detail::is_nothrow_invocable_v<F, A...>;
 
 //  mimic: std::is_nothrow_invocable, C++17
 template <typename F, typename... A>
@@ -246,7 +227,7 @@ struct is_nothrow_invocable
 //  mimic: std::is_nothrow_invocable_r_v, C++17
 template <typename R, typename F, typename... Args>
 inline constexpr bool is_nothrow_invocable_r_v =
-    invoke_detail::is_nothrow_invocable_r_v<void, R, F, Args...>;
+    invoke_detail::is_nothrow_invocable_r_v<R, F, Args...>;
 
 //  mimic: std::is_nothrow_invocable_r, C++17
 template <typename R, typename F, typename... A>
@@ -311,36 +292,35 @@ struct invoke_traits : detail::invoke_traits_base<I> {
   //    inline static constexpr invoke_type invoke{};
 
   template <typename... A>
-  using invoke_result = invoke_detail::invoke_result<void, I, A...>;
+  using invoke_result = invoke_detail::invoke_result<I, A...>;
   template <typename... A>
   using invoke_result_t = invoke_detail::invoke_result_t<I, A...>;
   template <typename... A>
   inline static constexpr bool is_invocable_v =
-      invoke_detail::is_invocable_v<void, I, A...>;
+      invoke_detail::is_invocable_v<I, A...>;
   template <typename... A>
   struct is_invocable //
-      : std::bool_constant<invoke_detail::is_invocable_v<void, I, A...>> {};
+      : std::bool_constant<invoke_detail::is_invocable_v<I, A...>> {};
   template <typename R, typename... A>
   inline static constexpr bool is_invocable_r_v =
-      invoke_detail::is_invocable_r_v<void, R, I, A...>;
+      invoke_detail::is_invocable_r_v<R, I, A...>;
   template <typename R, typename... A>
   struct is_invocable_r //
       : std::bool_constant< //
-            invoke_detail::is_invocable_r_v<void, R, I, A...>> {};
+            invoke_detail::is_invocable_r_v<R, I, A...>> {};
   template <typename... A>
   inline static constexpr bool is_nothrow_invocable_v =
-      invoke_detail::is_nothrow_invocable_v<void, I, A...>;
+      invoke_detail::is_nothrow_invocable_v<I, A...>;
   template <typename... A>
   struct is_nothrow_invocable //
-      : std::bool_constant<
-            invoke_detail::is_nothrow_invocable_v<void, I, A...>> {};
+      : std::bool_constant<invoke_detail::is_nothrow_invocable_v<I, A...>> {};
   template <typename R, typename... A>
   inline static constexpr bool is_nothrow_invocable_r_v =
-      invoke_detail::is_nothrow_invocable_r_v<void, R, I, A...>;
+      invoke_detail::is_nothrow_invocable_r_v<R, I, A...>;
   template <typename R, typename... A>
   struct is_nothrow_invocable_r //
       : std::bool_constant<
-            invoke_detail::is_nothrow_invocable_r_v<void, R, I, A...>> {};
+            invoke_detail::is_nothrow_invocable_r_v<R, I, A...>> {};
 };
 
 //  invoke_first_match
@@ -369,7 +349,7 @@ struct invoke_first_match : private Invoker... {
   template <size_t... Idx, typename... A>
   static constexpr size_t first_(std::index_sequence<Idx...>, tag_t<A...>) {
     constexpr std::array<bool, sizeof...(Idx) + 1> r = {
-        {invoke_detail::is_invocable_v<void, at<Idx> const&, A...>..., false}};
+        {invoke_detail::is_invocable_v<at<Idx> const&, A...>..., false}};
     for (size_t i = 0; i < sizeof...(Invoker); ++i) {
       if (r[i]) {
         return i;
@@ -859,6 +839,6 @@ struct tag_invoke_result
 ///         obj_key_equal>;
 ///     object_set objs;
 template <typename Arg, typename Fun>
-concept passable_to = invoke_detail::is_invocable_v<void, Fun, Arg>;
+concept passable_to = invoke_detail::is_invocable_v<Fun, Arg>;
 
 } // namespace folly
