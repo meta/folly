@@ -669,41 +669,30 @@ atomic_value_type_t<Atomic> atomic_fetch_modify_fn::operator()(
 namespace detail {
 
 template <typename Atomic>
-using detect_atomic_fetch_min = decltype(std::declval<Atomic&>().fetch_min(
-    atomic_value_type_t<Atomic>{}, std::memory_order_relaxed));
+inline constexpr bool has_atomic_fetch_min_member_v =
+    requires(Atomic& atomic, std::memory_order const mo) {
+      atomic.fetch_min(atomic_value_type_t<Atomic>{}, mo);
+    } || requires(Atomic& atomic) {
+      atomic.fetch_min(atomic_value_type_t<Atomic>{});
+    };
 
 template <typename Atomic>
-using detect_atomic_fetch_max = decltype(std::declval<Atomic&>().fetch_max(
-    atomic_value_type_t<Atomic>{}, std::memory_order_relaxed));
-
-template <typename Atomic>
-using detect_atomic_fetch_min_nomo =
-    decltype(std::declval<Atomic&>().fetch_min(atomic_value_type_t<Atomic>{}));
-
-template <typename Atomic>
-using detect_atomic_fetch_max_nomo =
-    decltype(std::declval<Atomic&>().fetch_max(atomic_value_type_t<Atomic>{}));
-
-template <typename Atomic>
-inline constexpr bool has_atomic_fetch_min_member_v = false //
-    || is_detected_v<detect_atomic_fetch_min, Atomic> //
-    || is_detected_v<detect_atomic_fetch_min_nomo, Atomic> //
-    ;
-
-template <typename Atomic>
-inline constexpr bool has_atomic_fetch_max_member_v = false //
-    || is_detected_v<detect_atomic_fetch_max, Atomic> //
-    || is_detected_v<detect_atomic_fetch_max_nomo, Atomic> //
-    ;
+inline constexpr bool has_atomic_fetch_max_member_v =
+    requires(Atomic& atomic, std::memory_order const mo) {
+      atomic.fetch_max(atomic_value_type_t<Atomic>{}, mo);
+    } || requires(Atomic& atomic) {
+      atomic.fetch_max(atomic_value_type_t<Atomic>{});
+    };
 
 template <typename Atomic>
 atomic_value_type_t<Atomic> atomic_fetch_min_(
     Atomic& atomic,
     atomic_value_type_t<Atomic> const value,
     std::memory_order const mo) {
-  if constexpr (is_detected_v<detect_atomic_fetch_min, Atomic>) {
+  using value_type = atomic_value_type_t<Atomic>;
+  if constexpr (requires { atomic.fetch_min(value_type{}, mo); }) {
     return atomic.fetch_min(value, mo);
-  } else if constexpr (is_detected_v<detect_atomic_fetch_min_nomo, Atomic>) {
+  } else if constexpr (requires { atomic.fetch_min(value_type{}); }) {
     return atomic.fetch_min(value);
   } else {
     auto const op = [=](auto const& v) { return value < v ? value : v; };
@@ -716,9 +705,10 @@ atomic_value_type_t<Atomic> atomic_fetch_max_(
     Atomic& atomic,
     atomic_value_type_t<Atomic> const value,
     std::memory_order const mo) {
-  if constexpr (is_detected_v<detect_atomic_fetch_max, Atomic>) {
+  using value_type = atomic_value_type_t<Atomic>;
+  if constexpr (requires { atomic.fetch_max(value_type{}, mo); }) {
     return atomic.fetch_max(value, mo);
-  } else if constexpr (is_detected_v<detect_atomic_fetch_max_nomo, Atomic>) {
+  } else if constexpr (requires { atomic.fetch_max(value_type{}); }) {
     return atomic.fetch_max(value);
   } else {
     auto const op = [=](auto const& v) { return v < value ? value : v; };

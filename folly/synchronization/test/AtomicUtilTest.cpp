@@ -1097,12 +1097,7 @@ struct AtomicFetchMinMaxStrong {
 static_assert(!std::is_default_constructible_v<AtomicFetchMinMaxStrong>);
 
 static_assert( //
-    !is_detected_v< //
-        detail::detect_atomic_fetch_max,
-        std::atomic<AtomicFetchMinMaxStrong>>);
-static_assert( //
-    !is_detected_v< //
-        detail::detect_atomic_fetch_max_nomo,
+    !detail::has_atomic_fetch_max_member_v<
         std::atomic<AtomicFetchMinMaxStrong>>);
 
 //  unlike std::atomic<AtomicFetchMinMaxStrong>, this one does have the members,
@@ -1142,13 +1137,9 @@ struct AtomicFetchMinMaxMemberStrong {
 //  substitution failure, not a hard error, so that such a type simply falls
 //  back to the c/x loop
 static_assert( //
-    !is_detected_v< //
-        detail::detect_atomic_fetch_min,
-        AtomicFetchMinMaxMemberStrong>);
+    !detail::has_atomic_fetch_min_member_v<AtomicFetchMinMaxMemberStrong>);
 static_assert( //
-    !is_detected_v< //
-        detail::detect_atomic_fetch_max,
-        AtomicFetchMinMaxMemberStrong>);
+    !detail::has_atomic_fetch_max_member_v<AtomicFetchMinMaxMemberStrong>);
 
 } // namespace
 
