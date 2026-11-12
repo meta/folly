@@ -557,7 +557,7 @@ class small_vector
   }
 
   small_vector(std::initializer_list<value_type> il) {
-    constructImpl(il.begin(), il.end(), std::false_type());
+    constructRange(il.begin(), il.end());
   }
 
   explicit small_vector(size_type n) {
@@ -576,10 +576,11 @@ class small_vector
 
   template <class Arg>
   explicit small_vector(Arg arg1, Arg arg2) {
-    // Forward using std::is_arithmetic to get to the proper
-    // implementation; this disambiguates between the iterators and
-    // (size_t, value_type) meaning for this constructor.
-    constructImpl(arg1, arg2, std::is_arithmetic<Arg>());
+    if constexpr (std::is_arithmetic_v<Arg>) {
+      constructFill(arg1, arg2);
+    } else {
+      constructRange(arg1, arg2);
+    }
   }
 
   ~small_vector() { destroy(); }
@@ -1004,10 +1005,11 @@ class small_vector
 
   template <class Arg>
   iterator insert(const_iterator p, Arg arg1, Arg arg2) {
-    // Forward using std::is_arithmetic to get to the proper
-    // implementation; this disambiguates between the iterators and
-    // (size_t, value_type) meaning for this function.
-    return insertImpl(unconst(p), arg1, arg2, std::is_arithmetic<Arg>());
+    if constexpr (std::is_arithmetic_v<Arg>) {
+      return insertFill(p, arg1, arg2);
+    } else {
+      return insertRange(unconst(p), arg1, arg2);
+    }
   }
 
   iterator insert(const_iterator p, std::initializer_list<value_type> il) {
@@ -1145,10 +1147,8 @@ class small_vector
     this->resetSizePolicy();
   }
 
-  // The std::false_type argument is part of disambiguating the
-  // iterator insert functions from integral types (see insert().)
   template <class It>
-  iterator insertImpl(iterator pos, It first, It last, std::false_type) {
+  iterator insertRange(iterator pos, It first, It last) {
     if (first == last) {
       return pos;
     }
@@ -1178,10 +1178,7 @@ class small_vector
     }
   }
 
-  iterator insertImpl(
-      iterator pos, size_type n, const value_type& val, std::true_type) {
-    // The true_type means this should call the size_t,value_type
-    // overload.  (See insert().)
+  iterator insertFill(const_iterator pos, size_type n, const value_type& val) {
     return insert(pos, n, val);
   }
 
@@ -1190,13 +1187,10 @@ class small_vector
     freeHeap();
   }
 
-  // The std::false_type argument came from std::is_arithmetic as part
-  // of disambiguating an overload (see the comment in the
-  // constructor).
   template <class It>
-  void constructImpl(It first, It last, std::false_type) {
+  void constructRange(It first, It last) {
     using categ = typename std::iterator_traits<It>::iterator_category;
-    if (std::is_same<categ, std::input_iterator_tag>::value) {
+    if constexpr (std::is_same_v<categ, std::input_iterator_tag>) {
       // With iterators that only allow a single pass, we can't really
       // do anything sane here.
       auto rollback = makeGuard([&] { destroy(); });
@@ -1236,9 +1230,7 @@ class small_vector
     }
   }
 
-  // The true_type means we should forward to the size_t,value_type
-  // overload.
-  void constructImpl(size_type n, value_type const& val, std::true_type) {
+  void constructFill(size_type n, value_type const& val) {
     FOLLY_PUSH_WARNING
     FOLLY_GCC_DISABLE_WARNING("-Warray-bounds")
     doConstruct(n, [&](void* p) { new (p) value_type(val); });
