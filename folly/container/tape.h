@@ -20,10 +20,12 @@
 #include <folly/Range.h>
 #include <folly/container/Iterator.h>
 #include <folly/container/detail/tape_detail.h>
+#include <folly/lang/Ordering.h>
 #include <folly/memory/UninitializedMemoryHacks.h>
 
 #include <algorithm>
 #include <cassert>
+#include <compare>
 #include <initializer_list>
 #include <iterator>
 #include <numeric>
@@ -127,6 +129,35 @@ class tape {
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
+ private:
+  using scalar_cmp_fn = std::compare_three_way;
+  template <typename T = scalar_value_type>
+  using scalar_cmp_result_t = std::compare_three_way_result_t<T>;
+
+  static constexpr bool byte_ordered =
+      std::is_pointer_v<typename const_reference::iterator> &&
+      (std::is_same_v<scalar_value_type, char> ||
+       std::is_same_v<scalar_value_type, signed char> ||
+       std::is_same_v<scalar_value_type, unsigned char>);
+
+  template <typename T = scalar_value_type>
+  using elem_cmp_result_t = std::
+      conditional_t<byte_ordered, std::strong_ordering, scalar_cmp_result_t<T>>;
+
+  struct elem_cmp_fn {
+    template <typename T = scalar_value_type>
+    elem_cmp_result_t<T> operator()(
+        const const_reference& x, const const_reference& y) const {
+      if constexpr (byte_ordered) {
+        return x.compare(y) <=> 0;
+      } else {
+        return detail::lexicographical_compare_three_way(
+            x.begin(), x.end(), y.begin(), y.end(), scalar_cmp_fn{});
+      }
+    }
+  };
+
+ public:
   // concepts (defined as statics because no local concepts) ------
 
   template <typename I>
@@ -354,13 +385,12 @@ class tape {
     return x.markers_ == y.markers_ && x.data_ == y.data_;
   }
 
-  friend bool operator<(const tape& x, const tape& y) {
-    return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end());
+  friend auto operator<=>(const tape& a, const tape& b)
+    requires std::three_way_comparable<scalar_value_type>
+  {
+    return detail::lexicographical_compare_three_way(
+        a.begin(), a.end(), b.begin(), b.end(), elem_cmp_fn{});
   }
-
-  friend bool operator>(const tape& x, const tape& y) { return y < x; }
-  friend bool operator<=(const tape& x, const tape& y) { return !(y < x); }
-  friend bool operator>=(const tape& x, const tape& y) { return !(x < y); }
 
   folly::Range<const difference_type*> markers() const { return markers_; }
   reference scalars() const {

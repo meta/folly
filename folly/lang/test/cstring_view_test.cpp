@@ -16,6 +16,7 @@
 
 #include <folly/lang/cstring_view.h>
 
+#include <compare>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -661,6 +662,23 @@ INSTANTIATE_TYPED_TEST_SUITE_P( //
     c_string,
     CStringViewCmpTest,
     char const*);
+
+TEST_F(CStringViewTest, ThreeWayComparison) {
+  const cstring_view a("abc");
+  const cstring_view b("abd");
+  const cstring_view prefix("ab");
+  const cstring_view empty;
+  static_assert(std::same_as<decltype(a <=> b), std::strong_ordering>);
+  static_assert(noexcept(a <=> b));
+  EXPECT_EQ(a <=> b, std::strong_ordering::less);
+  EXPECT_EQ(b <=> a, std::strong_ordering::greater);
+  EXPECT_EQ(a <=> a, std::strong_ordering::equal);
+  EXPECT_TRUE((prefix <=> a) < 0);
+  EXPECT_TRUE((empty <=> prefix) < 0);
+  EXPECT_EQ(
+      (folly::wcstring_view(L"abc") <=> folly::wcstring_view(L"abd")),
+      std::strong_ordering::less);
+}
 
 // std::hash tests
 TEST_F(CStringViewTest, StdHashBasic) {

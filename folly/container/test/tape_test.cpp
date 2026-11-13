@@ -16,8 +16,10 @@
 
 #include <folly/container/tape.h>
 
+#include <compare>
 #include <forward_list>
 #include <iterator>
+#include <limits>
 #include <vector>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
@@ -235,6 +237,81 @@ TEST(Tape, Ordering) {
   ASSERT_GT(st2, st1);
   ASSERT_GE(st2, st1);
   ASSERT_GE(st1, st1);
+  static_assert(std::same_as<decltype(st1 <=> st2), std::strong_ordering>);
+  EXPECT_EQ(st1 <=> st2, std::strong_ordering::less);
+  EXPECT_EQ(st2 <=> st1, std::strong_ordering::greater);
+  EXPECT_EQ(st1 <=> st1, std::strong_ordering::equal);
+  EXPECT_TRUE((folly::string_tape{"abc"} <=> st1) < 0);
+  EXPECT_TRUE((folly::string_tape{} <=> st1) < 0);
+}
+
+TEST(Tape, ThreeWayComparisonWeakElements) {
+  struct WeakValue {
+    int value;
+    bool operator==(const WeakValue&) const = default;
+    std::weak_ordering operator<=>(const WeakValue& other) const {
+      return value <=> other.value;
+    }
+  };
+  static_assert(std::three_way_comparable<WeakValue>);
+  const folly::tape<std::vector<WeakValue>> a{
+      std::vector<WeakValue>{{1}, {2}}, std::vector<WeakValue>{{3}}};
+  const folly::tape<std::vector<WeakValue>> b{
+      std::vector<WeakValue>{{1}, {2}}, std::vector<WeakValue>{{4}}};
+  const folly::tape<std::vector<WeakValue>> prefix{
+      std::vector<WeakValue>{{1}, {2}}};
+  static_assert(std::same_as<decltype(a <=> b), std::weak_ordering>);
+  EXPECT_EQ(a <=> b, std::weak_ordering::less);
+  EXPECT_EQ(b <=> a, std::weak_ordering::greater);
+  EXPECT_EQ(a <=> a, std::weak_ordering::equivalent);
+  EXPECT_TRUE((prefix <=> a) < 0);
+  EXPECT_LT(a, b);
+  EXPECT_LE(a, a);
+  EXPECT_GT(b, a);
+  EXPECT_GE(a, a);
+  EXPECT_NE(a, b);
+}
+
+TEST(Tape, NoLegacyOrderingFallback) {
+  struct LegacyValue {
+    int value;
+    bool operator==(const LegacyValue&) const = default;
+    bool operator<(const LegacyValue& other) const {
+      return value < other.value;
+    }
+  };
+  using LegacyTape = folly::tape<std::vector<LegacyValue>>;
+  static_assert(!std::three_way_comparable<LegacyTape>);
+  const LegacyTape values{std::vector<LegacyValue>{{1}}};
+  EXPECT_EQ(values.size(), 1);
+  EXPECT_EQ(values.front()[0], LegacyValue{1});
+  EXPECT_LT(values.front()[0], LegacyValue{2});
+}
+
+TEST(Tape, ThreeWayComparisonUnordered) {
+  const folly::tape<std::vector<double>> a{
+      std::vector<double>{std::numeric_limits<double>::quiet_NaN(), 1}};
+  const folly::tape<std::vector<double>> b{std::vector<double>{0, 2}};
+  static_assert(std::same_as<decltype(a <=> b), std::partial_ordering>);
+  EXPECT_EQ(a <=> b, std::partial_ordering::unordered);
+  EXPECT_EQ(b <=> a, std::partial_ordering::unordered);
+  EXPECT_FALSE(a < b);
+  EXPECT_FALSE(a <= b);
+  EXPECT_FALSE(a > b);
+  EXPECT_FALSE(a >= b);
+}
+
+TEST(Tape, ThreeWayComparisonUnsignedByteOrdering) {
+  const folly::string_tape high{"\x80"};
+  const folly::string_tape low{"\x7f"};
+  EXPECT_EQ(high <=> low, std::strong_ordering::greater);
+  EXPECT_GT(high, low);
+  const folly::tape<std::vector<signed char>> signedHigh{
+      std::vector<signed char>{static_cast<signed char>(0x80)}};
+  const folly::tape<std::vector<signed char>> signedLow{
+      std::vector<signed char>{0x7f}};
+  EXPECT_EQ(signedHigh <=> signedLow, std::strong_ordering::greater);
+  EXPECT_GT(signedHigh, signedLow);
 }
 
 TEST(Tape, RecordBuilder) {

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <compare>
 #include <cstdint>
 #include <stdexcept>
 
@@ -31,6 +32,26 @@ constexpr ordering to_ordering(T c) {
 }
 
 namespace detail {
+
+template <typename I1, typename I2, typename C = std::compare_three_way>
+constexpr auto lexicographical_compare_three_way(
+    I1 first1, I1 last1, I2 first2, I2 last2, C cmp = {})
+    -> decltype(cmp(*first1, *first2)) {
+  using result_type = decltype(cmp(*first1, *first2));
+  for (; first1 != last1 && first2 != last2; ++first1, ++first2) {
+    const auto result = cmp(*first1, *first2);
+    if (result != 0) {
+      return result;
+    }
+  }
+  if (first1 != last1) {
+    return result_type::greater;
+  }
+  if (first2 != last2) {
+    return result_type::less;
+  }
+  return result_type::equivalent;
+}
 
 template <typename C, ordering o, bool ne>
 struct cmp_pred : private C {

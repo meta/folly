@@ -16,6 +16,8 @@
 
 #include <folly/FBVector.h>
 
+#include <compare>
+#include <limits>
 #include <list>
 #include <map>
 #include <memory>
@@ -233,6 +235,70 @@ TEST(FBVector, reserveConsistency) {
     EXPECT_EQ(fb1.size(), 0);
     fb1.shrink_to_fit();
   }
+}
+
+TEST(FBVector, threeWayComparison) {
+  const fbvector<int> a{1, 2};
+  const fbvector<int> b{1, 3};
+  const fbvector<int> prefix{1};
+  const fbvector<int> empty;
+  static_assert(std::same_as<decltype(a <=> b), std::strong_ordering>);
+  EXPECT_EQ(a <=> b, std::strong_ordering::less);
+  EXPECT_EQ(b <=> a, std::strong_ordering::greater);
+  EXPECT_EQ(a <=> a, std::strong_ordering::equal);
+  EXPECT_TRUE((prefix <=> a) < 0);
+  EXPECT_TRUE((empty <=> prefix) < 0);
+}
+
+TEST(FBVector, threeWayComparisonWeakElements) {
+  struct WeakValue {
+    int value;
+    bool operator==(const WeakValue&) const = default;
+    std::weak_ordering operator<=>(const WeakValue& other) const {
+      return value <=> other.value;
+    }
+  };
+  static_assert(std::three_way_comparable<WeakValue>);
+  const fbvector<WeakValue> a{{1}, {2}};
+  const fbvector<WeakValue> b{{1}, {3}};
+  const fbvector<WeakValue> prefix{{1}};
+  static_assert(std::same_as<decltype(a <=> b), std::weak_ordering>);
+  EXPECT_EQ(a <=> b, std::weak_ordering::less);
+  EXPECT_EQ(b <=> a, std::weak_ordering::greater);
+  EXPECT_EQ(a <=> a, std::weak_ordering::equivalent);
+  EXPECT_TRUE((prefix <=> a) < 0);
+  EXPECT_LT(a, b);
+  EXPECT_LE(a, a);
+  EXPECT_GT(b, a);
+  EXPECT_GE(a, a);
+  EXPECT_NE(a, b);
+}
+
+TEST(FBVector, noLegacyOrderingFallback) {
+  struct LegacyValue {
+    int value;
+    bool operator==(const LegacyValue&) const = default;
+    bool operator<(const LegacyValue& other) const {
+      return value < other.value;
+    }
+  };
+  static_assert(!std::three_way_comparable<fbvector<LegacyValue>>);
+  const fbvector<LegacyValue> values{{1}};
+  EXPECT_EQ(values.size(), 1);
+  EXPECT_EQ(values.front(), LegacyValue{1});
+  EXPECT_LT(values.front(), LegacyValue{2});
+}
+
+TEST(FBVector, threeWayComparisonUnordered) {
+  const fbvector<double> a{std::numeric_limits<double>::quiet_NaN(), 1};
+  const fbvector<double> b{0, 2};
+  static_assert(std::same_as<decltype(a <=> b), std::partial_ordering>);
+  EXPECT_EQ(a <=> b, std::partial_ordering::unordered);
+  EXPECT_EQ(b <=> a, std::partial_ordering::unordered);
+  EXPECT_FALSE(a < b);
+  EXPECT_FALSE(a <= b);
+  EXPECT_FALSE(a > b);
+  EXPECT_FALSE(a >= b);
 }
 
 TEST(FBVector, vectorOfMaps) {

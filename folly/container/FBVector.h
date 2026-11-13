@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <compare>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
@@ -42,6 +43,7 @@
 #include <folly/lang/CheckedMath.h>
 #include <folly/lang/Exception.h>
 #include <folly/lang/Hint.h>
+#include <folly/lang/Ordering.h>
 #include <folly/memory/Malloc.h>
 
 //=============================================================================
@@ -1621,16 +1623,12 @@ class fbvector {
     return size() == other.size() && std::equal(begin(), end(), other.begin());
   }
 
-  bool operator<(const fbvector& other) const {
-    return std::lexicographical_compare(
-        begin(), end(), other.begin(), other.end());
+  friend auto operator<=>(const fbvector& a, const fbvector& b)
+    requires std::three_way_comparable<T>
+  {
+    return detail::lexicographical_compare_three_way(
+        a.begin(), a.end(), b.begin(), b.end());
   }
-
-  bool operator>(const fbvector& other) const { return other < *this; }
-
-  bool operator<=(const fbvector& other) const { return !(*this > other); }
-
-  bool operator>=(const fbvector& other) const { return !(*this < other); }
 
   //===========================================================================
   //---------------------------------------------------------------------------

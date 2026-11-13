@@ -108,6 +108,7 @@ folly_add_library(
     folly_lang_checked_math
     folly_lang_exception
     folly_lang_hint
+    folly_lang_ordering
     folly_likely
     folly_memory_malloc
     folly_scope_guard
@@ -352,6 +353,7 @@ folly_add_library(
   EXPORTED_DEPS
     folly_container_detail_tape_detail
     folly_container_iterator
+    folly_lang_ordering
     folly_memory_uninitialized_memory_hacks
     folly_portability
     folly_range

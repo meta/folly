@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cassert>
+#include <compare>
 #include <cstring>
 #include <functional>
 #include <iosfwd>
@@ -321,21 +322,13 @@ class basic_cstring_view {
   friend bool operator==(self lhs, self rhs) noexcept {
     return view_type(lhs) == view_type(rhs);
   }
-  friend bool operator<(self lhs, self rhs) noexcept {
-    return view_type(lhs) < view_type(rhs);
-  }
-  friend bool operator<=(self lhs, self rhs) noexcept {
-    return view_type(lhs) <= view_type(rhs);
-  }
-  friend bool operator>(self lhs, self rhs) noexcept {
-    return view_type(lhs) > view_type(rhs);
-  }
-  friend bool operator>=(self lhs, self rhs) noexcept {
-    return view_type(lhs) >= view_type(rhs);
+  friend auto operator<=>(self lhs, self rhs) noexcept {
+    return view_type(lhs) <=> view_type(rhs);
   }
 };
 
 using cstring_view = basic_cstring_view<char>;
+using wcstring_view = basic_cstring_view<wchar_t>;
 
 template <typename Char, typename Traits>
 std::basic_ostream<Char, Traits>& operator<<(

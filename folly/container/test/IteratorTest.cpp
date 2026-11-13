@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <compare>
 #include <concepts>
 #include <cstddef>
 #include <deque>
@@ -989,6 +990,21 @@ TEST(IndexIterator, UseProxyReferences) {
 
   expected = {1, 1, 1, 1};
   ASSERT_EQ(expected, iv.v_);
+}
+
+TEST(IndexIterator, ThreeWayComparison) {
+  using Container = std::array<int, 3>;
+  using Iterator = folly::index_iterator<Container>;
+  using ConstIterator = folly::index_iterator<const Container>;
+  static_assert(std::three_way_comparable<Iterator, std::strong_ordering>);
+  Container values{};
+  const Iterator first{values, 0};
+  const Iterator last{values, values.size()};
+  const ConstIterator constFirst{values, 0};
+  EXPECT_EQ(first <=> last, std::strong_ordering::less);
+  EXPECT_EQ(last <=> first, std::strong_ordering::greater);
+  EXPECT_EQ(first <=> constFirst, std::strong_ordering::equal);
+  EXPECT_EQ(constFirst <=> first, std::strong_ordering::equal);
 }
 
 TEST(IndexIterator, OperatorArrowForNonProxies) {
