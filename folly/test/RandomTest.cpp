@@ -339,11 +339,26 @@ TEST(Random, randDoubleSharesCanonicalGenerator) {
   EXPECT_EQ(rng, copy);
 
   copy = rng;
-  uniform_real_distribution<double> dist(-5, 17);
+  std::uniform_real_distribution<double> dist(-5, 17);
   for (int i = 0; i < 100; ++i) {
     EXPECT_EQ(Random::randDouble(-5, 17, rng), dist(copy));
   }
   EXPECT_EQ(rng, copy);
+
+  std::mt19937_64 rng64(123);
+  auto copy64 = rng64;
+  for (int i = 0; i < 100; ++i) {
+    EXPECT_EQ(Random::randDouble(-5, 17, rng64), dist(copy64));
+  }
+  EXPECT_EQ(rng64, copy64);
+
+  std::minstd_rand narrow(123);
+  auto narrowCopy = narrow;
+  uniform_real_distribution<double> narrowDist(-5, 17);
+  for (int i = 0; i < 100; ++i) {
+    EXPECT_EQ(Random::randDouble(-5, 17, narrow), narrowDist(narrowCopy));
+  }
+  EXPECT_EQ(narrow, narrowCopy);
   Random::randDouble01(std::mt19937{});
   Random::randDouble(-5, 17, std::mt19937{});
 }

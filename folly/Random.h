@@ -51,6 +51,29 @@ using LegacyGenerator = __gnu_cxx::sfmt19937;
 using LegacyGenerator = std::mt19937;
 #endif
 
+template <typename RNG>
+double random_double_std_compatible(double min, double max, RNG& rng) {
+  constexpr bool full32 =
+      RNG::min() == 0 && RNG::max() == std::numeric_limits<uint32_t>::max();
+  constexpr bool full64 =
+      RNG::min() == 0 && RNG::max() == std::numeric_limits<uint64_t>::max();
+  if constexpr (full32 || full64) {
+    double sum = static_cast<double>(rng());
+    if constexpr (full32) {
+      double high = static_cast<double>(rng());
+      sum += high * 0x1p32;
+    }
+    double value = sum * 0x1p-64;
+    if (value >= 1) {
+      value = std::nextafter(1.0, 0.0);
+    }
+    double result = value * (max - min) + min;
+    return result < max ? result : std::nextafter(max, min);
+  } else {
+    return uniform_real_distribution<double>(min, max)(rng);
+  }
+}
+
 } // namespace detail
 
 /**
@@ -427,7 +450,7 @@ class Random {
       return inRange ? result : std::nextafter(max, min);
     }
     auto& engine = rng;
-    return uniform_real_distribution<double>(min, max)(engine);
+    return detail::random_double_std_compatible(min, max, engine);
   }
 };
 
