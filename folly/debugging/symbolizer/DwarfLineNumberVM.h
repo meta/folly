@@ -35,63 +35,66 @@ class DwarfLineNumberVM {
   bool findAddress(uintptr_t target, Path& file, uint64_t& line);
 
   /** Gets full file name at given index including directory. */
-  Path getFullFileName(uint64_t index) const;
+  DwarfParseResult<Path> getFullFileName(uint64_t index) const;
 
  private:
-  bool init();
+  DwarfParseResult<bool> init();
   void reset();
 
   /** Execute until we commit one new row to the line number matrix */
-  bool next(std::span<const uint8_t>& program);
+  DwarfParseResult<bool> next(DwarfCursor& program);
   enum StepResult {
     CONTINUE, // Continue feeding opcodes
     COMMIT, // Commit new <address, file, line> tuple
     END, // End of sequence
   };
   /** Execute one opcode */
-  StepResult step(std::span<const uint8_t>& program);
+  DwarfParseResult<StepResult> step(DwarfCursor& program);
 
   struct FileName {
     folly::StringPiece relativeName;
     // 0 = current compilation directory
     // otherwise, 1-based index in the list of include directories
-    uint64_t directoryIndex;
+    uint64_t directoryIndex = 0;
   };
 
   /** Read one FileName object, advance sp */
-  static bool readFileName(std::span<const uint8_t>& program, FileName& fn);
+  static DwarfParseResult<folly::Optional<FileName>> readFileName(
+      DwarfCursor& program);
 
   /**
    * Get file name at given index; may be in the initial table
    * (fileNames_) or defined using DW_LNE_define_file (and we reexecute
    * enough of the program to find it, if so)
    */
-  FileName getFileName(uint64_t index) const;
+  DwarfParseResult<FileName> getFileName(uint64_t index) const;
 
   /** Get include directory at given index */
-  folly::StringPiece getIncludeDirectory(uint64_t index) const;
+  DwarfParseResult<folly::StringPiece> getIncludeDirectory(
+      uint64_t index) const;
 
   /**
    * Execute opcodes until finding a DW_LNE_define_file and return true;
    * return file at the end.
    */
-  bool nextDefineFile(std::span<const uint8_t>& program, FileName& fn) const;
+  DwarfParseResult<folly::Optional<FileName>> nextDefineFile(
+      DwarfCursor& program) const;
 
   // Initialization
   bool initializationSuccess_ = false;
-  bool is64Bit_;
+  bool is64Bit_ = false;
   std::span<const uint8_t> data_;
   folly::StringPiece compilationDirectory_;
   const DebugSections& debugSections_;
 
   // Header
-  uint16_t version_;
-  uint8_t minLength_;
-  bool defaultIsStmt_;
-  int8_t lineBase_;
-  uint8_t lineRange_;
-  uint8_t opcodeBase_;
-  const uint8_t* standardOpcodeLengths_;
+  uint16_t version_ = 0;
+  uint8_t minLength_ = 0;
+  bool defaultIsStmt_ = false;
+  int8_t lineBase_ = 0;
+  uint8_t lineRange_ = 0;
+  uint8_t opcodeBase_ = 0;
+  std::span<const uint8_t> standardOpcodeLengths_;
 
   // 6.2.4 The Line Number Program Header.
   struct {

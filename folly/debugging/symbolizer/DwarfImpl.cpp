@@ -959,7 +959,12 @@ DwarfParseResult<bool> DwarfImpl::findInlinedSubroutineDieForAddress(
       return false;
     }
 
-    locations[numFound].file = lineVM.getFullFileName(*callFile);
+    auto callFileName = lineVM.getFullFileName(*callFile);
+    if (callFileName.hasError()) {
+      parseError = callFileName.error();
+      return false;
+    }
+    locations[numFound].file = *callFileName;
     locations[numFound].line = *callLine;
 
     // DW_AT_abstract_origin is a reference. There a 3 types of references:

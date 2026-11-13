@@ -247,6 +247,17 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "dwarf_line_number_vm_test",
+    srcs = ["DwarfLineNumberVMTest.cpp"],
+    deps = [
+        "//folly:varint",
+        "//folly/debugging/symbolizer:dwarf",
+        "//folly/lang:cstring_view",
+        "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "dwarf_util_test",
     srcs = ["DwarfUtilTest.cpp"],
     deps = [
