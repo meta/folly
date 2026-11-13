@@ -83,6 +83,11 @@ bool json_pointer::is_prefix_of(json_pointer const& other) const noexcept {
   return std::equal(tokens_.cbegin(), tokens_.cend(), other_begin, other_end);
 }
 
+bool json_pointer::is_strict_prefix_of(
+    json_pointer const& other) const noexcept {
+  return tokens_.size() < other.tokens_.size() && is_prefix_of(other);
+}
+
 std::vector<std::string> const& json_pointer::tokens() const {
   return tokens_;
 }

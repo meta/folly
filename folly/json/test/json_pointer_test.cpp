@@ -75,8 +75,27 @@ TEST_F(JsonPointerTest, BoundedBytes) {
 TEST_F(JsonPointerTest, IsPrefixTo) {
   EXPECT_TRUE(
       json_pointer::parse("/a/b").is_prefix_of(json_pointer::parse("/a/b/c")));
+  EXPECT_TRUE(
+      json_pointer::parse("/a/b").is_prefix_of(json_pointer::parse("/a/b")));
   EXPECT_FALSE(
       json_pointer::parse("/a/b").is_prefix_of(json_pointer::parse("/a/d/e")));
   EXPECT_FALSE(
       json_pointer::parse("/a/b/c").is_prefix_of(json_pointer::parse("/a/b")));
+}
+
+TEST_F(JsonPointerTest, IsStrictPrefixOf) {
+  EXPECT_TRUE(
+      json_pointer::parse("/a/b").is_strict_prefix_of(
+          json_pointer::parse("/a/b/c")));
+  EXPECT_TRUE(
+      json_pointer::parse("").is_strict_prefix_of(json_pointer::parse("/a")));
+  EXPECT_FALSE(
+      json_pointer::parse("/a/b").is_strict_prefix_of(
+          json_pointer::parse("/a/b")));
+  EXPECT_FALSE(
+      json_pointer::parse("/a/b").is_strict_prefix_of(
+          json_pointer::parse("/a/d/e")));
+  EXPECT_FALSE(
+      json_pointer::parse("/a/b/c").is_strict_prefix_of(
+          json_pointer::parse("/a/b")));
 }

@@ -1624,6 +1624,15 @@ TEST(Dynamic, JSONPointer) {
         target.get_ptr(json_pointer::parse("/foo/01")), std::invalid_argument);
   }
 
+  {
+    auto err = target.try_get_ptr(json_pointer::parse("/foo/ 1")).error();
+    EXPECT_EQ(err_code::index_not_numeric, err.error_code);
+    EXPECT_EQ(1, err.index);
+    EXPECT_EQ(target.get_ptr(json_pointer::parse("/foo")), err.context);
+    EXPECT_THROW(
+        target.get_ptr(json_pointer::parse("/foo/ 1")), std::invalid_argument);
+  }
+
   // non-existent keys/indexes
   {
     auto err = ary.try_get_ptr(json_pointer::parse("/3")).error();

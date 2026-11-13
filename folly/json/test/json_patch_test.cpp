@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include <cstdint>
+#include <limits>
+#include <string_view>
+
 #include <folly/json/json.h>
 #include <folly/json_patch.h>
 #include <folly/json_pointer.h>
@@ -23,6 +27,7 @@
 using folly::dynamic;
 using folly::json_patch;
 using folly::json_pointer;
+using namespace std::string_view_literals;
 
 using err_code = folly::json_patch::parse_error_code;
 using op_code = folly::json_patch::patch_operation_code;
@@ -133,14 +138,6 @@ TEST_F(JsonPatchTest, InvalidPatches) {
       json_patch::try_parse(
           folly::parseJson(
               R"([{"op": "copy", "from" : "c/d/e", "path" : "/a/b/c"}])"))
-          .error()
-          .error_code);
-
-  EXPECT_EQ(
-      err_code::overlapping_pointers,
-      json_patch::try_parse(
-          folly::parseJson(
-              R"([{"op": "move", "from" : "/a/b/c", "path" : "/a/b/c"}])"))
           .error()
           .error_code);
 
@@ -358,4 +355,285 @@ TEST_F(JsonPatchTest, FailedOpIndex) {
       json_patch::patch_application_error_code::test_failed,
       res.error().error_code);
   EXPECT_EQ(1, res.error().index);
+}
+
+TEST_F(JsonPatchTest, AddCopyAndMoveAtDocumentRoot) {
+  {
+    constexpr auto patchText =
+        R"([{"op":"add","path":"","value":{"new":1}}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"old":true})");
+    ASSERT_TRUE(patch.apply(doc).hasValue());
+    EXPECT_EQ(folly::parseJson(R"({"new":1})"), doc);
+  }
+  {
+    constexpr auto patchText = R"([{"op":"copy","from":"/a","path":""}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":{"x":1}})");
+    ASSERT_TRUE(patch.apply(doc).hasValue());
+    EXPECT_EQ(folly::parseJson(R"({"x":1})"), doc);
+  }
+  {
+    constexpr auto patchText = R"([{"op":"move","from":"/a","path":""}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":{"x":1},"b":2})");
+    ASSERT_TRUE(patch.apply(doc).hasValue());
+    EXPECT_EQ(folly::parseJson(R"({"x":1})"), doc);
+  }
+}
+
+TEST_F(JsonPatchTest, MoveAppendFromNestedArrayElement) {
+  constexpr auto patchText = R"([{"op":"move","from":"/0/x","path":"/-"}])"sv;
+  auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+
+  dynamic doc = dynamic::array(dynamic::object("x", 1));
+  doc.push_back(99);
+
+  ASSERT_TRUE(patch.apply(doc).hasValue());
+  EXPECT_EQ(folly::parseJson(R"([{},99,1])"), doc);
+}
+
+TEST_F(JsonPatchTest, MoveArrayElementUsesPostRemovalDestinationIndex) {
+  {
+    constexpr auto patchText = R"([{"op":"move","from":"/1","path":"/0"}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"(["bar","baz"])");
+    ASSERT_TRUE(patch.apply(doc).hasValue());
+    EXPECT_EQ(folly::parseJson(R"(["baz","bar"])"), doc);
+  }
+  {
+    constexpr auto patchText = R"([{"op":"move","from":"/0","path":"/2"}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"([1,2,3])");
+    ASSERT_TRUE(patch.apply(doc).hasValue());
+    EXPECT_EQ(folly::parseJson(R"([2,3,1])"), doc);
+  }
+}
+
+TEST_F(JsonPatchTest, CopyDescendantToAncestorUsesSnapshot) {
+  constexpr folly::StringPiece value =
+      "01234567890123456789012345678901234567890123456789";
+  constexpr auto patchText = R"([{"op":"copy","from":"/a/b","path":"/a"}])"sv;
+  auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+  dynamic doc = dynamic::object("a", dynamic::object("b", value));
+
+  ASSERT_TRUE(patch.apply(doc).hasValue());
+  const dynamic expected = dynamic::object("a", value);
+  EXPECT_EQ(expected, doc);
+}
+
+TEST_F(JsonPatchTest, CopyArrayElementToSameArrayAppend) {
+  constexpr auto patchText = R"([
+    {"op":"add","path":"/arr","value":["x"]},
+    {"op":"copy","from":"/arr/0","path":"/arr/-"}
+  ])"sv;
+  auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+  dynamic doc = dynamic::object();
+
+  ASSERT_TRUE(patch.apply(doc).hasValue());
+  EXPECT_EQ(folly::parseJson(R"({"arr":["x","x"]})"), doc);
+}
+
+TEST_F(JsonPatchTest, MoveToSameLocationIsNoOp) {
+  constexpr auto patchText = R"([{"op":"move","from":"/a/b","path":"/a/b"}])"sv;
+  auto parsed = json_patch::try_parse(folly::parseJson(patchText));
+  ASSERT_TRUE(parsed.hasValue());
+
+  dynamic doc = folly::parseJson(R"({"a":{"b":[1,2]}})");
+  ASSERT_TRUE(parsed->apply(doc).hasValue());
+  EXPECT_EQ(folly::parseJson(R"({"a":{"b":[1,2]}})"), doc);
+}
+
+TEST_F(JsonPatchTest, AddAtNumericArrayEnd) {
+  {
+    constexpr auto patchText = R"([{"op":"add","path":"/a/2","value":3}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":[1,2]})");
+
+    ASSERT_TRUE(patch.apply(doc).hasValue());
+    EXPECT_EQ(folly::parseJson(R"({"a":[1,2,3]})"), doc);
+  }
+  {
+    constexpr auto patchText = R"([{"op":"add","path":"/a/3","value":3}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":[1,2]})");
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::other,
+        result.error().error_code);
+    EXPECT_EQ(folly::parseJson(R"({"a":[1,2]})"), doc);
+  }
+}
+
+TEST_F(JsonPatchTest, AddMissingIntermediateDoesNotInsertAtAncestor) {
+  {
+    constexpr auto patchText =
+        R"([{"op":"add","path":"/missing/final","value":1}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = dynamic::object();
+    const dynamic expected = dynamic::object();
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::other,
+        result.error().error_code);
+    EXPECT_EQ(expected, doc);
+  }
+  {
+    constexpr auto patchText =
+        R"([{"op":"add","path":"/a/2/final","value":1}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":[{},{}]})");
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::other,
+        result.error().error_code);
+    EXPECT_EQ(folly::parseJson(R"({"a":[{},{}]})"), doc);
+  }
+}
+
+TEST_F(JsonPatchTest, IgnoresMalformedIrrelevantFrom) {
+  constexpr auto patchText =
+      R"([{"op":"add","from":123,"path":"/a","value":1}])"sv;
+  auto parsed = json_patch::try_parse(folly::parseJson(patchText));
+  ASSERT_TRUE(parsed.hasValue());
+
+  dynamic doc = dynamic::object();
+  ASSERT_TRUE(parsed->apply(doc).hasValue());
+  EXPECT_EQ(folly::parseJson(R"({"a":1})"), doc);
+}
+
+TEST_F(JsonPatchTest, ArrayIndexTokensMustBeCanonicalDecimal) {
+  constexpr std::string_view patchTexts[] = {
+      R"([{"op":"test","path":"/a/+1","value":20}])",
+      R"([{"op":"test","path":"/a/ 1","value":20}])",
+      R"([{"op":"test","path":"/a/1 ","value":20}])",
+      R"([{"op":"test","path":"/a/-0","value":10}])",
+      R"([{"op":"test","path":"/a/+0","value":10}])",
+      R"([{"op":"test","path":"/a/0001","value":20}])",
+      R"([{"op":"add","path":"/a/ 2","value":30}])",
+      R"([{"op":"add","path":"/a/2 ","value":30}])",
+  };
+  const auto expected = folly::parseJson(R"({"a":[10,20]})");
+  for (auto patchText : patchTexts) {
+    SCOPED_TRACE(patchText);
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = expected;
+    EXPECT_TRUE(patch.apply(doc).hasError());
+    EXPECT_EQ(expected, doc);
+  }
+
+  {
+    constexpr auto patchText = R"([
+      {"op":"add","path":"/a/ 1","value":7},
+      {"op":"add","path":"/a/01","value":8}
+    ])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":{}})");
+    ASSERT_TRUE(patch.apply(doc).hasValue());
+    EXPECT_EQ(folly::parseJson(R"({"a":{" 1":7,"01":8}})"), doc);
+  }
+}
+
+TEST_F(JsonPatchTest, TestLargeIntegerDoesNotEqualRoundedDouble) {
+  {
+    constexpr auto patchText =
+        R"([{"op":"test","path":"/a","value":9007199254740992.0}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":9007199254740993})");
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::test_failed,
+        result.error().error_code);
+  }
+  {
+    constexpr auto patchText =
+        R"([{"op":"test","path":"/a","value":[9007199254740992.0]}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":[9007199254740993]})");
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::test_failed,
+        result.error().error_code);
+  }
+  {
+    constexpr auto patchText =
+        R"([{"op":"test","path":"/a","value":9223372036854775808.0}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = dynamic::object("a", std::numeric_limits<int64_t>::max());
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::test_failed,
+        result.error().error_code);
+  }
+  {
+    constexpr auto patchText =
+        R"([{"op":"test","path":"/a","value":-9223372036854775808.0}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = dynamic::object("a", std::numeric_limits<int64_t>::min());
+
+    EXPECT_TRUE(patch.apply(doc).hasValue());
+  }
+  {
+    constexpr auto patchText =
+        R"([{"op":"test","path":"/a","value":[1.0,{"b":2.0}]}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    dynamic doc = folly::parseJson(R"({"a":[1,{"b":2}]})");
+
+    EXPECT_TRUE(patch.apply(doc).hasValue());
+  }
+}
+
+TEST_F(JsonPatchTest, FailedMoveRestoresSource) {
+  {
+    constexpr auto patchText = R"([{"op":"move","from":"/0","path":"/1/x"}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    const dynamic expected = folly::parseJson(R"([1,{"x":2}])");
+    dynamic doc = expected;
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::other,
+        result.error().error_code);
+    EXPECT_EQ(expected, doc);
+  }
+  {
+    constexpr auto patchText =
+        R"([{"op":"move","from":"/a/b","path":"/missing/final"}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    const dynamic expected = folly::parseJson(R"({"a":{"b":1}})");
+    dynamic doc = expected;
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::other,
+        result.error().error_code);
+    EXPECT_EQ(expected, doc);
+  }
+  {
+    constexpr auto patchText = R"([{"op":"move","from":"/0","path":"/3"}])"sv;
+    auto patch = json_patch::try_parse(folly::parseJson(patchText)).value();
+    const dynamic expected = folly::parseJson(R"([1,2,3])");
+    dynamic doc = expected;
+
+    auto result = patch.apply(doc);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(
+        json_patch::patch_application_error_code::other,
+        result.error().error_code);
+    EXPECT_EQ(expected, doc);
+  }
 }

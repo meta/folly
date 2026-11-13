@@ -56,9 +56,15 @@ class json_pointer {
   static json_pointer parse(std::string_view str);
 
   /*
-   * Return true if this pointer is proper to prefix to another pointer
+   * Return true if this pointer is a prefix of another pointer. Equal
+   * pointers are prefixes of each other.
    */
   bool is_prefix_of(json_pointer const& other) const noexcept;
+
+  /*
+   * Return true if this pointer is a prefix of another, longer pointer.
+   */
+  bool is_strict_prefix_of(json_pointer const& other) const noexcept;
 
   /*
    * Get access to the parsed tokens for applications that want to traverse

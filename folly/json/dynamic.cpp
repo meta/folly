@@ -473,6 +473,16 @@ dynamic::try_get_ptr(json_pointer const& jsonPtr) const& {
         curr = nullptr;
         continue;
       }
+      // RFC 6901 array indices are decimal digits only. `tryTo` accepts
+      // surrounding whitespace, so reject non-digit tokens before using it.
+      bool is_canonical_index = !it->empty();
+      for (char const c : *it) {
+        is_canonical_index &= (c >= '0' && c <= '9');
+      }
+      if (!is_canonical_index) {
+        return makeUnexpected(
+            error{err_code::index_not_numeric, it.index, prev});
+      }
       auto const idx = tryTo<size_t>(*it);
       if (!idx.hasValue()) {
         return makeUnexpected(

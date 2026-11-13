@@ -18,6 +18,7 @@
 
 #include <glog/logging.h>
 
+#include <folly/Conv.h>
 #include <folly/container/Enumerate.h>
 
 namespace folly {
@@ -64,7 +65,10 @@ Expected<json_patch, json_patch::parse_error> json_patch::try_parse(
 
     // extract 'from' attribute
     {
-      auto const* from_ptr = elem.get_ptr(kFromTag);
+      auto const* from_ptr =
+          (op_str == kOperationMove || op_str == kOperationCopy)
+          ? elem.get_ptr(kFromTag)
+          : nullptr;
       if (from_ptr) {
         if (!from_ptr->isString()) {
           return makeUnexpected(parse_error{err_code::invalid_shape, &elem});
@@ -131,8 +135,7 @@ Expected<json_patch, json_patch::parse_error> json_patch::try_parse(
       if (!op.from) {
         return makeUnexpected(parse_error{err_code::missing_from_attr, &elem});
       }
-      // is from a proper prefix to path?
-      if (op.from->is_prefix_of(op.path)) {
+      if (op.from->is_strict_prefix_of(op.path)) {
         return makeUnexpected(
             parse_error{err_code::overlapping_pointers, &elem});
       }
@@ -158,6 +161,50 @@ std::vector<json_patch::patch_operation> const& json_patch::ops() const {
 }
 
 namespace {
+
+bool numbers_equal(dynamic const& lhs, dynamic const& rhs) {
+  if (lhs.type() == rhs.type()) {
+    return lhs == rhs;
+  }
+  auto const& int_value = lhs.isInt() ? lhs : rhs;
+  auto const& double_value = lhs.isInt() ? rhs : lhs;
+  auto const exact = tryTo<int64_t>(double_value.getDouble());
+  return exact.hasValue() && *exact == int_value.getInt();
+}
+
+bool json_values_equal(dynamic const& lhs, dynamic const& rhs) {
+  if (lhs.isNumber() && rhs.isNumber()) {
+    return numbers_equal(lhs, rhs);
+  }
+  if (lhs.type() != rhs.type()) {
+    return false;
+  }
+  if (lhs.isArray()) {
+    if (lhs.size() != rhs.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < lhs.size(); ++i) {
+      if (!json_values_equal(lhs[i], rhs[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (lhs.isObject()) {
+    if (lhs.size() != rhs.size()) {
+      return false;
+    }
+    for (auto const& item : lhs.items()) {
+      auto const it = rhs.find(item.first);
+      if (it == rhs.items().end() ||
+          !json_values_equal(item.second, it->second)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return lhs == rhs;
+}
 
 // clang-format off
 Expected<Unit, json_patch::patch_application_error_code>
@@ -188,43 +235,65 @@ do_remove(dynamic::resolved_json_pointer<dynamic>& ptr) {
   return makeUnexpected(error_code::other);
 }
 
+// Moves from `value` only when the add succeeds.
 // clang-format off
 Expected<Unit, json_patch::patch_application_error_code>
 // clang-format on
 do_add(
     dynamic::resolved_json_pointer<dynamic>& ptr,
-    const dynamic& value,
-    const std::string& last_token) {
+    dynamic&& value,
+    json_pointer const& path) {
   using app_err_code = json_patch::patch_application_error_code;
   using res_err_code = dynamic::json_pointer_resolution_error_code;
+
+  auto const& tokens = path.tokens();
+  auto const failed_at_last_token = !tokens.empty() && !ptr.hasValue() &&
+      ptr.error().index == tokens.size() - 1;
 
   // element found: see if parent is object or array
   if (ptr.hasValue()) {
     // root element, or key in object - replace (per RFC)
     if (ptr->parent == nullptr || ptr->parent->isObject()) {
-      *ptr->value = value;
-    }
-    // valid index in array: insert at index and shift right
-    if (ptr->parent && ptr->parent->isArray()) {
-      ptr->parent->insert(ptr->parent->begin() + ptr->parent_index, value);
+      *ptr->value = std::move(value);
+    } else if (ptr->parent->isArray()) {
+      // valid index in array: insert at index and shift right
+      ptr->parent->insert(
+          ptr->parent->begin() + ptr->parent_index, std::move(value));
     }
   } else {
     // see if we can add value, based on pointer resolution state
     switch (ptr.error().error_code) {
-      // key not found. can only happen in object - add new key-value
+      // key not found: only the final token may name a new object member
       case res_err_code::key_not_found: {
+        if (!failed_at_last_token) {
+          return makeUnexpected(app_err_code::other);
+        }
         DCHECK(ptr.error().context->isObject());
-        ptr.error().context->insert(last_token, value);
+        ptr.error().context->insert(tokens.back(), std::move(value));
         break;
       }
       // special '-' index in array - do append operation
       case res_err_code::append_requested: {
+        if (!failed_at_last_token) {
+          return makeUnexpected(app_err_code::other);
+        }
         DCHECK(ptr.error().context->isArray());
-        ptr.error().context->push_back(value);
+        ptr.error().context->push_back(std::move(value));
         break;
       }
+      // a numeric index equal to the array size is also an append
+      case res_err_code::index_out_of_bounds: {
+        auto const* context = ptr.error().context;
+        if (failed_at_last_token && context != nullptr && context->isArray()) {
+          if (auto const index = tryTo<size_t>(tokens.back());
+              index.hasValue() && *index == context->size()) {
+            ptr.error().context->push_back(std::move(value));
+            break;
+          }
+        }
+        return makeUnexpected(app_err_code::other);
+      }
       case res_err_code::other:
-      case res_err_code::index_out_of_bounds:
       case res_err_code::index_not_numeric:
       case res_err_code::index_has_leading_zero:
       case res_err_code::element_not_object_or_array:
@@ -253,7 +322,7 @@ json_patch::apply(dynamic& obj) const {
         if (!resolved_path.hasValue()) {
           return makeUnexpected(error{error_code::path_not_found, index});
         }
-        if (*resolved_path->value != *op.value) {
+        if (!json_values_equal(*resolved_path->value, *op.value)) {
           return makeUnexpected(error{error_code::test_failed, index});
         }
         break;
@@ -266,7 +335,7 @@ json_patch::apply(dynamic& obj) const {
       }
       case op_code::add: {
         DCHECK(op.value.has_value());
-        auto ret = do_add(resolved_path, *op.value, op.path.tokens().back());
+        auto ret = do_add(resolved_path, dynamic(*op.value), op.path);
         if (ret.hasError()) {
           return makeUnexpected(error{ret.error(), index});
         }
@@ -286,16 +355,27 @@ json_patch::apply(dynamic& obj) const {
         if (!resolved_from.hasValue()) {
           return makeUnexpected(error{error_code::from_not_found, index});
         }
+        if (*op.from == op.path) {
+          break;
+        }
+
+        dynamic value = std::move(*resolved_from->value);
         {
-          auto ret = do_add(
-              resolved_path, *resolved_from->value, op.path.tokens().back());
+          auto ret = do_remove(resolved_from);
           if (ret.hasError()) {
+            *resolved_from->value = std::move(value);
             return makeUnexpected(error{ret.error(), index});
           }
         }
         {
-          auto ret = do_remove(resolved_from);
+          auto resolved_destination = obj.try_get_ptr(op.path);
+          auto ret = do_add(resolved_destination, std::move(value), op.path);
           if (ret.hasError()) {
+            auto rollback_ptr = obj.try_get_ptr(*op.from);
+            // NOLINTNEXTLINE(bugprone-use-after-move)
+            auto rollback = do_add(rollback_ptr, std::move(value), *op.from);
+            DCHECK(rollback.hasValue());
+            (void)rollback;
             return makeUnexpected(error{ret.error(), index});
           }
         }
@@ -307,13 +387,10 @@ json_patch::apply(dynamic& obj) const {
         if (!resolved_from.hasValue()) {
           return makeUnexpected(error{error_code::from_not_found, index});
         }
-        {
-          DCHECK(!op.path.tokens().empty());
-          auto ret = do_add(
-              resolved_path, *resolved_from->value, op.path.tokens().back());
-          if (ret.hasError()) {
-            return makeUnexpected(error{ret.error(), index});
-          }
+        auto ret =
+            do_add(resolved_path, dynamic(*resolved_from->value), op.path);
+        if (ret.hasError()) {
+          return makeUnexpected(error{ret.error(), index});
         }
         break;
       }
