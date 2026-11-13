@@ -306,7 +306,7 @@ class LifoSemHead {
     assert(!isLocked());
     assert(!isNodeIdx());
     auto rv = LifoSemHead{bits + SeqIncr + delta};
-    if (FOLLY_UNLIKELY(rv.isNodeIdx())) {
+    if (rv.isNodeIdx()) [[unlikely]] {
       // value has overflowed into the isNodeIdx bit
       rv = LifoSemHead{(rv.bits & ~IsNodeIdxMask) | (IsNodeIdxMask - 1)};
     }
@@ -515,7 +515,7 @@ struct LifoSemBase {
     UniquePtr node = allocateNode();
 
     auto rv = tryWaitOrPush(*node);
-    if (FOLLY_UNLIKELY(rv == WaitResult::SHUTDOWN)) {
+    if (rv == WaitResult::SHUTDOWN) [[unlikely]] {
       assert(isShutdown());
       throw ShutdownSemError("wait() would block but semaphore is shut down");
     }
@@ -536,7 +536,7 @@ struct LifoSemBase {
           node->handoff().wait();
         }
       }
-      if (FOLLY_UNLIKELY(node->isShutdownNotice())) {
+      if (node->isShutdownNotice()) [[unlikely]] {
         // this wait() didn't consume a value, it was triggered by shutdown
         throw ShutdownSemError(
             "blocking wait() interrupted by semaphore shutdown");
@@ -735,7 +735,7 @@ struct LifoSemBase {
           return WaitResult::PUSH;
         }
 
-        if (FOLLY_UNLIKELY(head.isShutdown())) {
+        if (head.isShutdown()) [[unlikely]] {
           return WaitResult::SHUTDOWN;
         }
 

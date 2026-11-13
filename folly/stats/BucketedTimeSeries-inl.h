@@ -94,7 +94,7 @@ template <typename VT, typename CT>
 bool BucketedTimeSeries<VT, CT>::addValueAggregated(
     TimePoint now, const ValueType& total, uint64_t nsamples) {
   if (isAllTime()) {
-    if (FOLLY_UNLIKELY(empty())) {
+    if (empty()) [[unlikely]] {
       firstTime_ = now;
       latestTime_ = now;
     } else if (now > latestTime_) {
@@ -107,7 +107,7 @@ bool BucketedTimeSeries<VT, CT>::addValueAggregated(
   }
 
   size_t bucketIdx;
-  if (FOLLY_UNLIKELY(empty())) {
+  if (empty()) [[unlikely]] {
     // First data point we've ever seen
     firstTime_ = now;
     latestTime_ = now;
@@ -115,7 +115,7 @@ bool BucketedTimeSeries<VT, CT>::addValueAggregated(
   } else if (now > latestTime_) {
     // More recent time.  Need to update the buckets.
     bucketIdx = updateBuckets(now);
-  } else if (FOLLY_LIKELY(now == latestTime_)) {
+  } else if (now == latestTime_) [[likely]] {
     // Current time.
     bucketIdx = getBucketIdx(now);
   } else {

@@ -97,7 +97,7 @@ void DigestBuilder<DigestT>::append(double value) {
   auto cpuLocalBuf =
       &cpuLocalBuffers_[AccessSpreader<>::cachedCurrent(numBuffers)];
   auto g = std::unique_lock(cpuLocalBuf->mutex, std::try_to_lock);
-  if (FOLLY_UNLIKELY(!g.owns_lock())) {
+  if (!g.owns_lock()) [[unlikely]] {
     // If the mutex is already held by another thread, either build() is
     // running, or this or that thread have a stale stripe (possibly because the
     // thread migrated right after the call to cachedCurrent()). So invalidate
@@ -117,7 +117,7 @@ void DigestBuilder<DigestT>::append(double value) {
   // preallocate here.
 
   cpuLocalBuf->buffer.push_back(value);
-  if (FOLLY_UNLIKELY(cpuLocalBuf->buffer.size() == bufferSize_)) {
+  if (cpuLocalBuf->buffer.size() == bufferSize_) [[unlikely]] {
     if (!cpuLocalBuf->digest) {
       cpuLocalBuf->digest = std::make_unique<DigestT>(digestSize_);
     }

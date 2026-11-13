@@ -23,7 +23,7 @@ void SocketFds::cloneToSendFromOrDfatal(const SocketFds& other) {
     ptr_.reset();
   } else {
     auto* fds = std::get_if<ToSendPair>(other.ptr_.get());
-    if (FOLLY_UNLIKELY(fds == nullptr)) {
+    if (fds == nullptr) [[unlikely]] {
       LOG(DFATAL) << "SocketFds was in 'received' state, not cloning";
       ptr_.reset();
     } else {
@@ -53,7 +53,7 @@ SocketFds::Received SocketFds::releaseReceived() {
 
 std::optional<SocketFds::ToSendPair> SocketFds::releaseToSendAndSeqNum() {
   auto* fdsPtr = std::get_if<ToSendPair>(ptr_.get());
-  if (FOLLY_UNLIKELY(fdsPtr == nullptr)) {
+  if (fdsPtr == nullptr) [[unlikely]] {
     // This can "legitimately" happen if a client wrongly sends FDs to a
     // server method that is not expecting them. Then, `THeader::fds`
     // in a Thrift request-response handler will retain the received
@@ -72,7 +72,7 @@ std::optional<SocketFds::ToSendPair> SocketFds::releaseToSendAndSeqNum() {
 void SocketFds::setFdSocketSeqNumOnce(SeqNum seqNum) {
   // The type is unsigned because Thrift IDL only supports signed.
   DCHECK_GE(seqNum, 0) << "Sequence number must be nonnegative";
-  if (FOLLY_LIKELY(ptr_ != nullptr)) {
+  if (ptr_ != nullptr) [[likely]] {
     std::visit(
         [seqNum](auto&& v) {
           DCHECK_EQ(kNoSeqNum, v.second) << "Can only set sequence number once";
@@ -85,7 +85,7 @@ void SocketFds::setFdSocketSeqNumOnce(SeqNum seqNum) {
 }
 
 SocketFds::SeqNum SocketFds::getFdSocketSeqNum() const {
-  if (FOLLY_LIKELY(ptr_ != nullptr)) {
+  if (ptr_ != nullptr) [[likely]] {
     auto seqNum = std::visit([](auto&& v) { return v.second; }, *ptr_);
     if (seqNum >= 0) {
       return seqNum;
@@ -106,7 +106,7 @@ SocketFds::SeqNum detail::addSocketFdsSeqNum(
     return SocketFds::kNoSeqNum;
   }
   const auto gap = std::numeric_limits<SocketFds::SeqNum>::max() - a;
-  if (FOLLY_LIKELY(b <= gap)) {
+  if (b <= gap) [[likely]] {
     return a + b;
   }
   return b - gap - 1; // wrap around through 0, modulo max

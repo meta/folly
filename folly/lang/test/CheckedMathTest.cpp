@@ -28,7 +28,7 @@ namespace {
 template <typename T, typename T2>
 FOLLY_ERASE T check_folly_checked_add_(T const a, T2 const b) {
   T r{};
-  if (FOLLY_UNLIKELY(!folly::checked_add(&r, a, b))) {
+  if (!folly::checked_add(&r, a, b)) [[unlikely]] {
     auto const ac = a;
     auto const bc = b;
     folly::detail::keep_sink_nx(ac, bc);
