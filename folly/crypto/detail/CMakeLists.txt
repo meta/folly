@@ -37,8 +37,22 @@ if (IS_X86_64_ARCH)
     PRIVATE
       -mno-avx
       -mno-avx2
-      -mno-sse2
   )
+  if (APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Apple SDK math.h declares _Float16 functions that require SSE2 on x86.
+    # Disable auto-vectorization without disabling the target feature.
+    target_compile_options(
+      folly_crypto_detail_math_operation_simple_obj
+      PRIVATE
+        -fno-vectorize
+        -fno-slp-vectorize
+    )
+  else ()
+    target_compile_options(
+      folly_crypto_detail_math_operation_simple_obj
+      PRIVATE -mno-sse2
+    )
+  endif ()
 endif ()
 
 folly_add_library(
