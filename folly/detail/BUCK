@@ -94,6 +94,7 @@ fb_dirsync_cpp_library(
     name = "ip_address",
     srcs = ["IPAddress.cpp"],
     headers = ["IPAddress.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
         "//folly/portability:fmt_compile",
@@ -106,6 +107,7 @@ fb_dirsync_cpp_library(
 fb_dirsync_cpp_library(
     name = "ip_address_source",
     headers = ["IPAddressSource.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
         "fbsource//third-party/fmt:fmt",

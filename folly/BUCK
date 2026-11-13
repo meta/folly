@@ -1111,6 +1111,7 @@ fb_dirsync_cpp_library(
         "MacAddress.h",
         "SocketAddress.h",
     ],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     compiler_flags = [
         "-fno-omit-frame-pointer",
     ],
