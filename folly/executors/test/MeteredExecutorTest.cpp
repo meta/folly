@@ -503,6 +503,57 @@ TEST_F(MeteredExecutorTest, PauseResumeStress) {
   dexec->join();
 }
 
+TEST_F(MeteredExecutorTest, RealThreadConcurrentStress) {
+  // Exercises modifyState()'s CAS with genuine OS-thread concurrency (as
+  // opposed to PauseResumeStress, which uses DeterministicSchedule's mocked
+  // atomics to explore interleavings deterministically but does not exercise
+  // real hardware memory ordering). This is meant to catch any regression
+  // from relaxing the CAS from seq_cst to acq_rel: producers hammer add()
+  // concurrently with pause()/resume() from independent threads while a pool
+  // of real worker threads drains the wrapped executor.
+  createAdapter(1, std::make_unique<CPUThreadPoolExecutor>(4));
+  MeteredExecutor* metered =
+      dynamic_cast<MeteredExecutor*>(getKeepAlive(1).get());
+
+  constexpr int kNumProducers = 8;
+  constexpr int kTasksPerProducer = 2000;
+  std::atomic<uint64_t> executed{0};
+
+  std::vector<std::thread> producers;
+  for (int p = 0; p < kNumProducers; ++p) {
+    producers.emplace_back([&] {
+      for (int i = 0; i < kTasksPerProducer; ++i) {
+        add([&] { executed.fetch_add(1, std::memory_order_relaxed); }, 1);
+      }
+    });
+  }
+
+  std::atomic<bool> stopPauser{false};
+  std::thread pauser([&] {
+    while (!stopPauser.load(std::memory_order_relaxed)) {
+      metered->pause();
+      metered->resume();
+    }
+  });
+
+  for (auto& t : producers) {
+    t.join();
+  }
+  stopPauser.store(true, std::memory_order_relaxed);
+  pauser.join();
+
+  // Ensure the executor isn't left paused, then drain everything.
+  metered->resume();
+  folly::Baton<> baton;
+  add([&] { baton.post(); }, 1);
+  baton.wait();
+
+  EXPECT_EQ(
+      static_cast<uint64_t>(kNumProducers) * kTasksPerProducer,
+      executed.load());
+  EXPECT_EQ(0, metered->pendingTasks());
+}
+
 namespace {
 
 // Simulate saturation regime (queue almost always non-empty) on a
