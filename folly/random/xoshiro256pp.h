@@ -159,7 +159,109 @@ class xoshiro256pp {
   }
 
   void calc() noexcept {
-    for (uint64_t i = 0; i < VecResCount; i++) {
+#if defined(__aarch64__)
+    for (uint64_t i = 0; i < VecResCount; i=i+4) {
+
+      auto& curState0 = state[i];
+      auto& curState1 = state[i+1];
+      auto& curState2 = state[i+2];
+      auto& curState3 = state[i+3];
+
+      // curState[0..3] are uint64x2_t
+      // vecRes[i] = rotl(curState[0] + curState[3], 23) + curState[0];
+      uint64x2_t s0_0 = curState0[0];
+      uint64x2_t s0_1 = curState0[1];
+      uint64x2_t s0_2 = curState0[2];
+      uint64x2_t s0_3 = curState0[3];
+
+      uint64x2_t s1_0 = curState1[0];
+      uint64x2_t s1_1 = curState1[1];
+      uint64x2_t s1_2 = curState1[2];
+      uint64x2_t s1_3 = curState1[3];
+
+      uint64x2_t s2_0 = curState2[0];
+      uint64x2_t s2_1 = curState2[1];
+      uint64x2_t s2_2 = curState2[2];
+      uint64x2_t s2_3 = curState2[3];
+
+      uint64x2_t s3_0 = curState3[0];
+      uint64x2_t s3_1 = curState3[1];
+      uint64x2_t s3_2 = curState3[2];
+      uint64x2_t s3_3 = curState3[3];
+
+      uint64x2_t sum0 = vaddq_u64(s0_0, s0_3);
+      uint64x2_t rot0 = vorrq_u64(vshlq_n_u64(sum0, 23),vshrq_n_u64(sum0, 64 - 23));
+      vecRes[i] = vaddq_u64(rot0, s0_0);
+
+      uint64x2_t sum1 = vaddq_u64(s1_0, s1_3);
+      uint64x2_t rot1 = vorrq_u64(vshlq_n_u64(sum1, 23),vshrq_n_u64(sum1, 64 - 23));
+      vecRes[i+1] = vaddq_u64(rot1, s1_0);
+
+      uint64x2_t sum2 = vaddq_u64(s2_0, s2_3);
+      uint64x2_t rot2 = vorrq_u64(vshlq_n_u64(sum2, 23),vshrq_n_u64(sum2, 64 - 23));
+      vecRes[i+2] = vaddq_u64(rot2, s2_0);
+
+      uint64x2_t sum3 = vaddq_u64(s3_0, s3_3);
+      uint64x2_t rot3 = vorrq_u64(vshlq_n_u64(sum3, 23),vshrq_n_u64(sum3, 64 - 23));
+      vecRes[i+3] = vaddq_u64(rot3, s3_0);
+
+      uint64x2_t t0 = vshlq_n_u64(s0_1, 17);
+      uint64x2_t t1 = vshlq_n_u64(s1_1, 17);
+      uint64x2_t t2 = vshlq_n_u64(s2_1, 17);
+      uint64x2_t t3 = vshlq_n_u64(s3_1, 17);
+
+      s0_2 = veorq_u64(s0_2, s0_0);
+      s0_3 = veorq_u64(s0_3, s0_1);
+      s0_1 = veorq_u64(s0_1, s0_2);
+      s0_0 = veorq_u64(s0_0, s0_3);
+      s0_2 = veorq_u64(s0_2, t0);
+      s0_3 = vorrq_u64(vshlq_n_u64(s0_3, 45), vshrq_n_u64(s0_3, 19)); // rotl(s0_3, 45)
+
+      s1_2 = veorq_u64(s1_2, s1_0);
+      s1_3 = veorq_u64(s1_3, s1_1);
+      s1_1 = veorq_u64(s1_1, s1_2);
+      s1_0 = veorq_u64(s1_0, s1_3);
+      s1_2 = veorq_u64(s1_2, t1);
+      s1_3 = vorrq_u64(vshlq_n_u64(s1_3, 45), vshrq_n_u64(s1_3, 19)); // rotl(s1_3, 45)
+
+      s2_2 = veorq_u64(s2_2, s2_0);
+      s2_3 = veorq_u64(s2_3, s2_1);
+      s2_1 = veorq_u64(s2_1, s2_2);
+      s2_0 = veorq_u64(s2_0, s2_3);
+      s2_2 = veorq_u64(s2_2, t2);
+      s2_3 = vorrq_u64(vshlq_n_u64(s2_3, 45), vshrq_n_u64(s2_3, 19)); // rotl(s2_3, 45)
+
+      s3_2 = veorq_u64(s3_2, s3_0);
+      s3_3 = veorq_u64(s3_3, s3_1);
+      s3_1 = veorq_u64(s3_1, s3_2);
+      s3_0 = veorq_u64(s3_0, s3_3);
+      s3_2 = veorq_u64(s3_2, t3);
+      s3_3 = vorrq_u64(vshlq_n_u64(s3_3, 45), vshrq_n_u64(s3_3, 19)); // rotl(s3_3, 45)
+
+      curState0[0] = s0_0;
+      curState0[1] = s0_1;
+      curState0[2] = s0_2;
+      curState0[3] = s0_3;
+
+      curState1[0] = s1_0;
+      curState1[1] = s1_1;
+      curState1[2] = s1_2;
+      curState1[3] = s1_3;
+
+      curState2[0] = s2_0;
+      curState2[1] = s2_1;
+      curState2[2] = s2_2;
+      curState2[3] = s2_3;
+
+      curState3[0] = s3_0;
+      curState3[1] = s3_1;
+      curState3[2] = s3_2;
+      curState3[3] = s3_3;
+
+    }
+    cur = 0;
+#else
+   for (uint64_t i = 0; i < VecResCount; i++) {
       auto& curState = state[i];
       vecRes[i] = rotl(curState[0] + curState[3], 23) + curState[0];
       const auto t = curState[1] << 17;
@@ -171,6 +273,7 @@ class xoshiro256pp {
       curState[3] = rotl(curState[3], 45);
     }
     cur = 0;
+#endif
   }
 
   FOLLY_ALWAYS_INLINE result_type next() noexcept {
