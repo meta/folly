@@ -178,6 +178,7 @@ class ScopeGuardImpl : public ScopeGuardImplBase {
   }
 
   void* operator new(std::size_t) = delete;
+  void operator delete(void*) = delete;
 
   constexpr void execute() noexcept(InvokeNoexcept) {
     //  no exception can be thrown under constant evaluation, so the

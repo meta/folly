@@ -230,6 +230,9 @@ void Try<T>::throwIfFailed() const {
 }
 
 Try<void>& Try<void>::operator=(const Try<void>& t) noexcept {
+  if (this == &t) {
+    return *this;
+  }
   if (t.hasException()) {
     if (hasException()) {
       this->e_ = t.e_;

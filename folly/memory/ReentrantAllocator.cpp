@@ -187,7 +187,7 @@ void reentrant_allocator_base::obliterate() noexcept {
     auto const prev = std::exchange(head, head->next);
     reentrant_deallocate(prev, meta_->block_size);
   }
-  reentrant_deallocate(meta_, sizeof(meta_));
+  reentrant_deallocate(meta_, sizeof(*meta_));
   meta_ = nullptr;
 }
 
