@@ -18,76 +18,80 @@
 # Cython requires source files in a specific structure, the structure is
 # created as tree of links to the real source files.
 
-import argparse
+import os
 import sys
 
-import Cython
 from Cython.Build import cythonize
 from Cython.Compiler import Options
 from setuptools import Extension, setup
 
-
 Options.fast_fail = True
 
-
-def parse_build_mode(argv: list) -> tuple:
-    """
-    Parse command line arguments to determine build mode.
-
-    Args:
-        argv: Command line arguments (typically sys.argv)
-
-    Returns:
-        Tuple of (is_api_only, remaining_args)
-    """
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--api-only", action="store_true")
-    args, remaining = parser.parse_known_args(argv[1:])
-    return args.api_only, [argv[0]] + remaining
-
-
-is_api_only, remaining_argv = parse_build_mode(sys.argv)
-# Restore sys.argv with remaining args so setuptools sees its arguments
-# (e.g., "build_ext", "-f", "-I/path") when setup() is called
-sys.argv = remaining_argv
-
-if is_api_only:
-    # Generate API headers only (no C++ compilation or linking)
-    # Used by CMake to generate iobuf_api.h before building folly_python_cpp
-    Cython.Compiler.Main.compile(
-        "folly/iobuf.pyx",
-        full_module_name="folly.iobuf",
-        cplus=True,
-        language_level=3,
-    )
-    Cython.Compiler.Main.compile(
-        "folly/executor.pyx",
-        full_module_name="folly.executor",
-        cplus=True,
-        language_level=3,
-    )
+# Base library directories depending on platform
+if sys.platform == "darwin":
+    library_dirs = ["/opt/homebrew/lib"]
 else:
-    exts = [
-        Extension(
-            "folly.executor",
-            sources=["folly/executor.pyx", "folly/ProactorExecutor.cpp"],
-            libraries=["folly_python_cpp", "folly", "glog"],
-            extra_compile_args=["-std=c++20"],
-        ),
-        Extension(
-            "folly.iobuf",
-            sources=["folly/iobuf.pyx", "folly/iobuf_ext.cpp"],
-            libraries=["folly_python_cpp", "folly", "glog"],
-            extra_compile_args=["-std=c++20"],
-        ),
-    ]
+    # Linux
+    library_dirs = ["/usr/lib", "/usr/lib/x86_64-linux-gnu"]
 
-    setup(
-        name="folly",
-        version="0.0.1",
-        packages=["folly"],
-        package_data={"": ["*.pxd", "*.h"]},
-        setup_requires=["cython"],
-        zip_safe=False,
-        ext_modules=cythonize(exts, compiler_directives={"language_level": 3}),
-    )
+# Also pick up libraries built by folly's own build system
+if cmake_prefix_path := os.environ.get("CMAKE_PREFIX_PATH"):
+    library_dirs.extend(p + "/lib" for p in cmake_prefix_path.split(":"))
+
+# Common libraries needed on all platforms
+common_libraries = ["folly", "glog", "double-conversion", "fmt"]
+
+# libunwind is Linux-only — not available on macOS
+if sys.platform != "darwin":
+    common_libraries.append("unwind")
+
+exts = [
+    Extension(
+        "folly.executor",
+        sources=[
+            "folly/executor.pyx",
+            "folly/executor_intf.cpp",
+            "folly/ProactorExecutor.cpp",
+            "folly/error.cpp",
+        ],
+        libraries=common_libraries,
+        extra_compile_args=["-std=c++20"],
+        include_dirs=[".", "../.."],
+        library_dirs=library_dirs,
+    ),
+    Extension(
+        "folly.iobuf",
+        sources=[
+            "folly/iobuf.pyx",
+            "folly/iobuf_intf.cpp",
+            "folly/iobuf_ext.cpp",
+            "folly/error.cpp",
+        ],
+        libraries=common_libraries,
+        extra_compile_args=["-std=c++20"],
+        include_dirs=[".", "../.."],
+        library_dirs=library_dirs,
+    ),
+    Extension(
+        "folly.fiber_manager",
+        sources=[
+            "folly/fiber_manager.pyx",
+            "folly/fibers.cpp",
+            "folly/error.cpp",
+        ],
+        libraries=common_libraries + ["event"],
+        extra_compile_args=["-std=c++20"],
+        include_dirs=[".", "../.."],
+        library_dirs=library_dirs,
+    ),
+]
+
+setup(
+    name="folly",
+    version="0.0.1",
+    packages=["folly"],
+    package_data={"": ["*.pxd", "*.pyi", "*.h"]},
+    setup_requires=["cython"],
+    zip_safe=False,
+    ext_modules=cythonize(exts, compiler_directives={"language_level": 3}),
+)
