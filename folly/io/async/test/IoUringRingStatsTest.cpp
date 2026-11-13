@@ -56,26 +56,26 @@ class IoUringRingStatsTest : public ::testing::Test {
   }
 };
 
-TEST_F(IoUringRingStatsTest, GetStatsReturnsAndResetsRecordedValues) {
+TEST_F(IoUringRingStatsTest, GetAndResetStatsReturnsAndResetsRecordedValues) {
   RingStatsBackend backend(options());
   backend.submitOutstanding();
-  backend.getRingStats();
+  backend.getAndResetRingStats();
 
   for (int i = 0; i < 3; ++i) {
     backend.queueCancel();
   }
-  const auto first = backend.getRingStats();
+  const auto first = backend.getAndResetRingStats();
   EXPECT_EQ(first.sqPeak, 0);
 
   backend.queueCancel();
   backend.queueCancel();
   backend.submitOutstanding();
   backend.processCompleted();
-  const auto second = backend.getStats().ring;
+  const auto second = backend.getAndResetStats().ring;
   EXPECT_EQ(second.sqPeak, 5);
   EXPECT_EQ(second.cqPeak, 5);
 
-  const auto reset = backend.getRingStats();
+  const auto reset = backend.getAndResetRingStats();
   EXPECT_EQ(reset.sqPeak, 0);
   EXPECT_EQ(reset.cqPeak, 0);
 }
@@ -83,31 +83,31 @@ TEST_F(IoUringRingStatsTest, GetStatsReturnsAndResetsRecordedValues) {
 TEST_F(IoUringRingStatsTest, CountsInitialSqFullAndForcedSubmission) {
   RingStatsBackend backend(options());
   backend.submitOutstanding();
-  backend.getRingStats();
+  backend.getAndResetRingStats();
   const auto capacity = backend.params().sq_entries;
   for (uint32_t i = 0; i <= capacity; ++i) {
     backend.queueCancel();
   }
   backend.submitOutstanding();
   backend.processCompleted();
-  const auto stats = backend.getRingStats();
+  const auto stats = backend.getAndResetRingStats();
   EXPECT_EQ(stats.sqPeak, capacity);
   EXPECT_EQ(stats.sqFullCount, 1);
-  const auto reset = backend.getRingStats();
+  const auto reset = backend.getAndResetRingStats();
   EXPECT_EQ(reset.sqFullCount, 0);
 }
 
 TEST_F(IoUringRingStatsTest, FullSqWithoutFailedAcquisition) {
   RingStatsBackend backend(options());
   backend.submitOutstanding();
-  backend.getRingStats();
+  backend.getAndResetRingStats();
   const auto capacity = backend.params().sq_entries;
   for (uint32_t i = 0; i < capacity; ++i) {
     backend.queueCancel();
   }
   backend.submitOutstanding();
   backend.processCompleted();
-  const auto stats = backend.getRingStats();
+  const auto stats = backend.getAndResetRingStats();
   EXPECT_EQ(stats.sqPeak, capacity);
   EXPECT_EQ(stats.sqFullCount, 0);
 }
@@ -129,25 +129,25 @@ TEST_F(IoUringRingStatsTest, CqPeakPrecedesReapLimitAndDeferredTaskrun) {
     opts.setDeferTaskRun(deferTaskrun).setMaxSubmit(4);
     RingStatsBackend backend(std::move(opts));
     backend.submitOutstanding();
-    backend.getRingStats();
+    backend.getAndResetRingStats();
     std::array<Nop, 6> nops;
     for (auto& nop : nops) {
       backend.submitNextLoop(nop);
     }
     backend.submitOutstanding();
     backend.loopPoll();
-    const auto first = backend.getRingStats();
+    const auto first = backend.getAndResetRingStats();
     EXPECT_EQ(first.sqPeak, 4);
     EXPECT_EQ(first.cqPeak, 6);
 
     backend.processCompleted();
-    const auto second = backend.getRingStats();
+    const auto second = backend.getAndResetRingStats();
     EXPECT_EQ(second.cqPeak, 4);
 
     backend.loopPoll();
-    const auto third = backend.getRingStats();
+    const auto third = backend.getAndResetRingStats();
     EXPECT_EQ(third.cqPeak, 2);
-    EXPECT_EQ(backend.getRingStats().cqPeak, 0);
+    EXPECT_EQ(backend.getAndResetRingStats().cqPeak, 0);
   }
 }
 
@@ -156,7 +156,7 @@ TEST_F(IoUringRingStatsTest, CountsCqOverflowObservations) {
   SKIP_IF(!(backend.params().features & IORING_FEAT_NODROP))
       << "Kernel cannot retain overflow completions";
   backend.submitOutstanding();
-  backend.getRingStats();
+  backend.getAndResetRingStats();
   const auto capacity = backend.params().cq_entries;
   for (uint32_t i = 0; i < capacity; ++i) {
     backend.queueCancel();
@@ -167,15 +167,15 @@ TEST_F(IoUringRingStatsTest, CountsCqOverflowObservations) {
   ASSERT_TRUE(::io_uring_cq_has_overflow(backend.ioRingPtr()));
   backend.submitOutstanding();
   backend.submitOutstanding();
-  EXPECT_EQ(backend.getRingStats().cqOverflowCount, 2);
+  EXPECT_EQ(backend.getAndResetRingStats().cqOverflowCount, 2);
   backend.submitOutstanding();
-  EXPECT_EQ(backend.getRingStats().cqOverflowCount, 1);
+  EXPECT_EQ(backend.getAndResetRingStats().cqOverflowCount, 1);
   backend.loopPoll();
   EXPECT_FALSE(::io_uring_cq_has_overflow(backend.ioRingPtr()));
-  const auto stats = backend.getRingStats();
+  const auto stats = backend.getAndResetRingStats();
   EXPECT_EQ(stats.cqPeak, capacity);
   EXPECT_GT(stats.cqOverflowCount, 0);
-  EXPECT_EQ(backend.getRingStats().cqOverflowCount, 0);
+  EXPECT_EQ(backend.getAndResetRingStats().cqOverflowCount, 0);
 }
 
 } // namespace

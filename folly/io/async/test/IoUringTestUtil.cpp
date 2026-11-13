@@ -54,7 +54,7 @@ std::unique_ptr<EventBase> makeIoUringEventBase(
 
 IoUringBackend::IoUringStats ioUringStats(EventBase& evb) {
   return CHECK_NOTNULL(dynamic_cast<IoUringBackend*>(evb.getBackend()))
-      ->getStats();
+      ->getAndResetStats();
 }
 
 std::string makePayload(size_t len) {

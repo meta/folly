@@ -262,14 +262,14 @@ class IoUringBackend : public EventBaseBackendBase {
     auto operator<=>(const IoUringStats&) const = default;
   };
 
-  CqeStats getCqeStats() { return std::exchange(cqeStats_, {}); }
+  CqeStats getAndResetCqeStats() { return std::exchange(cqeStats_, {}); }
 
-  RingStats getRingStats() { return std::exchange(ringStats_, {}); }
+  RingStats getAndResetRingStats() { return std::exchange(ringStats_, {}); }
 
-  IoUringStats getStats() {
+  IoUringStats getAndResetStats() {
     IoUringStats stats;
-    stats.cqe = getCqeStats();
-    stats.ring = getRingStats();
+    stats.cqe = getAndResetCqeStats();
+    stats.ring = getAndResetRingStats();
     if (zcBufferPool_) {
       zcBufferPool_->getStats(stats.zcrx);
     }

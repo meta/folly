@@ -1231,7 +1231,7 @@ TEST_P(AsyncSocketIoUringTest, ConnectWriteZeroCopy) {
 
   auto* backend = dynamic_cast<IoUringBackend*>(evb.getBackend());
   ASSERT_NE(backend, nullptr);
-  EXPECT_EQ(1, backend->getStats().cqe.zeroCopyNotifCount);
+  EXPECT_EQ(1, backend->getAndResetStats().cqe.zeroCopyNotifCount);
 
   socket->close();
   server.verifyConnection(buf, kLen);

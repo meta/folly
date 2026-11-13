@@ -1519,7 +1519,7 @@ TEST(IoUringBackend, ProvidedBuffers) {
       "34", toString(bufferProvider->getIoBuf(cqes[1].second >> 16, 2, false)));
   EXPECT_EQ(
       (folly::IoUringBackend::CqeStats{.providedBufferCount = 2}),
-      backend->getStats().cqe);
+      backend->getAndResetStats().cqe);
 
   // now the buffers should be back
   readers.clear();
@@ -1532,7 +1532,7 @@ TEST(IoUringBackend, ProvidedBuffers) {
       "56", toString(bufferProvider->getIoBuf(cqes[0].second >> 16, 2, false)));
   EXPECT_EQ(
       (folly::IoUringBackend::CqeStats{.providedBufferCount = 1}),
-      backend->getStats().cqe);
+      backend->getAndResetStats().cqe);
 }
 
 TEST(IoUringBackend, IncrementalProvidedBuffersReportBufMore) {
@@ -1582,7 +1582,7 @@ TEST(IoUringBackend, IncrementalProvidedBuffersReportBufMore) {
   EXPECT_EQ(
       (folly::IoUringBackend::CqeStats{
           .providedBufferCount = 1, .bufMoreCount = 1}),
-      backend->getStats().cqe);
+      backend->getAndResetStats().cqe);
 }
 
 TEST(IoUringBackend, DynamicProvidedBuffers) {
