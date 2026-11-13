@@ -1660,7 +1660,7 @@ struct formatter<folly::StringPiece> : private formatter<string_view> {
 
 #if FMT_VERSION >= 80000
   template <typename Context>
-  typename Context::iterator format(folly::StringPiece s, Context& ctx) const {
+  typename Context::iterator format(folly::StringPiece s, Context& ctx) {
     return formatter<string_view>::format({s.data(), s.size()}, ctx);
   }
 #else

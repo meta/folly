@@ -2601,7 +2601,7 @@ struct fmt::formatter<folly::fbstring> : private formatter<fmt::string_view> {
 
   template <typename Context>
   typename Context::iterator format(
-      const folly::fbstring& s, Context& ctx) const {
+      const folly::fbstring& s, Context& ctx) {
     return formatter<fmt::string_view>::format({s.data(), s.size()}, ctx);
   }
 };
