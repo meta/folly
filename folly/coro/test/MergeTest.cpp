@@ -19,6 +19,7 @@
 #include <folly/CancellationToken.h>
 #include <folly/ScopeGuard.h>
 #include <folly/coro/AsyncGenerator.h>
+#include <folly/coro/Baton.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/Collect.h>
 #include <folly/coro/CurrentExecutor.h>
@@ -107,8 +108,10 @@ TEST_F(MergeTest, TruncateStream) {
 
 TEST_F(MergeTest, TruncateStreamMultiThreaded) {
   blockingWait([]() -> Task<void> {
+    std::atomic<int> started = 0;
     std::atomic<int> completed = 0;
-    folly::Baton allCompleted;
+    folly::coro::Baton allStarted;
+    folly::coro::Baton allCompleted;
     {
       auto generator = merge(
           folly::getGlobalCPUExecutor(),
@@ -119,6 +122,9 @@ TEST_F(MergeTest, TruncateStreamMultiThreaded) {
                   allCompleted.post();
                 }
               };
+              if (++started == 3) {
+                allStarted.post();
+              }
               co_yield 1;
               co_yield 2;
             };
@@ -131,11 +137,14 @@ TEST_F(MergeTest, TruncateStreamMultiThreaded) {
       auto item = co_await generator.next();
       CHECK_EQ(1, *item);
       co_await generator.next();
+      co_await allStarted;
+      CHECK_EQ(3, started.load());
       // Truncate the stream after consuming only 2 of the 6 values it
       // would have produced.
     }
 
-    CHECK(allCompleted.try_wait_for(1s));
+    co_await allCompleted;
+    CHECK_EQ(3, completed.load());
   }());
 }
 
