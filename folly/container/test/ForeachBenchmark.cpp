@@ -283,14 +283,6 @@ BENCHMARK(ForEachManual, iters) {
   doNotOptimizeAway(sum);
 }
 
-BENCHMARK(ForEachRange, iters) {
-  int sum = 1;
-  FOR_EACH_RANGE (i, 1, iters) {
-    sum *= i;
-  }
-  doNotOptimizeAway(sum);
-}
-
 BENCHMARK(ForEachDescendingManual, iters) {
   int sum = 1;
   for (size_t i = iters; i-- > 1;) {
