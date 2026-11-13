@@ -1448,6 +1448,67 @@ TEST(IOBuf, CloneAsValue) {
   EXPECT_FALSE(buf->isShared());
 }
 
+TEST(IOBuf, ChainDestructionUnlinksBeforeFreeCallbacks) {
+  struct State {
+    IOBuf* head{nullptr};
+    IOBuf* middle{nullptr};
+    IOBuf* tail{nullptr};
+    int calls{0};
+  } state;
+
+  auto head = IOBuf::takeOwnership(
+      new uint8_t[1],
+      1,
+      [](void* buffer, void* userData) {
+        auto& s = *static_cast<State*>(userData);
+        EXPECT_EQ(2, s.calls);
+        ++s.calls;
+        EXPECT_EQ(s.head, s.head->next());
+        EXPECT_EQ(s.head, s.head->prev());
+        delete[] static_cast<uint8_t*>(buffer);
+      },
+      &state);
+  state.head = head.get();
+  auto middle = IOBuf::takeOwnership(
+      new uint8_t[1],
+      1,
+      [](void* buffer, void* userData) {
+        auto& s = *static_cast<State*>(userData);
+        EXPECT_EQ(0, s.calls);
+        ++s.calls;
+        EXPECT_EQ(s.middle, s.middle->next());
+        EXPECT_EQ(s.middle, s.middle->prev());
+        EXPECT_EQ(s.tail, s.head->next());
+        EXPECT_EQ(s.tail, s.head->prev());
+        EXPECT_EQ(s.head, s.tail->next());
+        EXPECT_EQ(s.head, s.tail->prev());
+        delete[] static_cast<uint8_t*>(buffer);
+      },
+      &state);
+  state.middle = middle.get();
+  auto tail = IOBuf::takeOwnership(
+      new uint8_t[1],
+      1,
+      [](void* buffer, void* userData) {
+        auto& s = *static_cast<State*>(userData);
+        EXPECT_EQ(1, s.calls);
+        ++s.calls;
+        EXPECT_EQ(s.head, s.head->next());
+        EXPECT_EQ(s.head, s.head->prev());
+        EXPECT_EQ(s.tail, s.tail->next());
+        EXPECT_EQ(s.tail, s.tail->prev());
+        delete[] static_cast<uint8_t*>(buffer);
+      },
+      &state);
+  state.tail = tail.get();
+  head->appendToChain(std::move(middle));
+  head->appendToChain(std::move(tail));
+
+  head.reset();
+
+  EXPECT_EQ(3, state.calls);
+}
+
 TEST(IOBuf, MoveAssignmentReadsSourceAfterDestinationCleanup) {
   auto source = IOBuf::copyBuffer("source");
   auto destination = IOBuf::takeOwnership(

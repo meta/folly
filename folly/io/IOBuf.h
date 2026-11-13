@@ -2185,7 +2185,9 @@ class IOBuf {
 
   FOLLY_ALWAYS_INLINE void unlinkAll() noexcept {
     while (next_ != this) {
-      (void)next_->unlink();
+      auto* buf = next_->unlink().release();
+      buf->decrementRefcount();
+      IOBuf::operator delete(buf);
     }
   }
 
