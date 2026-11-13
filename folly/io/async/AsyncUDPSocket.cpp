@@ -16,6 +16,7 @@
 
 #include <folly/io/async/AsyncUDPSocket.h>
 
+#include <algorithm>
 #include <cerrno>
 
 #include <folly/Likely.h>
@@ -73,11 +74,12 @@ void AsyncUDPSocket::fromMsg(
     } else if (cmsg->cmsg_level == SOL_SOCKET) {
       if (cmsg->cmsg_type == SO_TIMESTAMPING ||
           cmsg->cmsg_type == SO_TIMESTAMPNS) {
-        ReadCallback::OnDataAvailableParams::Timestamp ts;
+        // SO_TIMESTAMPING contains three timespecs; SO_TIMESTAMPNS only one.
+        ReadCallback::OnDataAvailableParams::Timestamp ts{};
         memcpy(
             &ts,
-            reinterpret_cast<struct timespec*>(CMSG_DATA(cmsg)),
-            sizeof(ts));
+            CMSG_DATA(cmsg),
+            std::min<size_t>(cmsg->cmsg_len - CMSG_LEN(0), sizeof(ts)));
         params.ts = ts;
       }
     } else if (
