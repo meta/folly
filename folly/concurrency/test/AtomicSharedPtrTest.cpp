@@ -382,6 +382,39 @@ TEST(AtomicSharedPtr, StressTest) {
   }
 }
 
+TEST(AtomicSharedPtr, ArrayStoredPointer) {
+  const auto check =
+      []<typename T>(
+          std::shared_ptr<T> owner, const std::shared_ptr<T>& desired) {
+        atomic_shared_ptr<T> ptr(owner);
+        auto loaded = ptr.load();
+        EXPECT_EQ(loaded.get(), owner.get());
+        EXPECT_EQ(loaded[0], 7);
+        EXPECT_EQ(loaded[1], 11);
+        EXPECT_FALSE(loaded.owner_before(owner));
+        EXPECT_FALSE(owner.owner_before(loaded));
+        EXPECT_TRUE(ptr.compare_exchange_strong(loaded, desired));
+        EXPECT_EQ(ptr.load().get(), desired.get());
+        auto exchanged = ptr.exchange({});
+        EXPECT_EQ(exchanged.get(), desired.get());
+        EXPECT_FALSE(exchanged.owner_before(desired));
+        EXPECT_FALSE(desired.owner_before(exchanged));
+        EXPECT_EQ(ptr.load().get(), nullptr);
+        EXPECT_EQ(ptr.load().use_count(), 0);
+        loaded.reset();
+        EXPECT_EQ(owner.use_count(), 1);
+      };
+  check(
+      std::shared_ptr<int[]>(new int[2]{7, 11}), // NOLINT
+      std::shared_ptr<int[]>(new int[2]{})); // NOLINT
+  check(
+      std::shared_ptr<int[2]>(new int[2]{7, 11}), // NOLINT
+      std::shared_ptr<int[2]>(new int[2]{})); // NOLINT
+  check(
+      std::shared_ptr<const int[]>(new int[2]{7, 11}), // NOLINT
+      std::shared_ptr<const int[]>(new int[2]{})); // NOLINT
+}
+
 #if FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED
 
 namespace {

@@ -73,10 +73,10 @@ class shared_ptr_internals {
   static void release_shared(counted_base* base, long count);
 
   template <typename T>
-  static T* get_shared_ptr(counted_base* base);
+  static std::remove_extent_t<T>* get_shared_ptr(counted_base* base);
 
   template <typename T>
-  static T* release_ptr(std::shared_ptr<T>& p);
+  static std::remove_extent_t<T>* release_ptr(std::shared_ptr<T>& p);
 
   template <typename T>
   static std::shared_ptr<T> get_shared_ptr_from_counted_base(
@@ -187,20 +187,22 @@ inline void shared_ptr_internals::release_shared(
 }
 
 template <typename T>
-inline T* shared_ptr_internals::get_shared_ptr(counted_base* base) {
+inline std::remove_extent_t<T>* shared_ptr_internals::get_shared_ptr(
+    counted_base* base) {
   // See if this was a make_shared allocation
   auto inplace = base->_M_get_deleter(typeid(std::_Sp_make_shared_tag));
   if (inplace) {
-    return (T*)inplace;
+    return (std::remove_extent_t<T>*)inplace;
   }
   // Could also be a _Sp_counted_deleter, but the layout is the same
   using derived_type = std::_Sp_counted_ptr<const void*, std::_S_atomic>;
   auto ptr = reinterpret_cast<derived_type*>(base);
-  return (T*)(ptr->*fieldPtr(access_counted_ptr_ptr{}));
+  return (std::remove_extent_t<T>*)(ptr->*fieldPtr(access_counted_ptr_ptr{}));
 }
 
 template <typename T>
-inline T* shared_ptr_internals::release_ptr(std::shared_ptr<T>& p) {
+inline std::remove_extent_t<T>* shared_ptr_internals::release_ptr(
+    std::shared_ptr<T>& p) {
   auto res = p.get();
   std::shared_ptr<const void>& ptr(
       reinterpret_cast<std::shared_ptr<const void>&>(p));
@@ -290,10 +292,10 @@ class shared_ptr_internals {
   static void release_shared(counted_base* base, long count);
 
   template <typename T>
-  static T* get_shared_ptr(counted_base* base);
+  static std::remove_extent_t<T>* get_shared_ptr(counted_base* base);
 
   template <typename T>
-  static T* release_ptr(std::shared_ptr<T>& p);
+  static std::remove_extent_t<T>* release_ptr(std::shared_ptr<T>& p);
 
   template <typename T>
   static std::shared_ptr<T> get_shared_ptr_from_counted_base(
@@ -445,10 +447,11 @@ inline void shared_ptr_internals::release_shared(
 }
 
 template <typename T>
-inline T* shared_ptr_internals::get_shared_ptr(counted_base* base) {
+inline std::remove_extent_t<T>* shared_ptr_internals::get_shared_ptr(
+    counted_base* base) {
   const char* name = typeid(*base).name();
   if (is_family(name, emplace_family())) {
-    return reinterpret_cast<T*>(
+    return reinterpret_cast<std::remove_extent_t<T>*>(
         reinterpret_cast<char*>(base) + sizeof(counted_base));
   }
   if (is_family(name, pointer_family())) {
@@ -459,13 +462,14 @@ inline T* shared_ptr_internals::get_shared_ptr(counted_base* base) {
 #else
     const void* ptr = data.first().first();
 #endif
-    return static_cast<T*>(const_cast<void*>(ptr));
+    return static_cast<std::remove_extent_t<T>*>(const_cast<void*>(ptr));
   }
   return nullptr;
 }
 
 template <typename T>
-inline T* shared_ptr_internals::release_ptr(std::shared_ptr<T>& p) {
+inline std::remove_extent_t<T>* shared_ptr_internals::release_ptr(
+    std::shared_ptr<T>& p) {
   auto res = p.get();
   std::shared_ptr<const void>& ptr(
       reinterpret_cast<std::shared_ptr<const void>&>(p));
