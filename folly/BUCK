@@ -2170,6 +2170,7 @@ fb_dirsync_cpp_library(
     exported_deps = [
         "//folly/concurrency:cache_locality",
         "//folly/lang:bits",
+        "//folly/lang:new",
     ],
 )
 
