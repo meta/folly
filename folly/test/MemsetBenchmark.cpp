@@ -41,7 +41,7 @@ size_t getPow2(size_t v) {
 template <void* memset_impl(void*, int, size_t)>
 void bmMemset(void* buf, size_t length, size_t iters) {
 #if !defined(__aarch64__)
-  __asm__ volatile(".align 64\n");
+  __asm__ volatile(".balign 64\n");
 #endif
   FOLLY_PRAGMA_UNROLL_N(1)
   for (size_t i = 0; i < iters; ++i) {
