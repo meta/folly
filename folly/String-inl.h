@@ -118,7 +118,9 @@ void cUnescape(StringPiece str, String& out, bool strict) {
       last = p;
     } else if (e == 'X') { // hex
       ++p;
-      if (p == str.end()) { // \x at end of string
+      if (p == str.end() ||
+          detail::hexTable[static_cast<unsigned char>(*p)] >= 16) {
+        // \x not followed by a hex digit
         if (strict) {
           throw_exception<std::invalid_argument>(
               "incomplete hex escape sequence");
