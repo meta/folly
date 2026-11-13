@@ -1247,10 +1247,20 @@ TYPED_TEST_P(EventBaseTest, RescheduleTimeout) {
   eb.loop();
   TimePoint end;
 
-  T_CHECK_TIMEOUT(start, t1.timestamp, std::chrono::milliseconds(15));
-  T_CHECK_TIMEOUT(start, t2.timestamp, std::chrono::milliseconds(20));
-  T_CHECK_TIMEOUT(start, t3.timestamp, std::chrono::milliseconds(50));
-  T_CHECK_TIMEOUT(start, end, std::chrono::milliseconds(50));
+  // The IoUring backend can deliver timer callbacks up to a loop iteration
+  // later than other backends, so on loaded hosts it can exceed the tight
+  // default tolerance (overruns of 6-11ms observed under stress). Allow it
+  // extra room without weakening the check for other backends.
+  auto timeoutTolerance = TypeParam::isIoUringBackend()
+      ? std::chrono::milliseconds(15)
+      : std::chrono::milliseconds(5);
+  T_CHECK_TIMEOUT(
+      start, t1.timestamp, std::chrono::milliseconds(15), timeoutTolerance);
+  T_CHECK_TIMEOUT(
+      start, t2.timestamp, std::chrono::milliseconds(20), timeoutTolerance);
+  T_CHECK_TIMEOUT(
+      start, t3.timestamp, std::chrono::milliseconds(50), timeoutTolerance);
+  T_CHECK_TIMEOUT(start, end, std::chrono::milliseconds(50), timeoutTolerance);
 }
 
 /**
