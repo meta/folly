@@ -336,7 +336,7 @@ namespace detail {
   }                                                                      \
   }
 
-#if defined(_LIBCPP_VECTOR)
+#if defined(_LIBCPP_VECTOR) && (_LIBCPP_VERSION < 200000)
 // libc++
 
 template <typename T, typename Alloc = std::allocator<T>>
