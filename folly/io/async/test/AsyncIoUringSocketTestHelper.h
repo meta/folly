@@ -261,7 +261,12 @@ class AsyncIoUringSocketTest
     if (p.manySmallBuffers) {
       options.setInitialProvidedBuffers(1024, 2000);
     } else {
-      options.setInitialProvidedBuffers(2000000, 1);
+      // One big buffer, still several times smaller than the multi-MB writes
+      // in WriteBig/WriteBigDrop so those tests keep exercising the provided
+      // buffer overflow path, while pinning little enough for the shared
+      // per-UID memlock budget on loaded CI hosts (count is raised to 2 by
+      // the ring when below the minimum).
+      options.setInitialProvidedBuffers(65536, 1);
     }
     options.setDeferTaskRun(true);
     return options;
