@@ -465,6 +465,7 @@ fb_dirsync_cpp_library(
         # @fb-only[end= ]: # static linking for ARVR mode to avoid the extra .so overhead.
         # @fb-only[end= ]: "ovr_config//build_mode:arvr_mode[enabled]": True,
     }),
+    shared_under_folly_linkage = True,
     use_raw_headers = True,
     deps = [
         "//folly/memory:reentrant_allocator",

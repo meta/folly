@@ -155,6 +155,7 @@ def folly_xplat_library(
     enable_static_variant = False,
     labels = (),
     redirect = True,
+    shared_under_folly_linkage = False,
     **kwargs,
 ):
     """Translate a simpler declaration into the more complete library target.
@@ -191,6 +192,25 @@ def folly_xplat_library(
         }),
         "ovr_config//build_mode:arvr_mode[enabled]": force_static,
     })
+    if shared_under_folly_linkage:
+        force_static = select({
+            "DEFAULT": force_static,
+            # @fb-only[end= ]: "ovr_config//folly_linkage:folly_linkage[shared]": False,
+        })
+        if "preferred_linkage" in kwargs:
+            kwargs["preferred_linkage"] = select({
+                "DEFAULT": kwargs["preferred_linkage"],
+                # @fb-only[end= ]: "ovr_config//folly_linkage:folly_linkage[shared]": "shared",
+            })
+        else:
+            kwargs["cxx_preferred_linkage"] = select({
+                "DEFAULT": None,
+                # @fb-only[end= ]: "ovr_config//folly_linkage:folly_linkage[shared]": "shared",
+            })
+        kwargs["link_style"] = select({
+            "DEFAULT": kwargs.get("link_style"),
+            # @fb-only[end= ]: "ovr_config//folly_linkage:folly_linkage[shared]": "static",
+        })
 
     # Preserve lib_name when redirecting to maintain SONAME
     if use_redirect:

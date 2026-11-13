@@ -193,6 +193,7 @@ fb_dirsync_cpp_library(
     srcs = ["GlobalExecutor.cpp"],
     headers = ["GlobalExecutor.h"],
     force_static = False,
+    shared_under_folly_linkage = True,
     use_raw_headers = True,
     deps = [
         ":cpu_thread_pool_executor",
