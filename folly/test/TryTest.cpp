@@ -414,6 +414,24 @@ TEST(Try, nothrow) {
       (std::is_nothrow_constructible<Try<void>, Try<Unit> const&>::value));
 }
 
+TEST(Try, MoveConversionFromVoidToUnit) {
+  Try<void> source{make_exception_wrapper<std::runtime_error>("error")};
+
+  Try<Unit> result{std::move(source)};
+
+  EXPECT_TRUE(result.hasException<std::runtime_error>());
+  EXPECT_FALSE(source.exception());
+}
+
+TEST(Try, MoveConversionFromUnitToVoid) {
+  Try<Unit> source{make_exception_wrapper<std::runtime_error>("error")};
+
+  Try<void> result{std::move(source)};
+
+  EXPECT_TRUE(result.hasException<std::runtime_error>());
+  EXPECT_FALSE(source.exception());
+}
+
 TEST(Try, MoveDereference) {
   auto ptr = std::make_unique<int>(1);
   auto t = Try<std::unique_ptr<int>>{std::move(ptr)};

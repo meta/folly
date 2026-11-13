@@ -136,6 +136,21 @@ TryBase<T>::TryBase(
 }
 
 template <class T>
+template <class T2>
+TryBase<T>::TryBase(
+    typename std::enable_if<std::is_same<Unit, T2>::value, Try<void>&&>::type
+        t) noexcept
+    : contains_(Contains::NOTHING) {
+  if (t.hasValue()) {
+    contains_ = Contains::VALUE;
+    ::new (static_cast<void*>(std::addressof(value_))) T();
+  } else if (t.hasException()) {
+    contains_ = Contains::EXCEPTION;
+    new (&e_) exception_wrapper(std::move(t).exception());
+  }
+}
+
+template <class T>
 TryBase<T>::~TryBase() {
   if (contains_ == Contains::VALUE) [[likely]] {
     value_.~T();
@@ -149,6 +164,12 @@ TryBase<T>::~TryBase() {
 Try<void>::Try(const Try<Unit>& t) noexcept : hasValue_(!t.hasException()) {
   if (t.hasException()) {
     new (&this->e_) exception_wrapper(t.exception());
+  }
+}
+
+Try<void>::Try(Try<Unit>&& t) noexcept : hasValue_(!t.hasException()) {
+  if (t.hasException()) {
+    new (&this->e_) exception_wrapper(std::move(t).exception());
   }
 }
 

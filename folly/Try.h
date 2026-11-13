@@ -99,6 +99,10 @@ class TryBase {
   /* implicit */ TryBase(
       typename std::enable_if<std::is_same<Unit, T2>::value, Try<void> const&>::
           type t) noexcept;
+  template <class T2 = T>
+  /* implicit */ TryBase(
+      typename std::enable_if<std::is_same<Unit, T2>::value, Try<void>&&>::type
+          t) noexcept;
 
   /*
    * Construct a Try with an exception_wrapper
@@ -425,6 +429,7 @@ class Try<void> {
 
   /// Implicit conversion from Try<Unit> to Try<void>
   /* implicit */ inline Try(const Try<Unit>& t) noexcept;
+  /* implicit */ inline Try(Try<Unit>&& t) noexcept;
 
   // Copy assigner
   inline Try& operator=(const Try<void>& t) noexcept;
