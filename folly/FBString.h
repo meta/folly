@@ -33,7 +33,6 @@
 #include <type_traits>
 #include <utility>
 
-#include <fmt/format.h>
 #include <folly/CPortability.h>
 #include <folly/CppAttributes.h>
 #include <folly/Likely.h>
@@ -2594,14 +2593,3 @@ struct IsSomeString;
 template <>
 struct IsSomeString<fbstring> : std::true_type {};
 } // namespace folly
-
-template <>
-struct fmt::formatter<folly::fbstring> : private formatter<fmt::string_view> {
-  using formatter<fmt::string_view>::parse;
-
-  template <typename Context>
-  typename Context::iterator format(
-      const folly::fbstring& s, Context& ctx) const {
-    return formatter<fmt::string_view>::format({s.data(), s.size()}, ctx);
-  }
-};
