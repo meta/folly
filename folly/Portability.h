@@ -103,6 +103,12 @@ constexpr bool kHasUnalignedAccess = false;
 #define FOLLY_X64 0
 #endif
 
+#if (FOLLY_X86 || FOLLY_X64) && defined(__AVX2__)
+#define FOLLY_AVX2 1
+#else
+#define FOLLY_AVX2 0
+#endif
+
 #if defined(__arm__)
 #define FOLLY_ARM 1
 #else
@@ -119,6 +125,20 @@ constexpr bool kHasUnalignedAccess = false;
 #define FOLLY_AARCH64_LSE 1
 #else
 #define FOLLY_AARCH64_LSE 0
+#endif
+
+// ACLE has no LSE2 feature macro. Armv9 guarantees it; Armv8.4+ targets
+// are conservatively left unrecognized.
+#if FOLLY_AARCH64 && defined(__ARM_ARCH) && __ARM_ARCH >= 9
+#define FOLLY_AARCH64_LSE2 1
+#else
+#define FOLLY_AARCH64_LSE2 0
+#endif
+
+#if FOLLY_AARCH64 && defined(__ARM_FEATURE_RCPC) && __ARM_FEATURE_RCPC >= 3
+#define FOLLY_AARCH64_LRCPC3 1
+#else
+#define FOLLY_AARCH64_LRCPC3 0
 #endif
 
 #if defined(__powerpc64__)
@@ -186,8 +206,11 @@ namespace folly {
 constexpr bool kIsArchArm = FOLLY_ARM == 1;
 constexpr bool kIsArchX86 = FOLLY_X86 == 1;
 constexpr bool kIsArchAmd64 = FOLLY_X64 == 1;
+constexpr bool kHasAvx2 = FOLLY_AVX2 == 1;
 constexpr bool kIsArchAArch64 = FOLLY_AARCH64 == 1;
 constexpr bool kIsArchAArch64Lse = FOLLY_AARCH64_LSE == 1;
+constexpr bool kIsArchAArch64Lse2 = FOLLY_AARCH64_LSE2 == 1;
+constexpr bool kIsArchAArch64Lrcpc3 = FOLLY_AARCH64_LRCPC3 == 1;
 constexpr bool kIsArchPPC64 = FOLLY_PPC64 == 1;
 constexpr bool kIsArchS390X = FOLLY_S390X == 1;
 constexpr bool kIsArchRISCV64 = FOLLY_RISCV64 == 1;
