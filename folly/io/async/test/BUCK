@@ -1282,6 +1282,19 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "io_uring_ring_stats_test",
+    srcs = ["IoUringRingStatsTest.cpp"],
+    labels = fbcode_ci_default_labels(),
+    owner = "dmm@xmail.facebook.com",
+    target_compatible_with = ["ovr_config//runtime:fbcode"],
+    deps = [
+        "//folly/io/async:io_uring_backend",
+        "//folly/portability:gtest",
+        "//folly/test:test_utils",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "io_uring_test",
     srcs = ["IoUringTest.cpp"],
     labels = ["oss-broken"] + fbcode_ci_default_labels(),
