@@ -488,10 +488,6 @@ class ValueContainerIterator : public ValueContainerIteratorBase<ValuePtr> {
       ValueContainerIterator const& lhs, ValueContainerIterator const& rhs) {
     return lhs.underlying_ == rhs.underlying_;
   }
-  friend bool operator!=(
-      ValueContainerIterator const& lhs, ValueContainerIterator const& rhs) {
-    return !(lhs == rhs);
-  }
 
  private:
   ItemIter underlying_;
@@ -731,10 +727,6 @@ class NodeContainerIterator : public BaseIter<ValuePtr, NonConstPtr<ValuePtr>> {
   friend bool operator==(
       NodeContainerIterator const& lhs, NodeContainerIterator const& rhs) {
     return lhs.underlying_ == rhs.underlying_;
-  }
-  friend bool operator!=(
-      NodeContainerIterator const& lhs, NodeContainerIterator const& rhs) {
-    return !(lhs == rhs);
   }
 
  private:

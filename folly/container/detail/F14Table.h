@@ -246,10 +246,6 @@ class F14HashToken final {
       F14HashToken const& a, F14HashToken const& b) noexcept {
     return a.hp_.first == b.hp_.first; // processed hash but not tag
   }
-  friend constexpr bool operator!=(
-      F14HashToken const& a, F14HashToken const& b) noexcept {
-    return !(a == b);
-  }
 
  private:
   using HashPair = std::pair<std::size_t, std::size_t>;
@@ -271,10 +267,6 @@ class F14HashToken final {
   friend constexpr bool operator==(
       F14HashToken const&, F14HashToken const&) noexcept {
     return true;
-  }
-  friend constexpr bool operator!=(
-      F14HashToken const&, F14HashToken const&) noexcept {
-    return false;
   }
 };
 #endif
@@ -498,40 +490,21 @@ class F14HashedKey final {
   friend bool operator==(const F14HashedKey& a, const F14HashedKey& b) {
     return KeyEqual{}(a.key_, b.key_);
   }
-  friend bool operator!=(const F14HashedKey& a, const F14HashedKey& b) {
-    return !(a == b);
-  }
   friend bool operator==(const F14HashedKey& a, const TKeyType& b) {
     return KeyEqual{}(a.key_, b);
-  }
-  friend bool operator!=(const F14HashedKey& a, const TKeyType& b) {
-    return !(a == b);
   }
   friend bool operator==(const TKeyType& a, const F14HashedKey& b) {
     return KeyEqual{}(a, b.key_);
   }
-  friend bool operator!=(const TKeyType& a, const F14HashedKey& b) {
-    return !(a == b);
-  }
   template <typename K>
   friend EnableHeterogeneousCompare<K, bool> operator==(
       const F14HashedKey& a, const K& b) {
     return KeyEqual{}(a.key_, b);
   }
   template <typename K>
-  friend EnableHeterogeneousCompare<K, bool> operator!=(
-      const F14HashedKey& a, const K& b) {
-    return !(a == b);
-  }
-  template <typename K>
   friend EnableHeterogeneousCompare<K, bool> operator==(
       const K& a, const F14HashedKey& b) {
     return KeyEqual{}(a, b.key_);
-  }
-  template <typename K>
-  friend EnableHeterogeneousCompare<K, bool> operator!=(
-      const K& a, const F14HashedKey& b) {
-    return !(a == b);
   }
 
  private:
@@ -1127,10 +1100,6 @@ class PackedChunkItemPtr {
     return ptr_ == rhs.ptr_;
   }
 
-  bool operator!=(PackedChunkItemPtr const& rhs) const {
-    return !(*this == rhs);
-  }
-
  private:
   Ptr ptr_{};
   std::size_t index_{};
@@ -1229,9 +1198,6 @@ class PackedChunkItemPtr<T*> {
   }
   bool operator==(PackedChunkItemPtr const& rhs) const {
     return raw_ == rhs.raw_;
-  }
-  bool operator!=(PackedChunkItemPtr const& rhs) const {
-    return !(*this == rhs);
   }
 
  private:
@@ -1353,8 +1319,6 @@ class F14ItemIter {
     // and constant propagation
     return itemPtr_ == rhs.itemPtr_;
   }
-
-  bool operator!=(F14ItemIter const& rhs) const { return !(*this == rhs); }
 
  private:
   ItemPtr itemPtr_;
