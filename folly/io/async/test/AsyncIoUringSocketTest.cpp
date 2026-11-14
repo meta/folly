@@ -870,6 +870,101 @@ INSTANTIATE_TEST_SUITE_P(
       return info.param.testName();
     });
 
+class AsyncIoUringSocketZeroCopyFallbackTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    if (!IoUringBackend::isAvailable()) {
+      GTEST_SKIP() << "io_uring not available";
+    }
+    evb = std::make_unique<EventBase>(EventBase::Options{}.setBackendFactory(
+        []() -> std::unique_ptr<EventBaseBackendBase> {
+          IoUringBackend::Options options;
+          options.setUseRegisteredFds(64)
+              .setInitialProvidedBuffers(64, 8)
+              .setDeferTaskRun(true);
+          return std::make_unique<IoUringBackend>(std::move(options));
+        }));
+    // init delayed bits (like the buffer provider) as this is the only thread
+    dynamic_cast<IoUringBackend*>(evb->getBackend())->loopPoll();
+
+    // zero copy sends are not supported on unix sockets, so every zero copy
+    // write fails with EOPNOTSUPP without sending anything
+    std::array<int, 2> fds;
+    ASSERT_EQ(0, ::socketpair(AF_UNIX, SOCK_STREAM, 0, fds.data()));
+    peerFd = fds[1];
+
+    AsyncIoUringSocket::Options socketOptions;
+    socketOptions.zeroCopyEnable = [this](auto&&) {
+      ++zeroCopyAttempts;
+      return true;
+    };
+    socket.reset(new AsyncIoUringSocket(
+        evb.get(), NetworkSocket::fromFd(fds[0]), std::move(socketOptions)));
+  }
+
+  void TearDown() override {
+    socket.reset();
+    if (peerFd >= 0) {
+      ::close(peerFd);
+    }
+  }
+
+  FutureWriteCallback::TResult write(std::string const& data) {
+    FutureWriteCallback cb;
+    socket->writeChain(&cb, IOBuf::copyBuffer(data), WriteFlags::NONE);
+    auto& [promise, future] = cb.promiseContract;
+    return std::move(future).within(kTimeout).via(evb.get()).getVia(evb.get());
+  }
+
+  std::string readPeer(size_t n) {
+    std::string ret(n, '\0');
+    EXPECT_EQ(n, folly::readFull(peerFd, ret.data(), n));
+    return ret;
+  }
+
+  std::unique_ptr<EventBase> evb;
+  AsyncIoUringSocket::UniquePtr socket;
+  int peerFd = -1;
+  int zeroCopyAttempts = 0;
+};
+
+TEST_F(AsyncIoUringSocketZeroCopyFallbackTest, WriteSucceedsWithoutZeroCopy) {
+  auto res = write("hello");
+  ASSERT_TRUE(res.hasValue()) << res.error().second;
+  EXPECT_EQ("hello", readPeer(5));
+  EXPECT_EQ(1, zeroCopyAttempts);
+}
+
+TEST_F(AsyncIoUringSocketZeroCopyFallbackTest, StaysSuspendedByDefault) {
+  for (int i = 0; i < 5; i++) {
+    auto res = write("hello");
+    ASSERT_TRUE(res.hasValue()) << res.error().second;
+    EXPECT_EQ("hello", readPeer(5));
+  }
+  EXPECT_EQ(1, zeroCopyAttempts);
+}
+
+TEST_F(AsyncIoUringSocketZeroCopyFallbackTest, ReenabledAfterThreshold) {
+  socket->setZeroCopyReenableThreshold(3);
+  std::vector<int> attempts;
+  for (int i = 0; i < 7; i++) {
+    auto res = write("hello");
+    ASSERT_TRUE(res.hasValue()) << res.error().second;
+    EXPECT_EQ("hello", readPeer(5));
+    attempts.push_back(zeroCopyAttempts);
+  }
+  // zero copy is tried on the first write and then on every third write
+  // after each failure
+  EXPECT_EQ((std::vector<int>{1, 1, 1, 2, 2, 2, 3}), attempts);
+}
+
+TEST_F(AsyncIoUringSocketZeroCopyFallbackTest, WriteErrorReportsErrno) {
+  ::close(std::exchange(peerFd, -1));
+  auto res = write("hello");
+  ASSERT_TRUE(res.hasError());
+  EXPECT_EQ(EPIPE, res.error().second.getErrno()) << res.error().second;
+}
+
 TEST(AsyncIoUringSocketTest, RemoveNonBlockFlag) {
   Promise<NetworkSocket> fdPromise;
   test::TestAcceptCallback acceptCallback;
@@ -938,27 +1033,6 @@ FutureWriteCallback::TResult writeAndWait(
 }
 
 } // namespace
-
-TEST(AsyncIoUringSocketTest, ZeroCopyWriteErrorKeepsErrno) {
-  if (!IoUringBackend::isAvailable()) {
-    GTEST_SKIP() << "io_uring not available";
-  }
-  auto evb = makeIoUringEventBase();
-  // AF_UNIX sockets don't support zc, returning EOPNOTSUPP or EINVAL
-  std::array<int, 2> fds{};
-  ASSERT_EQ(0, ::socketpair(AF_UNIX, SOCK_STREAM, 0, fds.data()));
-  AsyncIoUringSocket::Options options;
-  options.zeroCopyEnable = [](auto&&) { return true; };
-  FutureWriteCallback cb;
-  AsyncIoUringSocket::UniquePtr socket(new AsyncIoUringSocket(
-      evb.get(), NetworkSocket::fromFd(fds[0]), std::move(options)));
-
-  auto res = writeAndWait(*evb, *socket, cb, "hello");
-
-  ASSERT_TRUE(res.hasError());
-  EXPECT_NE(0, res.error().second.getErrno()) << res.error().second.what();
-  ::close(fds[1]);
-}
 
 TEST(AsyncIoUringSocketTest, WriteErrorKeepsErrno) {
   if (!IoUringBackend::isAvailable()) {

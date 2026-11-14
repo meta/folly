@@ -129,7 +129,16 @@ class AsyncIoUringSocket : public AsyncSocketTransport {
       WriteCallback* callback,
       std::unique_ptr<IOBuf>&& buf,
       WriteFlags flags) override;
-  bool canZC(std::unique_ptr<IOBuf> const& buf) const;
+  bool canZC(std::unique_ptr<IOBuf> const& buf);
+
+  // Retry zero copy after this many writes following ENOMEM or EOPNOTSUPP.
+  // 0 (the default) keeps zero copy suspended.
+  void setZeroCopyReenableThreshold(size_t threshold) {
+    zeroCopyReenableThreshold_ = threshold;
+  }
+  size_t getZeroCopyReenableThreshold() const {
+    return zeroCopyReenableThreshold_;
+  }
 
   // AsyncTransport
   void close() override;
@@ -494,6 +503,9 @@ class AsyncIoUringSocket : public AsyncSocketTransport {
   WriteSqe* writeSqeActive_ = nullptr;
   WriteSqeList writeSqeQueue_;
   size_t bytesWritten_{0};
+  bool zeroCopySuspended_{false};
+  size_t zeroCopyReenableThreshold_{0};
+  size_t zeroCopyReenableCounter_{0};
 
   // connect
   std::unique_ptr<ConnectSqe> connectSqe_;

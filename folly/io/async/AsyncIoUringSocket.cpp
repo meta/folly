@@ -1519,6 +1519,23 @@ void AsyncIoUringSocket::WriteSqe::callbackCancelled(
   }
 }
 
+namespace {
+
+// Errors from a zero copy send that a copying send of the same data would
+// not necessarily hit, e.g. failing to pin the pages or allocate zero copy
+// state, or the socket not supporting zero copy at all.
+bool isZeroCopySendError(int err) {
+  switch (err) {
+    case ENOMEM:
+    case EOPNOTSUPP:
+      return true;
+    default:
+      return false;
+  }
+}
+
+} // namespace
+
 void AsyncIoUringSocket::WriteSqe::callback(const io_uring_cqe* cqe) noexcept {
   auto res = cqe->res;
   auto flags = cqe->flags;
@@ -1596,6 +1613,19 @@ void AsyncIoUringSocket::WriteSqe::callback(const io_uring_cqe* cqe) noexcept {
 
     // partial write
     parent_->doReSubmitWrite();
+  } else if (res < 0 && zcOptions_.zeroCopy && isZeroCopySendError(-res)) {
+    // a failed send transmits nothing, so resend the whole message without
+    // zero copy rather than failing the write. The notification for the
+    // failed send still arrives and is accounted for in refs_.
+    VLOG(2) << "zero copy write failed, retrying without zero copy: "
+            << folly::errnoStr(-res) << " (" << res << ")";
+    zcOptions_.zeroCopy = false;
+    parent_->zeroCopySuspended_ = true;
+    parent_->zeroCopyReenableCounter_ = parent_->zeroCopyReenableThreshold_;
+
+    // must make inflight false even if MORE is set
+    prepareForReuse();
+    parent_->doReSubmitWrite();
   } else {
     if (callback_) {
       if (res >= 0) {
@@ -1652,7 +1682,13 @@ void AsyncIoUringSocket::writev(
   writeChain(callback, std::move(first), wf);
 }
 
-bool AsyncIoUringSocket::canZC(std::unique_ptr<IOBuf> const& buf) const {
+bool AsyncIoUringSocket::canZC(std::unique_ptr<IOBuf> const& buf) {
+  if (zeroCopySuspended_) {
+    if (zeroCopyReenableCounter_ == 0 || --zeroCopyReenableCounter_ > 0) {
+      return false;
+    }
+    zeroCopySuspended_ = false;
+  }
   if (!options_.zeroCopyEnable) {
     return false;
   }
