@@ -16,7 +16,6 @@
 
 #include <folly/codec/hex.h>
 
-#include <folly/Likely.h>
 #include <folly/lang/Keep.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
@@ -62,7 +61,7 @@ check_folly_hex_decode_digit_flavor_x86_64(char h) {
 extern "C" FOLLY_KEEP uint8_t
 check_folly_hex_decode_digit_table_or_sink(char h) {
   auto const v = folly::hex_decode_digit_table(h);
-  if (FOLLY_UNLIKELY(!folly::hex_decoded_digit_is_valid(v))) {
+  if (!folly::hex_decoded_digit_is_valid(v)) [[unlikely]] {
     folly::detail::keep_sink_nx();
   }
   return v;
@@ -71,7 +70,7 @@ check_folly_hex_decode_digit_table_or_sink(char h) {
 extern "C" FOLLY_KEEP uint8_t
 check_folly_hex_decode_digit_flavor_aarch64_or_sink(char h) {
   auto const v = folly::hex_decode_digit_flavor_aarch64(h);
-  if (FOLLY_UNLIKELY(!folly::hex_decoded_digit_is_valid(v))) {
+  if (!folly::hex_decoded_digit_is_valid(v)) [[unlikely]] {
     folly::detail::keep_sink_nx();
   }
   return v;
@@ -80,7 +79,7 @@ check_folly_hex_decode_digit_flavor_aarch64_or_sink(char h) {
 extern "C" FOLLY_KEEP uint8_t
 check_folly_hex_decode_digit_flavor_x86_64_or_sink(char h) {
   auto const v = folly::hex_decode_digit_flavor_x86_64(h);
-  if (FOLLY_UNLIKELY(!folly::hex_decoded_digit_is_valid(v))) {
+  if (!folly::hex_decoded_digit_is_valid(v)) [[unlikely]] {
     folly::detail::keep_sink_nx();
   }
   return v;
@@ -88,7 +87,7 @@ check_folly_hex_decode_digit_flavor_x86_64_or_sink(char h) {
 
 extern "C" FOLLY_KEEP uint8_t
 check_folly_hex_decode_digit_table_or_sink_split(char h) {
-  if (FOLLY_UNLIKELY(!folly::hex_is_digit_table(h))) {
+  if (!folly::hex_is_digit_table(h)) [[unlikely]] {
     folly::detail::keep_sink_nx();
     return ~0;
   }
@@ -97,7 +96,7 @@ check_folly_hex_decode_digit_table_or_sink_split(char h) {
 
 extern "C" FOLLY_KEEP uint8_t
 check_folly_hex_decode_digit_flavor_aarch64_or_sink_split(char h) {
-  if (FOLLY_UNLIKELY(!folly::hex_is_digit_flavor_aarch64(h))) {
+  if (!folly::hex_is_digit_flavor_aarch64(h)) [[unlikely]] {
     folly::detail::keep_sink_nx();
     return ~0;
   }
@@ -106,7 +105,7 @@ check_folly_hex_decode_digit_flavor_aarch64_or_sink_split(char h) {
 
 extern "C" FOLLY_KEEP uint8_t
 check_folly_hex_decode_digit_flavor_x86_64_or_sink_split(char h) {
-  if (FOLLY_UNLIKELY(!folly::hex_is_digit_flavor_x86_64(h))) {
+  if (!folly::hex_is_digit_flavor_x86_64(h)) [[unlikely]] {
     folly::detail::keep_sink_nx();
     return ~0;
   }

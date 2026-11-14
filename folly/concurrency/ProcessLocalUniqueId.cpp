@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <folly/Likely.h>
 #include <folly/concurrency/ProcessLocalUniqueId.h>
 #include <folly/synchronization/RelaxedAtomic.h>
 
@@ -32,10 +31,10 @@ uint64_t processLocalUniqueId() {
   thread_local uint64_t next{0};
 
   // If first call in thread, or counter wrapped around, start new epoch.
-  if (FOLLY_UNLIKELY((next & kCounterMask) == 0)) {
+  if ((next & kCounterMask) == 0) [[unlikely]] {
     next = nextEpoch++ << kCounterBits;
     // Skip 0 as per contract.
-    if (FOLLY_UNLIKELY(next == 0)) {
+    if (next == 0) [[unlikely]] {
       ++next;
     }
   }

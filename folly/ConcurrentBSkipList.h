@@ -1039,7 +1039,7 @@ class ConcurrentBSkipList {
     constexpr uint64_t kFibonacciMix = 0x9E3779B97F4A7C15ULL;
     constexpr int kBitsPerDigit = __builtin_ctz(kPromotionProbInverse);
     const uint64_t hashMixed = static_cast<uint64_t>(Hash{}(k)) * kFibonacciMix;
-    if (FOLLY_UNLIKELY(hashMixed == 0)) {
+    if (hashMixed == 0) [[unlikely]] {
       return kMaxHeight - 1;
     }
     const int firstNonZeroDigitIndex =
