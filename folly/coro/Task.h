@@ -625,7 +625,16 @@ class [[nodiscard]] TaskWithExecutor {
   }
 
   friend TaskWithExecutor co_withCancellation(
-      folly::CancellationToken cancelToken, TaskWithExecutor&& task) noexcept {
+      const folly::CancellationToken& cancelToken,
+      TaskWithExecutor&& task) noexcept {
+    DCHECK(task.coro_);
+    task.coro_.promise().setCancellationToken(cancelToken);
+    return std::move(task);
+  }
+
+  friend TaskWithExecutor co_withCancellation(
+      folly::CancellationToken&& cancelToken,
+      TaskWithExecutor&& task) noexcept {
     DCHECK(task.coro_);
     task.coro_.promise().setCancellationToken(std::move(cancelToken));
     return std::move(task);
@@ -790,7 +799,14 @@ class FOLLY_CORO_TASK_ATTRS Task {
   }
 
   friend Task co_withCancellation(
-      folly::CancellationToken cancelToken, Task&& task) noexcept {
+      const folly::CancellationToken& cancelToken, Task&& task) noexcept {
+    DCHECK(task.coro_);
+    task.coro_.promise().setCancellationToken(cancelToken);
+    return std::move(task);
+  }
+
+  friend Task co_withCancellation(
+      folly::CancellationToken&& cancelToken, Task&& task) noexcept {
     DCHECK(task.coro_);
     task.coro_.promise().setCancellationToken(std::move(cancelToken));
     return std::move(task);

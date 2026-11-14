@@ -75,6 +75,17 @@ TEST_F(AsyncGeneratorTest, DefaultConstructedGeneratorIsEmpty) {
   }());
 }
 
+TEST_F(AsyncGeneratorTest, EmptyGeneratorConsumesMovedCancellationToken) {
+  folly::CancellationSource source;
+  auto token = source.getToken();
+  folly::coro::AsyncGenerator<int> generator;
+  auto next =
+      folly::coro::co_withCancellation(std::move(token), generator.next());
+
+  EXPECT_FALSE(token.canBeCancelled());
+  EXPECT_FALSE(folly::coro::blockingWait(next));
+}
+
 TEST_F(AsyncGeneratorTest, GeneratorDestroyedBeforeCallingBegin) {
   bool started = false;
   auto makeGenerator = [&]() -> folly::coro::AsyncGenerator<int> {

@@ -501,9 +501,19 @@ class [[nodiscard]] AsyncGenerator {
     }
 
     friend NextSemiAwaitable co_withCancellation(
-        CancellationToken cancelToken, NextSemiAwaitable&& awaitable) {
+        const CancellationToken& cancelToken, NextSemiAwaitable&& awaitable) {
       if (awaitable.coro_) {
-        awaitable.coro_.promise().setCancellationToken(std::move(cancelToken));
+        awaitable.coro_.promise().setCancellationToken(cancelToken);
+      }
+      return NextSemiAwaitable{std::exchange(awaitable.coro_, {})};
+    }
+
+    friend NextSemiAwaitable co_withCancellation(
+        CancellationToken&& cancelToken, NextSemiAwaitable&& awaitable) {
+      auto consumedToken = std::move(cancelToken);
+      if (awaitable.coro_) {
+        awaitable.coro_.promise().setCancellationToken(
+            std::move(consumedToken));
       }
       return NextSemiAwaitable{std::exchange(awaitable.coro_, {})};
     }

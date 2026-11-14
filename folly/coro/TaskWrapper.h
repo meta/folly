@@ -303,9 +303,16 @@ class TaskWrapperCrtp {
 
   // Pass `tw` by-value, since `&&` would break immediately-awaitable types
   friend Derived co_withCancellation(
-      CancellationToken cancelToken, Derived tw) noexcept {
+      const CancellationToken& cancelToken, Derived tw) noexcept {
+    return Derived{
+        co_withCancellation(cancelToken, std::move(tw).unwrapTask())};
+  }
+
+  friend Derived co_withCancellation(
+      CancellationToken&& cancelToken, Derived tw) noexcept {
+    auto consumedToken = std::move(cancelToken);
     return Derived{co_withCancellation(
-        std::move(cancelToken), std::move(tw).unwrapTask())};
+        std::move(consumedToken), std::move(tw).unwrapTask())};
   }
 
   // Pass `tw` by-value, since `&&` would break immediately-awaitable types

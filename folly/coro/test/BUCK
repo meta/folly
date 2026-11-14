@@ -486,6 +486,12 @@ fb_dirsync_cpp_benchmark(
     srcs = ["TaskBenchmark.cpp"],
     headers = [],
     deps = [
+        "fbsource//xplat/folly:cancellation_token",
+        "fbsource//xplat/folly/coro:async_generator",
+        "fbsource//xplat/folly/coro:coroutine",
+        "fbsource//xplat/folly/coro:with_cancellation",
+        "fbsource//xplat/folly/coro/safe:now_task",
+        "fbsource//xplat/folly/tracing:async_stack",
         "//folly:benchmark",
         "//folly:portability",
         "//folly/coro:blocking_wait",

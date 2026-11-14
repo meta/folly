@@ -256,6 +256,22 @@ CO_TEST_F(MovableTaskWrapperTest, withExecutor) {
 CO_TEST_F(NowTaskWrapperTest, cancellation) {
   co_await checkCancellation();
 }
+
+CO_TEST_F(NowTaskWrapperTest, cancellationOverrideConsumesMovedToken) {
+  CancellationSource firstSource;
+  CancellationSource ignoredSource;
+  auto firstToken = firstSource.getToken();
+  auto ignoredToken = ignoredSource.getToken();
+  auto readToken = []() -> tiny_now_task<CancellationToken> {
+    co_return co_await co_current_cancellation_token;
+  };
+
+  auto token = co_await co_withCancellation(
+      std::move(ignoredToken), co_withCancellation(firstToken, readToken()));
+  EXPECT_FALSE(ignoredToken.canBeCancelled());
+  EXPECT_EQ(firstToken, token);
+}
+
 CO_TEST_F(MovableTaskWrapperTest, cancellation) {
   co_await checkCancellation();
 }

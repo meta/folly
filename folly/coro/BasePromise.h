@@ -130,11 +130,21 @@ class BasePromise {
   }
 
   // End-users can do this via `co_withCancellation`.
-  void setCancellationToken(folly::CancellationToken cancelToken) noexcept {
+  void setCancellationToken(
+      const folly::CancellationToken& cancelToken) noexcept {
     // Only keep the first cancellation token.  This is usually the inner-most
     // cancellation scope of the consumer's calling context.
     if (!hasCancelTokenOverride_) {
-      cancelToken_ = std::move(cancelToken);
+      cancelToken_ = folly::CancellationToken{cancelToken};
+      hasCancelTokenOverride_ = true;
+    }
+  }
+
+  void setCancellationToken(folly::CancellationToken&& cancelToken) noexcept {
+    // Rvalue tokens are consumed even when an earlier override is kept.
+    auto consumedToken = std::move(cancelToken);
+    if (!hasCancelTokenOverride_) {
+      cancelToken_ = std::move(consumedToken);
       hasCancelTokenOverride_ = true;
     }
   }

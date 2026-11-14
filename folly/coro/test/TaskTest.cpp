@@ -546,6 +546,42 @@ TEST_F(TaskTest, CancellationPropagatesThroughCoAwaitTry) {
   EXPECT_EQ(42, result.value());
 }
 
+TEST_F(TaskTest, CancellationOverrideConsumesMovedToken) {
+  folly::CancellationSource firstSource;
+  folly::CancellationSource ignoredSource;
+  auto firstToken = firstSource.getToken();
+  auto ignoredToken = ignoredSource.getToken();
+  auto readToken = []() -> folly::coro::Task<folly::CancellationToken> {
+    co_return co_await folly::coro::co_current_cancellation_token;
+  };
+
+  auto task = folly::coro::co_withCancellation(firstToken, readToken());
+  auto overridden = folly::coro::co_withCancellation(
+      std::move(ignoredToken), std::move(task));
+  EXPECT_FALSE(ignoredToken.canBeCancelled());
+  EXPECT_EQ(firstToken, folly::coro::blockingWait(std::move(overridden)));
+}
+
+TEST_F(TaskTest, EmptyCancellationOverrideConsumesMovedTokenWithExecutor) {
+  folly::ManualExecutor executor;
+  folly::CancellationSource ignoredSource;
+  auto ignoredToken = ignoredSource.getToken();
+  auto readToken = []() -> folly::coro::Task<folly::CancellationToken> {
+    co_return co_await folly::coro::co_current_cancellation_token;
+  };
+
+  auto task = co_withExecutor(
+      &executor,
+      folly::coro::co_withCancellation(
+          folly::CancellationToken{}, readToken()));
+  auto overridden = folly::coro::co_withCancellation(
+      std::move(ignoredToken), std::move(task));
+  EXPECT_FALSE(ignoredToken.canBeCancelled());
+  EXPECT_FALSE(
+      folly::coro::blockingWait(std::move(overridden), &executor)
+          .canBeCancelled());
+}
+
 TEST_F(TaskTest, StartInlineUnsafe) {
   folly::coro::blockingWait([]() -> folly::coro::Task<void> {
     auto executor = co_await folly::coro::co_current_executor;
