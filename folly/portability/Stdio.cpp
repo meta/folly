@@ -65,15 +65,32 @@ void setbuffer(FILE* f, char* buf, size_t size) {
 }
 
 int vasprintf(char** dest, const char* format, va_list ap) {
-  int len = vsnprintf(nullptr, 0, format, ap);
+  va_list ap1;
+  va_copy(ap1, ap);
+  int len = vsnprintf(nullptr, 0, format, ap1);
+  va_end(ap1);
+
   if (len <= 0) {
     return -1;
   }
-  char* buf = *dest = (char*)malloc(size_t(len + 1));
-  if (vsnprintf(buf, size_t(len + 1), format, ap) == len) {
+
+  char* buf = (char*)malloc(size_t(len + 1));
+  if (!buf) {
+    return -1;
+  }
+
+  va_list ap2;
+  va_copy(ap2, ap);
+  int const rc = vsnprintf(buf, size_t(len + 1), format, ap2);
+  va_end(ap2);
+
+  if (rc == len) {
+    *dest = buf;
     return len;
   }
+
   free(buf);
+  *dest = nullptr;
   return -1;
 }
 }
