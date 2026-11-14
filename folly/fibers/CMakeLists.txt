@@ -58,15 +58,9 @@ folly_add_library(
   HEADERS BoostContextCompatibility.h
   EXPORTED_DEPS
     ${GLOG_LIBRARIES}
-    Boost::context
+    folly_external_boost-fcontext_fcontext
     folly_function
-)
-set_property(
-  GLOBAL
-  APPEND
-  PROPERTY
-    FOLLY_MONOLITHIC_EXTERNAL_DEPS
-    Boost::context
+    folly_portability_config
 )
 
 folly_add_library(

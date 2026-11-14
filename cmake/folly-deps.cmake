@@ -56,7 +56,24 @@ set(Boost_USE_STATIC_LIBS "${FOLLY_BOOST_LINK_STATIC}")
 # Note: We find these components so the CMake targets exist, but we don't
 # link them globally. Targets that need specific Boost libraries should
 # add them to their EXTERNAL_DEPS (e.g., Boost::regex, Boost::context).
-set(FOLLY_BOOST_COMPONENTS context)
+set(FOLLY_BOOST_COMPONENTS "")
+
+# Fibers switch contexts with the assembly in folly/external/boost-fcontext
+# on x86_64 and arm64 outside Windows, and with Boost.Context elsewhere.
+set(FOLLY_FIBERS_USE_BOOST_CONTEXT OFF)
+set(folly_fcontext_archs ${CMAKE_SYSTEM_PROCESSOR})
+if (APPLE AND CMAKE_OSX_ARCHITECTURES)
+  set(folly_fcontext_archs ${CMAKE_OSX_ARCHITECTURES})
+endif ()
+foreach (arch IN LISTS folly_fcontext_archs)
+  if (NOT arch MATCHES "^(x86_64|aarch64|arm64)$")
+    set(FOLLY_FIBERS_USE_BOOST_CONTEXT ON)
+  endif ()
+endforeach ()
+if (WIN32 OR NOT folly_fcontext_archs OR FOLLY_FIBERS_USE_BOOST_CONTEXT)
+  set(FOLLY_FIBERS_USE_BOOST_CONTEXT ON)
+  list(APPEND FOLLY_BOOST_COMPONENTS context)
+endif ()
 
 # CMake 4 dropped FindBoost, so this config-only probe warns without QUIET.
 # folly/cli's ProgramOptions is built only if Boost.ProgramOptions is found,

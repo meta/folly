@@ -1,0 +1,70 @@
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+
+oncall("fbcode_entropy_wardens_folly")
+
+MACHO_SRCS = select({
+    "DEFAULT": [],
+    "ovr_config//cpu:arm64": [
+        "jump_arm64_aapcs_macho_gas.S",
+        "make_arm64_aapcs_macho_gas.S",
+    ],
+    "ovr_config//cpu:x86_64": [
+        "jump_x86_64_sysv_macho_gas.S",
+        "make_x86_64_sysv_macho_gas.S",
+    ],
+})
+
+ELF_ARM64_SRCS = [
+    "jump_arm64_aapcs_elf_gas.S",
+    "make_arm64_aapcs_elf_gas.S",
+]
+
+ELF_SRCS = {
+    "ovr_config//cpu:arm32": [
+        "jump_arm_aapcs_elf_gas.S",
+        "make_arm_aapcs_elf_gas.S",
+    ],
+    "ovr_config//cpu:arm64": ELF_ARM64_SRCS,
+    "ovr_config//cpu:x86_32": [
+        "jump_i386_sysv_elf_gas.S",
+        "make_i386_sysv_elf_gas.S",
+    ],
+    "ovr_config//cpu:x86_64": [
+        "jump_x86_64_sysv_elf_gas.S",
+        "make_x86_64_sysv_elf_gas.S",
+    ],
+}
+
+fb_dirsync_cpp_library(
+    name = "fcontext",
+    srcs = select({
+        "DEFAULT": select(dict(ELF_SRCS, DEFAULT = [])),
+        # Android configurations without a CPU constraint compile for arm64.
+        "ovr_config//os:android": select(dict(ELF_SRCS, DEFAULT = ELF_ARM64_SRCS)),
+        "ovr_config//os:appletvos": MACHO_SRCS,
+        "ovr_config//os:iphoneos": MACHO_SRCS,
+        "ovr_config//os:macos": MACHO_SRCS,
+        "ovr_config//os:windows": select({
+            "DEFAULT": [],
+            "ovr_config//cpu:arm64": [
+                "jump_arm64_aapcs_pe_armasm.asm",
+                "make_arm64_aapcs_pe_armasm.asm",
+            ],
+            "ovr_config//cpu:x86_32": [
+                "jump_i386_ms_pe_masm.asm",
+                "make_i386_ms_pe_masm.asm",
+            ],
+            "ovr_config//cpu:x86_64": [
+                "jump_x86_64_ms_pe_masm.asm",
+                "make_x86_64_ms_pe_masm.asm",
+            ],
+        }),
+    }),
+    headers = ["fcontext.h"],
+    compiler_flags = select({
+        "DEFAULT": ["-Wno-unused-command-line-argument"],
+        "ovr_config//os:windows": [],
+        "ovr_config//os:windows-x86_32": ["/DBOOST_CONTEXT_EXPORT="],
+        "ovr_config//os:windows-x86_64": ["/DBOOST_CONTEXT_EXPORT="],
+    }),
+)

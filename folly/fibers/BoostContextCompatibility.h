@@ -16,14 +16,16 @@
 
 #pragma once
 
-#include <boost/context/detail/fcontext.hpp>
 #include <glog/logging.h>
 
-/**
- * A wrapper for the low-level fcontext API of boost::context.
- */
-
 #include <folly/Function.h>
+#include <folly/portability/Config.h>
+
+#if defined(FOLLY_FIBERS_USE_BOOST_CONTEXT) && FOLLY_FIBERS_USE_BOOST_CONTEXT
+#include <boost/context/detail/fcontext.hpp> // @manual
+#else
+#include <folly/external/boost-fcontext/fcontext.h>
+#endif
 
 #if defined(__clang__)
 #define FOLLY_DETAIL_DISABLE_TAIL_CALLS __attribute__((disable_tail_calls))
@@ -40,10 +42,26 @@
 namespace folly {
 namespace fibers {
 
-class FiberImpl {
-  using FiberContext = boost::context::detail::fcontext_t;
+namespace fcontext {
+#if defined(FOLLY_FIBERS_USE_BOOST_CONTEXT) && FOLLY_FIBERS_USE_BOOST_CONTEXT
+using boost::context::detail::fcontext_t;
+using boost::context::detail::jump_fcontext;
+using boost::context::detail::make_fcontext;
+using boost::context::detail::transfer_t;
+#else
+using folly::detail::fcontext::fcontext_t;
+using folly::detail::fcontext::transfer_t;
+inline constexpr auto jump_fcontext =
+    &folly::detail::fcontext::folly_jump_fcontext;
+inline constexpr auto make_fcontext =
+    &folly::detail::fcontext::folly_make_fcontext;
+#endif
+} // namespace fcontext
 
-  using MainContext = boost::context::detail::fcontext_t;
+class FiberImpl {
+  using FiberContext = fcontext::fcontext_t;
+
+  using MainContext = fcontext::fcontext_t;
 
  public:
   FiberImpl(
@@ -51,20 +69,18 @@ class FiberImpl {
       : func_(std::move(func)) {
     auto stackBase = stackLimit + stackSize;
     entryFrameBase_ = nullptr;
-    fiberContext_ =
-        boost::context::detail::make_fcontext(stackBase, stackSize, &fiberFunc);
+    fiberContext_ = fcontext::make_fcontext(stackBase, stackSize, &fiberFunc);
   }
 
   void activate() {
-    auto transfer = boost::context::detail::jump_fcontext(fiberContext_, this);
+    auto transfer = fcontext::jump_fcontext(fiberContext_, this);
     fiberContext_ = transfer.fctx;
     auto context = reinterpret_cast<intptr_t>(transfer.data);
     DCHECK_EQ(0, context);
   }
 
   void deactivate() {
-    auto transfer =
-        boost::context::detail::jump_fcontext(mainContext_, nullptr);
+    auto transfer = fcontext::jump_fcontext(mainContext_, nullptr);
     mainContext_ = transfer.fctx;
     fixStackUnwinding();
     auto context = reinterpret_cast<intptr_t>(transfer.data);
@@ -86,7 +102,7 @@ class FiberImpl {
 
  private:
   static FOLLY_NOINLINE FOLLY_DETAIL_DISABLE_TAIL_CALLS void fiberFunc(
-      boost::context::detail::transfer_t transfer) {
+      fcontext::transfer_t transfer) {
     auto fiberImpl = reinterpret_cast<FiberImpl*>(transfer.data);
     fiberImpl->mainContext_ = transfer.fctx;
 #if FOLLY_HAS_BUILTIN(__builtin_frame_address) && \
