@@ -254,21 +254,9 @@ class alignas(T) Replaceable {
     requires(
         std::is_constructible<T, U &&>::value &&
         !std::is_same<std::decay_t<U>, std::in_place_t>::value &&
-        !std::is_same<Replaceable<T>, std::decay_t<U>>::value &&
-        std::is_convertible<U &&, T>::value)
-  constexpr /* implicit */ Replaceable(U&& other) noexcept(
-      std::is_nothrow_constructible<T, U&&>::value) {
-    ::new (storage_) T(std::forward<U>(other));
-  }
-
-  template <class U = T>
-    requires(
-        std::is_constructible<T, U &&>::value &&
-        !std::is_same<std::decay_t<U>, std::in_place_t>::value &&
-        !std::is_same<Replaceable<T>, std::decay_t<U>>::value &&
-        !std::is_convertible<U &&, T>::value)
-  constexpr explicit Replaceable(U&& other) noexcept(
-      std::is_nothrow_constructible<T, U&&>::value) {
+        !std::is_same<Replaceable<T>, std::decay_t<U>>::value)
+  constexpr explicit(!std::is_convertible<U&&, T>::value) Replaceable(
+      U&& other) noexcept(std::is_nothrow_constructible<T, U&&>::value) {
     ::new (storage_) T(std::forward<U>(other));
   }
 
@@ -276,21 +264,10 @@ class alignas(T) Replaceable {
     requires(
         std::is_constructible<T, const U&>::value &&
         !replaceable_detail::is_constructible_from_replaceable<T>::value &&
-        !replaceable_detail::is_convertible_from_replaceable<T>::value &&
-        std::is_convertible<const U&, T>::value)
-  /* implicit */ Replaceable(const Replaceable<U>& other) noexcept(
-      std::is_nothrow_constructible<T, U const&>::value) {
-    ::new (storage_) T(*other);
-  }
-
-  template <class U>
-    requires(
-        std::is_constructible<T, const U&>::value &&
-        !replaceable_detail::is_constructible_from_replaceable<T>::value &&
-        !replaceable_detail::is_convertible_from_replaceable<T>::value &&
-        !std::is_convertible<const U&, T>::value)
-  explicit Replaceable(const Replaceable<U>& other) noexcept(
-      std::is_nothrow_constructible<T, U const&>::value) {
+        !replaceable_detail::is_convertible_from_replaceable<T>::value)
+  explicit(!std::is_convertible<const U&, T>::value)
+      Replaceable(const Replaceable<U>& other) noexcept(
+          std::is_nothrow_constructible<T, U const&>::value) {
     ::new (storage_) T(*other);
   }
 
@@ -298,21 +275,10 @@ class alignas(T) Replaceable {
     requires(
         std::is_constructible<T, U &&>::value &&
         !replaceable_detail::is_constructible_from_replaceable<T>::value &&
-        !replaceable_detail::is_convertible_from_replaceable<T>::value &&
-        std::is_convertible<U &&, T>::value)
-  /* implicit */ Replaceable(Replaceable<U>&& other) noexcept(
-      std::is_nothrow_constructible<T, U&&>::value) {
-    ::new (storage_) T(std::move(*other));
-  }
-
-  template <class U>
-    requires(
-        std::is_constructible<T, U &&>::value &&
-        !replaceable_detail::is_constructible_from_replaceable<T>::value &&
-        !replaceable_detail::is_convertible_from_replaceable<T>::value &&
-        !std::is_convertible<U &&, T>::value)
-  explicit Replaceable(Replaceable<U>&& other) noexcept(
-      std::is_nothrow_constructible<T, U&&>::value) {
+        !replaceable_detail::is_convertible_from_replaceable<T>::value)
+  explicit(!std::is_convertible<U&&, T>::value)
+      Replaceable(Replaceable<U>&& other) noexcept(
+          std::is_nothrow_constructible<T, U&&>::value) {
     ::new (storage_) T(std::move(*other));
   }
 

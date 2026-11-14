@@ -81,30 +81,15 @@ class Indestructible final {
    *
    * This provides convenience
    *
-   * There are two versions of this constructor - one for when the element is
-   * implicitly constructible from the given argument and one for when the
-   * type is explicitly but not implicitly constructible from the given
-   * argument.
+   * The constructor is implicit when the element is implicitly constructible
+   * from the given argument and explicit otherwise.
    */
-  template <
-      typename U = T,
-      std::enable_if_t<std::is_constructible<T, U&&>::value>* = nullptr,
-      std::enable_if_t<
-          !std::is_same<Indestructible<T>, std::remove_cvref_t<U>>::value>* =
-          nullptr,
-      std::enable_if_t<!std::is_convertible<U&&, T>::value>* = nullptr>
-  explicit constexpr Indestructible(U&& u) noexcept(
-      noexcept(T(std::declval<U>())))
-      : storage_{std::in_place, std::forward<U>(u)} {}
-  template <
-      typename U = T,
-      std::enable_if_t<std::is_constructible<T, U&&>::value>* = nullptr,
-      std::enable_if_t<
-          !std::is_same<Indestructible<T>, std::remove_cvref_t<U>>::value>* =
-          nullptr,
-      std::enable_if_t<std::is_convertible<U&&, T>::value>* = nullptr>
-  /* implicit */ constexpr Indestructible(U&& u) noexcept(
-      noexcept(T(std::declval<U>())))
+  template <typename U = T>
+    requires(
+        std::is_constructible_v<T, U &&> &&
+        !std::is_same_v<Indestructible<T>, std::remove_cvref_t<U>>)
+  explicit(!std::is_convertible_v<U&&, T>) constexpr Indestructible(
+      U&& u) noexcept(noexcept(T(std::declval<U>())))
       : storage_{std::in_place, std::forward<U>(u)} {}
 
   template <typename... Args, typename = decltype(T(std::declval<Args>()...))>

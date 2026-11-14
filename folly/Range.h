@@ -457,76 +457,36 @@ class Range {
    *
    * @methodset Range
    */
-  template <
-      class OtherIter,
-      typename std::enable_if<
-          (std::is_same<Iter, const unsigned char*>::value &&
-           (std::is_same<OtherIter, const char*>::value ||
-            std::is_same<OtherIter, char*>::value)),
-          int>::type = 0>
-  /* implicit */ Range(const Range<OtherIter>& other)
-      : b_(reinterpret_cast<const unsigned char*>(other.begin())),
-        e_(reinterpret_cast<const unsigned char*>(other.end())) {}
-
-  template <
-      class OtherIter,
-      typename std::enable_if<
-          (std::is_same<Iter, unsigned char*>::value &&
-           std::is_same<OtherIter, char*>::value),
-          int>::type = 0>
-  /* implicit */ Range(const Range<OtherIter>& other)
-      : b_(reinterpret_cast<unsigned char*>(other.begin())),
-        e_(reinterpret_cast<unsigned char*>(other.end())) {}
-
-  template <
-      class OtherIter,
-      typename std::enable_if<
-          (std::is_same<Iter, const char*>::value &&
-           (std::is_same<OtherIter, const unsigned char*>::value ||
-            std::is_same<OtherIter, unsigned char*>::value)),
-          int>::type = 0>
-  explicit Range(const Range<OtherIter>& other)
-      : b_(reinterpret_cast<const char*>(other.begin())),
-        e_(reinterpret_cast<const char*>(other.end())) {}
-
-  template <
-      class OtherIter,
-      typename std::enable_if<
-          (std::is_same<Iter, char*>::value &&
-           std::is_same<OtherIter, unsigned char*>::value),
-          int>::type = 0>
-  explicit Range(const Range<OtherIter>& other)
-      : b_(reinterpret_cast<char*>(other.begin())),
-        e_(reinterpret_cast<char*>(other.end())) {}
+  template <class OtherIter>
+    requires((std::is_same_v<Iter, const unsigned char*> &&
+              (std::is_same_v<OtherIter, const char*> ||
+               std::is_same_v<OtherIter, char*>)) ||
+             (std::is_same_v<Iter, unsigned char*> &&
+              std::is_same_v<OtherIter, char*>) ||
+             (std::is_same_v<Iter, const char*> &&
+              (std::is_same_v<OtherIter, const unsigned char*> ||
+               std::is_same_v<OtherIter, unsigned char*>)) ||
+             (std::is_same_v<Iter, char*> &&
+              std::is_same_v<OtherIter, unsigned char*>))
+  explicit(
+      !std::is_same_v<Iter, const unsigned char*> &&
+      !std::is_same_v<Iter, unsigned char*>)
+      Range(const Range<OtherIter>& other)
+      : b_(reinterpret_cast<Iter>(other.begin())),
+        e_(reinterpret_cast<Iter>(other.end())) {}
 
   /**
-   * Allow implicit conversion from Range<From> to Range<To> if From is
-   * implicitly convertible to To.
+   * Allow conversion from Range<From> to Range<To> if From is convertible to
+   * To. The conversion is implicit if From is implicitly convertible to To.
    *
    * @methodset Range
    */
-  template <
-      class OtherIter,
-      typename std::enable_if<
-          (!std::is_same<Iter, OtherIter>::value &&
-           std::is_convertible<OtherIter, Iter>::value),
-          int>::type = 0>
-  constexpr /* implicit */ Range(const Range<OtherIter>& other)
-      : b_(other.begin()), e_(other.end()) {}
-  /**
-   * Allow explicit conversion from Range<From> to Range<To> if From is
-   * explicitly convertible to To.
-   *
-   * @methodset Range
-   */
-  template <
-      class OtherIter,
-      typename std::enable_if<
-          (!std::is_same<Iter, OtherIter>::value &&
-           !std::is_convertible<OtherIter, Iter>::value &&
-           std::is_constructible<Iter, const OtherIter&>::value),
-          int>::type = 0>
-  constexpr explicit Range(const Range<OtherIter>& other)
+  template <class OtherIter>
+    requires(!std::is_same_v<Iter, OtherIter> &&
+             (std::is_convertible_v<OtherIter, Iter> ||
+              std::is_constructible_v<Iter, const OtherIter&>))
+  constexpr explicit(!std::is_convertible_v<OtherIter, Iter>)
+      Range(const Range<OtherIter>& other)
       : b_(other.begin()), e_(other.end()) {}
 
   /**

@@ -67,33 +67,17 @@ class propagate_const {
   propagate_const(propagate_const const&) = delete;
 
   template <typename OtherPointer>
-    requires(
-        std::is_constructible_v<Pointer, OtherPointer &&> &&
-        !std::is_convertible_v<OtherPointer &&, Pointer>)
-  constexpr explicit propagate_const(propagate_const<OtherPointer>&& other)
-      : pointer_(static_cast<OtherPointer&&>(other.pointer_)) {}
-
-  template <typename OtherPointer>
-    requires(
-        std::is_constructible_v<Pointer, OtherPointer &&> &&
-        std::is_convertible_v<OtherPointer &&, Pointer>)
-  constexpr propagate_const(propagate_const<OtherPointer>&& other)
+    requires(std::is_constructible_v<Pointer, OtherPointer &&>)
+  constexpr explicit(!std::is_convertible_v<OtherPointer&&, Pointer>)
+      propagate_const(propagate_const<OtherPointer>&& other)
       : pointer_(static_cast<OtherPointer&&>(other.pointer_)) {}
 
   template <typename OtherPointer>
     requires(
         !detail::is_decay_propagate_const<OtherPointer>::value &&
-        std::is_constructible_v<Pointer, OtherPointer &&> &&
-        !std::is_convertible_v<OtherPointer &&, Pointer>)
-  constexpr explicit propagate_const(OtherPointer&& other)
-      : pointer_(static_cast<OtherPointer&&>(other)) {}
-
-  template <typename OtherPointer>
-    requires(
-        !detail::is_decay_propagate_const<OtherPointer>::value &&
-        std::is_constructible_v<Pointer, OtherPointer &&> &&
-        std::is_convertible_v<OtherPointer &&, Pointer>)
-  constexpr propagate_const(OtherPointer&& other)
+        std::is_constructible_v<Pointer, OtherPointer &&>)
+  constexpr explicit(!std::is_convertible_v<OtherPointer&&, Pointer>)
+      propagate_const(OtherPointer&& other)
       : pointer_(static_cast<OtherPointer&&>(other)) {}
 
   constexpr propagate_const& operator=(propagate_const&&) = default;
