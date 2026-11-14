@@ -1105,12 +1105,6 @@ class AsyncSocket
   size_t getRecvBufInUse() const;
 #endif
 
-/** Applies a TCP personality through Meta's SO_SET_NAMESPACE socket option. */
-#ifndef SO_SET_NAMESPACE
-#define SO_SET_NAMESPACE 41
-#endif
-  int setTCPProfile(int profd);
-
   /**
    * Generic API for reading a socket option.
    *

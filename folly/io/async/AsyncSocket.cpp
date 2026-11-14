@@ -2960,25 +2960,6 @@ size_t AsyncSocket::getRecvBufInUse() const {
 }
 #endif
 
-int AsyncSocket::setTCPProfile(int profd) {
-  if (fd_ == NetworkSocket()) {
-    VLOG(4) << "AsyncSocket::setTCPProfile() called on non-open socket " << this
-            << "(state=" << state_ << ")";
-    return EINVAL;
-  }
-
-  if (netops_->setsockopt(
-          fd_, SOL_SOCKET, SO_SET_NAMESPACE, &profd, sizeof(int)) != 0) {
-    int errnoCopy = errno;
-    VLOG(2) << "failed to set socket namespace option on AsyncSocket" << this
-            << "(fd=" << fd_ << ", state=" << state_
-            << "): " << errnoStr(errnoCopy);
-    return errnoCopy;
-  }
-
-  return 0;
-}
-
 void AsyncSocket::ioReady(uint16_t events) noexcept {
   VLOG(7) << "AsyncSocket::ioRead() this=" << this << ", fd=" << fd_
           << ", events=" << std::hex << events << ", state=" << state_;
