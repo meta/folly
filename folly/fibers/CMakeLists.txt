@@ -60,7 +60,6 @@ folly_add_library(
     ${GLOG_LIBRARIES}
     folly_external_boost-fcontext_fcontext
     folly_function
-    folly_portability_config
 )
 
 folly_add_library(

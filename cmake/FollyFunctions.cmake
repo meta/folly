@@ -632,7 +632,7 @@ endfunction ()
 #     DEPS folly_lang_bits folly_ext_lz4  # Private dependencies (folly targets
 #                                         # and folly_ext_* libraries)
 #     EXPORTED_DEPS folly_range     # Public dependencies (propagated to users)
-#     EXTERNAL_DEPS Boost::context  # External library dependencies
+#     EXTERNAL_DEPS Boost::regex  # External library dependencies
 #     EXTERNAL_INCLUDE_DIRS ${FOO_INCLUDE_DIRS}  # External include directories
 #     COMPILE_OPTIONS -mpclmul      # Optional compile options for source files
 #     EXCLUDE_FROM_MONOLITH         # Don't include in monolithic folly library

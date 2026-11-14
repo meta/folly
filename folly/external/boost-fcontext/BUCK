@@ -25,6 +25,10 @@ ELF_SRCS = {
         "make_arm_aapcs_elf_gas.S",
     ],
     "ovr_config//cpu:arm64": ELF_ARM64_SRCS,
+    "ovr_config//cpu:riscv64": [
+        "jump_riscv64_sysv_elf_gas.S",
+        "make_riscv64_sysv_elf_gas.S",
+    ],
     "ovr_config//cpu:x86_32": [
         "jump_i386_sysv_elf_gas.S",
         "make_i386_sysv_elf_gas.S",

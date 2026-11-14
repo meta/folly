@@ -60,7 +60,6 @@ fb_dirsync_cpp_library(
         "fbsource//third-party/glog:glog",
         "//folly:function",
         "//folly/external/boost-fcontext:fcontext",
-        "//folly/portability:config",
     ],
 )
 

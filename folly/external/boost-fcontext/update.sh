@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # Regenerates the vendored Boost.Context assembly from a Boost source tree,
-# renaming the symbols but not the comments that mention them:
+# renaming the symbols outside lines that start with a comment:
 #   folly/external/boost-fcontext/update.sh path/to/boost
 
 set -eu
@@ -34,6 +34,11 @@ abis="
   arm_aapcs_elf_gas.S
   i386_ms_pe_masm.asm
   i386_sysv_elf_gas.S
+  mips32_o32_elf_gas.S
+  mips64_n64_elf_gas.S
+  riscv64_sysv_elf_gas.S
+  s390x_sysv_elf_gas.S
+  x86_64_ms_pe_clang_gas.S
   x86_64_ms_pe_masm.asm
   x86_64_sysv_elf_gas.S
   x86_64_sysv_macho_gas.S

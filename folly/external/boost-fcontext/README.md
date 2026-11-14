@@ -14,7 +14,8 @@ Boost.Context in a program that links both. `update.sh` regenerates the
 assembly from a Boost source tree. `make_macho_gas.S` and `jump_macho_gas.S`
 include the Mach-O variant for the target architecture, so that CMake builds
 for any combination of arm64 and x86_64 in `CMAKE_OSX_ARCHITECTURES`, including
-universal binaries, and uses Boost.Context for other architectures.
+universal binaries. CMake stops with an error for an architecture that has no
+variant here.
 
 Distributed under the Boost Software License, Version 1.0 (see
 `LICENSE_1_0.txt`).

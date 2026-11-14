@@ -19,13 +19,7 @@
 #include <glog/logging.h>
 
 #include <folly/Function.h>
-#include <folly/portability/Config.h>
-
-#if defined(FOLLY_FIBERS_USE_BOOST_CONTEXT) && FOLLY_FIBERS_USE_BOOST_CONTEXT
-#include <boost/context/detail/fcontext.hpp> // @manual
-#else
 #include <folly/external/boost-fcontext/fcontext.h>
-#endif
 
 #if defined(__clang__)
 #define FOLLY_DETAIL_DISABLE_TAIL_CALLS __attribute__((disable_tail_calls))
@@ -43,19 +37,12 @@ namespace folly {
 namespace fibers {
 
 namespace fcontext {
-#if defined(FOLLY_FIBERS_USE_BOOST_CONTEXT) && FOLLY_FIBERS_USE_BOOST_CONTEXT
-using boost::context::detail::fcontext_t;
-using boost::context::detail::jump_fcontext;
-using boost::context::detail::make_fcontext;
-using boost::context::detail::transfer_t;
-#else
 using folly::detail::fcontext::fcontext_t;
 using folly::detail::fcontext::transfer_t;
 inline constexpr auto jump_fcontext =
     &folly::detail::fcontext::folly_jump_fcontext;
 inline constexpr auto make_fcontext =
     &folly::detail::fcontext::folly_make_fcontext;
-#endif
 } // namespace fcontext
 
 class FiberImpl {
