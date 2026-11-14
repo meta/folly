@@ -57,8 +57,8 @@ bool parseHostAndPort(StringPiece s, StringPiece& host, StringPiece& port) {
        std::all_of(port.begin(), port.end(), isDigit));
 }
 
-// Boost.Regex's default `^` and `$` also match at line breaks other than
-// between '\r' and '\n'.
+// The `^` and `$` anchors of the query parameter pattern also match at line
+// breaks, except between '\r' and '\n'.
 bool isLineBreak(char c) {
   return c == '\n' || c == '\r' || c == '\f';
 }
@@ -81,8 +81,8 @@ struct QueryParam {
   size_t end;
 };
 
-// Matches `([^=&]*)=?([^=&]*)(?=&|$)` at `begin` the way Boost.Regex does,
-// trying the longest name and value first.
+// Matches `([^=&]*)=?([^=&]*)(?=&|$)` at `begin` with backtracking regex
+// semantics, trying the longest name and value first.
 std::optional<QueryParam> matchQueryParam(StringPiece query, size_t begin) {
   auto findDelimiter = [&](size_t from) {
     return std::min(query.find_first_of("=&", from), query.size());
@@ -228,8 +228,8 @@ std::string Uri::hostname() const {
 
 const std::vector<std::pair<std::string, std::string>>& Uri::getQueryParams() {
   if (!query_.empty() && queryParams_.empty()) {
-    // Finds successive matches of `(^|&)([^=&]*)=?([^=&]*)(?=&|$)` like
-    // Boost.Regex and skips parameters without a name.
+    // Finds successive matches of `(^|&)([^=&]*)=?([^=&]*)(?=&|$)` and skips
+    // parameters without a name.
     StringPiece query(query_);
     size_t start = 0;
     while (start <= query.size()) {
@@ -238,7 +238,8 @@ const std::vector<std::pair<std::string, std::string>>& Uri::getQueryParams() {
       if (isLineStart(query, start)) {
         param = matchQueryParam(query, begin);
         if (param && param->end == start) {
-          // Boost rejects an empty match on the next search and tries '&'.
+          // An empty match where the previous match ended doesn't count, so
+          // try '&'.
           param.reset();
         }
       }
