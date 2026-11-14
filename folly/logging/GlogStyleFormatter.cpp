@@ -26,7 +26,7 @@ namespace {
 using folly::LogLevel;
 using folly::StringPiece;
 
-StringPiece getGlogLevelName(LogLevel level) {
+StringPiece getGlogStyleLevelName(LogLevel level) {
   if (level < LogLevel::INFO) {
     return "VERBOSE";
   } else if (level < LogLevel::WARN) {
@@ -63,7 +63,7 @@ std::string GlogStyleFormatter::formatMessage(
   auto header = log_thread_name_
       ? fmt::format(
             "{}{:02d}{:02d} {:02d}:{:02d}:{:02d}.{:06d} {:5d} [{}] {}:{}{}] ",
-            getGlogLevelName(message.getLevel())[0],
+            getGlogStyleLevelName(message.getLevel())[0],
             ltime.tm_mon + 1,
             ltime.tm_mday,
             ltime.tm_hour,
@@ -77,7 +77,7 @@ std::string GlogStyleFormatter::formatMessage(
             message.getContextString())
       : fmt::format(
             "{}{:02d}{:02d} {:02d}:{:02d}:{:02d}.{:06d} {:5d} {}:{}{}] ",
-            getGlogLevelName(message.getLevel())[0],
+            getGlogStyleLevelName(message.getLevel())[0],
             ltime.tm_mon + 1,
             ltime.tm_mday,
             ltime.tm_hour,
