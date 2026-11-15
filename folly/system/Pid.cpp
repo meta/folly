@@ -52,7 +52,7 @@ class PidState {
 
 class PidCache {
   PidState state_;
-  pid_t pid_;
+  pid_t pid_{};
 
  public:
   FOLLY_ALWAYS_INLINE pid_t get() {
@@ -76,7 +76,7 @@ class PidCache {
   }
 }; // PidCache
 
-static PidCache cache_;
+constinit PidCache cache_;
 
 } // namespace
 
