@@ -37,7 +37,6 @@ class LogCategoryConfig {
       std::vector<std::string> handlers);
 
   bool operator==(const LogCategoryConfig& other) const;
-  bool operator!=(const LogCategoryConfig& other) const;
 
   /**
    * The LogLevel for this category.

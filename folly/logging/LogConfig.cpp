@@ -25,10 +25,6 @@ bool LogConfig::operator==(const LogConfig& other) const {
       categoryConfigs_ == other.categoryConfigs_;
 }
 
-bool LogConfig::operator!=(const LogConfig& other) const {
-  return !(*this == other);
-}
-
 void LogConfig::update(const LogConfig& other) {
   // Update handlerConfigs_ with all of the entries from the other LogConfig.
   // Any entries already present in our handlerConfigs_ are replaced wholesale.

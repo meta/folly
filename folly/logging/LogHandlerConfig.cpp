@@ -48,8 +48,4 @@ bool LogHandlerConfig::operator==(const LogHandlerConfig& other) const {
   return type == other.type && options == other.options;
 }
 
-bool LogHandlerConfig::operator!=(const LogHandlerConfig& other) const {
-  return !(*this == other);
-}
-
 } // namespace folly

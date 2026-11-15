@@ -32,8 +32,4 @@ bool LogCategoryConfig::operator==(const LogCategoryConfig& other) const {
       handlers == other.handlers;
 }
 
-bool LogCategoryConfig::operator!=(const LogCategoryConfig& other) const {
-  return !(*this == other);
-}
-
 } // namespace folly

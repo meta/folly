@@ -48,7 +48,6 @@ class LogConfig {
   const HandlerConfigMap& getHandlerConfigs() const { return handlerConfigs_; }
 
   bool operator==(const LogConfig& other) const;
-  bool operator!=(const LogConfig& other) const;
 
   /**
    * Update this LogConfig object by merging in settings from another

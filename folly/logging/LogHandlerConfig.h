@@ -46,7 +46,6 @@ class LogHandlerConfig {
   void update(const LogHandlerConfig& other);
 
   bool operator==(const LogHandlerConfig& other) const;
-  bool operator!=(const LogHandlerConfig& other) const;
 
   /**
    * The handler type name.
