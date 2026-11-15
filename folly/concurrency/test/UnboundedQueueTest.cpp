@@ -1300,3 +1300,121 @@ Flags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr
                      lahf_lm epb tpr_shadow vnmi flexpriority ept vpid
                      xsaveopt dtherm arat pln pts
  */
+
+// Benchmark: round-trip latency percentiles for SPSC UnboundedQueue.
+//
+// Motivation: the existing bench test measures throughput (ops/sec) but
+// omits tail latency. In real-time pipelines, sensor DAQ, market data
+// handlers, p99/p999 latency is the binding constraint, not throughput.
+//
+// Design:
+//   - Producer enqueues the send timestamp as the payload itself.
+//   - Consumer dequeues it and enqueues it into an echo queue.
+//   - Producer measures round-trip as (receive_time - sent_timestamp).
+//   - This isolates queue latency from any application processing time.
+//   - We use steady_clock (monotonic) rather than high_resolution_clock
+//     to avoid wall-clock adjustments skewing measurements.
+
+TEST(UnboundedQueue, RoundTripLatencyPercentiles) {
+  // SPSC variant: single producer, single consumer, not blocking.
+  // Template args: <T, SingleProducer, SingleConsumer, MayBlock>
+  using SPSCQueue = folly::USPSCQueue<int64_t, false>;
+
+  SPSCQueue sendQueue; // producer -> consumer
+  SPSCQueue echoQueue; // consumer -> producer (echo path)
+
+  constexpr int kWarmupIterations = 1'000;
+  constexpr int kSampleCount = 100'000;
+
+  std::vector<int64_t> roundTripLatenciesNs;
+  roundTripLatenciesNs.reserve(kSampleCount);
+
+  std::atomic<bool> consumerReady{false};
+  std::atomic<bool> shouldStop{false};
+
+  // Consumer thread: dequeues the sent timestamp and echoes it back.
+  // No processing, pure queue-to-queue forwarding to isolate latency.
+  std::thread consumerThread(
+      [&sendQueue, &echoQueue, &consumerReady, &shouldStop]() {
+        consumerReady.store(true, std::memory_order_release);
+        int64_t receivedTimestampNs{0};
+
+        while (!shouldStop.load(std::memory_order_acquire)) {
+          if (sendQueue.try_dequeue(receivedTimestampNs)) {
+            // Echo the original send timestamp back unchanged.
+            // Producer computes RTT as (now - receivedTimestampNs).
+            echoQueue.enqueue(receivedTimestampNs);
+          }
+        }
+      });
+
+  // Wait for consumer thread to be scheduled and ready.
+  while (!consumerReady.load(std::memory_order_acquire)) {
+    std::this_thread::yield();
+  }
+
+  // Helper lambda: returns current time as nanoseconds since epoch.
+  const auto nowNs = []() -> int64_t {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+  };
+
+  // Warmup: allow the queues and caches to reach steady state
+  // before recording measurements.
+  for (int warmupIndex = 0; warmupIndex < kWarmupIterations; ++warmupIndex) {
+    sendQueue.enqueue(nowNs());
+    int64_t echoedTimestampNs{0};
+    while (!echoQueue.try_dequeue(echoedTimestampNs)) {
+      std::this_thread::yield();
+    }
+  }
+
+  // Measurement phase: record one round-trip latency per sample.
+  for (int sampleIndex = 0; sampleIndex < kSampleCount; ++sampleIndex) {
+    const int64_t sendTimestampNs = nowNs();
+    sendQueue.enqueue(sendTimestampNs);
+
+    int64_t echoedTimestampNs{0};
+    while (!echoQueue.try_dequeue(echoedTimestampNs)) {
+      std::this_thread::yield();
+    }
+
+    // RTT = time of receive - time of send (both in nanoseconds).
+    const int64_t roundTripNs = nowNs() - echoedTimestampNs;
+    roundTripLatenciesNs.push_back(roundTripNs);
+  }
+
+  shouldStop.store(true, std::memory_order_release);
+  consumerThread.join();
+
+  // Compute percentiles by sorting the sample vector.
+  std::sort(roundTripLatenciesNs.begin(), roundTripLatenciesNs.end());
+  const size_t sampleSize = roundTripLatenciesNs.size();
+
+  const int64_t p50Ns = roundTripLatenciesNs[sampleSize * 50 / 100];
+  const int64_t p95Ns = roundTripLatenciesNs[sampleSize * 95 / 100];
+  const int64_t p99Ns = roundTripLatenciesNs[sampleSize * 99 / 100];
+  const int64_t p999Ns = roundTripLatenciesNs[sampleSize * 999 / 1000];
+
+  // Sanity assertions: latencies must be positive and
+  // monotonically non-decreasing across percentiles.
+  EXPECT_GT(p50Ns, 0);
+  EXPECT_GE(p95Ns, p50Ns);
+  EXPECT_GE(p99Ns, p95Ns);
+  EXPECT_GE(p999Ns, p99Ns);
+
+  // Print results so they appear in test output.
+  printf(
+      "\nUSPSCQueue round-trip latency (%d samples, %d warmup):\n"
+      "  p50  = %6ld ns\n"
+      "  p95  = %6ld ns\n"
+      "  p99  = %6ld ns\n"
+      "  p999 = %6ld ns\n",
+      kSampleCount,
+      kWarmupIterations,
+      p50Ns,
+      p95Ns,
+      p99Ns,
+      p999Ns);
+}
