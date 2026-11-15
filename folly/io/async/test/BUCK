@@ -1360,6 +1360,17 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "io_uring_setup_retry_test",
+    srcs = ["IoUringSetupRetryTest.cpp"],
+    labels = fbcode_ci_default_labels(),
+    target_compatible_with = ["ovr_config//runtime:fbcode"],
+    deps = [
+        "//folly/io/async:io_uring_setup_retry",
+        "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "io_uring_provided_buffer_ring_max_capacity_test",
     srcs = ["IoUringProvidedBufferRingMaxCapacityTest.cpp"],
     labels = [
@@ -1369,7 +1380,9 @@ fb_dirsync_cpp_unittest(
     + fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
+        "//folly:scope_guard",
         "//folly/io/async:io_uring_provided_buffer_ring",
+        "//folly/io/async:io_uring_setup_retry",
     ],
 )
 

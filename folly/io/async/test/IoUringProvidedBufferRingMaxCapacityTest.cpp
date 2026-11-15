@@ -18,6 +18,9 @@
 
 #include <gtest/gtest.h>
 
+#include <folly/ScopeGuard.h>
+#include <folly/io/async/IoUringSetupRetry.h>
+
 #if FOLLY_HAS_LIBURING
 
 namespace folly {
@@ -25,18 +28,26 @@ namespace {
 
 TEST(IoUringProvidedBufferRingMaxCapacityTest, Create) {
   io_uring ring{};
-  ASSERT_EQ(0, ::io_uring_queue_init(2, &ring, 0));
+  const auto ret = detail::retryTransientIoUringSetup([&] {
+    return ::io_uring_queue_init(2, &ring, 0);
+  });
+  ASSERT_EQ(0, ret);
+  auto cleanup = makeGuard([&] { ::io_uring_queue_exit(&ring); });
 
   IoUringProvidedBufferRing::Options options = {
       .gid = 0,
       .bufferCount = 32768,
       .bufferSize = 32,
   };
-  auto maxRing = IoUringProvidedBufferRing::create(&ring, options);
+  auto maxRing = detail::retryTransientIoUringSetup<
+      IoUringProvidedBufferRing::LibUringCallError>(
+      [&] { return IoUringProvidedBufferRing::create(&ring, options); },
+      [](const IoUringProvidedBufferRing::LibUringCallError& error) {
+        return error.code() == std::errc::not_enough_memory;
+      });
 
   EXPECT_EQ(maxRing->count(), 32768);
   maxRing.reset();
-  ::io_uring_queue_exit(&ring);
 }
 
 } // namespace

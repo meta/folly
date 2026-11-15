@@ -600,6 +600,7 @@ folly_add_library(
     folly_conv
     folly_lang_align
     folly_portability_sys_mman
+    folly_scope_guard
     folly_string
   EXPORTED_DEPS
     folly_container_intrusive_list

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <system_error>
+
 #include <folly/io/async/IoUringBase.h>
 #include <folly/io/async/Liburing.h>
 #include <folly/synchronization/DistributedMutex.h>
@@ -35,9 +37,9 @@ class IoUringProvidedBufferRing {
  public:
   friend class IoUringProvidedBufferRingTestHelper;
 
-  class LibUringCallError : public std::runtime_error {
+  class LibUringCallError : public std::system_error {
    public:
-    using std::runtime_error::runtime_error;
+    using std::system_error::system_error;
   };
 
   struct Deleter {

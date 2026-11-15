@@ -17,6 +17,7 @@
 #include <folly/io/async/IoUringProvidedBufferRing.h>
 
 #include <folly/Conv.h>
+#include <folly/ScopeGuard.h>
 #include <folly/String.h>
 #include <folly/lang/Align.h>
 #include <folly/portability/SysMman.h>
@@ -147,7 +148,11 @@ IoUringProvidedBufferRing::IoUringProvidedBufferRing(
   }
 
   mapBuffers();
-  initialRegister();
+  {
+    auto rollback = makeGuard([&] { ::munmap(bufferBuffer_, bufferMemSize_); });
+    initialRegister();
+    rollback.dismiss();
+  }
   mapRing();
 
   bufferStates_ = std::make_unique<BufferState[]>(ringBufferCount_);
@@ -333,7 +338,10 @@ void IoUringProvidedBufferRing::initialRegister() {
         sizePerBuffer_,
         ", bgid: ",
         gid_);
-    throw LibUringCallError("unable to register provided buffer ring");
+    throw LibUringCallError(
+        -ret,
+        std::generic_category(),
+        "unable to register provided buffer ring");
   }
 }
 

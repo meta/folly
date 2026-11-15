@@ -21,6 +21,7 @@
 #include <chrono>
 #include <thread>
 #include <type_traits>
+#include <utility>
 
 namespace folly::detail {
 
@@ -56,19 +57,27 @@ int retryTransientIoUringSetup(TrySetup&& trySetup) {
   return result;
 }
 
-template <typename OutOfMemory, typename TrySetup>
+template <typename Exception, typename TrySetup, typename ShouldRetry>
 std::invoke_result_t<TrySetup&> retryTransientIoUringSetup(
-    TrySetup&& trySetup) {
+    TrySetup&& trySetup, ShouldRetry&& shouldRetry) {
   io_uring_setup_retry_detail::Backoff backoff;
   while (true) {
     try {
       return trySetup();
-    } catch (const OutOfMemory&) {
-      if (!backoff.wait()) {
+    } catch (const Exception& error) {
+      if (!shouldRetry(error) || !backoff.wait()) {
         throw;
       }
     }
   }
+}
+
+template <typename OutOfMemory, typename TrySetup>
+std::invoke_result_t<TrySetup&> retryTransientIoUringSetup(
+    TrySetup&& trySetup) {
+  return retryTransientIoUringSetup<OutOfMemory>(
+      std::forward<TrySetup>(trySetup),
+      [](const OutOfMemory&) { return true; });
 }
 
 } // namespace folly::detail

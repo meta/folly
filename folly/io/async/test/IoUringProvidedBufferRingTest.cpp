@@ -63,6 +63,35 @@ class IoUringProvidedBufferRingTestHelper {
 };
 } // namespace folly
 
+TEST(IoUringProvidedBufferRingErrorTest, PreservesErrno) {
+  const IoUringProvidedBufferRing::LibUringCallError error(
+      std::make_error_code(std::errc::not_enough_memory), "registration");
+  EXPECT_EQ(error.code(), std::errc::not_enough_memory);
+  EXPECT_THROW(throw error, std::runtime_error);
+}
+
+TEST(IoUringProvidedBufferRingErrorTest, RegistrationFailurePreservesErrno) {
+  io_uring ring{};
+  ring.ring_fd = -1;
+  io_uring_buf_reg reg{};
+  reg.ring_entries = 2;
+  const auto ret =
+      ::io_uring_register_buf_ring(&ring, &reg, IOU_PBUF_RING_MMAP);
+  ASSERT_LT(ret, 0);
+
+  const IoUringProvidedBufferRing::Options options = {
+      .gid = 0,
+      .bufferCount = 2,
+      .bufferSize = 32,
+  };
+  try {
+    IoUringProvidedBufferRing::create(&ring, options);
+    FAIL() << "Expected the registration error";
+  } catch (const IoUringProvidedBufferRing::LibUringCallError& error) {
+    EXPECT_EQ(error.code(), std::error_code(-ret, std::generic_category()));
+  }
+}
+
 TEST_F(IoUringProvidedBufferRingTest, Create) {
   IoUringProvidedBufferRing::Options options = {
       .gid = 1,
