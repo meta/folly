@@ -667,14 +667,6 @@ FOLLY_EXPORT FOLLY_ALWAYS_INLINE bool xlogFirstNExactImpl(std::size_t n) {
 #define XLOG_SET_CATEGORY_CHECK
 #endif
 
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 9
-// gcc 8.x crashes with an internal compiler error when trying to evaluate
-// getXlogCategoryName() in a constexpr expression.  Keeping category name
-// constexpr is important for performance, and XLOG_SET_CATEGORY_NAME() is
-// fairly rarely used, so simply let it be a no-op if compiling with older
-// versions of gcc.
-#define XLOG_SET_CATEGORY_NAME(category)
-#else
 #define XLOG_SET_CATEGORY_NAME(category)                                     \
   namespace folly {                                                          \
   namespace detail {                                                         \
@@ -697,7 +689,6 @@ FOLLY_EXPORT FOLLY_ALWAYS_INLINE bool xlogFirstNExactImpl(std::size_t n) {
   }                                                                          \
   }                                                                          \
   }
-#endif
 
 /**
  * Assert that a condition is true.
