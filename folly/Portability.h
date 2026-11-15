@@ -704,23 +704,6 @@ constexpr auto kCpplibVer = 0;
 #define FOLLY_PRAGMA_UNROLL_N(N) _Pragma(FOLLY_PRAGMA_DETAIL_STR(unroll(N)))
 #endif
 
-//  MSVC does not permit:
-//
-//    extern int const num;
-//    constexpr int const num = 3;
-//
-//  Instead:
-//
-//    extern int const num;
-//    FOLLY_STORAGE_CONSTEXPR int const num = 3;
-//
-//  True as of MSVC 2017.
-#ifdef _MSC_VER
-#define FOLLY_STORAGE_CONSTEXPR
-#else
-#define FOLLY_STORAGE_CONSTEXPR constexpr
-#endif
-
 //  FOLLY_CXX23_CONSTEXPR
 //
 //  C++23 permits more cases to be marked constexpr, including definitions of
