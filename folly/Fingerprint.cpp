@@ -105,12 +105,6 @@ constexpr poly_table<Deg> make_poly_table() {
   return copy_table(table);
 }
 
-// private global variables marked constexpr to enforce that make_poly_table is
-// really invoked at constexpr time, which would not otherwise be guaranteed
-FOLLY_STORAGE_CONSTEXPR auto const poly_table_63 = make_poly_table<63>();
-FOLLY_STORAGE_CONSTEXPR auto const poly_table_95 = make_poly_table<95>();
-FOLLY_STORAGE_CONSTEXPR auto const poly_table_127 = make_poly_table<127>();
-
 } // namespace
 
 template <>
@@ -124,11 +118,11 @@ const uint64_t FingerprintTable<128>::poly[poly_size(128)] = {
     FingerprintTablePoly<127>::data[0], FingerprintTablePoly<127>::data[1]};
 
 template <>
-const poly_table<64> FingerprintTable<64>::table = poly_table_63;
+const poly_table<64> FingerprintTable<64>::table = make_poly_table<63>();
 template <>
-const poly_table<96> FingerprintTable<96>::table = poly_table_95;
+const poly_table<96> FingerprintTable<96>::table = make_poly_table<95>();
 template <>
-const poly_table<128> FingerprintTable<128>::table = poly_table_127;
+const poly_table<128> FingerprintTable<128>::table = make_poly_table<127>();
 
 } // namespace detail
 } // namespace folly

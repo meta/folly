@@ -107,13 +107,13 @@ struct partial_ordering_ {
 };
 
 template <typename D>
-FOLLY_STORAGE_CONSTEXPR D const partial_ordering_<D>::less{ordering::lt};
+D const partial_ordering_<D>::less{ordering::lt};
 template <typename D>
-FOLLY_STORAGE_CONSTEXPR D const partial_ordering_<D>::greater{ordering::gt};
+D const partial_ordering_<D>::greater{ordering::gt};
 template <typename D>
-FOLLY_STORAGE_CONSTEXPR D const partial_ordering_<D>::equivalent{ordering::eq};
+D const partial_ordering_<D>::equivalent{ordering::eq};
 template <typename D>
-FOLLY_STORAGE_CONSTEXPR D const //
+D const //
     partial_ordering_<D>::unordered{typename D::unordered_tag{}};
 
 } // namespace detail

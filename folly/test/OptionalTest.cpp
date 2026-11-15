@@ -134,12 +134,11 @@ static_assert(is_hashable_v<folly::Optional<HashableStruct>>);
 static_assert(!is_hashable_v<folly::Optional<UnhashableStruct>>);
 
 TEST(Optional, ConstexprConstructible) {
-  // Use FOLLY_STORAGE_CONSTEXPR to work around MSVC not taking this.
-  static FOLLY_STORAGE_CONSTEXPR Optional<int> opt;
+  static constinit const Optional<int> opt;
   // NOTE: writing `opt = none` instead of `opt(none)` causes gcc to reject this
   // code, claiming that the (non-constexpr) move ctor of `Optional` is being
   // invoked.
-  static FOLLY_STORAGE_CONSTEXPR Optional<int> opt2(none);
+  static constinit const Optional<int> opt2(none);
 
   EXPECT_FALSE(opt.has_value());
   EXPECT_FALSE(opt2.has_value());

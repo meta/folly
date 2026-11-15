@@ -53,8 +53,8 @@ constexpr auto makeSelectInByteArray(Is is, std::index_sequence<J...>) {
 
 } // namespace
 
-FOLLY_STORAGE_CONSTEXPR std::array<std::array<std::uint8_t, 256>, 8> const
-    kSelectInByte = makeSelectInByteArray(
+constinit std::array<std::array<std::uint8_t, 256>, 8> const kSelectInByte =
+    makeSelectInByteArray(
         std::make_index_sequence<256>{}, std::make_index_sequence<8>{});
 
 } // namespace detail

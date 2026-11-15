@@ -109,46 +109,44 @@ static constexpr auto const E = folly::kIsSanitizeThread;
 namespace folly {
 namespace detail {
 
-FOLLY_STORAGE_CONSTEXPR tsan_acquire_t* const tsan_acquire_v =
-    tsan_acquire_access_v<E>;
+constinit tsan_acquire_t* const tsan_acquire_v = tsan_acquire_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR tsan_release_t* const tsan_release_v =
-    tsan_release_access_v<E>;
+constinit tsan_release_t* const tsan_release_v = tsan_release_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_rwlock_cd_t* const annotate_rwlock_create_v =
+constinit annotate_rwlock_cd_t* const annotate_rwlock_create_v =
     annotate_rwlock_create_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_rwlock_cd_t* const
-    annotate_rwlock_create_static_v = annotate_rwlock_create_static_access_v<E>;
+constinit annotate_rwlock_cd_t* const annotate_rwlock_create_static_v =
+    annotate_rwlock_create_static_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_rwlock_cd_t* const annotate_rwlock_destroy_v =
+constinit annotate_rwlock_cd_t* const annotate_rwlock_destroy_v =
     annotate_rwlock_destroy_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_rwlock_ar_t* const annotate_rwlock_acquired_v =
+constinit annotate_rwlock_ar_t* const annotate_rwlock_acquired_v =
     annotate_rwlock_acquired_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_rwlock_ar_t* const annotate_rwlock_released_v =
+constinit annotate_rwlock_ar_t* const annotate_rwlock_released_v =
     annotate_rwlock_released_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_benign_race_sized_t* const
-    annotate_benign_race_sized_v = annotate_benign_race_sized_access_v<E>;
+constinit annotate_benign_race_sized_t* const annotate_benign_race_sized_v =
+    annotate_benign_race_sized_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_ignore_t* const annotate_ignore_reads_begin_v =
+constinit annotate_ignore_t* const annotate_ignore_reads_begin_v =
     annotate_ignore_reads_begin_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_ignore_t* const annotate_ignore_reads_end_v =
+constinit annotate_ignore_t* const annotate_ignore_reads_end_v =
     annotate_ignore_reads_end_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_ignore_t* const
-    annotate_ignore_writes_begin_v = annotate_ignore_writes_begin_access_v<E>;
+constinit annotate_ignore_t* const annotate_ignore_writes_begin_v =
+    annotate_ignore_writes_begin_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_ignore_t* const annotate_ignore_writes_end_v =
+constinit annotate_ignore_t* const annotate_ignore_writes_end_v =
     annotate_ignore_writes_end_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_ignore_t* const annotate_ignore_sync_begin_v =
+constinit annotate_ignore_t* const annotate_ignore_sync_begin_v =
     annotate_ignore_sync_begin_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR annotate_ignore_t* const annotate_ignore_sync_end_v =
+constinit annotate_ignore_t* const annotate_ignore_sync_end_v =
     annotate_ignore_sync_end_access_v<E>;
 
 } // namespace detail

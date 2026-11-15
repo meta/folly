@@ -53,22 +53,22 @@ constexpr bool E = folly::kIsLibrarySanitizeAddress;
 namespace folly {
 namespace detail {
 
-FOLLY_STORAGE_CONSTEXPR asan_mark_memory_region_t* const
-    asan_poison_memory_region_v = asan_poison_memory_region_access_v<E>;
+constinit asan_mark_memory_region_t* const asan_poison_memory_region_v =
+    asan_poison_memory_region_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR asan_mark_memory_region_t* const
-    asan_unpoison_memory_region_v = asan_unpoison_memory_region_access_v<E>;
+constinit asan_mark_memory_region_t* const asan_unpoison_memory_region_v =
+    asan_unpoison_memory_region_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR asan_region_is_poisoned_t* const
-    asan_region_is_poisoned_v = asan_region_is_poisoned_access_v<E>;
+constinit asan_region_is_poisoned_t* const asan_region_is_poisoned_v =
+    asan_region_is_poisoned_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR asan_address_is_poisoned_t* const
-    asan_address_is_poisoned_v = asan_address_is_poisoned_access_v<E>;
+constinit asan_address_is_poisoned_t* const asan_address_is_poisoned_v =
+    asan_address_is_poisoned_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR sanitizer_start_switch_fiber_t* const
-    sanitizer_start_switch_fiber_v = sanitizer_start_switch_fiber_access_v<E>;
+constinit sanitizer_start_switch_fiber_t* const sanitizer_start_switch_fiber_v =
+    sanitizer_start_switch_fiber_access_v<E>;
 
-FOLLY_STORAGE_CONSTEXPR sanitizer_finish_switch_fiber_t* const
+constinit sanitizer_finish_switch_fiber_t* const
     sanitizer_finish_switch_fiber_v = sanitizer_finish_switch_fiber_access_v<E>;
 
 } // namespace detail

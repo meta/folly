@@ -60,15 +60,15 @@ namespace folly {
 
 namespace detail {
 
-FOLLY_STORAGE_CONSTEXPR lsan_ignore_object_t* const //
+constinit lsan_ignore_object_t* const //
     lsan_ignore_object_v = lsan_ignore_object_access_v<EnW>;
-FOLLY_STORAGE_CONSTEXPR lsan_register_root_region_t* const //
+constinit lsan_register_root_region_t* const //
     lsan_register_root_region_v = lsan_register_root_region_access_v<EnW>;
-FOLLY_STORAGE_CONSTEXPR lsan_unregister_root_region_t* const //
+constinit lsan_unregister_root_region_t* const //
     lsan_unregister_root_region_v = lsan_unregister_root_region_access_v<EnW>;
-FOLLY_STORAGE_CONSTEXPR lsan_disable_t* const //
+constinit lsan_disable_t* const //
     lsan_disable_v = lsan_disable_access_v<EnW>;
-FOLLY_STORAGE_CONSTEXPR lsan_enable_t* const //
+constinit lsan_enable_t* const //
     lsan_enable_v = lsan_enable_access_v<EnW>;
 
 namespace {
