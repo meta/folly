@@ -34,30 +34,6 @@ namespace symbolizer {
 
 namespace {
 
-folly::Optional<uint64_t> readAddressEntry(
-    std::span<const uint8_t> section, uint64_t base, uint64_t index) {
-  if (base > section.size()) {
-    return folly::none;
-  }
-  const auto remaining = section.size() - base;
-  if (remaining < sizeof(uint64_t) ||
-      index > (remaining - sizeof(uint64_t)) / sizeof(uint64_t)) {
-    return folly::none;
-  }
-  const auto offset = base + index * sizeof(uint64_t);
-  auto entry = section.subspan(offset, sizeof(uint64_t));
-  return read<uint64_t>(entry);
-}
-
-// Adds a base address and an offset, rejecting overflow. A wrapped sum could
-// otherwise match an address the range does not cover.
-folly::Optional<uint64_t> addBaseAddress(uint64_t base, uint64_t offset) {
-  if (offset > std::numeric_limits<uint64_t>::max() - base) {
-    return folly::none;
-  }
-  return base + offset;
-}
-
 template <typename Size = size_t>
 DwarfParseResult<Size> incrementDieOffset(uint32_t offset) {
   if constexpr (sizeof(Size) <= sizeof(uint32_t)) {
@@ -133,6 +109,7 @@ bool DwarfImpl::findLocation(
   }
 
   bool typeMismatch = false;
+  folly::Optional<DwarfParseError> rangeParseError;
   auto getUnsigned = [&](const Attribute& attr) {
     const auto* value = std::get_if<uint64_t>(&attr.attrValue);
     typeMismatch |= value == nullptr;
@@ -191,12 +168,13 @@ bool DwarfImpl::findLocation(
           if (seenHighPC) {
             foundAddress = true;
           } else if (rangesOffset) {
-            if (!isAddrInRangeList(
-                    mainCu,
-                    address,
-                    baseAddrCU,
-                    *rangesOffset,
-                    mainCu.addrSize)) {
+            auto rangeMatch = isAddressInRangeList(
+                mainCu, address, baseAddrCU, *rangesOffset);
+            if (rangeMatch.hasError()) {
+              rangeParseError = rangeMatch.error();
+              return false;
+            }
+            if (!*rangeMatch) {
               return false;
             }
             foundAddress = true;
@@ -232,12 +210,13 @@ bool DwarfImpl::findLocation(
         if (!foundAddress) {
           rangesOffset = *value;
           if (seenLowPC) {
-            if (!isAddrInRangeList(
-                    mainCu,
-                    address,
-                    baseAddrCU,
-                    *rangesOffset,
-                    mainCu.addrSize)) {
+            auto rangeMatch = isAddressInRangeList(
+                mainCu, address, baseAddrCU, *rangesOffset);
+            if (rangeMatch.hasError()) {
+              rangeParseError = rangeMatch.error();
+              return false;
+            }
+            if (!*rangeMatch) {
               return false;
             }
             foundAddress = true;
@@ -248,7 +227,7 @@ bool DwarfImpl::findLocation(
     }
     return (expectedAttributes != 0); // continue forEachAttribute
   });
-  if (attributes.hasError() || typeMismatch) {
+  if (attributes.hasError() || typeMismatch || rangeParseError.has_value()) {
     return false;
   }
 
@@ -522,155 +501,6 @@ DwarfParseResult<size_t> DwarfImpl::forEachChild(
   return incrementDieOffset(childDie->offset);
 }
 
-bool DwarfImpl::isAddrInRangeList(
-    const CompilationUnit& cu,
-    uint64_t address,
-    folly::Optional<uint64_t> baseAddr,
-    size_t offset,
-    uint8_t addrSize) const {
-  if (addrSize != 4 && addrSize != 8) {
-    FOLLY_SAFE_DFATAL("wrong address size: ", int(addrSize));
-    return false;
-  }
-  if (cu.version <= 4 && !cu.debugSections.debugRanges.empty()) {
-    const bool is64BitAddr = addrSize == 8;
-    if (offset > cu.debugSections.debugRanges.size()) {
-      return false;
-    }
-    auto sp = cu.debugSections.debugRanges.subspan(offset);
-    const uint64_t maxAddr = is64BitAddr
-        ? std::numeric_limits<uint64_t>::max()
-        : std::numeric_limits<uint32_t>::max();
-    while (sp.size() >= 2 * addrSize) {
-      uint64_t begin = readOffset(sp, is64BitAddr);
-      uint64_t end = readOffset(sp, is64BitAddr);
-      // The range list entry is a base address selection entry.
-      if (begin == maxAddr) {
-        baseAddr = end;
-        continue;
-      }
-      // The range list entry is an end of list entry.
-      if (begin == 0 && end == 0) {
-        break;
-      }
-
-      // Check if the given address falls in the range list entry.
-      // 2.17.3 Non-Contiguous Address Ranges
-      // The applicable base address of a range list entry is determined by
-      // the closest preceding base address selection entry (see below) in the
-      // same range list. If there is no such selection entry, then the
-      // applicable base address defaults to the base address of the
-      // compilation unit.
-      if (baseAddr) {
-        auto rangeBegin = addBaseAddress(*baseAddr, begin);
-        auto rangeEnd = addBaseAddress(*baseAddr, end);
-        if (!rangeBegin || !rangeEnd) {
-          return false;
-        }
-        if (address >= *rangeBegin && address < *rangeEnd) {
-          return true;
-        }
-      }
-    }
-  }
-
-  if (cu.version == 5 && !cu.debugSections.debugRnglists.empty() &&
-      cu.addrBase.has_value()) {
-    if (offset > cu.debugSections.debugRnglists.size()) {
-      return false;
-    }
-    auto debugRnglists = cu.debugSections.debugRnglists.subspan(offset);
-
-    while (!debugRnglists.empty()) {
-      auto kind = read<uint8_t>(debugRnglists);
-      switch (kind) {
-        case DW_RLE_end_of_list:
-          return false;
-        case DW_RLE_base_addressx: {
-          auto index = readULEB(debugRnglists);
-          auto value =
-              readAddressEntry(cu.debugSections.debugAddr, *cu.addrBase, index);
-          if (!value) {
-            return false;
-          }
-          baseAddr = *value;
-        } break;
-
-        case DW_RLE_startx_endx: {
-          auto indexStart = readULEB(debugRnglists);
-          auto indexEnd = readULEB(debugRnglists);
-          auto start = readAddressEntry(
-              cu.debugSections.debugAddr, *cu.addrBase, indexStart);
-          auto end = readAddressEntry(
-              cu.debugSections.debugAddr, *cu.addrBase, indexEnd);
-          if (!start || !end) {
-            return false;
-          }
-          if (address >= *start && address < *end) {
-            return true;
-          }
-        } break;
-
-        case DW_RLE_startx_length: {
-          auto indexStart = readULEB(debugRnglists);
-          auto length = readULEB(debugRnglists);
-          auto start = readAddressEntry(
-              cu.debugSections.debugAddr, *cu.addrBase, indexStart);
-          if (!start) {
-            return false;
-          }
-          auto end = *start + length;
-          if (*start != end && address >= *start && address < end) {
-            return true;
-          }
-        } break;
-
-        case DW_RLE_offset_pair: {
-          auto offsetStart = readULEB(debugRnglists);
-          auto offsetEnd = readULEB(debugRnglists);
-          if (!baseAddr) {
-            break;
-          }
-          auto rangeBegin = addBaseAddress(*baseAddr, offsetStart);
-          auto rangeEnd = addBaseAddress(*baseAddr, offsetEnd);
-          if (!rangeBegin || !rangeEnd) {
-            return false;
-          }
-          if (address >= *rangeBegin && address < *rangeEnd) {
-            return true;
-          }
-        } break;
-
-        case DW_RLE_base_address:
-          baseAddr = read<uint64_t>(debugRnglists);
-          break;
-
-        case DW_RLE_start_end: {
-          uint64_t start = read<uint64_t>(debugRnglists);
-          uint64_t end = read<uint64_t>(debugRnglists);
-          if (address >= start && address < end) {
-            return true;
-          }
-        } break;
-
-        case DW_RLE_start_length: {
-          uint64_t start = read<uint64_t>(debugRnglists);
-          uint64_t end = start + readULEB(debugRnglists);
-          if (address >= start && address < end) {
-            return true;
-          }
-        } break;
-
-        default:
-          FOLLY_SAFE_DFATAL(
-              "Unexpected debug_rnglists entry kind: ", static_cast<int>(kind));
-          return false;
-      }
-    }
-  }
-  return false;
-}
-
 DwarfParseResult<bool> DwarfImpl::findSubProgramDieForAddress(
     const CompilationUnit& cu,
     const Die& die,
@@ -755,11 +585,17 @@ DwarfParseResult<bool> DwarfImpl::findSubProgramDieForAddress(
         return false; // stop forEachChild
       }
 
-      bool rangeMatch = rangeOffset &&
-          isAddrInRangeList(cu, address, baseAddrCU, *rangeOffset, cu.addrSize);
-      if (rangeMatch) {
-        subprogram = childDie;
-        return false; // stop forEachChild
+      if (rangeOffset) {
+        auto rangeMatch =
+            isAddressInRangeList(cu, address, baseAddrCU, *rangeOffset);
+        if (rangeMatch.hasError()) {
+          parseError = rangeMatch.error();
+          return false;
+        }
+        if (*rangeMatch) {
+          subprogram = childDie;
+          return false; // stop forEachChild
+        }
       }
     }
 
@@ -946,8 +782,15 @@ DwarfParseResult<bool> DwarfImpl::findInlinedSubroutineDieForAddress(
     }
     bool pcMatch = lowPc && highPc && isHighPcAddr && address >= *lowPc &&
         (address < (*isHighPcAddr ? *highPc : (*lowPc + *highPc)));
-    bool rangeMatch = rangeOffset &&
-        isAddrInRangeList(cu, address, baseAddrCU, *rangeOffset, cu.addrSize);
+    bool rangeMatch = false;
+    if (rangeOffset) {
+      auto match = isAddressInRangeList(cu, address, baseAddrCU, *rangeOffset);
+      if (match.hasError()) {
+        parseError = match.error();
+        return false;
+      }
+      rangeMatch = *match;
+    }
     if (!pcMatch && !rangeMatch) {
       // Address doesn't match. Keep searching other children.
       return true;

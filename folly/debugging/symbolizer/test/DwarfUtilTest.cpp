@@ -23,6 +23,8 @@
 #include <span>
 #include <vector>
 
+#include <folly/Utility.h>
+#include <folly/Varint.h>
 #include <folly/portability/GTest.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
@@ -41,6 +43,27 @@ template <typename T>
 void overwrite(std::vector<uint8_t>& bytes, size_t offset, T value) {
   ASSERT_LE(offset + sizeof(value), bytes.size());
   std::memcpy(bytes.data() + offset, &value, sizeof(value));
+}
+
+void appendULEB(std::vector<uint8_t>& bytes, uint64_t value) {
+  const auto offset = bytes.size();
+  bytes.resize(offset + folly::kMaxVarintLength64);
+  const auto encodedSize = folly::encodeVarint(value, bytes.data() + offset);
+  bytes.resize(offset + encodedSize);
+}
+
+CompilationUnit rangeUnit(
+    uint8_t version,
+    std::span<const uint8_t> debugRanges,
+    std::span<const uint8_t> debugRnglists,
+    std::span<const uint8_t> debugAddr = {}) {
+  CompilationUnit cu{};
+  cu.version = version;
+  cu.addrSize = sizeof(uint64_t);
+  cu.debugSections.debugRanges = debugRanges;
+  cu.debugSections.debugRnglists = debugRnglists;
+  cu.debugSections.debugAddr = debugAddr;
+  return cu;
 }
 
 std::vector<uint8_t> dwarf4Header() {
@@ -716,6 +739,411 @@ TEST(DwarfUtil, ReadAttributeRejectsInvalidStringIndex) {
 
   ASSERT_TRUE(result.hasError());
   EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
+}
+
+TEST(DwarfUtil, ReadAttributeUsesCompilationUnitAddressSize) {
+  std::vector<uint8_t> addresses;
+  append<uint32_t>(addresses, 0x12345678);
+  const std::vector<uint8_t> info{0};
+  DwarfCursor cursor(info);
+  CompilationUnit cu{};
+  cu.addrSize = sizeof(uint32_t);
+  cu.addrBase = 0;
+  cu.debugSections.debugAddr = addresses;
+  Die die{};
+
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_low_pc, .form = DW_FORM_addrx1},
+      cursor);
+
+  ASSERT_TRUE(result.hasValue());
+  const auto* value = std::get_if<uint64_t>(&result->attrValue);
+  ASSERT_NE(nullptr, value);
+  EXPECT_EQ(uint64_t{0x12345678}, *value);
+}
+
+TEST(DwarfUtil, CollectsAddressBaseAfterIndexedLowPc) {
+  struct AddressForm {
+    uint64_t form;
+    size_t width;
+  };
+  constexpr AddressForm kAddressForms[] = {
+      {DW_FORM_addrx, 1},
+      {DW_FORM_addrx1, 1},
+      {DW_FORM_addrx2, 2},
+      {DW_FORM_addrx3, 3},
+      {DW_FORM_addrx4, 4},
+      {DW_FORM_GNU_addr_index, 1},
+  };
+  constexpr uint32_t kAddressBase = 8;
+  constexpr uintptr_t kLowPc = 0x2000;
+  constexpr char kDirectory[] = "/build";
+
+  std::vector<uint8_t> addresses;
+  append<uint32_t>(addresses, 4 + 2 * sizeof(uintptr_t));
+  append<uint16_t>(addresses, 5);
+  append<uint8_t>(addresses, sizeof(uintptr_t));
+  append<uint8_t>(addresses, 0);
+  append<uintptr_t>(addresses, 0x1000);
+  append<uintptr_t>(addresses, kLowPc);
+
+  for (const auto& addressForm : kAddressForms) {
+    SCOPED_TRACE(addressForm.form);
+    std::vector<uint8_t> abbrev;
+    appendULEB(abbrev, 1);
+    appendULEB(abbrev, DW_TAG_compile_unit);
+    append<uint8_t>(abbrev, DW_CHILDREN_no);
+    appendULEB(abbrev, DW_AT_low_pc);
+    appendULEB(abbrev, addressForm.form);
+    appendULEB(abbrev, DW_AT_addr_base);
+    appendULEB(abbrev, DW_FORM_sec_offset);
+    appendULEB(abbrev, DW_AT_comp_dir);
+    appendULEB(abbrev, DW_FORM_string);
+    abbrev.insert(abbrev.end(), {0, 0, 0});
+
+    std::vector<uint8_t> info;
+    append<uint32_t>(info, 0);
+    append<uint16_t>(info, 5);
+    append<uint8_t>(info, DW_UT_compile);
+    append<uint8_t>(info, sizeof(uintptr_t));
+    append<uint32_t>(info, 0);
+    appendULEB(info, 1);
+    append<uint8_t>(info, 1); // index of kLowPc
+    info.insert(info.end(), addressForm.width - 1, 0);
+    append<uint32_t>(info, kAddressBase);
+    info.insert(info.end(), std::begin(kDirectory), std::end(kDirectory));
+    overwrite<uint32_t>(
+        info, 0, folly::to_narrow(info.size() - sizeof(uint32_t)));
+
+    DebugSections sections{};
+    sections.debugInfo = info;
+    sections.debugAbbrev = abbrev;
+    sections.debugAddr = addresses;
+    const auto units = getCompilationUnits(nullptr, sections, 0);
+    const auto& cu = units.mainCompilationUnit;
+
+    ASSERT_TRUE(cu.addrBase.hasValue());
+    EXPECT_EQ(kAddressBase, *cu.addrBase);
+    EXPECT_EQ(kDirectory, cu.compDir);
+    auto die = getDieAtOffset(cu, cu.firstDie);
+    ASSERT_TRUE(die.hasValue());
+    auto lowPc = getAttribute<uint64_t>(cu, *die, DW_AT_low_pc);
+    ASSERT_TRUE(lowPc.hasValue());
+    ASSERT_TRUE(lowPc->hasValue());
+    EXPECT_EQ(kLowPc, **lowPc);
+
+    overwrite<uint8_t>(info, die->offset + die->attrOffset, 2);
+    auto invalidLowPc = getAttribute<uint64_t>(cu, *die, DW_AT_low_pc);
+    ASSERT_TRUE(invalidLowPc.hasError());
+    EXPECT_EQ(DwarfParseErrorCode::invalid_offset, invalidLowPc.error().code);
+  }
+}
+
+TEST(DwarfUtil, ReadAttributeRejectsMissingAddressBase) {
+  const std::vector<uint8_t> addresses(sizeof(uint64_t));
+  const std::vector<uint8_t> info{0};
+  DwarfCursor cursor(info);
+  CompilationUnit cu{};
+  cu.addrSize = sizeof(uint64_t);
+  cu.debugSections.debugAddr = addresses;
+  Die die{};
+
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_low_pc, .form = DW_FORM_addrx1},
+      cursor);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
+}
+
+TEST(DwarfUtil, FindsAddressInLegacyRangeList) {
+  std::vector<uint8_t> ranges;
+  append<uint64_t>(ranges, std::numeric_limits<uint64_t>::max());
+  append<uint64_t>(ranges, 0x1000);
+  append<uint64_t>(ranges, 0x10);
+  append<uint64_t>(ranges, 0x20);
+  append<uint64_t>(ranges, 0);
+  append<uint64_t>(ranges, 0);
+  const auto cu = rangeUnit(4, ranges, {});
+
+  auto match = isAddressInRangeList(cu, 0x1015, folly::none, 0);
+  auto miss = isAddressInRangeList(cu, 0x1020, folly::none, 0);
+
+  ASSERT_TRUE(match.hasValue());
+  EXPECT_TRUE(*match);
+  ASSERT_TRUE(miss.hasValue());
+  EXPECT_FALSE(*miss);
+}
+
+TEST(DwarfUtil, LegacyRangeDefaultsToZeroBase) {
+  std::vector<uint8_t> ranges;
+  append<uint64_t>(ranges, 0x10);
+  append<uint64_t>(ranges, 0x20);
+  append<uint64_t>(ranges, 0);
+  append<uint64_t>(ranges, 0);
+  const auto cu = rangeUnit(4, ranges, {});
+
+  auto result = isAddressInRangeList(cu, 0x15, folly::none, 0);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_TRUE(*result);
+}
+
+TEST(DwarfUtil, RecoversWhenLegacyRangePrecedesBaseSelection) {
+  std::vector<uint8_t> ranges;
+  append<uint64_t>(ranges, 0x30);
+  append<uint64_t>(ranges, 0x40);
+  append<uint64_t>(ranges, std::numeric_limits<uint64_t>::max());
+  append<uint64_t>(ranges, 0x1000);
+  append<uint64_t>(ranges, 0x10);
+  append<uint64_t>(ranges, 0x20);
+  append<uint64_t>(ranges, 0);
+  append<uint64_t>(ranges, 0);
+  const auto cu = rangeUnit(4, ranges, {});
+
+  auto result = isAddressInRangeList(cu, 0x1015, folly::none, 0);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_TRUE(*result);
+}
+
+TEST(DwarfUtil, RejectsEveryTruncatedLegacyRangeListPrefix) {
+  std::vector<uint8_t> ranges;
+  append<uint64_t>(ranges, 0x10);
+  append<uint64_t>(ranges, 0x20);
+  append<uint64_t>(ranges, 0);
+  append<uint64_t>(ranges, 0);
+  for (size_t size = 1; size < ranges.size(); ++size) {
+    SCOPED_TRACE(size);
+    auto cu = rangeUnit(4, std::span{ranges}.first(size), {});
+    auto result = isAddressInRangeList(cu, 0x2000, uint64_t{0x1000}, 0);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(DwarfParseErrorCode::truncated, result.error().code);
+  }
+}
+
+TEST(DwarfUtil, RejectsLegacyRangeEndpointOverflow) {
+  std::vector<uint8_t> ranges;
+  append<uint64_t>(ranges, 0x20);
+  append<uint64_t>(ranges, 0x30);
+  append<uint64_t>(ranges, 0);
+  append<uint64_t>(ranges, 0);
+  const auto cu = rangeUnit(4, ranges, {});
+
+  auto result = isAddressInRangeList(
+      cu, 0, std::numeric_limits<uint64_t>::max() - 0x10, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::integer_overflow, result.error().code);
+}
+
+TEST(DwarfUtil, FindsAddressInDirectDwarf5RangeEntries) {
+  {
+    std::vector<uint8_t> ranges{DW_RLE_start_end};
+    append<uint64_t>(ranges, 0x1000);
+    append<uint64_t>(ranges, 0x1020);
+    ranges.push_back(DW_RLE_end_of_list);
+    const auto cu = rangeUnit(5, {}, ranges);
+    auto result = isAddressInRangeList(cu, 0x1010, folly::none, 0);
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_TRUE(*result);
+  }
+  {
+    std::vector<uint8_t> ranges{DW_RLE_start_length};
+    append<uint64_t>(ranges, 0x1000);
+    appendULEB(ranges, 0x20);
+    ranges.push_back(DW_RLE_end_of_list);
+    const auto cu = rangeUnit(5, {}, ranges);
+    auto result = isAddressInRangeList(cu, 0x1010, folly::none, 0);
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_TRUE(*result);
+  }
+  {
+    std::vector<uint8_t> ranges{DW_RLE_base_address};
+    append<uint64_t>(ranges, 0x1000);
+    ranges.push_back(DW_RLE_offset_pair);
+    appendULEB(ranges, 0x10);
+    appendULEB(ranges, 0x20);
+    ranges.push_back(DW_RLE_end_of_list);
+    const auto cu = rangeUnit(5, {}, ranges);
+    auto result = isAddressInRangeList(cu, 0x1015, folly::none, 0);
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_TRUE(*result);
+  }
+  {
+    std::vector<uint8_t> ranges{DW_RLE_start_end};
+    append<uint32_t>(ranges, 0x1000);
+    append<uint32_t>(ranges, 0x1020);
+    ranges.push_back(DW_RLE_end_of_list);
+    auto cu = rangeUnit(5, {}, ranges);
+    cu.addrSize = sizeof(uint32_t);
+    auto result = isAddressInRangeList(cu, 0x1010, folly::none, 0);
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_TRUE(*result);
+  }
+}
+
+TEST(DwarfUtil, FindsAddressInIndexedDwarf5RangeEntries) {
+  std::vector<uint8_t> addresses;
+  append<uint64_t>(addresses, 0x1000);
+  append<uint64_t>(addresses, 0x1020);
+  {
+    std::vector<uint8_t> ranges{DW_RLE_startx_endx};
+    appendULEB(ranges, 0);
+    appendULEB(ranges, 1);
+    ranges.push_back(DW_RLE_end_of_list);
+    auto cu = rangeUnit(5, {}, ranges, addresses);
+    cu.addrBase = 0;
+    auto result = isAddressInRangeList(cu, 0x1010, folly::none, 0);
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_TRUE(*result);
+  }
+  {
+    std::vector<uint8_t> ranges{DW_RLE_startx_length};
+    appendULEB(ranges, 0);
+    appendULEB(ranges, 0x20);
+    ranges.push_back(DW_RLE_end_of_list);
+    auto cu = rangeUnit(5, {}, ranges, addresses);
+    cu.addrBase = 0;
+    auto result = isAddressInRangeList(cu, 0x1010, folly::none, 0);
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_TRUE(*result);
+  }
+  {
+    std::vector<uint8_t> ranges{DW_RLE_base_addressx};
+    appendULEB(ranges, 0);
+    ranges.push_back(DW_RLE_offset_pair);
+    appendULEB(ranges, 0x10);
+    appendULEB(ranges, 0x20);
+    ranges.push_back(DW_RLE_end_of_list);
+    auto cu = rangeUnit(5, {}, ranges, addresses);
+    cu.addrBase = 0;
+    auto result = isAddressInRangeList(cu, 0x1015, folly::none, 0);
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_TRUE(*result);
+  }
+}
+
+TEST(DwarfUtil, RejectsEveryTruncatedDwarf5RangeListPrefix) {
+  std::vector<uint8_t> addresses;
+  append<uint64_t>(addresses, 0x1000);
+  append<uint64_t>(addresses, 0x1020);
+  std::vector<uint8_t> ranges{DW_RLE_base_addressx};
+  appendULEB(ranges, 0);
+  ranges.push_back(DW_RLE_startx_endx);
+  appendULEB(ranges, 0);
+  appendULEB(ranges, 1);
+  ranges.push_back(DW_RLE_startx_length);
+  appendULEB(ranges, 0);
+  appendULEB(ranges, 1);
+  ranges.push_back(DW_RLE_offset_pair);
+  appendULEB(ranges, 1);
+  appendULEB(ranges, 2);
+  ranges.push_back(DW_RLE_base_address);
+  append<uint64_t>(ranges, 0x2000);
+  ranges.push_back(DW_RLE_start_end);
+  append<uint64_t>(ranges, 0x3000);
+  append<uint64_t>(ranges, 0x3001);
+  ranges.push_back(DW_RLE_start_length);
+  append<uint64_t>(ranges, 0x4000);
+  appendULEB(ranges, 1);
+  ranges.push_back(DW_RLE_end_of_list);
+
+  for (size_t size = 1; size < ranges.size(); ++size) {
+    SCOPED_TRACE(size);
+    auto cu = rangeUnit(5, {}, std::span{ranges}.first(size), addresses);
+    cu.addrBase = 0;
+    auto result = isAddressInRangeList(cu, 0x5000, folly::none, 0);
+    ASSERT_TRUE(result.hasError());
+    EXPECT_EQ(DwarfParseErrorCode::truncated, result.error().code);
+  }
+}
+
+TEST(DwarfUtil, RejectsInvalidDwarf5AddressIndex) {
+  std::vector<uint8_t> addresses;
+  append<uint64_t>(addresses, 0x1000);
+  std::vector<uint8_t> ranges{DW_RLE_startx_endx};
+  appendULEB(ranges, 0);
+  appendULEB(ranges, 1);
+  ranges.push_back(DW_RLE_end_of_list);
+  auto cu = rangeUnit(5, {}, ranges, addresses);
+  cu.addrBase = 0;
+
+  auto result = isAddressInRangeList(cu, 0x1000, folly::none, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
+}
+
+TEST(DwarfUtil, RejectsDwarf5OffsetPairWithoutBaseAddress) {
+  std::vector<uint8_t> ranges{DW_RLE_offset_pair};
+  appendULEB(ranges, 0x10);
+  appendULEB(ranges, 0x20);
+  ranges.push_back(DW_RLE_end_of_list);
+  const auto cu = rangeUnit(5, {}, ranges);
+
+  auto result = isAddressInRangeList(cu, 0x1015, folly::none, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
+}
+
+TEST(DwarfUtil, RejectsDwarf5RangeEndpointOverflow) {
+  std::vector<uint8_t> ranges{DW_RLE_start_length};
+  append<uint64_t>(ranges, std::numeric_limits<uint64_t>::max() - 1);
+  appendULEB(ranges, 4);
+  ranges.push_back(DW_RLE_end_of_list);
+  const auto cu = rangeUnit(5, {}, ranges);
+
+  auto result = isAddressInRangeList(cu, 0, folly::none, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::integer_overflow, result.error().code);
+}
+
+TEST(DwarfUtil, RejectsIndexedDwarf5RangeEndpointOverflow) {
+  std::vector<uint8_t> addresses;
+  append<uint64_t>(addresses, std::numeric_limits<uint64_t>::max() - 1);
+  std::vector<uint8_t> ranges{DW_RLE_startx_length};
+  appendULEB(ranges, 0);
+  appendULEB(ranges, 4);
+  ranges.push_back(DW_RLE_end_of_list);
+  auto cu = rangeUnit(5, {}, ranges, addresses);
+  cu.addrBase = 0;
+
+  auto result = isAddressInRangeList(cu, 0, folly::none, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::integer_overflow, result.error().code);
+}
+
+TEST(DwarfUtil, RejectsDwarf5OffsetPairBaseOverflow) {
+  std::vector<uint8_t> ranges{DW_RLE_base_address};
+  append<uint64_t>(ranges, std::numeric_limits<uint64_t>::max() - 0x10);
+  ranges.push_back(DW_RLE_offset_pair);
+  appendULEB(ranges, 0x10);
+  appendULEB(ranges, 0x20);
+  ranges.push_back(DW_RLE_end_of_list);
+  const auto cu = rangeUnit(5, {}, ranges);
+
+  auto result = isAddressInRangeList(cu, 0, folly::none, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::integer_overflow, result.error().code);
+}
+
+TEST(DwarfUtil, RejectsUnknownDwarf5RangeEntry) {
+  const std::vector<uint8_t> ranges{0xff};
+  const auto cu = rangeUnit(5, {}, ranges);
+
+  auto result = isAddressInRangeList(cu, 0, folly::none, 0);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_value, result.error().code);
 }
 
 TEST(DwarfSection, Reads32And64BitChunks) {

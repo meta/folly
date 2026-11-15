@@ -101,17 +101,6 @@ class DwarfImpl {
       const Die& die,
       folly::FunctionRef<bool(const Die& die)> f) const;
 
-  /**
-   * Check if the given address is in the range list at the given offset in
-   * .debug_ranges.
-   */
-  bool isAddrInRangeList(
-      const CompilationUnit& cu,
-      uint64_t address,
-      folly::Optional<uint64_t> baseAddr,
-      size_t offset,
-      uint8_t addrSize) const;
-
   void fillInlineFrames(
       uintptr_t address,
       SymbolizedFrame& frame,

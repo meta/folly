@@ -261,6 +261,8 @@ fb_dirsync_cpp_unittest(
     name = "dwarf_util_test",
     srcs = ["DwarfUtilTest.cpp"],
     deps = [
+        "fbsource//xplat/folly:utility",
+        "//folly:varint",
         "//folly/debugging/symbolizer:dwarf",
         "//folly/portability:gtest",
     ],

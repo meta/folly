@@ -250,6 +250,12 @@ DwarfParseResult<folly::Optional<size_t>> forEachAttribute(
     const Die& die,
     folly::FunctionRef<bool(const Attribute&)> f);
 
+DwarfParseResult<bool> isAddressInRangeList(
+    const CompilationUnit& cu,
+    uint64_t address,
+    folly::Optional<uint64_t> baseAddress,
+    uint64_t offset);
+
 template <class T>
 DwarfParseResult<folly::Optional<T>> getAttribute(
     const CompilationUnit& cu, const Die& die, uint64_t attrName) {

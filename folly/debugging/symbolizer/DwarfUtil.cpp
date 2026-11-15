@@ -210,6 +210,16 @@ DwarfParseResult<folly::Optional<DIEAbbreviation>> readAbbreviation(
 
 namespace {
 
+enum class AttributeReadMode {
+  resolve,
+  defer_indexed_addresses,
+};
+
+DwarfParseResult<folly::Optional<size_t>> forEachMetadataAttr(
+    const CompilationUnit& cu,
+    const Die& die,
+    folly::FunctionRef<bool(const Attribute&)> f);
+
 template <typename Size = size_t>
 constexpr Size toErrorOffset(uint64_t offset) noexcept {
   if constexpr (sizeof(Size) < sizeof(uint64_t)) {
@@ -613,7 +623,7 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
         target = *value;
         return true;
       };
-  auto attributes = forEachAttribute(cu, die, [&](const Attribute& attr) {
+  auto attributes = forEachMetadataAttr(cu, die, [&](const Attribute& attr) {
     switch (attr.spec.name) {
       case DW_AT_comp_dir:
         if (!assign(cu.compDir, attr)) {
@@ -948,7 +958,281 @@ DwarfParseResult<uint64_t> getIndexedOffset(
   return cursor.readOffset(is64Bit);
 }
 
+DwarfParseResult<uint64_t> readAddress(
+    DwarfCursor& cursor, uint8_t addressSize) {
+  if (addressSize == sizeof(uint32_t)) {
+    auto value = cursor.read<uint32_t>();
+    if (value.hasError()) {
+      return makeUnexpected(value.error());
+    }
+    return *value;
+  }
+  if (addressSize == sizeof(uint64_t)) {
+    return cursor.read<uint64_t>();
+  }
+  return parseError<uint64_t>(
+      DwarfParseErrorCode::invalid_value, cursor.offset());
+}
+
+DwarfParseResult<uint64_t> readIndexedAddress(
+    const CompilationUnit& cu, uint64_t index, size_t errorOffset) {
+  if (!cu.addrBase.has_value()) {
+    return parseError<uint64_t>(
+        DwarfParseErrorCode::invalid_value, errorOffset);
+  }
+  auto entry = getIndexedSectionBytes(
+      cu.debugSections.debugAddr,
+      *cu.addrBase,
+      index,
+      cu.addrSize,
+      errorOffset);
+  if (entry.hasError()) {
+    return makeUnexpected(entry.error());
+  }
+  const auto entryOffset = static_cast<size_t>(*cu.addrBase) +
+      static_cast<size_t>(index) * cu.addrSize;
+  DwarfCursor cursor(*entry, entryOffset);
+  return readAddress(cursor, cu.addrSize);
+}
+
+DwarfParseResult<bool> addressInRange(
+    uint64_t address, uint64_t start, uint64_t end, size_t errorOffset) {
+  if (end < start) {
+    return parseError<bool>(DwarfParseErrorCode::invalid_value, errorOffset);
+  }
+  return address >= start && address < end;
+}
+
 } // namespace
+
+DwarfParseResult<bool> isAddressInRangeList(
+    const CompilationUnit& cu,
+    uint64_t address,
+    folly::Optional<uint64_t> baseAddress,
+    uint64_t offset) {
+  const auto readSection =
+      [&](std::span<const uint8_t> section) -> DwarfParseResult<DwarfCursor> {
+    if (offset > section.size()) {
+      return parseError<DwarfCursor>(
+          DwarfParseErrorCode::invalid_offset, toErrorOffset(offset));
+    }
+    const auto sectionOffset = static_cast<size_t>(offset);
+    return DwarfCursor(section.subspan(sectionOffset), sectionOffset);
+  };
+
+  if (cu.version <= 4) {
+    if (cu.debugSections.debugRanges.empty()) {
+      return false;
+    }
+    auto cursorResult = readSection(cu.debugSections.debugRanges);
+    if (cursorResult.hasError()) {
+      return makeUnexpected(cursorResult.error());
+    }
+    auto cursor = *cursorResult;
+    const auto maxAddress = cu.addrSize == sizeof(uint32_t)
+        ? static_cast<uint64_t>(std::numeric_limits<uint32_t>::max())
+        : std::numeric_limits<uint64_t>::max();
+    if (cu.addrSize != sizeof(uint32_t) && cu.addrSize != sizeof(uint64_t)) {
+      return parseError<bool>(
+          DwarfParseErrorCode::invalid_value, cursor.offset());
+    }
+    // Without a CU base, treat entries as absolute until a base selection,
+    // matching LLVM's DWARFDebugRangeList::getAbsoluteRanges.
+    uint64_t legacyBase = baseAddress.value_or(0);
+    while (!cursor.empty()) {
+      const auto entryOffset = cursor.offset();
+      auto begin = readAddress(cursor, cu.addrSize);
+      auto end = readAddress(cursor, cu.addrSize);
+      if (begin.hasError()) {
+        return makeUnexpected(begin.error());
+      }
+      if (end.hasError()) {
+        return makeUnexpected(end.error());
+      }
+      if (*begin == 0 && *end == 0) {
+        return false;
+      }
+      if (*begin == maxAddress) {
+        legacyBase = *end;
+        continue;
+      }
+      auto start = addSectionOffsets(legacyBase, *begin, entryOffset);
+      auto finish = addSectionOffsets(legacyBase, *end, entryOffset);
+      if (start.hasError()) {
+        return makeUnexpected(start.error());
+      }
+      if (finish.hasError()) {
+        return makeUnexpected(finish.error());
+      }
+      auto matches = addressInRange(address, *start, *finish, entryOffset);
+      if (matches.hasError()) {
+        return makeUnexpected(matches.error());
+      }
+      if (*matches) {
+        return true;
+      }
+    }
+    return parseError<bool>(DwarfParseErrorCode::truncated, cursor.offset());
+  }
+
+  if (cu.version != 5 || cu.debugSections.debugRnglists.empty()) {
+    return false;
+  }
+  auto cursorResult = readSection(cu.debugSections.debugRnglists);
+  if (cursorResult.hasError()) {
+    return makeUnexpected(cursorResult.error());
+  }
+  auto cursor = *cursorResult;
+  while (!cursor.empty()) {
+    const auto entryOffset = cursor.offset();
+    auto kind = cursor.read<uint8_t>();
+    if (kind.hasError()) {
+      return makeUnexpected(kind.error());
+    }
+    switch (*kind) {
+      case DW_RLE_end_of_list:
+        return false;
+      case DW_RLE_base_addressx: {
+        auto index = cursor.readULEB();
+        if (index.hasError()) {
+          return makeUnexpected(index.error());
+        }
+        auto value = readIndexedAddress(cu, *index, entryOffset);
+        if (value.hasError()) {
+          return makeUnexpected(value.error());
+        }
+        baseAddress = *value;
+        break;
+      }
+      case DW_RLE_startx_endx: {
+        auto startIndex = cursor.readULEB();
+        auto endIndex = cursor.readULEB();
+        if (startIndex.hasError()) {
+          return makeUnexpected(startIndex.error());
+        }
+        if (endIndex.hasError()) {
+          return makeUnexpected(endIndex.error());
+        }
+        auto start = readIndexedAddress(cu, *startIndex, entryOffset);
+        auto end = readIndexedAddress(cu, *endIndex, entryOffset);
+        if (start.hasError()) {
+          return makeUnexpected(start.error());
+        }
+        if (end.hasError()) {
+          return makeUnexpected(end.error());
+        }
+        auto matches = addressInRange(address, *start, *end, entryOffset);
+        if (matches.hasError()) {
+          return makeUnexpected(matches.error());
+        }
+        if (*matches) {
+          return true;
+        }
+        break;
+      }
+      case DW_RLE_startx_length: {
+        auto startIndex = cursor.readULEB();
+        auto length = cursor.readULEB();
+        if (startIndex.hasError()) {
+          return makeUnexpected(startIndex.error());
+        }
+        if (length.hasError()) {
+          return makeUnexpected(length.error());
+        }
+        auto start = readIndexedAddress(cu, *startIndex, entryOffset);
+        if (start.hasError()) {
+          return makeUnexpected(start.error());
+        }
+        auto end = addSectionOffsets(*start, *length, entryOffset);
+        if (end.hasError()) {
+          return makeUnexpected(end.error());
+        }
+        if (address >= *start && address < *end) {
+          return true;
+        }
+        break;
+      }
+      case DW_RLE_offset_pair: {
+        auto startOffset = cursor.readULEB();
+        auto endOffset = cursor.readULEB();
+        if (startOffset.hasError()) {
+          return makeUnexpected(startOffset.error());
+        }
+        if (endOffset.hasError()) {
+          return makeUnexpected(endOffset.error());
+        }
+        if (!baseAddress.has_value()) {
+          return parseError<bool>(
+              DwarfParseErrorCode::invalid_value, entryOffset);
+        }
+        auto start = addSectionOffsets(*baseAddress, *startOffset, entryOffset);
+        auto end = addSectionOffsets(*baseAddress, *endOffset, entryOffset);
+        if (start.hasError()) {
+          return makeUnexpected(start.error());
+        }
+        if (end.hasError()) {
+          return makeUnexpected(end.error());
+        }
+        auto matches = addressInRange(address, *start, *end, entryOffset);
+        if (matches.hasError()) {
+          return makeUnexpected(matches.error());
+        }
+        if (*matches) {
+          return true;
+        }
+        break;
+      }
+      case DW_RLE_base_address: {
+        auto value = readAddress(cursor, cu.addrSize);
+        if (value.hasError()) {
+          return makeUnexpected(value.error());
+        }
+        baseAddress = *value;
+        break;
+      }
+      case DW_RLE_start_end: {
+        auto start = readAddress(cursor, cu.addrSize);
+        auto end = readAddress(cursor, cu.addrSize);
+        if (start.hasError()) {
+          return makeUnexpected(start.error());
+        }
+        if (end.hasError()) {
+          return makeUnexpected(end.error());
+        }
+        auto matches = addressInRange(address, *start, *end, entryOffset);
+        if (matches.hasError()) {
+          return makeUnexpected(matches.error());
+        }
+        if (*matches) {
+          return true;
+        }
+        break;
+      }
+      case DW_RLE_start_length: {
+        auto start = readAddress(cursor, cu.addrSize);
+        auto length = cursor.readULEB();
+        if (start.hasError()) {
+          return makeUnexpected(start.error());
+        }
+        if (length.hasError()) {
+          return makeUnexpected(length.error());
+        }
+        auto end = addSectionOffsets(*start, *length, entryOffset);
+        if (end.hasError()) {
+          return makeUnexpected(end.error());
+        }
+        if (address >= *start && address < *end) {
+          return true;
+        }
+        break;
+      }
+      default:
+        return parseError<bool>(
+            DwarfParseErrorCode::invalid_value, entryOffset);
+    }
+  }
+  return parseError<bool>(DwarfParseErrorCode::truncated, cursor.offset());
+}
 
 DwarfParseResult<Die> getDieAtOffset(
     const CompilationUnit& cu, uint64_t offset) {
@@ -1008,11 +1292,14 @@ DwarfParseResult<Die> getDieAtOffset(
   return die;
 }
 
-DwarfParseResult<Attribute> readAttribute(
+namespace {
+
+DwarfParseResult<Attribute> readAttributeImpl(
     const CompilationUnit& cu,
     const Die& die,
     AttributeSpec spec,
-    DwarfCursor& info) {
+    DwarfCursor& info,
+    AttributeReadMode mode) {
   // DWARF 5 introduces new FORMs whose values are relative to some base
   // attrs: DW_AT_str_offsets_base, DW_AT_rnglists_base, DW_AT_addr_base.
   // Debug Fission DWARF 4 uses GNU DW_AT_GNU_ranges_base &
@@ -1091,15 +1378,14 @@ DwarfParseResult<Attribute> readAttribute(
   };
 
   auto readDebugAddr = [&](uint64_t index) -> DwarfParseResult<uint64_t> {
-    if (!cu.addrBase.has_value()) {
-      return uint64_t(0);
+    if (mode == AttributeReadMode::defer_indexed_addresses) {
+      return uint64_t{0};
     }
     // DWARF 5: 7.27 Address Table
     // The DW_AT_addr_base attribute points to the first entry following
     // the header. The entries are indexed sequentially from this base
     // entry, starting from 0.
-    return getIndexedOffset(
-        cu.debugSections.debugAddr, *cu.addrBase, index, true, info.offset());
+    return readIndexedAddress(cu, index, info.offset());
   };
 
   while (spec.form == DW_FORM_indirect) {
@@ -1326,10 +1612,11 @@ DwarfParseResult<Attribute> readAttribute(
  * callable for each. Iteration is stopped early if any of the calls
  * return false.
  */
-DwarfParseResult<folly::Optional<size_t>> forEachAttribute(
+DwarfParseResult<folly::Optional<size_t>> forEachAttributeImpl(
     const CompilationUnit& cu,
     const Die& die,
-    folly::FunctionRef<bool(const Attribute&)> f) {
+    folly::FunctionRef<bool(const Attribute&)> f,
+    AttributeReadMode mode) {
   auto valuesBytes = getCompilationUnitBytes(cu, die.offset);
   if (valuesBytes.hasError()) {
     return makeUnexpected(valuesBytes.error());
@@ -1350,7 +1637,7 @@ DwarfParseResult<folly::Optional<size_t>> forEachAttribute(
     if (!spec->hasValue()) {
       break;
     }
-    auto attr = readAttribute(cu, die, **spec, values);
+    auto attr = readAttributeImpl(cu, die, **spec, values, mode);
     if (attr.hasError()) {
       return makeUnexpected(attr.error());
     }
@@ -1359,6 +1646,31 @@ DwarfParseResult<folly::Optional<size_t>> forEachAttribute(
     }
   }
   return folly::Optional<size_t>{values.offset()};
+}
+
+DwarfParseResult<folly::Optional<size_t>> forEachMetadataAttr(
+    const CompilationUnit& cu,
+    const Die& die,
+    folly::FunctionRef<bool(const Attribute&)> f) {
+  return forEachAttributeImpl(
+      cu, die, f, AttributeReadMode::defer_indexed_addresses);
+}
+
+} // namespace
+
+DwarfParseResult<Attribute> readAttribute(
+    const CompilationUnit& cu,
+    const Die& die,
+    AttributeSpec spec,
+    DwarfCursor& info) {
+  return readAttributeImpl(cu, die, spec, info, AttributeReadMode::resolve);
+}
+
+DwarfParseResult<folly::Optional<size_t>> forEachAttribute(
+    const CompilationUnit& cu,
+    const Die& die,
+    folly::FunctionRef<bool(const Attribute&)> f) {
+  return forEachAttributeImpl(cu, die, f, AttributeReadMode::resolve);
 }
 
 DwarfParseResult<folly::StringPiece> getFunctionNameFromDie(
