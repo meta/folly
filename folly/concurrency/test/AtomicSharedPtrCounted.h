@@ -109,7 +109,7 @@ class counted_ptr_internals : public counted_ptr_base<Atom> {
  public:
   template <typename T, typename... Args>
   static counted_ptr<T, Atom> make_ptr(Args&&... args) {
-    return make_counted<Atom, T>(std::forward<Args...>(args...));
+    return make_counted<Atom, T>(std::forward<Args>(args)...);
   }
   template <typename T>
   using CountedPtr = counted_ptr<T, Atom>;

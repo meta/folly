@@ -210,6 +210,20 @@ TEST(AtomicSharedPtr, counted) {
   EXPECT_EQ(1, d_count);
 }
 
+TEST(AtomicSharedPtr, CountedFactoryForwardsArguments) {
+  struct Value {
+    Value(int& reference, std::unique_ptr<int> owned)
+        : reference(&reference), owned(std::move(owned)) {}
+    int* reference;
+    std::unique_ptr<int> owned;
+  };
+  int reference = 7;
+  auto ptr = counted_ptr_internals<>::make_ptr<Value>(
+      reference, std::make_unique<int>(11));
+  EXPECT_EQ(ptr->reference, &reference);
+  EXPECT_EQ(*ptr->owned, 11);
+}
+
 TEST(AtomicSharedPtr, counted2) {
   auto foo = make_counted<std::atomic, bool>();
   atomic_shared_ptr<bool, std::atomic, counted_ptr_internals<std::atomic>>
