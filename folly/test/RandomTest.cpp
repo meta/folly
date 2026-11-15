@@ -338,17 +338,28 @@ TEST(Random, randDoubleSharesCanonicalGenerator) {
   }
   EXPECT_EQ(rng, copy);
 
+  // MSVC's standard library computes generate_canonical differently, so
+  // bit-exact equality with std:: holds only for libstdc++ and libc++.
+  auto expectMatchesStd = [](double value, double expected) {
+    if constexpr (kIsLibstdcpp || kIsLibcpp) {
+      EXPECT_EQ(value, expected);
+    } else {
+      EXPECT_GE(value, -5);
+      EXPECT_LT(value, 17);
+    }
+  };
+
   copy = rng;
   std::uniform_real_distribution<double> dist(-5, 17);
   for (int i = 0; i < 100; ++i) {
-    EXPECT_EQ(Random::randDouble(-5, 17, rng), dist(copy));
+    expectMatchesStd(Random::randDouble(-5, 17, rng), dist(copy));
   }
   EXPECT_EQ(rng, copy);
 
   std::mt19937_64 rng64(123);
   auto copy64 = rng64;
   for (int i = 0; i < 100; ++i) {
-    EXPECT_EQ(Random::randDouble(-5, 17, rng64), dist(copy64));
+    expectMatchesStd(Random::randDouble(-5, 17, rng64), dist(copy64));
   }
   EXPECT_EQ(rng64, copy64);
 
