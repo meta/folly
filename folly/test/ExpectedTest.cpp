@@ -88,6 +88,72 @@ static_assert(
         Expected<int, int> const&>);
 // clang-format on
 
+namespace {
+
+// Only used in unevaluated type-trait checks, so the members are declared but
+// never defined.
+struct ThrowingMove {
+  ThrowingMove() = default;
+  ThrowingMove(const ThrowingMove&);
+  ThrowingMove(ThrowingMove&&) noexcept(false);
+  ThrowingMove& operator=(const ThrowingMove&);
+  ThrowingMove& operator=(ThrowingMove&&) noexcept(false);
+};
+
+struct CopyNoAssign {
+  CopyNoAssign() = default;
+  CopyNoAssign(const CopyNoAssign&);
+  CopyNoAssign& operator=(const CopyNoAssign&) = delete;
+};
+
+} // namespace
+
+static_assert(std::is_nothrow_move_constructible_v<Expected<std::string, int>>);
+static_assert(std::is_nothrow_move_assignable_v<Expected<std::string, int>>);
+static_assert(std::is_nothrow_move_constructible_v<Expected<int, std::string>>);
+static_assert(std::is_nothrow_move_assignable_v<Expected<int, std::string>>);
+static_assert(
+    !std::is_nothrow_move_constructible_v<Expected<ThrowingMove, int>>);
+static_assert(!std::is_nothrow_move_assignable_v<Expected<ThrowingMove, int>>);
+static_assert(
+    !std::is_nothrow_move_constructible_v<Expected<int, ThrowingMove>>);
+static_assert(!std::is_nothrow_move_assignable_v<Expected<int, ThrowingMove>>);
+
+using UniquePtrExpected = Expected<std::unique_ptr<int>, int>;
+static_assert(!std::is_copy_constructible_v<UniquePtrExpected>);
+static_assert(!std::is_copy_assignable_v<UniquePtrExpected>);
+static_assert(std::is_nothrow_move_constructible_v<UniquePtrExpected>);
+static_assert(std::is_nothrow_move_assignable_v<UniquePtrExpected>);
+static_assert(
+    !std::is_copy_constructible_v<Expected<int, std::unique_ptr<int>>>);
+
+static_assert(std::is_copy_constructible_v<Expected<CopyNoAssign, int>>);
+static_assert(std::is_move_constructible_v<Expected<CopyNoAssign, int>>);
+static_assert(!std::is_copy_assignable_v<Expected<CopyNoAssign, int>>);
+static_assert(!std::is_move_assignable_v<Expected<CopyNoAssign, int>>);
+
+static_assert(
+    std::is_assignable_v<Expected<int, std::string>&, Unexpected<const char*>>);
+static_assert(std::is_assignable_v<
+              Expected<std::unique_ptr<int>, std::string>&,
+              Unexpected<const char*>>);
+
+static_assert(!std::is_convertible_v<int, Expected<int, int>>);
+static_assert(!std::is_constructible_v<Expected<int, int>, const int&>);
+static_assert(!std::is_assignable_v<Expected<int, int>&, int>);
+static_assert(
+    !std::is_constructible_v<Expected<std::string, std::string>, std::string>);
+static_assert(!std::is_assignable_v<
+              Expected<std::string, std::string>&,
+              const std::string&>);
+
+TEST(Expected, AssignUnexpectedOfConvertibleError) {
+  Expected<std::unique_ptr<int>, std::string> x{std::in_place};
+  x = makeUnexpected("error");
+  ASSERT_TRUE(x.hasError());
+  EXPECT_EQ("error", x.error());
+}
+
 TEST(Expected, NoDefault) {
   static_assert(std::is_default_constructible<Expected<NoDefault, int>>::value);
   Expected<NoDefault, int> x{std::in_place, 42, 42};
