@@ -122,7 +122,7 @@ Expected<time_t, ConversionCode> chronoRangeCheck(Src value) {
  * return.  This must have a numerator of 1.
  */
 template <typename SubsecondRatio, typename Rep>
-static Expected<std::pair<time_t, long>, ConversionCode> durationToPosixTime(
+Expected<std::pair<time_t, long>, ConversionCode> durationToPosixTime(
     const std::chrono::duration<Rep, std::ratio<1, 1>>& duration) {
   static_assert(
       SubsecondRatio::num == 1, "subsecond numerator should always be 1");
@@ -153,7 +153,7 @@ static Expected<std::pair<time_t, long>, ConversionCode> durationToPosixTime(
  * (seconds, subseconds)
  */
 template <typename SubsecondRatio, typename Rep, std::intmax_t Denominator>
-static Expected<std::pair<time_t, long>, ConversionCode> durationToPosixTime(
+Expected<std::pair<time_t, long>, ConversionCode> durationToPosixTime(
     const std::chrono::duration<Rep, std::ratio<1, Denominator>>& duration) {
   static_assert(Denominator != 1, "special case expecting den != 1");
   static_assert(
@@ -184,7 +184,7 @@ static Expected<std::pair<time_t, long>, ConversionCode> durationToPosixTime(
  * pair of (seconds, subseconds)
  */
 template <typename SubsecondRatio, typename Rep, std::intmax_t Numerator>
-static Expected<std::pair<time_t, long>, ConversionCode> durationToPosixTime(
+Expected<std::pair<time_t, long>, ConversionCode> durationToPosixTime(
     const std::chrono::duration<Rep, std::ratio<Numerator, 1>>& duration) {
   static_assert(Numerator != 1, "special case expecting num!=1");
   static_assert(
