@@ -16,9 +16,7 @@
 
 #pragma once
 
-#ifdef _WIN32
 #include <string>
-#endif
 #include <string_view>
 
 namespace folly {
