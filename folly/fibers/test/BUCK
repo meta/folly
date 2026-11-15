@@ -50,6 +50,7 @@ fb_dirsync_cpp_unittest(
         "//folly/fibers:when_n",
         "//folly/futures:core",
         "//folly/io/async:scoped_event_base_thread",
+        "//folly/lang:hint",
         "//folly/portability:gtest",
         "//folly/synchronization:lock",
         "//folly/tracing:async_stack",

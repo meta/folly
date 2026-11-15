@@ -43,6 +43,7 @@
 #include <folly/fibers/WhenN.h>
 #include <folly/futures/Future.h>
 #include <folly/io/async/ScopedEventBaseThread.h>
+#include <folly/lang/Hint.h>
 #include <folly/portability/GTest.h>
 #include <folly/synchronization/Lock.h>
 #include <folly/tracing/AsyncStack.h>
@@ -3839,3 +3840,96 @@ TEST(FiberManager, EventBaseMigratingThreads) {
 
   EXPECT_TRUE(f.isReady());
 }
+
+#if (defined(__linux__) || defined(__APPLE__)) && \
+    (FOLLY_X64 || FOLLY_AARCH64) &&               \
+    FOLLY_HAS_BUILTIN(__builtin_frame_address) && \
+    !(defined(FOLLY_FIBERS_USE_BOOST_CONTEXT) &&  \
+      FOLLY_FIBERS_USE_BOOST_CONTEXT)
+
+// FiberImpl reads the frame pointer at a fixed offset in the vendored fcontext
+// layout, both to stitch a fiber's stack to the context that resumed it and to
+// report a suspended fiber's stack pointer. These tests follow the
+// frame-pointer chain so that an fcontext update that moves that slot fails
+// here; with a wrong layout the walk may read a bad pointer and crash, which
+// also fails. The tests assume a build that keeps frame pointers;
+// `canWalkFrames` is a best-effort check, and in a build without them the check
+// itself may crash.
+
+namespace {
+
+bool frameChainReaches(const void* frame, const void* target) {
+  for (int i = 0; i < 64 && frame != nullptr; ++i) {
+    if (frame == target) {
+      return true;
+    }
+    frame = *static_cast<void* const*>(frame);
+  }
+  return false;
+}
+
+FOLLY_NOINLINE bool reachesFrame(const void* target) {
+  return frameChainReaches(__builtin_frame_address(0), target);
+}
+
+FOLLY_NOINLINE bool callReachesFrame(const void* target) {
+  bool result = reachesFrame(target);
+  folly::compiler_must_not_elide(result);
+  return result;
+}
+
+// Best-effort check whether frame-pointer walking works in this build.
+FOLLY_NOINLINE bool canWalkFrames() {
+  bool result = callReachesFrame(__builtin_frame_address(0));
+  folly::compiler_must_not_elide(result);
+  return result;
+}
+
+FOLLY_NOINLINE void loopFromFrame(FiberManager& manager, void*& frame) {
+  frame = __builtin_frame_address(0);
+  manager.loopUntilNoReady();
+  folly::compiler_must_not_elide(frame);
+}
+
+FOLLY_NOINLINE void waitInFrame(Baton& baton, void*& frame) {
+  frame = __builtin_frame_address(0);
+  baton.wait();
+  folly::compiler_must_not_elide(frame);
+}
+
+} // namespace
+
+TEST(FiberManager, fiberFrameChainReachesResumingFrame) {
+  if (!canWalkFrames()) {
+    GTEST_SKIP() << "Frame-pointer walking does not work in this build";
+  }
+  FiberManager manager(std::make_unique<SimpleLoopController>());
+  void* mainFrame = nullptr;
+  bool reached = false;
+  manager.addTask([&] {
+    reached = frameChainReaches(__builtin_frame_address(0), mainFrame);
+  });
+  loopFromFrame(manager, mainFrame);
+  EXPECT_TRUE(reached);
+}
+
+TEST(FiberManager, suspendedFiberStackPointerReachesWaitingFrame) {
+  if (!canWalkFrames()) {
+    GTEST_SKIP() << "Frame-pointer walking does not work in this build";
+  }
+  FiberManager manager(std::make_unique<SimpleLoopController>());
+  Baton baton;
+  Fiber* fiber = nullptr;
+  void* waitFrame = nullptr;
+  manager.addTask([&] {
+    fiber = manager.currentFiber();
+    waitInFrame(baton, waitFrame);
+  });
+  manager.loopUntilNoReady();
+  ASSERT_NE(fiber, nullptr);
+  EXPECT_TRUE(frameChainReaches(fiber->getStackPointer(), waitFrame));
+  baton.post();
+  manager.loopUntilNoReady();
+}
+
+#endif
