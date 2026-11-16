@@ -25,14 +25,14 @@
 
 #ifdef _MSC_VER
 #include <event2/event_compat.h> // @manual
-// The signal_set macro from libevent 2 compat conflicts with the
-// boost::asio::signal_set function
+// libevent 2's compatibility API defines `signal_set` as a function-like macro,
+// which breaks other uses of the name, such as `asio::signal_set`.
 #undef signal_set
 #include <folly/portability/Fcntl.h>
 #endif
 
-// The signal_set macro from libevent 1.4.14b-stable conflicts with the
-// boost::asio::signal_set function
+// libevent 1.4.14b-stable defines `signal_set` as a function-like macro, which
+// breaks other uses of the name, such as `asio::signal_set`.
 #if defined(_EVENT_NUMERIC_VERSION) && _EVENT_NUMERIC_VERSION == 0x01040e00
 #undef signal_set
 #endif
