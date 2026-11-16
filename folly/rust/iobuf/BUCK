@@ -47,7 +47,7 @@ fb_dirsync_rule(
     ]
     + ([ANDROID] if is_xplat() else []),
     src_includes = ["iobuf_sys.rs"],
-    visibility = ["fbcode//folly/rust/iobuf:iobuf-sys"],
+    visibility = ["fbsource//xplat/folly/rust/iobuf:iobuf-sys"],
 )
 
 fb_dirsync_cpp_library(
