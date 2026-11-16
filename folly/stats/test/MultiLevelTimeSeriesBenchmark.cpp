@@ -312,7 +312,7 @@ int main(int argc, char* argv[]) {
 
 #if 0
 Intel(R) Xeon(R) Gold 6138 CPU @ 2.00GHz
-buck run @mode/opt fbcode//folly/stats/test:multi_level_time_series_benchmark
+buck run @mode/opt fbsource//xplat/folly/stats/test:multi_level_time_series_benchmark
 ============================================================================
 [...]est/MultiLevelTimeSeriesBenchmark.cpp     relative  time/iter   iters/s
 ============================================================================
