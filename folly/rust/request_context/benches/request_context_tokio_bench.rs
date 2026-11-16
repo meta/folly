@@ -17,7 +17,7 @@
 //! Benchmarks for `request_context_tokio` hook overhead.
 //!
 //! Run locally:
-//!   buck run @mode/opt fbcode//folly/rust/request_context:request_context_tokio_bench -- --bench
+//!   buck run @mode/opt fbsource//xplat/folly/rust/request_context:request_context_tokio_bench -- --bench
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
