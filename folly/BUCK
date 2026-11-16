@@ -1331,12 +1331,9 @@ non_fbcode_target(
     platforms = (ANDROID, APPLE, CXX, FBCODE, WINDOWS),
     visibility = ["PUBLIC"],
     deps = [
-        "//third-party/boost:boost",
-        "//third-party/boost:boost_regex",
         "//xplat/folly:memory",
     ],
     exported_deps = [
-        "fbsource//third-party/boost:boost",
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly:atomic_hash_map",
         "fbsource//xplat/folly:atomic_linked_list",
@@ -1489,7 +1486,6 @@ non_fbcode_target(
         "fbsource//xplat/third-party/linker_lib:atomic",
         "fbsource//xplat/third-party/openssl:crypto",
         "fbsource//xplat/third-party/openssl:ssl",
-        "//third-party/boost:boost_system",
         "//xplat/folly:discriminated_ptr",
         "//xplat/folly:stop_watch",
         "//xplat/folly/detail:discriminated_ptr_detail",
