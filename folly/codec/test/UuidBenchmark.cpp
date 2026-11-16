@@ -17,7 +17,7 @@
 #include <folly/Benchmark.h>
 
 #include <string>
-#include <boost/lexical_cast.hpp>
+#include <boost/uuid/string_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <uuid/uuid.h>
@@ -84,11 +84,10 @@ BENCHMARK(uuid_parse_glibc, n) {
 }
 
 BENCHMARK(uuid_parse_boost, n) {
+  boost::uuids::string_generator gen;
   boost::uuids::uuid uuid;
   for (size_t i = 0; i < n; ++i) {
-    folly::compiler_must_not_elide(
-        uuid = boost::lexical_cast<boost::uuids::uuid>(
-            kGuidPool[i % kGuidPoolSize]));
+    folly::compiler_must_not_elide(uuid = gen(kGuidPool[i % kGuidPoolSize]));
     folly::compiler_must_not_elide(uuid);
   }
 }
