@@ -300,6 +300,13 @@ namespace detail {
 template <class... T>
 using LastElement = type_pack_element_t<sizeof...(T) - 1, T...>;
 
+template <class Tgt, class... Ts>
+struct IsArithmeticToString : std::false_type {};
+
+template <class Tgt, class Src>
+struct IsArithmeticToString<Tgt, Src>
+    : std::bool_constant<IsSomeString<Tgt>::value && is_arithmetic_v<Src>> {};
+
 #ifdef _MSC_VER
 // MSVC can't quite figure out the LastElementImpl::call() stuff
 // in the base implementation, so we have to use tuples instead,
@@ -858,7 +865,8 @@ template <class Tgt, class... Ts>
   requires(
       IsSomeString<Tgt>::value &&
       (sizeof...(Ts) != 1 ||
-       !std::is_same<Tgt, detail::LastElement<void, Ts...>>::value))
+       !std::is_same<Tgt, detail::LastElement<void, Ts...>>::value) &&
+      !detail::IsArithmeticToString<Tgt, Ts...>::value)
 Tgt to(const Ts&... vs) {
   Tgt result;
   toAppendFit(vs..., &result);
@@ -866,18 +874,19 @@ Tgt to(const Ts&... vs) {
 }
 
 /**
- * Special version of to<SomeString> for floating point. When calling
- * folly::to<SomeString>(double), generic implementation above will
- * firstly reserve 24 (or 25 when negative value) bytes. This will
- * introduce a malloc call for most mainstream string implementations.
+ * Special version of to<SomeString> for a single arithmetic value, which
+ * skips the string reserve done by the generic implementation above.
  *
- * But for most cases, a floating point doesn't need 24 (or 25) bytes to
- * be converted as a string.
+ * For floating point, the generic implementation reserves 24 (or 25 when
+ * negative) bytes, which introduces a malloc call for most mainstream string
+ * implementations even though most values need far fewer bytes.
  *
- * This special version will not do string reserve.
+ * For integers, the reserve computes the decimal digit count, which toAppend
+ * computes again while writing. toAppend formats into a stack buffer and
+ * appends once, so the reserve saves no allocations.
  */
 template <class Tgt, class Src>
-  requires(IsSomeString<Tgt>::value && std::is_floating_point<Src>::value)
+  requires(detail::IsArithmeticToString<Tgt, Src>::value)
 Tgt to(Src value) {
   Tgt result;
   toAppend(value, &result);
