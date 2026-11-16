@@ -83,23 +83,13 @@ struct TemporaryEmplaceKey {
 // about heterogeneous lookup you can just pass a single-arg template
 // that extends std::false_type.
 
-// TODO(T31574848): We can remove the std::enable_if_t once we no longer
-// target platforms without N4387 ("perfect initialization" for pairs
-// and tuples).  libstdc++ at gcc-6.1.0 is the first release that contains
-// the improved set of pair constructors.
 template <
     typename KeyType,
     typename MappedType,
     typename Func,
     typename UsableKeyType,
     typename Arg1,
-    typename Arg2,
-    std::enable_if_t<
-        std::is_constructible<
-            std::pair<KeyType const, MappedType>,
-            Arg1&&,
-            Arg2&&>::value,
-        int> = 0>
+    typename Arg2>
 auto callWithKeyAndPairArgs(
     Func&& f,
     UsableKeyType const& key,
@@ -296,8 +286,8 @@ template <typename T>
 using RequireNotAllocator = std::enable_if_t<!is_allocator_v<T>, T>;
 
 template <typename T>
-using RequireInputIterator =
-    std::enable_if_t<iterator_category_matches_v<T, std::input_iterator_tag>>;
+concept LegacyInputIterator =
+    iterator_category_matches_v<T, std::input_iterator_tag>;
 
 } // namespace detail
 } // namespace folly
