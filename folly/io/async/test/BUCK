@@ -1121,7 +1121,10 @@ fb_dirsync_cpp_unittest(
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         ":async_io_uring_socket_test_helper",
+        "//folly/facebook/ext:resource_exhaustion_ext",
+        "//folly/lang:exception",
         "//folly/portability:gtest",
+        "//folly/testing:test_util",
     ],
 )
 
@@ -1382,8 +1385,11 @@ fb_dirsync_cpp_unittest(
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:scope_guard",
+        "//folly/facebook/ext:resource_exhaustion_ext",
         "//folly/io/async:io_uring_provided_buffer_ring",
         "//folly/io/async:io_uring_setup_retry",
+        "//folly/lang:exception",
+        "//folly/testing:test_util",
     ],
 )
 

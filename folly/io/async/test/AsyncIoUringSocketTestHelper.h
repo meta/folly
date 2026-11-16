@@ -98,6 +98,9 @@ class EchoTransport
   void writeErr(
       size_t bytesWritten, const AsyncSocketException& ex) noexcept override {
     LOG_EVERY_N(ERROR, 10000) << "writeErr " << bytesWritten << " " << ex;
+    if (writeError == 0) {
+      writeError = ex.getErrno();
+    }
     transport->close();
   }
 
@@ -126,6 +129,7 @@ class EchoTransport
 
   AsyncSocketTransport::UniquePtr transport;
   bool bufferMovable;
+  int writeError{0};
   std::array<char, kBufferSize> buff;
 };
 

@@ -16,52 +16,82 @@
 
 #include <chrono>
 #include <string>
+#include <system_error>
 #include <thread>
 
 #include <folly/io/async/test/AsyncIoUringSocketTestHelper.h>
+#include <folly/lang/Exception.h>
 #include <folly/portability/GTest.h>
+#include <folly/testing/TestUtil.h>
 
 namespace folly {
 namespace {
 
-// write() requires a callback, but a failed write here always surfaces as a
-// read-side error: bytes that never went out cannot be echoed back, so
-// waitFor below can only end in a reset or a timeout, where runWithRetries
-// sees it. Unlike NullWriteCallback this does not LOG(FATAL), so a
-// transient write failure under host memlock contention becomes a retriable
-// error instead of aborting the process. (writeErr is noexcept, so
-// recording-and-throwing is not an option.)
 class TolerantWriteCallback : public AsyncWriter::WriteCallback {
  public:
   void writeSuccess() noexcept override {}
 
-  void writeErr(size_t, const AsyncSocketException&) noexcept override {}
-};
+  void writeErr(size_t, const AsyncSocketException& error) noexcept override {
+    if (writeError == 0) {
+      writeError = error.getErrno();
+    }
+  }
 
-static TolerantWriteCallback tolerantWriteCallback;
+  int writeError{0};
+};
 
 constexpr size_t kBigWriteSize = 1000000;
 constexpr int kMaxAttempts = 3;
 
-// Runs attempt up to kMaxAttempts times with backoff. An attempt that throws
-// std::exception is treated as a transient failure (e.g. ENOMEM under host
-// memlock contention) and retried; deterministic failures recorded with
-// gtest assertions fail immediately without retry. Fails the test if every
-// attempt throws.
 template <typename Attempt>
 void runWithRetries(const std::string& name, Attempt&& attempt) {
-  std::string lastError = "no attempts made";
   for (int i = 0; i < kMaxAttempts; ++i) {
     try {
       attempt();
       return;
-    } catch (const std::exception& ex) {
-      lastError = ex.what();
+    } catch (const std::system_error& error) {
+      if (error.code() != std::errc::not_enough_memory) {
+        throw;
+      }
+      if (i + 1 == kMaxAttempts) {
+        test::report_resource_exhaustion(name, error.code(), error.what());
+        throw;
+      }
     }
     std::this_thread::sleep_for(std::chrono::seconds(1 << i));
   }
-  FAIL() << name << " failed after " << kMaxAttempts
-         << " attempts: " << lastError;
+}
+
+void throwWriteEnomem(
+    const EchoTransport& echo, const TolerantWriteCallback& writer) {
+  if (writer.writeError == ENOMEM || echo.writeError == ENOMEM) {
+    throw_exception<std::system_error>(
+        ENOMEM,
+        std::generic_category(),
+        writer.writeError == ENOMEM ? "client write" : "echo write");
+  }
+}
+
+std::string waitForEcho(
+    CollectCallback& callback,
+    EventBase& base,
+    size_t size,
+    const EchoTransport& echo,
+    const TolerantWriteCallback& writer) {
+  try {
+    return callback.waitFor(size).via(&base).getVia(&base);
+  } catch (const AsyncSocketException& error) {
+    if (error.getErrno() == ECONNRESET || error.getErrno() == EPIPE) {
+      throwWriteEnomem(echo, writer);
+    }
+    throw;
+  } catch (const FutureTimeout&) {
+    throwWriteEnomem(echo, writer);
+    throw;
+  } catch (const BrokenPromise&) {
+    throwWriteEnomem(echo, writer);
+    throw;
+  }
 }
 
 } // namespace
@@ -70,10 +100,11 @@ TEST_P(AsyncIoUringSocketTestAll, WriteBig) {
   MAYBE_SKIP();
   std::string big(kBigWriteSize, 'X');
   runWithRetries("WriteBig", [&] {
+    TolerantWriteCallback writer;
     auto [e, s, cb] = makeConnected();
     cb->setHoldData(true);
-    s->write(&tolerantWriteCallback, big.c_str(), big.size());
-    auto res = cb->waitFor(big.size()).via(base.get()).getVia(base.get());
+    s->write(&writer, big.c_str(), big.size());
+    auto res = waitForEcho(*cb, *base, big.size(), *e, writer);
     EXPECT_TRUE(big == res) << big.size() << " vs " << res.size();
   });
 }
@@ -83,10 +114,11 @@ TEST_P(AsyncIoUringSocketTestAll, WriteBigDrop) {
   std::string big(kBigWriteSize, 'X');
   // holdData=false should trigger overflow in provided buffers.
   runWithRetries("WriteBigDrop", [&] {
+    TolerantWriteCallback writer;
     auto [e, s, cb] = makeConnected();
     cb->setHoldData(false);
-    s->write(&tolerantWriteCallback, big.c_str(), big.size());
-    EXPECT_EQ(big, cb->waitFor(big.size()).via(base.get()).getVia(base.get()));
+    s->write(&writer, big.c_str(), big.size());
+    EXPECT_EQ(big, waitForEcho(*cb, *base, big.size(), *e, writer));
   });
 }
 
