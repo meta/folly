@@ -17,6 +17,7 @@
 #pragma once
 
 #include <atomic>
+#include <new>
 
 #include <folly/lang/Bits.h>
 
@@ -66,14 +67,48 @@ class SingleWriterFixedHashMap {
       "readers to read keys data-race-free concurrently with possible "
       "concurrent insert and erase operations on the keys.");
 
-  class Elem;
-
   enum class State : uint8_t { EMPTY, VALID, TOMBSTONE };
+
+  /// Elem
+  class Elem {
+    std::atomic<State> state_;
+    Key key_;
+    std::atomic<Value> value_;
+
+   public:
+    Elem() : state_(State::EMPTY) {}
+
+    FOLLY_ALWAYS_INLINE State state() const {
+      return state_.load(std::memory_order_acquire);
+    }
+
+    FOLLY_ALWAYS_INLINE bool valid() const { return state() == State::VALID; }
+
+    FOLLY_ALWAYS_INLINE Key key() const { return key_; }
+
+    FOLLY_ALWAYS_INLINE Value value() const {
+      return value_.load(std::memory_order_relaxed);
+    }
+
+    void setKey(Key key) { key_ = key; }
+
+    void setValue(Value value) {
+      value_.store(value, std::memory_order_relaxed);
+    }
+
+    void setValid() { state_.store(State::VALID, std::memory_order_release); }
+
+    void erase() { state_.store(State::TOMBSTONE, std::memory_order_release); }
+  }; // Elem
+
+  // Maximum capacity that fits in inline storage.
+  static constexpr size_t kInlineCapacity = 4;
 
   size_t capacity_;
   size_t used_{0};
   std::atomic<size_t> size_{0};
-  std::unique_ptr<Elem[]> elem_;
+  Elem* elem_{nullptr};
+  alignas(Elem) unsigned char inlineStorage_[kInlineCapacity * sizeof(Elem)];
 
  public:
   class Iterator;
@@ -88,12 +123,12 @@ class SingleWriterFixedHashMap {
     if (o.empty()) {
       return;
     }
-    elem_ = std::make_unique<Elem[]>(capacity_);
+    initElem();
     if (capacity_ == o.capacity_ &&
         (o.used_ < o.capacity_ || o.size() == o.capacity_)) {
       std::memcpy(
-          static_cast<void*>(elem_.get()),
-          static_cast<const void*>(o.elem_.get()),
+          static_cast<void*>(elem_),
+          static_cast<const void*>(o.elem_),
           capacity_ * sizeof(Elem));
       used_ = o.used_;
       setSize(o.size());
@@ -104,6 +139,18 @@ class SingleWriterFixedHashMap {
       if (e.valid()) {
         insert(e.key(), e.value());
       }
+    }
+  }
+
+  // elem_ may point into inlineStorage_, so instances are not relocatable.
+  SingleWriterFixedHashMap(const SingleWriterFixedHashMap&) = delete;
+  SingleWriterFixedHashMap(SingleWriterFixedHashMap&&) = delete;
+  SingleWriterFixedHashMap& operator=(const SingleWriterFixedHashMap&) = delete;
+  SingleWriterFixedHashMap& operator=(SingleWriterFixedHashMap&&) = delete;
+
+  ~SingleWriterFixedHashMap() {
+    if (capacity_ > kInlineCapacity) {
+      delete[] elem_;
     }
   }
 
@@ -132,7 +179,7 @@ class SingleWriterFixedHashMap {
 
   bool insert(Key key, Value value) {
     if (!elem_) {
-      elem_ = std::make_unique<Elem[]>(capacity_);
+      initElem();
     }
     DCHECK_LT(used_, capacity_);
     size_t index = hash(key);
@@ -191,6 +238,18 @@ class SingleWriterFixedHashMap {
   }
 
  private:
+  void initElem() {
+    if (capacity_ > kInlineCapacity) {
+      elem_ = new Elem[capacity_];
+      return;
+    }
+    auto* storage = reinterpret_cast<Elem*>(inlineStorage_);
+    for (size_t i = 0; i < capacity_; ++i) {
+      ::new (static_cast<void*>(storage + i)) Elem();
+    }
+    elem_ = std::launder(storage);
+  }
+
   FOLLY_ALWAYS_INLINE size_t hash(Key key) const {
     size_t mask = capacity_ - 1;
     size_t index = std::hash<Key>()(key) & mask;
@@ -232,38 +291,6 @@ class SingleWriterFixedHashMap {
     setSize(size() - 1);
   }
 
-  /// Elem
-  class Elem {
-    std::atomic<State> state_;
-    Key key_;
-    std::atomic<Value> value_;
-
-   public:
-    Elem() : state_(State::EMPTY) {}
-
-    FOLLY_ALWAYS_INLINE State state() const {
-      return state_.load(std::memory_order_acquire);
-    }
-
-    FOLLY_ALWAYS_INLINE bool valid() const { return state() == State::VALID; }
-
-    FOLLY_ALWAYS_INLINE Key key() const { return key_; }
-
-    FOLLY_ALWAYS_INLINE Value value() const {
-      return value_.load(std::memory_order_relaxed);
-    }
-
-    void setKey(Key key) { key_ = key; }
-
-    void setValue(Value value) {
-      value_.store(value, std::memory_order_relaxed);
-    }
-
-    void setValid() { state_.store(State::VALID, std::memory_order_release); }
-
-    void erase() { state_.store(State::TOMBSTONE, std::memory_order_release); }
-  }; // Elem
-
  public:
   /// Iterator
   class Iterator {
@@ -302,7 +329,7 @@ class SingleWriterFixedHashMap {
     friend class SingleWriterFixedHashMap;
 
     explicit Iterator(const SingleWriterFixedHashMap& m, size_t i = 0)
-        : elem_(i == m.capacity_ ? nullptr : m.elem_.get()),
+        : elem_(i == m.capacity_ ? nullptr : m.elem_),
           capacity_(m.capacity_),
           index_(i) {
       if (index_ < capacity_) {
