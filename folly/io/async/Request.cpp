@@ -578,7 +578,7 @@ void RequestContext::State::clearContextData(const RequestToken& token) {
   DCHECK(data);
   data->releaseRefClearOnly();
   DCHECK(replaced);
-  replaced->cleared_.emplace_back(std::make_pair(token, data));
+  replaced->cleared_.emplace_back(token, data);
   replaced->retire();
 }
 
