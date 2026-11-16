@@ -3,6 +3,7 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dir
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_binary.bzl", "fb_dirsync_cpp_binary")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
+load("@fbsource//tools/target_determinator/macros:ci.bzl", "ci")
 load("../../../defs.bzl", "fbcode_ci_default_labels")
 load("../../../io/async/test/certs/defs.bzl", "alias_pem")
 
@@ -518,7 +519,32 @@ fb_dirsync_cpp_unittest(
     deps = [
         "//folly/io/async:async_base",
         "//folly/portability:gtest",
+        "//xplat/folly:file_util",
+        "//xplat/folly:scope_guard",
         "//xplat/folly/portability:fcntl",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
+    name = "windows_notification_queue_recovery_test",
+    srcs = [
+        "WindowsNotificationQueueFaultTest.cpp",
+        "WindowsNotificationQueueRecoveryTest.cpp",
+    ],
+    labels = ci.labels(
+        ci.windows(ci.mode("fbcode//mode/win")),
+    ),
+    supports_static_listing = False,
+    deps = [
+        "//folly/io/async:async_base",
+        "//folly/net:net_ops",
+        "//folly/net:network_socket",
+        "//folly/portability:gmock",
+        "//folly/portability:gtest",
+        "//folly/portability:sockets",
+        "//folly/portability:windows",
+        "//folly/portability/provide:iphlpapi",
+        "//xplat/folly/portability:event",
     ],
 )
 

@@ -16,6 +16,10 @@
 
 #pragma once
 
+#include <chrono>
+#include <mutex>
+
+#include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/AtomicNotificationQueue.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
@@ -23,7 +27,7 @@
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
 
-#if __has_include(<sys/eventfd.h>)
+#if !defined(_WIN32) && __has_include(<sys/eventfd.h>)
 #include <sys/eventfd.h>
 #endif
 
@@ -35,7 +39,13 @@ namespace detail {
 /// Type-independent notification transport and event registration.
 class EventBaseAtomicNotificationQueueBase
     : protected EventBase::LoopCallback,
+      protected AsyncTimeout,
+      protected EventBase::OnDestructionCallback,
       protected EventHandler {
+ public:
+  static bool createPipe(int (&fds)[2]);
+  static void closePipe(int (&fds)[2]);
+
  protected:
   EventBaseAtomicNotificationQueueBase();
   ~EventBaseAtomicNotificationQueueBase() override;
@@ -57,6 +67,15 @@ class EventBaseAtomicNotificationQueueBase
   bool armed_{false};
   bool edgeTriggeredSet_{false};
 
+#ifdef _WIN32
+
+  bool winIsPipeBroken() const;
+  void winRepairPipe();
+  void winScheduleRecoveryTick();
+  uint64_t winAttachmentEpoch_{0};
+
+#endif
+
  private:
   /**
    * Check that the AtomicNotificationQueue is being used from the correct
@@ -74,6 +93,22 @@ class EventBaseAtomicNotificationQueueBase
    */
   void checkPid() const;
   [[noreturn]] FOLLY_NOINLINE void checkPidFail() const;
+  void onEventBaseDestruction() noexcept override;
+  void detachConsuming();
+  bool registerReadHandler(bool internal);
+
+#ifdef _WIN32
+
+  void winRetirePipe();
+
+  mutable std::mutex winPipeMutex_;
+  size_t winSignalDebt_{0};
+  bool winPipeEnabled_{false};
+  std::chrono::steady_clock::time_point winRetryAt_{};
+  uint32_t winRetryDelay_{100};
+  bool winInternal_{false};
+
+#endif
 };
 } // namespace detail
 
@@ -192,6 +227,18 @@ class EventBaseAtomicNotificationQueue
 
   AtomicNotificationQueue<Task> notificationQueue_;
   Consumer consumer_;
+
+  void timeoutExpired() noexcept override {
+#ifdef _WIN32
+    winRecoveryTick();
+#endif
+  }
+
+#ifdef _WIN32
+
+  void winRecoveryTick();
+
+#endif
 };
 
 } // namespace folly

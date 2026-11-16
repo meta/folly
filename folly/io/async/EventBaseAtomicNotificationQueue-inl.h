@@ -26,6 +26,9 @@ EventBaseAtomicNotificationQueue<Task, Consumer>::
 template <typename Task, typename Consumer>
 EventBaseAtomicNotificationQueue<Task, Consumer>::
     ~EventBaseAtomicNotificationQueue() {
+#ifdef _WIN32
+  detail::EventBaseAtomicNotificationQueueBase::stopConsuming();
+#endif
   // discard pending tasks and disarm the queue
   while (drive([](Task&&) {
     return AtomicNotificationQueueTaskStatus::DISCARD;
@@ -101,6 +104,12 @@ void EventBaseAtomicNotificationQueue<Task, Consumer>::
     runLoopCallback() noexcept {
   DCHECK(!armed_);
   if (!notificationQueue_.arm()) {
+#ifdef _WIN32
+    if (winIsPipeBroken()) {
+      execute();
+      return;
+    }
+#endif
     activateEvent();
   } else {
     armed_ = true;
@@ -127,11 +136,44 @@ void EventBaseAtomicNotificationQueue<Task, Consumer>::handlerReady(
 
 template <typename Task, typename Consumer>
 void EventBaseAtomicNotificationQueue<Task, Consumer>::execute() {
+#ifdef _WIN32
+  if (!evb_) {
+    return;
+  }
+  const auto epoch = winAttachmentEpoch_;
+  cancelLoopCallback();
+  drainFd();
+  drive(consumer_);
+  if (epoch != winAttachmentEpoch_) {
+    return;
+  }
+  winRepairPipe();
+#else
   if (!edgeTriggeredSet_) {
     drainFd();
   }
   drive(consumer_);
+#endif
   evb_->runInLoop(this, false, nullptr);
 }
+
+#ifdef _WIN32
+
+template <typename Task, typename Consumer>
+void EventBaseAtomicNotificationQueue<Task, Consumer>::winRecoveryTick() {
+  if (!evb_) {
+    return;
+  }
+  const auto epoch = winAttachmentEpoch_;
+  drainFd();
+  if (winIsPipeBroken() || !empty()) {
+    execute();
+  }
+  if (epoch == winAttachmentEpoch_ && evb_) {
+    winScheduleRecoveryTick();
+  }
+}
+
+#endif
 
 } // namespace folly

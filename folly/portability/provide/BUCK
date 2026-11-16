@@ -23,3 +23,13 @@ fb_dirsync_cpp_library(
         "fbsource//third-party/libunwind:unwind",
     ],
 )
+
+fb_dirsync_cpp_library(
+    name = "iphlpapi",
+    exported_deps = select({
+        "DEFAULT": [],
+        "ovr_config//os:windows": [
+            "fbsource//third-party/toolchains/win:iphlpapi.lib",
+        ],
+    }),
+)
