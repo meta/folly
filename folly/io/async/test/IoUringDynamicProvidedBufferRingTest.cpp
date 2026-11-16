@@ -16,8 +16,11 @@
 
 #include <folly/io/async/IoUringDynamicProvidedBufferRing.h>
 #include <folly/io/async/IoUringSetupRetry.h>
+#include <folly/portability/SysMman.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <thread>
 #include <vector>
 
@@ -267,7 +270,7 @@ TEST_F(IoUringDynamicProvidedBufferRingTest, ConcurrentDecBufferState) {
     threads.emplace_back([&go, threadBufs = std::move(threadBufs)]() mutable {
       while (!go.load(std::memory_order_acquire)) {
       }
-      // Each reset triggers free_fn -> decBufferState
+      // Each reset triggers bufFreeFn
       for (auto& buf : threadBufs) {
         buf.reset();
       }
@@ -334,6 +337,93 @@ TEST_F(IoUringDynamicProvidedBufferRingTest, GrowsOnExhaustion) {
     held.push_back(consumeOne(*bufRing, helper, 64));
   }
   EXPECT_EQ(helper.areaCount(), 3u);
+}
+
+TEST_F(
+    IoUringDynamicProvidedBufferRingTest,
+    DestroyWithBuffersHeldInSeveralAreas) {
+  IoUringDynamicProvidedBufferRing::Options options = {
+      .gid = 1,
+      .bufferCount = 8,
+      .bufferSize = 64,
+  };
+  auto bufRing = createBufferRing(ring_, options);
+  IoUringDynamicProvidedBufferRingTestHelper helper(*bufRing);
+
+  std::vector<std::unique_ptr<folly::IOBuf>> held;
+  held.reserve(16);
+  for (int i = 0; i < 16; i++) {
+    held.push_back(consumeOne(*bufRing, helper, 64));
+  }
+  ASSERT_EQ(helper.areaCount(), 3u);
+  for (size_t i = 0; i < held.size(); i += 2) {
+    held[i].reset();
+  }
+
+  bufRing.reset();
+
+  for (auto& buf : held) {
+    if (buf) {
+      EXPECT_EQ(std::count(buf->data(), buf->tail(), 0), 64)
+          << "held buffers must stay mapped after the ring is destroyed";
+      buf.reset();
+    }
+  }
+}
+
+static void expectUnmapped(const void* address) {
+  unsigned char resident = 0;
+  const auto ret = ::mincore(const_cast<void*>(address), 1, &resident);
+  const auto error = errno;
+  EXPECT_EQ(ret, -1);
+  EXPECT_EQ(error, ENOMEM);
+}
+
+TEST_F(IoUringDynamicProvidedBufferRingTest, DestroyUnusedIncrementalRing) {
+  IoUringDynamicProvidedBufferRing::Options options = {
+      .gid = 1,
+      .bufferCount = 4,
+      .bufferSize = 64,
+      .useIncrementalBuffers = true,
+  };
+  auto bufRing = createBufferRing(ring_, options);
+  IoUringDynamicProvidedBufferRingTestHelper helper(*bufRing);
+  EXPECT_EQ(helper.outstandingSum(), options.bufferCount);
+
+  std::vector<const void*> areas;
+  areas.reserve(helper.areaCount());
+  for (uint32_t area = 0; area < helper.areaCount(); ++area) {
+    areas.push_back(helper.areaData(area, 0));
+  }
+  bufRing.reset();
+
+  for (const auto* area : areas) {
+    expectUnmapped(area);
+  }
+}
+
+TEST_F(
+    IoUringDynamicProvidedBufferRingTest,
+    DestroyWithIncrementalSliceOutstanding) {
+  IoUringDynamicProvidedBufferRing::Options options = {
+      .gid = 1,
+      .bufferCount = 4,
+      .bufferSize = 64,
+      .useIncrementalBuffers = true,
+  };
+  auto bufRing = createBufferRing(ring_, options);
+  IoUringDynamicProvidedBufferRingTestHelper helper(*bufRing);
+  const auto* area = helper.areaData(helper.activeArea(), 0);
+
+  // Buffer 0 stays in the ring, partially consumed by this slice.
+  auto slice = bufRing->getIoBuf(0, 30, true);
+  EXPECT_EQ(helper.outstandingSum(), options.bufferCount);
+  bufRing.reset();
+
+  EXPECT_EQ(std::count(slice->data(), slice->tail(), 0), 30)
+      << "slice must stay mapped after the ring is destroyed";
+  slice.reset();
+  expectUnmapped(area);
 }
 
 TEST_F(
@@ -769,10 +859,7 @@ TEST_F(
 }
 
 // The producer (getIoBuf) runs on a single thread while returns land on
-// arbitrary threads, so a consumer's thread-local refcount is purely negative.
-// When such a thread exits, ~LocalRefCount folds that negative delta into the
-// global count while the ring is still alive, which can drive the global count
-// to zero or below. That must not be mistaken for "last reference dropped".
+// short-lived threads. Those returns must never destroy the live ring.
 TEST_F(
     IoUringDynamicProvidedBufferRingTest, ConsumerThreadsExitWhileRingAlive) {
   constexpr uint32_t kBufferCount = 64;
@@ -821,18 +908,24 @@ TEST_F(
 }
 
 static void runDestroyRaceIteration(
-    io_uring& ring, uint16_t gid, uint32_t bufferCount, int numThreads) {
+    io_uring& ring,
+    uint16_t gid,
+    uint32_t bufferCount,
+    int numThreads,
+    bool incremental = false) {
   IoUringDynamicProvidedBufferRing::Options options = {
       .gid = gid,
       .bufferCount = bufferCount,
       .bufferSize = 64,
+      .useIncrementalBuffers = incremental,
   };
   auto bufRing = createBufferRing(ring, options);
 
   std::vector<std::unique_ptr<IOBuf>> bufs;
   bufs.reserve(bufferCount);
   for (uint32_t bufIdx = 0; bufIdx < bufferCount; bufIdx++) {
-    bufs.push_back(bufRing->getIoBuf(bufIdx, 32, false));
+    const bool hasMore = incremental && bufIdx == bufferCount - 1;
+    bufs.push_back(bufRing->getIoBuf(bufIdx, 32, hasMore));
   }
 
   std::atomic<bool> go{false};
@@ -870,6 +963,15 @@ TEST_F(
   constexpr int kIterations = 100;
   for (int iter = 0; iter < kIterations; iter++) {
     runDestroyRaceIteration(ring_, iter % 65536, 64, 8);
+  }
+}
+
+TEST_F(
+    IoUringDynamicProvidedBufferRingTest,
+    ConcurrentIncrementalSliceReleaseWithDestroy) {
+  constexpr int kIterations = 100;
+  for (int iter = 0; iter < kIterations; iter++) {
+    runDestroyRaceIteration(ring_, iter, 4, 1, true);
   }
 }
 

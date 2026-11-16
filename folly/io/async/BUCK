@@ -939,15 +939,14 @@ fb_dirsync_cpp_library(
     deps = [
         "//folly:conv",
         "//folly:string",
-        "//folly/lang:align",
         "//folly/portability:sys_mman",
     ],
     exported_deps = [
         ":delayed_destruction",
         ":liburing",
-        "//folly/concurrency/memory:tl_ref_count",
         "//folly/container:intrusive_list",
         "//folly/io:iobuf",
+        "//folly/lang:align",
     ],
 )
 

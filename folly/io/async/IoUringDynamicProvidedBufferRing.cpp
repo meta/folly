@@ -17,12 +17,12 @@
 #include <folly/io/async/IoUringDynamicProvidedBufferRing.h>
 
 #include <algorithm>
+#include <array>
 #include <new>
 #include <optional>
 #include <utility>
 
 #include <folly/Conv.h>
-#include <folly/ScopeGuard.h>
 #include <folly/String.h>
 #include <folly/lang/Align.h>
 #include <folly/portability/SysMman.h>
@@ -41,16 +41,11 @@ constexpr uint32_t kMaxAreaCount = 64;
 namespace folly {
 
 void IoUringDynamicProvidedBufferRing::checkInvariants() {
-  // This object is carefully packed into cache lines holding the hottest fields
-  // accessed during hot code, i.e. getIoBuf(). The hot scalar fields occupy the
-  // first two cache lines, followed by the bufferUsedCount_ refcount on its own
-  // aligned cache line(s) which is platform dependent
-  constexpr size_t kCacheline = folly::hardware_constructive_interference_size;
-  constexpr size_t kRefCountCachelines =
-      (sizeof(folly::TLRefCount) + kCacheline - 1) / kCacheline;
+  // This object is carefully packed into two cache lines holding the hottest
+  // fields accessed during hot code, i.e. getIoBuf().
   static_assert(
       sizeof(IoUringDynamicProvidedBufferRing) ==
-      (2 + kRefCountCachelines) * kCacheline);
+      2 * folly::hardware_constructive_interference_size);
 
   static_assert(
       alignof(IoUringDynamicProvidedBufferRing) ==
@@ -93,7 +88,8 @@ void IoUringDynamicProvidedBufferRing::mapRing() {
 std::unique_ptr<IoUringDynamicProvidedBufferRing::BufferArea>
 IoUringDynamicProvidedBufferRing::createArea() noexcept {
   try {
-    return std::make_unique<BufferArea>(this, ringBufferCount_, sizePerBuffer_);
+    return std::make_unique<BufferArea>(
+        ringBufferCount_, sizePerBuffer_, useIncremental_);
   } catch (const std::bad_alloc& ex) {
     LOG(ERROR) << "unable to create area: " << ex.what();
     return nullptr;
@@ -126,11 +122,6 @@ IoUringDynamicProvidedBufferRing::IoUringDynamicProvidedBufferRing(
       gid_(options.gid),
       ringIoPtr(ioRingPtr),
       useIncremental_(options.useIncrementalBuffers) {
-  SCOPE_FAIL {
-    bufferUsedCount_.useGlobal();
-    --bufferUsedCount_;
-  };
-
   if (ringBufferCount_ > kMaxRingRefillEntries) {
     throw std::runtime_error(
         folly::to<std::string>(
@@ -197,10 +188,9 @@ uint32_t IoUringDynamicProvidedBufferRing::getAndResetEnobufCount() noexcept {
 
 void IoUringDynamicProvidedBufferRing::destroy() noexcept {
   ::io_uring_unregister_buf_ring(ringIoPtr, gid_);
-  bufferUsedCount_.useGlobal();
-  if (--bufferUsedCount_ == 0) {
-    delayedDestroy();
-  }
+  orphanAreas();
+  ::munmap(ringPtr_, ringMemSize());
+  delete this;
 }
 
 bool IoUringDynamicProvidedBufferRing::getNewRefillArea() noexcept {
@@ -327,10 +317,52 @@ void IoUringDynamicProvidedBufferRing::tryReclaimArea() noexcept {
 void IoUringDynamicProvidedBufferRing::bufFreeFn(
     void* /* buf */, void* userData) noexcept {
   auto* bufferState = static_cast<BufferState*>(userData);
-  IoUringDynamicProvidedBufferRing* parent = bufferState->parent;
-  uint16_t bufId = bufferState->bufId;
-  BufferArea* area = bufferState->area;
-  parent->decBufferState(*area, bufId);
+  // @lint-ignore NULLSAFECLANG: takeOwnership always passes a live state/area.
+  BufferArea& area = *bufferState->area;
+  if (area.incremental && bufferState->refCount.fetch_sub(1) != 1) {
+    return;
+  }
+  // Nothing in `area` may be touched after this decrement unless it was the
+  // last reference of an orphaned area: the ring may reclaim it concurrently.
+  if (area.outstanding.fetch_sub(1, std::memory_order_acq_rel) ==
+      (kAreaOrphaned | 1)) {
+    delete &area;
+  }
+}
+
+void IoUringDynamicProvidedBufferRing::orphanAreas() noexcept {
+  // Buffers still published to the ring were never handed out, so no free will
+  // ever return them. Drop them from each area's count and orphan the area in
+  // the same atomic update; whoever brings the count to kAreaOrphaned deletes.
+  std::array<uint32_t, kMaxAreaCount> inRing{};
+  for (uint16_t i = ringHead_; i != ringTail_; ++i) {
+    const auto addr = ringBuf(i)->addr;
+    for (size_t a = 0; a < areas_.size(); ++a) {
+      BufferArea& area = *areas_[a];
+      const auto base = reinterpret_cast<uintptr_t>(area.buffers);
+      if (addr < base || addr >= base + area.memSize) {
+        continue;
+      }
+      // A partially consumed incremental buffer is released by its last
+      // outstanding slice instead.
+      if (!useIncremental_ ||
+          area.states[ringBuf(i)->bid].refCount.fetch_sub(1) == 1) {
+        inRing[a]++;
+      }
+      break;
+    }
+  }
+
+  for (size_t a = 0; a < areas_.size(); ++a) {
+    BufferArea* area = areas_[a].release();
+    uint32_t delta = kAreaOrphaned - inRing[a];
+    // @lint-ignore NULLSAFECLANG: areas_ contains only live owners.
+    if (area->outstanding.fetch_add(delta, std::memory_order_acq_rel) + delta ==
+        kAreaOrphaned) {
+      delete area;
+    }
+  }
+  areas_.clear();
 }
 
 std::unique_ptr<IOBuf> IoUringDynamicProvidedBufferRing::getIoBufSingle(
@@ -462,14 +494,13 @@ void IoUringDynamicProvidedBufferRing::initialRegister() {
 }
 
 IoUringDynamicProvidedBufferRing::BufferArea::BufferArea(
-    IoUringDynamicProvidedBufferRing* parent,
-    uint32_t bufferCount,
-    uint32_t bufferSize)
+    uint32_t bufferCount, uint32_t bufferSize, bool incremental)
     : states(std::make_unique<BufferState[]>(bufferCount)),
       memSize(
           folly::align_ceil(
               static_cast<size_t>(bufferCount) * bufferSize,
-              kHugePageSizeBytes)) {
+              kHugePageSizeBytes)),
+      incremental(incremental) {
   void* mem = ::mmap(
       nullptr,
       memSize,
@@ -491,7 +522,6 @@ IoUringDynamicProvidedBufferRing::BufferArea::BufferArea(
   for (uint32_t b = 0; b < bufferCount; b++) {
     states[b].area = this;
     states[b].bufId = static_cast<uint16_t>(b);
-    states[b].parent = parent;
     states[b].offset = 0;
   }
 }
@@ -500,18 +530,11 @@ IoUringDynamicProvidedBufferRing::BufferArea::~BufferArea() {
   ::munmap(buffers, memSize);
 }
 
-void IoUringDynamicProvidedBufferRing::delayedDestroy() noexcept {
-  ::munmap(ringPtr_, ringMemSize());
-  delete this;
-}
-
 void IoUringDynamicProvidedBufferRing::incBufferState(
     BufferArea& area,
     uint16_t bid,
     bool hasMore,
     size_t bytesConsumed) noexcept {
-  ++bufferUsedCount_;
-
   if (useIncremental_ && hasMore) {
     BufferState* bufferState = &area.states[bid];
     bufferState->refCount.fetch_add(1);
@@ -526,17 +549,6 @@ void IoUringDynamicProvidedBufferRing::incBufferState(
     if (bid == ringBufferCount_ - 1) {
       bufferActiveArea_ = bufferRefillArea_;
     }
-  }
-}
-
-void IoUringDynamicProvidedBufferRing::decBufferState(
-    BufferArea& area, uint16_t bid) noexcept {
-  if (!useIncremental_ || area.states[bid].refCount.fetch_sub(1) == 1) {
-    area.outstanding.fetch_sub(1, std::memory_order_release);
-  }
-
-  if (--bufferUsedCount_ == 0) [[unlikely]] {
-    delayedDestroy();
   }
 }
 

@@ -555,15 +555,14 @@ folly_add_library(
     IoUringDynamicProvidedBufferRing.h
   DEPS
     folly_conv
-    folly_lang_align
     folly_portability_sys_mman
     folly_string
   EXPORTED_DEPS
-    folly_concurrency_memory_tl_ref_count
     folly_container_intrusive_list
     folly_io_async_delayed_destruction
     folly_io_async_liburing
     folly_io_iobuf
+    folly_lang_align
 )
 
 folly_add_library(

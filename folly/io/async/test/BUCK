@@ -1392,6 +1392,7 @@ fb_dirsync_cpp_unittest(
     labels = fbcode_ci_default_labels(),
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
+        "fbsource//xplat/folly/portability:sys_mman",
         "//folly/io/async:io_uring_dynamic_provided_buffer_ring",
         "//folly/io/async:io_uring_setup_retry",
     ],

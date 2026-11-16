@@ -16,12 +16,14 @@
 
 #pragma once
 
+#include <atomic>
 #include <limits>
+#include <memory>
 #include <vector>
 
-#include <folly/concurrency/memory/TLRefCount.h>
 #include <folly/io/async/IoUringBase.h>
 #include <folly/io/async/Liburing.h>
+#include <folly/lang/Align.h>
 
 #if FOLLY_HAS_LIBURING
 
@@ -125,13 +127,12 @@ class IoUringDynamicProvidedBufferRing {
 
   BufferArea* addArea() noexcept;
 
-  void delayedDestroy() noexcept;
+  void orphanAreas() noexcept;
   void incBufferState(
       BufferArea& area,
       uint16_t bid,
       bool hasMore,
       size_t bytesConsumed) noexcept;
-  void decBufferState(BufferArea& area, uint16_t bid) noexcept;
 
   void ringRefill() noexcept;
   void ringMaybeRefill() noexcept;
@@ -189,14 +190,10 @@ class IoUringDynamicProvidedBufferRing {
     BufferArea* area{nullptr};
     std::atomic<uint32_t> refCount{1};
     unsigned int offset{0};
-    IoUringDynamicProvidedBufferRing* parent{nullptr};
   };
 
   struct BufferArea {
-    BufferArea(
-        IoUringDynamicProvidedBufferRing* parent,
-        uint32_t bufferCount,
-        uint32_t bufferSize);
+    BufferArea(uint32_t bufferCount, uint32_t bufferSize, bool incremental);
     ~BufferArea();
 
     BufferArea(BufferArea&&) = delete;
@@ -208,7 +205,12 @@ class IoUringDynamicProvidedBufferRing {
     std::unique_ptr<BufferState[]> states;
     std::atomic<uint32_t> outstanding{0};
     size_t memSize{0};
+    bool incremental{false};
   };
+
+  // Set in BufferArea::outstanding once the owning ring is destroyed. An
+  // orphaned area is deleted by the free that drops it to kAreaOrphaned.
+  static constexpr uint32_t kAreaOrphaned = 1u << 31;
 
   std::unique_ptr<BufferArea> createArea() noexcept;
 
@@ -234,10 +236,6 @@ class IoUringDynamicProvidedBufferRing {
   bool useIncremental_{false};
   bool enobuf_{false};
   uint16_t ringRefillThreshold_{1};
-
-  // Hot refcount for buffer tracking
-  alignas(folly::hardware_constructive_interference_size) folly::TLRefCount
-      bufferUsedCount_;
 };
 
 } // namespace folly
