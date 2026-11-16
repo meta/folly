@@ -402,7 +402,8 @@ cdef class WritableIOBuf(IOBuf):
         self._this.appendToChain(move(other._ours))
 
     def coalesce(self):
-        if sys.getrefcount(self) > 2:
+        single = 1 if sys.version_info >= (3, 14) else 2
+        if sys.getrefcount(self) > single:
             raise RuntimeError("Cannot coalesce IOBuf with more than one reference")
         self._this.coalesce()
 

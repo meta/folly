@@ -17,7 +17,6 @@
 
 import array
 import struct
-import sys
 import unittest
 
 from folly.iobuf import IOBuf, WritableIOBuf
@@ -344,21 +343,40 @@ class WritableIOBufTests(unittest.TestCase):
         y = bytearray(b"wtfbbqomg")
         yb = WritableIOBuf(y)
         xb.append_to_chain(yb)
-        before = sys.getrefcount(xb)
-        test = xb
+        alias = xb
 
-        self.assertEqual(test, xb)
-        # The alias above is the extra reference coalesce() must refuse. Assert
-        # the delta, not an absolute: Python 3.14 loads locals as borrowed
-        # references, so the absolute count is one lower there.
-        self.assertEqual(sys.getrefcount(xb), before + 1)
-        try:
+        with self.assertRaisesRegex(
+            RuntimeError, "Cannot coalesce IOBuf with more than one reference"
+        ):
             xb.coalesce()
-            self.fail("Expected exception for too many references")
-        except RuntimeError as e:
-            self.assertEqual(
-                str(e), "Cannot coalesce IOBuf with more than one reference"
-            )
+        self.assertIs(alias, xb)
+        self.assertTrue(xb.is_chained)
+        self.assertEqual(b"".join(xb), x + y)
+
+        del alias
+        xb.coalesce()
+        self.assertFalse(xb.is_chained)
+        self.assertEqual(bytes(xb), x + y)
+
+    def test_coalesce_with_exported_buffer(self) -> None:
+        x = bytearray(b"abc")
+        y = bytearray(b"def")
+        xb = WritableIOBuf(x)
+        xb.append_to_chain(WritableIOBuf(y))
+        view = memoryview(xb)
+
+        with self.assertRaisesRegex(
+            RuntimeError, "Cannot coalesce IOBuf with more than one reference"
+        ):
+            xb.coalesce()
+        self.assertTrue(xb.is_chained)
+        self.assertEqual(bytes(view), x)
+        self.assertEqual(b"".join(xb), x + y)
+
+        view.release()
+        xb.coalesce()
+        self.assertFalse(xb.is_chained)
+        self.assertEqual(bytes(xb), x + y)
 
     def test_buffer_creation_with_size_write(self) -> None:
         finish = bytearray(b"123456789012345")
