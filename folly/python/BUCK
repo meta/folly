@@ -547,8 +547,8 @@ fb_dirsync_cpp_library(
     }),
     platforms = CYTHON_DEFAULT_PLATFORMS,
     tests = [
-        "fbcode//folly/python/test:weak-test",
-        "fbcode//folly/python/test:weak-test-linked",
+        "fbsource//xplat/folly/python/test:weak-test",
+        "fbsource//xplat/folly/python/test:weak-test-linked",
     ],
     use_raw_headers = True,
     visibility = ["PUBLIC"],
