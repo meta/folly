@@ -29,6 +29,54 @@
 
 namespace folly {
 
+namespace detail {
+/// EventBaseAtomicNotificationQueueBase
+///
+/// Type-independent notification transport and event registration.
+class EventBaseAtomicNotificationQueueBase
+    : protected EventBase::LoopCallback,
+      protected EventHandler {
+ protected:
+  EventBaseAtomicNotificationQueueBase();
+  ~EventBaseAtomicNotificationQueueBase() override;
+
+  void startConsumingImpl(EventBase* evb, bool internal);
+  void stopConsuming();
+  void notifyFd();
+  void drainFd();
+  void activateEvent();
+
+  int eventfd_{-1};
+  int pipeFds_[2]{-1, -1};
+  EventBase* evb_{nullptr};
+  const pid_t pid_;
+  ssize_t successfulArmCount_{0};
+  ssize_t consumerDisarmedCount_{0};
+  ssize_t writesObserved_{0};
+  ssize_t writesLocal_{0};
+  bool armed_{false};
+  bool edgeTriggeredSet_{false};
+
+ private:
+  /**
+   * Check that the AtomicNotificationQueue is being used from the correct
+   * process.
+   *
+   * If you create a AtomicNotificationQueue in one process, then fork, and try
+   * to send messages to the queue from the child process, you're going to have
+   * a bad time.  Unfortunately users have (accidentally) run into this.
+   *
+   * Because we use an eventfd/pipe, the child process can actually signal the
+   * parent process that an event is ready.  However, it can't put anything on
+   * the parent's queue, so the parent wakes up and finds an empty queue.  This
+   * check ensures that we catch the problem in the misbehaving child process
+   * code, and crash before signalling the parent process.
+   */
+  void checkPid() const;
+  [[noreturn]] FOLLY_NOINLINE void checkPidFail() const;
+};
+} // namespace detail
+
 /**
  * A producer-consumer queue for passing tasks to EventBase thread.
  *
@@ -37,8 +85,7 @@ namespace folly {
  */
 template <typename Task, typename Consumer>
 class EventBaseAtomicNotificationQueue
-    : private EventBase::LoopCallback,
-      private EventHandler {
+    : private detail::EventBaseAtomicNotificationQueueBase {
   static_assert(
       noexcept(std::declval<Consumer>()(std::declval<Task&&>())),
       "Consumer::operator()(Task&&) should be noexcept.");
@@ -135,63 +182,16 @@ class EventBaseAtomicNotificationQueue
   bool drive(T&& t);
 
   /*
-   * Write into the signal fd to wake up the consumer thread.
-   */
-  void notifyFd();
-
-  /*
-   * Read all messages from the signal fd.
-   */
-  void drainFd();
-
-  /*
    * Either arm the queue or reactivate the EventBase event.
    * This has to be a loop callback because the event can't be activated from
    * within the event callback. It also allows delayed re-arming the queue.
    */
   void runLoopCallback() noexcept override;
 
-  void startConsumingImpl(EventBase* evb, bool internal);
-
   void handlerReady(uint16_t) noexcept override;
 
-  void activateEvent();
-
-  /**
-   * Check that the AtomicNotificationQueue is being used from the correct
-   * process.
-   *
-   * If you create a AtomicNotificationQueue in one process, then fork, and try
-   * to send messages to the queue from the child process, you're going to have
-   * a bad time.  Unfortunately users have (accidentally) run into this.
-   *
-   * Because we use an eventfd/pipe, the child process can actually signal the
-   * parent process that an event is ready.  However, it can't put anything on
-   * the parent's queue, so the parent wakes up and finds an empty queue.  This
-   * check ensures that we catch the problem in the misbehaving child process
-   * code, and crash before signalling the parent process.
-   */
-  void checkPid() const;
-
-  [[noreturn]] FOLLY_NOINLINE void checkPidFail() const;
-
-  int eventfd_{-1};
-  int pipeFds_[2]{-1, -1}; // to fallback to on older/non-linux systems
-  /*
-   * If event is registered with the EventBase, this describes whether
-   * edge-triggered flag was set for it. For edge-triggered events we don't
-   * need to drain the fd to deactivate them.
-   */
-  EventBase* evb_{nullptr};
-  const pid_t pid_;
   AtomicNotificationQueue<Task> notificationQueue_;
   Consumer consumer_;
-  ssize_t successfulArmCount_{0};
-  ssize_t consumerDisarmedCount_{0};
-  ssize_t writesObserved_{0};
-  ssize_t writesLocal_{0};
-  bool armed_{false};
-  bool edgeTriggeredSet_{false};
 };
 
 } // namespace folly

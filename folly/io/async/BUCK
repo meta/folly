@@ -16,6 +16,7 @@ fb_dirsync_cpp_library(
     srcs = [
         "AsyncTimeout.cpp",
         "EventBase.cpp",
+        "EventBaseAtomicNotificationQueue.cpp",
         "EventBaseBackendBase.cpp",
         "EventBaseLocal.cpp",
         "EventHandler.cpp",

@@ -17,7 +17,9 @@
 #include <algorithm>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <set>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -298,7 +300,44 @@ TEST(AtomicNotificationQueueTest, DriveSnapshot) {
   EXPECT_TRUE(lastRan);
 }
 
+TEST(
+    AtomicNotificationQueueTest,
+    DestructionDiscardsTaskWithoutInvokingConsumer) {
+  size_t consumed = 0;
+  size_t destroyed = 0;
+  auto consumer = [&consumed](folly::Func&& task) noexcept {
+    ++consumed;
+    task();
+  };
+  {
+    EventBaseAtomicNotificationQueue<folly::Func, decltype(consumer)> queue(
+        std::move(consumer));
+    auto token = std::shared_ptr<int>(new int(0), [&destroyed](int* value) {
+      ++destroyed;
+      delete value;
+    });
+    queue.putMessage([token = std::move(token)] {});
+    EXPECT_EQ(0, destroyed);
+  }
+  EXPECT_EQ(0, consumed);
+  EXPECT_EQ(1, destroyed);
+}
+
 #ifndef _WIN32
+TEST(AtomicNotificationQueueTest, ThrowingConsumerMoveClosesDescriptors) {
+  struct Consumer {
+    Consumer() = default;
+    Consumer(Consumer&&) { throw std::runtime_error("consumer move"); }
+    void operator()(int&&) noexcept {}
+  };
+  const auto before = openFds();
+  Consumer consumer;
+  EXPECT_THROW(
+      (EventBaseAtomicNotificationQueue<int, Consumer>(std::move(consumer))),
+      std::runtime_error);
+  EXPECT_EQ(before, openFds());
+}
+
 // Every descriptor the queue opens is close-on-exec: the eventfd by
 // construction, and the pipe it falls back to (macOS) on both ends. A child
 // process has no use for a wakeup descriptor, and an inherited one is leaked

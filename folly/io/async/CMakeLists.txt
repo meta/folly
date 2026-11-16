@@ -19,6 +19,7 @@ folly_add_library(
   SRCS
     AsyncTimeout.cpp
     EventBase.cpp
+    EventBaseAtomicNotificationQueue.cpp
     EventBaseBackendBase.cpp
     EventBaseLocal.cpp
     EventHandler.cpp

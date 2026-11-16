@@ -1781,7 +1781,7 @@ TYPED_TEST_P(EventBaseTest, PidCheck) {
   auto evbPtr = this->makeEventBase();
 
   auto deadManWalking = [&]() { evbPtr->loopForever(); };
-  EXPECT_DEATH(deadManWalking(), "Pid mismatch");
+  EXPECT_DEATH(deadManWalking(), "pid mismatch");
 }
 
 TYPED_TEST_P(EventBaseTest, MessageAvailableException) {

@@ -518,6 +518,7 @@ fb_dirsync_cpp_unittest(
     deps = [
         "//folly/io/async:async_base",
         "//folly/portability:gtest",
+        "//xplat/folly/portability:fcntl",
     ],
 )
 
