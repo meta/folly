@@ -16,7 +16,8 @@
 
 // Benchmark ConcurrentBSkipList against folly::ConcurrentSkipList.
 // Uses 100K random keys from a 1M universe.
-// Run: buck run @mode/opt fbcode//folly/test:concurrent_b_skip_list_benchmark
+// Run: buck run @mode/opt
+// fbsource//xplat/folly/test:concurrent_b_skip_list_benchmark
 
 #include <folly/ConcurrentBSkipList.h>
 
