@@ -20,6 +20,7 @@ namespace folly {
 namespace ext {
 
 test_find_resource_t* test_find_resource = nullptr;
+test_report_resource_exhaustion_t* test_report_resource_exhaustion = nullptr;
 
 } // namespace ext
 } // namespace folly

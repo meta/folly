@@ -22,6 +22,7 @@
 
 #include <folly/FileUtil.h>
 #include <folly/Memory.h>
+#include <folly/ext/test_ext.h>
 #include <folly/portability/Fcntl.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/Stdlib.h>
@@ -29,6 +30,57 @@
 
 using namespace folly;
 using namespace folly::test;
+
+namespace {
+
+struct ResourceReport {
+  bool called{false};
+  std::string_view operation;
+  std::error_code error;
+  std::string_view message;
+};
+
+ResourceReport resourceReport;
+
+void captureResourceReport(
+    std::string_view operation,
+    std::error_code error,
+    std::string_view message) noexcept {
+  resourceReport = {true, operation, error, message};
+}
+
+} // namespace
+
+TEST(ResourceExhaustion, CallsExtension) {
+  const auto previous = ext::test_report_resource_exhaustion;
+  SCOPE_EXIT {
+    ext::test_report_resource_exhaustion = previous;
+  };
+  ext::test_report_resource_exhaustion = captureResourceReport;
+  resourceReport = {};
+  const auto error = std::make_error_code(std::errc::not_enough_memory);
+
+  report_resource_exhaustion("ring setup", error, "original error");
+
+  EXPECT_TRUE(resourceReport.called);
+  EXPECT_EQ(resourceReport.operation, "ring setup");
+  EXPECT_EQ(resourceReport.error, error);
+  EXPECT_EQ(resourceReport.message, "original error");
+}
+
+TEST(ResourceExhaustion, WithoutExtension) {
+  const auto previous = ext::test_report_resource_exhaustion;
+  SCOPE_EXIT {
+    ext::test_report_resource_exhaustion = previous;
+  };
+  ext::test_report_resource_exhaustion = nullptr;
+  resourceReport = {};
+
+  report_resource_exhaustion(
+      "ring setup", std::make_error_code(std::errc::not_enough_memory));
+
+  EXPECT_FALSE(resourceReport.called);
+}
 
 TEST(TemporaryFile, Simple) {
   int fd = -1;

@@ -10,6 +10,7 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/glog:glog",
         "//folly:file_util",
         "//folly:memory",
+        "//folly/ext:test_ext",
         "//folly/portability:fcntl",
         "//folly/portability:gtest",
         "//folly/portability:stdlib",

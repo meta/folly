@@ -242,6 +242,15 @@ std::string CaptureFD::readIncremental() {
   return std::string(buf.get(), size);
 }
 
+void report_resource_exhaustion(
+    std::string_view operation,
+    std::error_code error,
+    std::string_view message) noexcept {
+  if (const auto ext = folly::ext::test_report_resource_exhaustion) {
+    ext(operation, error, message);
+  }
+}
+
 fs::path find_resource(std::string_view resource) {
   auto const pos = resource.find_last_of('/');
   if (pos == std::string::npos) {

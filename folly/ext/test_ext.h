@@ -18,12 +18,17 @@
 
 #include <string>
 #include <string_view>
+#include <system_error>
 
 namespace folly {
 namespace ext {
 
 using test_find_resource_t = std::string(std::string_view);
 extern test_find_resource_t* test_find_resource;
+
+using test_report_resource_exhaustion_t =
+    void(std::string_view, std::error_code, std::string_view) noexcept;
+extern test_report_resource_exhaustion_t* test_report_resource_exhaustion;
 
 } // namespace ext
 } // namespace folly
