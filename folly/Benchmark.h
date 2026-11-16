@@ -17,6 +17,7 @@
 #pragma once
 
 #include <folly/BenchmarkUtil.h>
+#include <folly/CPortability.h>
 #include <folly/Portability.h>
 #include <folly/Preprocessor.h> // for FB_ANONYMOUS_VARIABLE
 #include <folly/Range.h>
@@ -26,6 +27,8 @@
 #include <folly/lang/Hint.h>
 #include <folly/portability/GFlags.h>
 
+#include <stddef.h>
+#include <stdint.h>
 #include <cassert>
 #include <chrono>
 #include <concepts>
