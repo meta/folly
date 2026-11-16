@@ -24,10 +24,6 @@ fb_dirsync_cpp_binary(
     name = "nested_command_line_app_test_helper",
     srcs = ["NestedCommandLineAppTestHelper.cpp"],
     deps = [
-        # boost_atomic is required by boost_filesystem, which is required by
-        # boost_program_options, prior to C++20, for its implementation of
-        # atomic_ref; this is controlled by a preprocessory symbol
-        "fbsource//third-party/boost:boost_atomic",  # @manual
         "//folly/cli:program_options",
         "//folly/portability:gflags",
     ],
@@ -52,10 +48,6 @@ fb_dirsync_cpp_binary(
     name = "program_options_test_helper",
     srcs = ["ProgramOptionsTestHelper.cpp"],
     deps = [
-        # boost_atomic is required by boost_filesystem, which is required by
-        # boost_program_options, prior to C++20, for its implementation of
-        # atomic_ref; this is controlled by a preprocessory symbol
-        "fbsource//third-party/boost:boost_atomic",  # @manual
         "fbsource//third-party/glog:glog",
         "//folly:conv",
         "//folly/cli:program_options",
