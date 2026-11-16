@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <concepts>
 #include <cstddef>
@@ -245,18 +246,6 @@ constexpr T constexpr_min(T a, Ts... ts) {
     a = list[i] < a ? list[i] : a;
   }
   return a;
-}
-
-template <typename T, typename Less>
-constexpr T const& constexpr_clamp(
-    T const& v, T const& lo, T const& hi, Less less) {
-  T const& a = less(v, lo) ? lo : v;
-  T const& b = less(hi, a) ? hi : a;
-  return b;
-}
-template <typename T>
-constexpr T const& constexpr_clamp(T const& v, T const& lo, T const& hi) {
-  return constexpr_clamp(v, lo, hi, std::less<T>{});
 }
 
 template <typename T>
@@ -729,7 +718,7 @@ constexpr T constexpr_add_overflow_clamped(T a, T b) {
     !std::is_integral<T>::value ? a + b :
     // for narrow integral types, just convert to intmax_t.
     sizeof(T) < sizeof(M)
-      ? T(constexpr_clamp(
+      ? T(std::clamp(
           static_cast<M>(a) + static_cast<M>(b),
           static_cast<M>(L::min()),
           static_cast<M>(L::max()))) :
@@ -757,7 +746,7 @@ constexpr T constexpr_sub_overflow_clamped(T a, T b) {
     std::is_unsigned<T>::value ? (a < b ? 0 : a - b) :
     // for narrow signed integral types, just convert to intmax_t.
     sizeof(T) < sizeof(M)
-      ? T(constexpr_clamp(
+      ? T(std::clamp(
           static_cast<M>(a) - static_cast<M>(b),
           static_cast<M>(L::min()),
           static_cast<M>(L::max()))) :
@@ -824,7 +813,7 @@ constexpr Dst constexpr_clamp_cast(Src src) {
       // we can safely convert Src to Dst without any loss of accuracy.
       sizeof(Src) <= sizeof(Dst) ? Dst(src) :
       // If Src is larger in size, we need to clamp it to valid range in Dst.
-      Dst(constexpr_clamp(src, Src(L::min()), Src(L::max()))))
+      Dst(std::clamp(src, Src(L::min()), Src(L::max()))))
     // Src and Dst have different signedness.
     // Check if it's signed -> unsigned cast.
     : std::is_signed<Src>::value && std::is_unsigned<Dst>::value
@@ -859,7 +848,7 @@ constexpr float kClampCastLowerBoundFloatToInt32F = -2147483520.0f;
 constexpr float kClampCastUpperBoundFloatToInt32F = 2147483520.0f;
 constexpr float kClampCastUpperBoundFloatToUInt32F = 4294967040.0f;
 
-// This works the same as constexpr_clamp, but the comparison are done in Src
+// This works the same as std::clamp, but the comparison are done in Src
 // to prevent any implicit promotions.
 template <typename D, typename S>
 constexpr D constexpr_clamp_cast_helper(S src, S sl, S su, D dl, D du) {

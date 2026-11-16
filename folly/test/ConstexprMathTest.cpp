@@ -245,18 +245,6 @@ TEST_F(ConstexprMathTest, constexpr_max) {
   EXPECT_TRUE((std::is_same<const uint16_t, decltype(a)>::value));
 }
 
-TEST_F(ConstexprMathTest, constexpr_clamp) {
-  constexpr auto lo = uint16_t(3);
-  constexpr auto hi = uint16_t(7);
-  constexpr auto x = folly::constexpr_clamp(uint16_t(2), lo, hi);
-  constexpr auto y = folly::constexpr_clamp(uint16_t(5), lo, hi);
-  constexpr auto z = folly::constexpr_clamp(uint16_t(8), lo, hi);
-  EXPECT_EQ(3, x);
-  EXPECT_EQ(5, y);
-  EXPECT_EQ(7, z);
-  EXPECT_TRUE((std::is_same<const uint16_t, decltype(y)>::value));
-}
-
 TEST_F(ConstexprMathTest, constexpr_abs_unsigned) {
   constexpr auto v = uint32_t(17);
   constexpr auto a = folly::constexpr_abs(v);
