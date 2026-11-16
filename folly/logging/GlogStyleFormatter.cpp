@@ -19,6 +19,7 @@
 
 #include <folly/logging/LogLevel.h>
 #include <folly/logging/LogMessage.h>
+#include <folly/portability/FmtCompile.h>
 #include <folly/portability/Time.h>
 #include <folly/system/ThreadName.h>
 
@@ -62,7 +63,8 @@ std::string GlogStyleFormatter::formatMessage(
   auto basename = message.getFileBaseName();
   auto header = log_thread_name_
       ? fmt::format(
-            "{}{:02d}{:02d} {:02d}:{:02d}:{:02d}.{:06d} {:5d} [{}] {}:{}{}] ",
+            FOLLY_FMT_COMPILE(
+                "{}{:02d}{:02d} {:02d}:{:02d}:{:02d}.{:06d} {:5d} [{}] {}:{}{}] "),
             getGlogLevelName(message.getLevel())[0],
             ltime.tm_mon + 1,
             ltime.tm_mday,
@@ -76,7 +78,8 @@ std::string GlogStyleFormatter::formatMessage(
             message.getLineNumber(),
             message.getContextString())
       : fmt::format(
-            "{}{:02d}{:02d} {:02d}:{:02d}:{:02d}.{:06d} {:5d} {}:{}{}] ",
+            FOLLY_FMT_COMPILE(
+                "{}{:02d}{:02d} {:02d}:{:02d}:{:02d}.{:06d} {:5d} {}:{}{}] "),
             getGlogLevelName(message.getLevel())[0],
             ltime.tm_mon + 1,
             ltime.tm_mday,

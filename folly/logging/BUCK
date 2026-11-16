@@ -143,6 +143,7 @@ fb_dirsync_cpp_library(
         "//folly:string",
         "//folly/container:reserve",
         "//folly/portability:fcntl",
+        "//folly/portability:fmt_compile",
         "//folly/portability:pthread",
         "//folly/portability:time",
         "//folly/portability:unistd",
