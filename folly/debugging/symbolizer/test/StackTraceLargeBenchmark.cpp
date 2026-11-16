@@ -29,7 +29,7 @@
 //
 // Run:
 //   buck2 run
-//   fbcode//folly/debugging/symbolizer/test:stack_trace_large_benchmark
+//   fbsource//xplat/folly/debugging/symbolizer/test:stack_trace_large_benchmark
 
 #include <folly/Benchmark.h>
 #include <folly/debugging/symbolizer/StackTrace.h>

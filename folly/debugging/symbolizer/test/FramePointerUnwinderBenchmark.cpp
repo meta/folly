@@ -24,16 +24,16 @@
  *
  * Run with:
  *   FOLLY_FB_UNWINDER_ENABLED=1 buck run \
- *     fbcode//folly/debugging/symbolizer/test:frame_pointer_unwinder_benchmark
+ *     fbsource//xplat/folly/debugging/symbolizer/test:frame_pointer_unwinder_benchmark
  *
  * To compare FP unwinder vs libunwind, run the benchmark twice:
  *   # With FP unwinder
  *   FOLLY_FB_UNWINDER_ENABLED=1 buck run \
- *     fbcode//folly/debugging/symbolizer/test:frame_pointer_unwinder_benchmark
+ *     fbsource//xplat/folly/debugging/symbolizer/test:frame_pointer_unwinder_benchmark
  *
  *   # Without FP unwinder (libunwind only)
  *   FOLLY_FB_UNWINDER_ENABLED=0 buck run \
- *     fbcode//folly/debugging/symbolizer/test:frame_pointer_unwinder_benchmark
+ *     fbsource//xplat/folly/debugging/symbolizer/test:frame_pointer_unwinder_benchmark
  */
 
 #include <folly/Benchmark.h>
