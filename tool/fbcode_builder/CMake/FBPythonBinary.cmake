@@ -550,15 +550,17 @@ function(add_fb_python_library LIB_NAME)
   # to work even if used from a different CMakeLists.txt file than where
   # add_fb_python_library() was called (i.e. such that
   # ${CMAKE_CURRENT_BINARY_DIR} is different between the two calls).
-  set(abs_install_dir "${install_dir}")
-  if(NOT IS_ABSOLUTE "${abs_install_dir}")
-    set(abs_install_dir "${CMAKE_INSTALL_PREFIX}/${abs_install_dir}")
+  #
+  # A relative directory stays relative, so that install() resolves it against
+  # the prefix at install time, which `cmake --install --prefix` can change.
+  string(REGEX REPLACE "/$" "" dest_dir "${install_dir}")
+  if(dest_dir STREQUAL "")
+    set(dest_dir ".")
   endif()
-  string(REGEX REPLACE "/$" "" abs_install_dir "${abs_install_dir}")
   set_target_properties(
     "${LIB_NAME}.py_lib_install"
     PROPERTIES
-    INSTALL_DIR "${abs_install_dir}"
+    INSTALL_DIR "${dest_dir}"
     BUILD_INSTALL_DIR "${build_install_dir}"
   )
 endfunction()
