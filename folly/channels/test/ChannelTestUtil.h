@@ -43,29 +43,6 @@ folly::F14FastMap<std::remove_const_t<Key>, Mapped> toMap(
   return itemsMap;
 }
 
-template <typename TValue>
-class MockNextCallback {
- public:
-  void operator()(Try<TValue> result) {
-    if (result.hasValue()) {
-      onValue(result.value());
-    } else if (result.template hasException<folly::OperationCancelled>()) {
-      onCancelled();
-    } else if (result.template hasException<std::runtime_error>()) {
-      onRuntimeError(result.exception().what().toStdString());
-    } else if (result.hasException()) {
-      LOG(FATAL) << "Unexpected exception: " << result.exception().what();
-    } else {
-      onClosed();
-    }
-  }
-
-  MOCK_METHOD(void, onValue, (TValue));
-  MOCK_METHOD(void, onClosed, ());
-  MOCK_METHOD(void, onCancelled, ());
-  MOCK_METHOD(void, onRuntimeError, (std::string));
-};
-
 enum class ConsumptionMode {
   CoroWithTry,
   CoroWithoutTry,

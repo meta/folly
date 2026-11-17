@@ -20,6 +20,7 @@
 #include <folly/channels/MaxConcurrentRateLimiter.h>
 #include <folly/channels/Transform.h>
 #include <folly/channels/test/ChannelTestUtil.h>
+#include <folly/channels/testing/MockNextCallback.h>
 #include <folly/coro/AsyncGenerator.h>
 #include <folly/coro/DetachOnCancel.h>
 #include <folly/executors/ManualExecutor.h>

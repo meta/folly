@@ -1,0 +1,14 @@
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+
+oncall("fbcode_entropy_wardens_folly")
+
+fb_dirsync_cpp_library(
+    name = "mock_next_callback",
+    headers = ["MockNextCallback.h"],
+    exported_deps = [
+        "fbsource//third-party/glog:glog",
+        "//folly:operation_cancelled",
+        "//folly:try",
+        "//folly/portability:gmock",
+    ],
+)

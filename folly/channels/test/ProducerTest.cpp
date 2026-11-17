@@ -16,6 +16,7 @@
 
 #include <folly/channels/Producer.h>
 #include <folly/channels/test/ChannelTestUtil.h>
+#include <folly/channels/testing/MockNextCallback.h>
 #include <folly/executors/ManualExecutor.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>

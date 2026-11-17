@@ -17,6 +17,7 @@
 #include <folly/channels/ConsumeChannel.h>
 #include <folly/channels/Merge.h>
 #include <folly/channels/test/ChannelTestUtil.h>
+#include <folly/channels/testing/MockNextCallback.h>
 #include <folly/executors/ManualExecutor.h>
 #include <folly/executors/SerialExecutor.h>
 #include <folly/portability/GMock.h>

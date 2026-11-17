@@ -22,6 +22,7 @@
 #include <folly/channels/MaxConcurrentRateLimiter.h>
 #include <folly/channels/MultiplexChannel.h>
 #include <folly/channels/test/ChannelTestUtil.h>
+#include <folly/channels/testing/MockNextCallback.h>
 #include <folly/coro/BlockingWait.h>
 #include <folly/executors/ManualExecutor.h>
 #include <folly/executors/SerialExecutor.h>
