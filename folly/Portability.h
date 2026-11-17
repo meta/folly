@@ -237,12 +237,6 @@ constexpr bool kIsLibrarySanitizeAddress = true;
 constexpr bool kIsLibrarySanitizeAddress = false;
 #endif
 
-#if FOLLY_LIBRARY_SANITIZE_HWADDRESS
-constexpr bool kIsLibrarySanitizeHwAddress = true;
-#else
-constexpr bool kIsLibrarySanitizeHwAddress = false;
-#endif
-
 #ifdef FOLLY_SANITIZE_ADDRESS
 constexpr bool kIsSanitizeAddress = true;
 #else

@@ -46,8 +46,7 @@ FOLLY_CREATE_EXTERN_ACCESSOR(
 FOLLY_CREATE_EXTERN_ACCESSOR(
     sanitizer_finish_switch_fiber_access_v, __sanitizer_finish_switch_fiber);
 
-constexpr bool EAsan = folly::kIsLibrarySanitizeAddress;
-constexpr bool EFiber = EAsan || folly::kIsLibrarySanitizeHwAddress;
+constexpr bool E = folly::kIsLibrarySanitizeAddress;
 
 } // namespace
 
@@ -55,23 +54,22 @@ namespace folly {
 namespace detail {
 
 constinit asan_mark_memory_region_t* const asan_poison_memory_region_v =
-    asan_poison_memory_region_access_v<EAsan>;
+    asan_poison_memory_region_access_v<E>;
 
 constinit asan_mark_memory_region_t* const asan_unpoison_memory_region_v =
-    asan_unpoison_memory_region_access_v<EAsan>;
+    asan_unpoison_memory_region_access_v<E>;
 
 constinit asan_region_is_poisoned_t* const asan_region_is_poisoned_v =
-    asan_region_is_poisoned_access_v<EAsan>;
+    asan_region_is_poisoned_access_v<E>;
 
 constinit asan_address_is_poisoned_t* const asan_address_is_poisoned_v =
-    asan_address_is_poisoned_access_v<EAsan>;
+    asan_address_is_poisoned_access_v<E>;
 
 constinit sanitizer_start_switch_fiber_t* const sanitizer_start_switch_fiber_v =
-    sanitizer_start_switch_fiber_access_v<EFiber>;
+    sanitizer_start_switch_fiber_access_v<E>;
 
 constinit sanitizer_finish_switch_fiber_t* const
-    sanitizer_finish_switch_fiber_v =
-        sanitizer_finish_switch_fiber_access_v<EFiber>;
+    sanitizer_finish_switch_fiber_v = sanitizer_finish_switch_fiber_access_v<E>;
 
 } // namespace detail
 } // namespace folly
