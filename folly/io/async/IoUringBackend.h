@@ -496,16 +496,6 @@ class IoUringBackend : public EventBaseBackendBase {
       ::io_uring_sqe_set_data(sqe, this);
     }
 
-    void prepRecvmsgMultishot(io_uring_sqe* sqe, int fd, msghdr* msg) noexcept {
-      CHECK(sqe);
-      ::io_uring_prep_recvmsg_multishot(sqe, fd, msg, MSG_TRUNC);
-      if (auto* bp = backend_->bufferProvider()) {
-        sqe->buf_group = bp->gid();
-        sqe->flags |= IOSQE_BUFFER_SELECT;
-      }
-      ::io_uring_sqe_set_data(sqe, this);
-    }
-
     FOLLY_ALWAYS_INLINE void prepCancel(io_uring_sqe* sqe, IoSqe* cancel_sqe) {
       CHECK(sqe);
       ::io_uring_prep_cancel(sqe, cancel_sqe, 0);
