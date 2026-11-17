@@ -190,7 +190,7 @@ void moveObjectsRightAndCreate(
       // Out must be decremented before an exception can be thrown so that
       // the rollback guard knows where to start.
       --out;
-      new (out) T(std::move(*(--in)));
+      std::construct_at(out, std::move(*(--in)));
     }
     for (; in != first;) {
       --out;
@@ -198,7 +198,7 @@ void moveObjectsRightAndCreate(
     }
     for (; out > lastConstructed;) {
       --out;
-      new (out) T(create());
+      std::construct_at(out, create());
     }
     for (; out != first;) {
       --out;
@@ -351,7 +351,7 @@ struct IntegralSizePolicy<SizeType, true, AlwaysUseHeap>
         std::destroy_n(out, idx);
       });
       for (; first != last; ++first, ++idx) {
-        new (&out[idx]) T(std::move(*first));
+        std::construct_at(&out[idx], std::move(*first));
       }
       rollback.dismiss();
     }
@@ -563,14 +563,14 @@ class small_vector
   explicit small_vector(size_type n) {
     FOLLY_PUSH_WARNING
     FOLLY_GCC_DISABLE_WARNING("-Warray-bounds")
-    doConstruct(n, [&](void* p) { new (p) value_type(); });
+    doConstruct(n, [&](value_type* p) { std::construct_at(p); });
     FOLLY_POP_WARNING
   }
 
   small_vector(size_type n, value_type const& t) {
     FOLLY_PUSH_WARNING
     FOLLY_GCC_DISABLE_WARNING("-Warray-bounds")
-    doConstruct(n, [&](void* p) { new (p) value_type(t); });
+    doConstruct(n, [&](value_type* p) { std::construct_at(p, t); });
     FOLLY_POP_WARNING
   }
 
@@ -764,7 +764,7 @@ class small_vector
         });
         for (; i < oldLarge.size(); ++i) {
           auto addr = oldSmall.begin() + i;
-          new (addr) value_type(std::move(oldLarge[i]));
+          std::construct_at(addr, std::move(oldLarge[i]));
           std::destroy_at(oldLarge.data() + i);
         }
         rollback.dismiss();
@@ -792,7 +792,7 @@ class small_vector
         oldExtern.setCapacity(oldExternCapacity);
       });
       for (; i < oldIntern.size(); ++i) {
-        new (&buff[i]) value_type(std::move(oldIntern[i]));
+        std::construct_at(&buff[i], std::move(oldIntern[i]));
         std::destroy_at(oldIntern.data() + i);
       }
       rollback.dismiss();
@@ -810,7 +810,7 @@ class small_vector
     auto extra = sz - size();
     makeSize(sz);
     detail::small_vector_detail::populateMemForward(
-        begin() + size(), extra, [&](void* p) { new (p) value_type(); });
+        begin() + size(), extra, [&](value_type* p) { std::construct_at(p); });
     this->incrementSize(extra);
   }
 
@@ -825,7 +825,9 @@ class small_vector
     auto extra = sz - size();
     makeSize(sz);
     detail::small_vector_detail::populateMemForward(
-        begin() + size(), extra, [&](void* p) { new (p) value_type(v); });
+        begin() + size(), extra, [&](value_type* p) {
+          std::construct_at(p, v);
+        });
     this->incrementSize(extra);
   }
 
@@ -910,7 +912,7 @@ class small_vector
   reference emplace_back(Args&&... args) {
     auto isize_ = this->getInternalSize();
     if (isize_ < MaxInline) {
-      new (u.buffer() + isize_) value_type(std::forward<Args>(args)...);
+      std::construct_at(u.buffer() + isize_, std::forward<Args>(args)...);
       this->incrementSize(1);
       return *(u.buffer() + isize_);
     }
@@ -925,11 +927,13 @@ class small_vector
       // element before modifying the data in the old buffer.
       makeSize(
           currentSize + 1,
-          [&](void* p) { new (p) value_type(std::forward<Args>(args)...); },
+          [&](value_type* p) {
+            std::construct_at(p, std::forward<Args>(args)...);
+          },
           currentSize);
     } else {
       // We know the vector is stored in the heap.
-      new (u.heap() + currentSize) value_type(std::forward<Args>(args)...);
+      std::construct_at(u.heap() + currentSize, std::forward<Args>(args)...);
     }
     this->incrementSize(1);
     return *(u.heap() + currentSize);
@@ -959,7 +963,7 @@ class small_vector
     if (capacity() == currentSize) {
       makeSize(
           currentSize + 1,
-          [&t](void* ptr) { new (ptr) value_type(std::move(t)); },
+          [&t](value_type* ptr) { std::construct_at(ptr, std::move(t)); },
           offset);
       this->incrementSize(1);
     } else {
@@ -1201,7 +1205,9 @@ class small_vector
     if (distance <= MaxInline) {
       this->incrementSize(distance);
       detail::small_vector_detail::populateMemForward(
-          u.buffer(), distance, [&](void* p) { new (p) value_type(*first++); });
+          u.buffer(), distance, [&](value_type* p) {
+            std::construct_at(p, *first++);
+          });
       return;
     }
     makeSize(distance);
@@ -1209,7 +1215,9 @@ class small_vector
     {
       auto rollback = makeGuard([&] { freeHeap(); });
       detail::small_vector_detail::populateMemForward(
-          u.heap(), distance, [&](void* p) { new (p) value_type(*first++); });
+          u.heap(), distance, [&](value_type* p) {
+            std::construct_at(p, *first++);
+          });
       rollback.dismiss();
     }
   }
@@ -1230,7 +1238,7 @@ class small_vector
   void constructFill(size_type n, value_type const& val) {
     FOLLY_PUSH_WARNING
     FOLLY_GCC_DISABLE_WARNING("-Warray-bounds")
-    doConstruct(n, [&](void* p) { new (p) value_type(val); });
+    doConstruct(n, [&](value_type* p) { std::construct_at(p, val); });
     FOLLY_POP_WARNING
   }
 
@@ -1252,7 +1260,7 @@ class small_vector
     if (newSize <= capacity()) {
       return;
     }
-    auto emplaceFunc = [](void*) { assume_unreachable(); };
+    auto emplaceFunc = [](value_type*) { assume_unreachable(); };
     makeSizeInternal<
         /* Insert */ false,
         IgnoreExistingData,
