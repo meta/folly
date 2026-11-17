@@ -88,7 +88,7 @@ non-blocking.
 The `XLOGF()` and `FB_LOGF()` macros format their arguments using
 `fmt::format()`.  This allows log statements to use the powerful Python-like
 format syntax supported by
-[`fmt::format()`](https://fmt.dev/latest/syntax.html).
+[`fmt::format()`](https://fmt.dev/latest/syntax/).
 
 Additionally the `XLOG()` and `FB_LOG()` macros concatenate any log arguments
 using `folly::to<string>()`, and also accept arguments via iostream-style `<<`
