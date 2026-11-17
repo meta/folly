@@ -1,0 +1,14 @@
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+
+oncall("fbcode_entropy_wardens_folly")
+
+fb_dirsync_cpp_library(
+    name = "async_stack_test_utils",
+    headers = ["AsyncStackTestUtils.h"],
+    exported_deps = [
+        "fbsource//third-party/glog:glog",
+        "//folly:utility",
+        "//folly/portability:sys_mman",
+        "//folly/tracing:async_stack",
+    ],
+)

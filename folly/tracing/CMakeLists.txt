@@ -48,3 +48,5 @@ folly_add_library(
     StaticTracepoint.h
   EXPORTED_DEPS folly_c_portability
 )
+
+add_subdirectory(testing)

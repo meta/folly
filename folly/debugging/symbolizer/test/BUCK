@@ -397,7 +397,7 @@ fb_dirsync_cpp_unittest(
         "//folly/test:test_utils",
         "//folly/testing:test_util",
         "//folly/tracing:async_stack",
-        "//folly/tracing/test:async_stack_test_utils",
+        "//folly/tracing/testing:async_stack_test_utils",
     ],
 )
 

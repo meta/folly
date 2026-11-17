@@ -7,26 +7,15 @@ load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule
 
 oncall("fbcode_entropy_wardens_folly")
 
-fb_dirsync_cpp_library(
-    name = "async_stack_test_utils",
-    headers = ["AsyncStackTestUtils.h"],
-    exported_deps = [
-        "fbsource//third-party/glog:glog",
-        "//folly:utility",
-        "//folly/portability:sys_mman",
-        "//folly/tracing:async_stack",
-    ],
-)
-
 fb_dirsync_cpp_unittest(
     name = "async_stack_test",
     srcs = ["AsyncStackTest.cpp"],
     deps = [
         "fbsource//third-party/glog:glog",
-        ":async_stack_test_utils",
         "//folly/portability:gmock",
         "//folly/portability:gtest",
         "//folly/tracing:async_stack",
+        "//folly/tracing/testing:async_stack_test_utils",
     ],
 )
 

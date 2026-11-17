@@ -37,7 +37,7 @@
 #include <folly/test/TestUtils.h>
 #include <folly/testing/TestUtil.h>
 #include <folly/tracing/AsyncStack.h>
-#include <folly/tracing/test/AsyncStackTestUtils.h>
+#include <folly/tracing/testing/AsyncStackTestUtils.h>
 
 #include <glog/logging.h>
 
