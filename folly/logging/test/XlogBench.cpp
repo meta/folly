@@ -18,8 +18,8 @@
 
 #include <cstddef>
 #include <thread>
+#include <utility>
 
-#include <boost/preprocessor/repetition/repeat.hpp>
 #include <folly/synchronization/test/Barrier.h>
 
 #include <folly/Benchmark.h>
@@ -117,13 +117,20 @@ BENCHMARK(xlog_every_n_thread, iters) {
   });
 }
 
-#define XLOG_EVERY_N_THREAD_BENCH_REP(z, n, text) \
+template <std::size_t>
+FOLLY_ALWAYS_INLINE void xlogEveryNThreadSite() {
   XLOG_EVERY_N_THREAD(INFO, FLAGS_every_n, "hi");
+}
+
+template <std::size_t... I>
+FOLLY_ALWAYS_INLINE void xlogEveryNThreadSites(std::index_sequence<I...>) {
+  (xlogEveryNThreadSite<I>(), ...);
+}
 
 BENCHMARK(xlog_every_n_thread_1_256, iters) {
   runXlogEveryNBench(iters, [] { //
     for (auto i = 0; i < 256; ++i) {
-      BOOST_PP_REPEAT(1, XLOG_EVERY_N_THREAD_BENCH_REP, unused)
+      xlogEveryNThreadSites(std::make_index_sequence<1>{});
     }
   });
 }
@@ -131,7 +138,7 @@ BENCHMARK(xlog_every_n_thread_1_256, iters) {
 BENCHMARK(xlog_every_n_thread_16_16, iters) {
   runXlogEveryNBench(iters, [] { //
     for (auto i = 0; i < 16; ++i) {
-      BOOST_PP_REPEAT(16, XLOG_EVERY_N_THREAD_BENCH_REP, unused)
+      xlogEveryNThreadSites(std::make_index_sequence<16>{});
     }
   });
 }
@@ -139,12 +146,11 @@ BENCHMARK(xlog_every_n_thread_16_16, iters) {
 BENCHMARK(xlog_every_n_thread_256_1, iters) {
   runXlogEveryNBench(iters, [] { //
     for (auto i = 0; i < 1; ++i) {
-      BOOST_PP_REPEAT(256, XLOG_EVERY_N_THREAD_BENCH_REP, unused)
+      xlogEveryNThreadSites(std::make_index_sequence<256>{});
     }
   });
 }
 
-#undef XLOG_EVERY_N_THREAD_BENCH_REP
 } // namespace folly
 
 FOLLY_INIT_LOGGING_CONFIG(".=INFO:default; default=null");

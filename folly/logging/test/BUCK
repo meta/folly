@@ -313,7 +313,6 @@ fb_dirsync_cpp_binary(
     name = "xlog_bench",
     srcs = ["XlogBench.cpp"],
     deps = [
-        "fbsource//third-party/boost:boost_preprocessor",
         "//folly:benchmark",
         "//folly/init:init",
         "//folly/logging:init",
