@@ -425,4 +425,5 @@ folly_add_library(
 )
 
 add_subdirectory(task_queue)
+add_subdirectory(testing)
 add_subdirectory(thread_factory)

@@ -17,8 +17,8 @@
 #include <queue>
 
 #include <folly/executors/InlineExecutor.h>
+#include <folly/executors/testing/SimpleThreadPoolExecutor.h>
 #include <folly/futures/Future.h>
-#include <folly/futures/test/TestExecutor.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/portability/GTest.h>
 #include <folly/synchronization/Baton.h>
@@ -271,7 +271,7 @@ TEST(Wait, waitWithDuration) {
 }
 
 TEST(Wait, multipleWait) {
-  folly::TestExecutor executor(1);
+  folly::test::SimpleThreadPoolExecutor executor(1);
   Promise<Unit> p;
   auto f = p.getSemiFuture().via(&executor);
   // Nothing fulfills p yet, so these checks don't depend on timing.
@@ -438,7 +438,7 @@ TEST(Wait, WaitPlusThen) {
 }
 
 TEST(Wait, cancelAfterWait) {
-  folly::TestExecutor executor(1);
+  folly::test::SimpleThreadPoolExecutor executor(1);
   Promise<folly::Unit> p;
   p.setInterruptHandler([&](const exception_wrapper& e) {
     EXPECT_THROW(e.throw_exception(), FutureCancellation);

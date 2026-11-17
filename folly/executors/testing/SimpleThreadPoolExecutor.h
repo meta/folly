@@ -22,16 +22,16 @@
 
 #include <folly/Executor.h>
 
-namespace folly {
+namespace folly::test {
 
 /**
  * A simple multithreaded executor for use in tests etc
  */
-class TestExecutor : public Executor {
+class SimpleThreadPoolExecutor : public Executor {
  public:
-  explicit TestExecutor(size_t numThreads);
+  explicit SimpleThreadPoolExecutor(size_t numThreads);
 
-  ~TestExecutor() override;
+  ~SimpleThreadPoolExecutor() override;
 
   void add(Func f) override;
 
@@ -47,4 +47,4 @@ class TestExecutor : public Executor {
   std::vector<std::thread> workers_;
 };
 
-} // namespace folly
+} // namespace folly::test

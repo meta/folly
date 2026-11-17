@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include <folly/executors/testing/SimpleThreadPoolExecutor.h>
 #include <folly/futures/Future.h>
 #include <folly/futures/Promise.h>
-#include <folly/futures/test/TestExecutor.h>
 #include <folly/portability/GTest.h>
 #include <folly/synchronization/Baton.h>
 
@@ -84,7 +84,7 @@ TEST(Interrupt, futureWithinTimedOut) {
 }
 
 TEST(Interrupt, semiFutureWithinTimedOut) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<int> p;
   Baton<> done;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { done.post(); });
@@ -94,7 +94,7 @@ TEST(Interrupt, semiFutureWithinTimedOut) {
 }
 
 TEST(Interrupt, futureThenValue) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -103,7 +103,7 @@ TEST(Interrupt, futureThenValue) {
 }
 
 TEST(Interrupt, semiFutureDeferValue) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -112,7 +112,7 @@ TEST(Interrupt, semiFutureDeferValue) {
 }
 
 TEST(Interrupt, futureThenValueFuture) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -123,7 +123,7 @@ TEST(Interrupt, futureThenValueFuture) {
 }
 
 TEST(Interrupt, semiFutureDeferValueSemiFuture) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -134,7 +134,7 @@ TEST(Interrupt, semiFutureDeferValueSemiFuture) {
 }
 
 TEST(Interrupt, futureThenError) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -143,7 +143,7 @@ TEST(Interrupt, futureThenError) {
 }
 
 TEST(Interrupt, semiFutureDeferError) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -154,7 +154,7 @@ TEST(Interrupt, semiFutureDeferError) {
 }
 
 TEST(Interrupt, futureThenErrorTagged) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -167,7 +167,7 @@ TEST(Interrupt, futureThenErrorTagged) {
 }
 
 TEST(Interrupt, semiFutureDeferErrorTagged) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -180,7 +180,7 @@ TEST(Interrupt, semiFutureDeferErrorTagged) {
 }
 
 TEST(Interrupt, futureThenErrorFuture) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -191,7 +191,7 @@ TEST(Interrupt, futureThenErrorFuture) {
 }
 
 TEST(Interrupt, semiFutureDeferErrorSemiFuture) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -204,7 +204,7 @@ TEST(Interrupt, semiFutureDeferErrorSemiFuture) {
 }
 
 TEST(Interrupt, futureThenErrorTaggedFuture) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });
@@ -217,7 +217,7 @@ TEST(Interrupt, futureThenErrorTaggedFuture) {
 }
 
 TEST(Interrupt, semiFutureDeferErrorTaggedSemiFuture) {
-  folly::TestExecutor ex(1);
+  folly::test::SimpleThreadPoolExecutor ex(1);
   Promise<folly::Unit> p;
   bool flag = false;
   p.setInterruptHandler([&](const exception_wrapper& /* e */) { flag = true; });

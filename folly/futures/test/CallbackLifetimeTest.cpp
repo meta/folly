@@ -16,8 +16,8 @@
 
 #include <thread>
 
+#include <folly/executors/testing/SimpleThreadPoolExecutor.h>
 #include <folly/futures/Future.h>
-#include <folly/futures/test/TestExecutor.h>
 #include <folly/portability/GTest.h>
 
 using namespace folly;
@@ -63,7 +63,8 @@ class CallbackLifetimeTest : public testing::Test {
     return makeFuture();
   }
 
-  TestExecutor executor{2}; // need at least 2 threads for internal futures
+  folly::test::SimpleThreadPoolExecutor executor{
+      2}; // need at least 2 threads for internal futures
 };
 } // namespace
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <folly/futures/test/TestExecutor.h>
+#include <folly/executors/testing/SimpleThreadPoolExecutor.h>
 
 #include <folly/portability/GTest.h>
 
@@ -22,10 +22,10 @@ using namespace std;
 using namespace std::chrono;
 using namespace folly;
 
-TEST(TestExecutor, parallelRun) {
+TEST(SimpleThreadPoolExecutor, parallelRun) {
   mutex m;
   set<thread::id> ids;
-  auto executor = std::make_unique<TestExecutor>(4);
+  auto executor = std::make_unique<folly::test::SimpleThreadPoolExecutor>(4);
   const auto numThreads = executor->numThreads();
   EXPECT_EQ(4, numThreads);
   for (auto idx = 0U; idx < numThreads * 10; ++idx) {

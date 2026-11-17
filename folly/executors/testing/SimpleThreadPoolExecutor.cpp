@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <folly/futures/test/TestExecutor.h>
+#include <folly/executors/testing/SimpleThreadPoolExecutor.h>
 
 using namespace std;
 
-namespace folly {
+namespace folly::test {
 
-TestExecutor::TestExecutor(size_t numThreads) {
+SimpleThreadPoolExecutor::SimpleThreadPoolExecutor(size_t numThreads) {
   const auto kWorkers = std::max(size_t(1), numThreads);
   for (auto idx = 0u; idx < kWorkers; ++idx) {
     workers_.emplace_back([this] {
@@ -41,7 +41,7 @@ TestExecutor::TestExecutor(size_t numThreads) {
   }
 }
 
-TestExecutor::~TestExecutor() {
+SimpleThreadPoolExecutor::~SimpleThreadPoolExecutor() {
   for (auto& worker : workers_) {
     (void)worker;
     addImpl({});
@@ -52,17 +52,17 @@ TestExecutor::~TestExecutor() {
   }
 }
 
-void TestExecutor::add(Func f) {
+void SimpleThreadPoolExecutor::add(Func f) {
   if (f) {
     addImpl(std::move(f));
   }
 }
 
-size_t TestExecutor::numThreads() const {
+size_t SimpleThreadPoolExecutor::numThreads() const {
   return workers_.size();
 }
 
-void TestExecutor::addImpl(Func f) {
+void SimpleThreadPoolExecutor::addImpl(Func f) {
   {
     lock_guard<mutex> g(m_);
     workItems_.push(std::move(f));
@@ -70,4 +70,4 @@ void TestExecutor::addImpl(Func f) {
   cv_.notify_one();
 }
 
-} // namespace folly
+} // namespace folly::test

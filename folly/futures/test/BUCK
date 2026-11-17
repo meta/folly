@@ -18,7 +18,7 @@ fb_dirsync_cpp_unittest(
     name = "callback_lifetime_test",
     srcs = ["CallbackLifetimeTest.cpp"],
     deps = [
-        ":test_executor",
+        "//folly/executors/testing:simple_thread_pool_executor",
         "//folly/futures:core",
         "//folly/portability:gtest",
     ],
@@ -128,9 +128,9 @@ fb_dirsync_cpp_benchmark(
         "--json",
     ],
     deps = [
-        ":test_executor",
         "//folly:benchmark",
         "//folly/executors:inline_executor",
+        "//folly/executors/testing:simple_thread_pool_executor",
         "//folly/futures:core",
         "//folly/portability:gflags",
         "//folly/synchronization:baton",
@@ -153,7 +153,7 @@ fb_dirsync_cpp_unittest(
     srcs = ["InterruptTest.cpp"],
     labels = ["load-sensitive-timing-test"],
     deps = [
-        ":test_executor",
+        "//folly/executors/testing:simple_thread_pool_executor",
         "//folly/futures:core",
         "//folly/portability:gtest",
         "//folly/synchronization:baton",
@@ -218,7 +218,7 @@ fb_dirsync_cpp_unittest(
     name = "retrying_test",
     srcs = ["RetryingTest.cpp"],
     deps = [
-        ":test_executor",
+        "//folly/executors/testing:simple_thread_pool_executor",
         "//folly/futures:core",
         "//folly/portability:gtest",
         "//folly/portability:sys_resource",
@@ -244,21 +244,11 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
-fb_dirsync_cpp_library(
-    name = "test_executor",
-    srcs = ["TestExecutor.cpp"],
-    headers = ["TestExecutor.h"],
-    use_raw_headers = True,
-    exported_deps = [
-        "//folly:executor",
-    ],
-)
-
 fb_dirsync_cpp_unittest(
     name = "test_executor_test",
     srcs = ["TestExecutorTest.cpp"],
     deps = [
-        ":test_executor",
+        "//folly/executors/testing:simple_thread_pool_executor",
         "//folly/portability:gtest",
     ],
 )
@@ -369,8 +359,8 @@ fb_dirsync_cpp_unittest(
     name = "wait_test",
     srcs = ["WaitTest.cpp"],
     deps = [
-        ":test_executor",
         "//folly/executors:inline_executor",
+        "//folly/executors/testing:simple_thread_pool_executor",
         "//folly/futures:core",
         "//folly/io/async:async_base",
         "//folly/portability:gtest",

@@ -20,7 +20,7 @@
 #include <atomic>
 #include <vector>
 
-#include <folly/futures/test/TestExecutor.h>
+#include <folly/executors/testing/SimpleThreadPoolExecutor.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/SysResource.h>
 
@@ -350,7 +350,7 @@ TEST(RetryingTest, largeRetries) {
   };
 #endif
 
-  TestExecutor executor(4);
+  folly::test::SimpleThreadPoolExecutor executor(4);
   // size of implicit promise is at least the size of the return.
   using LargeReturn = array<uint64_t, 16000>;
   auto func = [&executor](size_t retryNum) -> Future<LargeReturn> {

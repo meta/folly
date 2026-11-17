@@ -524,8 +524,8 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ${FOLLY_DIR}/compression/test/CodingTestUtils.cpp
     ${FOLLY_DIR}/container/test/F14TestUtil.h
     ${FOLLY_DIR}/container/test/TrackingTypes.h
-    ${FOLLY_DIR}/futures/test/TestExecutor.cpp
-    ${FOLLY_DIR}/futures/test/TestExecutor.h
+    ${FOLLY_DIR}/executors/testing/SimpleThreadPoolExecutor.cpp
+    ${FOLLY_DIR}/executors/testing/SimpleThreadPoolExecutor.h
     ${FOLLY_DIR}/io/async/test/CallbackStateEnum.h
     ${FOLLY_DIR}/io/async/test/ConnCallback.h
     ${FOLLY_DIR}/io/async/test/MockAsyncServerSocket.h

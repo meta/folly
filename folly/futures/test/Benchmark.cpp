@@ -19,9 +19,9 @@
 #include <vector>
 
 #include <folly/executors/InlineExecutor.h>
+#include <folly/executors/testing/SimpleThreadPoolExecutor.h>
 #include <folly/futures/Future.h>
 #include <folly/futures/Promise.h>
-#include <folly/futures/test/TestExecutor.h>
 #include <folly/portability/GFlags.h>
 #include <folly/synchronization/Baton.h>
 #include <folly/synchronization/NativeSemaphore.h>
@@ -52,7 +52,7 @@ void someThens(size_t n) {
 }
 
 void someThensOnThread(size_t n, bool runInline = false) {
-  auto executor = std::make_unique<TestExecutor>(1);
+  auto executor = std::make_unique<folly::test::SimpleThreadPoolExecutor>(1);
   auto f = makeFuture<int>(42).via(executor.get());
   f = thens(std::move(f), n / 2, runInline);
   f = thens(std::move(f), 1, false);
