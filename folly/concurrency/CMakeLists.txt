@@ -25,7 +25,6 @@ folly_add_library(
     folly_packed_sync_ptr
     folly_synchronization_atomic_struct
     folly_synchronization_atomic_util
-    folly_synchronization_detail_atomic_utils
 )
 
 folly_add_library(

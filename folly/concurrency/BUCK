@@ -146,7 +146,6 @@ fb_dirsync_cpp_library(
         "//folly/memory:sanitize_leak",
         "//folly/synchronization:atomic_struct",
         "//folly/synchronization:atomic_util",
-        "//folly/synchronization/detail:atomic_utils",
     ],
 )
 

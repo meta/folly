@@ -532,7 +532,7 @@ TEST(AtomicSharedPtr, SameOwnerAliasBatchAccounting) {
       start.arrive_and_wait();
       for (unsigned i = 0; i < 65536; ++i) {
         loads.fetch_add(1, std::memory_order_relaxed);
-        auto loaded = ptr.load(std::memory_order_acquire);
+        auto loaded = ptr.load(std::memory_order_relaxed);
         EXPECT_TRUE(
             loaded.get() == &owner->first || loaded.get() == &owner->second);
         EXPECT_TRUE(*loaded == 7 || *loaded == 11);
@@ -545,7 +545,7 @@ TEST(AtomicSharedPtr, SameOwnerAliasBatchAccounting) {
       while (loads.load(std::memory_order_relaxed) < i * 4097) {
         std::this_thread::yield();
       }
-      ptr.store(values[i & 1], std::memory_order_release);
+      ptr.store(values[i & 1], std::memory_order_relaxed);
     }
     first.join();
     second.join();
@@ -604,7 +604,7 @@ TEST(AtomicSharedPtr, MixedRepresentationStress) {
     threads.emplace_back([&] {
       start.arrive_and_wait();
       do {
-        auto loaded = ptr.load(std::memory_order_acquire);
+        auto loaded = ptr.load(std::memory_order_relaxed);
         if (loaded.get() == &ownerless_value) {
           EXPECT_EQ(loaded.use_count(), 0);
           EXPECT_EQ(*loaded, 13);
@@ -620,6 +620,29 @@ TEST(AtomicSharedPtr, MixedRepresentationStress) {
   }
   ptr.store({});
   EXPECT_EQ(alive.load(), 0);
+}
+
+TEST(AtomicSharedPtr, EmptyLoadAcquiresPublication) {
+  constexpr std::array orders{
+      std::memory_order_acquire,
+      std::memory_order_seq_cst,
+  };
+  constexpr unsigned iterations = kIsSanitizeThread ? 32 : 256;
+  for (const auto order : orders) {
+    for (unsigned i = 0; i < iterations; ++i) {
+      atomic_shared_ptr<int> ptr(std::make_shared<int>(7));
+      int published = 0;
+      std::thread writer([&] {
+        published = 42;
+        ptr.store({}, std::memory_order_release);
+      });
+      while (ptr.load(order)) {
+        std::this_thread::yield();
+      }
+      EXPECT_EQ(published, 42);
+      writer.join();
+    }
+  }
 }
 
 TEST(AtomicSharedPtr, Leak) {

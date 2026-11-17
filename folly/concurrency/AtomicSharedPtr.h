@@ -26,7 +26,6 @@
 #include <folly/memory/SanitizeLeak.h>
 #include <folly/synchronization/AtomicStruct.h>
 #include <folly/synchronization/AtomicUtil.h>
-#include <folly/synchronization/detail/AtomicUtils.h>
 
 #if (defined(__GLIBCXX__) || FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED_LIBCXX) && \
     FOLLY_HAS_PACKED_SYNC_PTR
@@ -127,7 +126,7 @@ class atomic_shared_ptr {
       SharedPtr n,
       std::memory_order order = std::memory_order_seq_cst) /* noexcept */ {
     auto newptr = get_newptr(std::move(n));
-    auto old = ptr_.exchange(newptr, order);
+    auto old = ptr_.exchange(newptr, update_order(order));
     release_external(old);
   }
 
@@ -135,7 +134,7 @@ class atomic_shared_ptr {
       SharedPtr n,
       std::memory_order order = std::memory_order_seq_cst) /* noexcept */ {
     auto newptr = get_newptr(std::move(n));
-    auto old = ptr_.exchange(newptr, order);
+    auto old = ptr_.exchange(newptr, update_order(order));
 
     SharedPtr old_ptr;
 
@@ -151,8 +150,7 @@ class atomic_shared_ptr {
       SharedPtr& expected,
       const SharedPtr& n,
       std::memory_order mo = std::memory_order_seq_cst) noexcept {
-    return compare_exchange_weak(
-        expected, n, mo, detail::default_failure_memory_order(mo));
+    return compare_exchange_weak(expected, n, mo, memory_order_load(mo));
   }
   bool compare_exchange_weak(
       SharedPtr& expected,
@@ -169,7 +167,10 @@ class atomic_shared_ptr {
       return false;
     }
     expectedptr = oldptr; // Need oldptr to release if failed
-    if (ptr_.compare_exchange_weak(expectedptr, newptr, success, failure)) {
+    const auto success_order = update_order(success);
+    const auto failure_order = memory_order_load(update_order(failure));
+    if (ptr_.compare_exchange_weak(
+            expectedptr, newptr, success_order, failure_order)) {
       if (oldptr.get()) {
         release_external(oldptr, -1);
       }
@@ -188,8 +189,7 @@ class atomic_shared_ptr {
       SharedPtr& expected,
       SharedPtr&& desired,
       std::memory_order mo = std::memory_order_seq_cst) noexcept {
-    return compare_exchange_weak(
-        expected, desired, mo, detail::default_failure_memory_order(mo));
+    return compare_exchange_weak(expected, desired, mo, memory_order_load(mo));
   }
   bool compare_exchange_weak(
       SharedPtr& expected,
@@ -202,8 +202,7 @@ class atomic_shared_ptr {
       SharedPtr& expected,
       const SharedPtr& n,
       std::memory_order mo = std::memory_order_seq_cst) noexcept {
-    return compare_exchange_strong(
-        expected, n, mo, detail::default_failure_memory_order(mo));
+    return compare_exchange_strong(expected, n, mo, memory_order_load(mo));
   }
   bool compare_exchange_strong(
       SharedPtr& expected,
@@ -224,7 +223,7 @@ class atomic_shared_ptr {
       SharedPtr&& desired,
       std::memory_order mo = std::memory_order_seq_cst) noexcept {
     return compare_exchange_strong(
-        expected, desired, mo, detail::default_failure_memory_order(mo));
+        expected, desired, mo, memory_order_load(mo));
   }
   bool compare_exchange_strong(
       SharedPtr& expected,
@@ -242,6 +241,11 @@ class atomic_shared_ptr {
   // Bit signifying aliased constructor
   static constexpr std::uint16_t ALIASED_PTR{0x4000};
 
+  static std::memory_order update_order(std::memory_order order) {
+    return order == std::memory_order_seq_cst
+        ? order
+        : std::memory_order_acq_rel;
+  }
   static std::uint16_t get_local_count(const PackedPtr& p) {
     return p.extra() & ~ALIASED_PTR;
   }
@@ -339,8 +343,9 @@ class atomic_shared_ptr {
    * needed for compare_and_swap later.
    */
   PackedPtr takeOwnedBase(std::memory_order order) const noexcept {
+    const auto acquire = memory_order_load(update_order(order));
     PackedPtr local, newlocal;
-    local = ptr_.load(std::memory_order_acquire);
+    local = ptr_.load(acquire);
     while (true) {
       if (!local.get()) {
         return local;
@@ -351,11 +356,11 @@ class atomic_shared_ptr {
         // EXTERNAL_OFFSET threads trying to access at once.
         std::this_thread::yield();
         // Force DeterministicSchedule to choose a different thread
-        local = ptr_.load(std::memory_order_acquire);
+        local = ptr_.load(acquire);
       } else {
         newlocal.setExtra(newlocal.extra() + 1);
         assert(get_local_count(newlocal) > 0);
-        if (ptr_.compare_exchange_weak(local, newlocal, order)) {
+        if (ptr_.compare_exchange_weak(local, newlocal, acquire)) {
           break;
         }
       }
@@ -388,7 +393,7 @@ class atomic_shared_ptr {
         // the local one.
         break;
       }
-      if (ptr_.compare_exchange_weak(local, newlocal, mo)) {
+      if (ptr_.compare_exchange_weak(local, newlocal, update_order(mo))) {
         return;
       }
     }
