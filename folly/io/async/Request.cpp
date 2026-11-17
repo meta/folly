@@ -516,6 +516,10 @@ RequestContext::State::getContextData(const RequestToken& token) const {
 
 FOLLY_ALWAYS_INLINE
 void RequestContext::State::onSet() {
+  // Skip acquiring a hazard pointer when there are no callbacks to protect
+  if (!combined_.load(std::memory_order_relaxed)) {
+    return;
+  }
   // Don't use hazptr_local because callback may use hazptr
   hazptr_holder<> h = make_hazard_pointer<>();
   Combined* combined = h.protect(combined_);
@@ -530,6 +534,10 @@ void RequestContext::State::onSet() {
 
 FOLLY_ALWAYS_INLINE
 void RequestContext::State::onUnset() {
+  // Skip acquiring a hazard pointer when there are no callbacks to protect
+  if (!combined_.load(std::memory_order_relaxed)) {
+    return;
+  }
   // Don't use hazptr_local because callback may use hazptr
   hazptr_holder<> h = make_hazard_pointer<>();
   Combined* combined = h.protect(combined_);
