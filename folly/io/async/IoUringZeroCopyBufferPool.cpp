@@ -803,6 +803,10 @@ void IoUringZeroCopyBufferPool::incNoBufferCount() noexcept {
   impl_->incNoBufferCount();
 }
 
+void IoUringZeroCopyBufferPool::requestRefillQueueFlush() noexcept {
+  impl_->requestRefillQueueFlush();
+}
+
 bool IoUringZeroCopyBufferPool::isRefillFlushPending() const noexcept {
   return impl_->isRefillFlushPending();
 }
@@ -865,6 +869,8 @@ IoUringZeroCopyBufferPool::Diagnostics
 IoUringZeroCopyBufferPool::getDiagnostics() noexcept {
   return {};
 }
+
+void IoUringZeroCopyBufferPool::requestRefillQueueFlush() noexcept {}
 
 } // namespace folly
 

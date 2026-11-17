@@ -116,6 +116,8 @@ class IoUringZeroCopyBufferPool {
 
   Diagnostics getDiagnostics() noexcept;
 
+  void requestRefillQueueFlush() noexcept;
+
   struct Stats {
     uint64_t copyFallbackCount{0};
     uint64_t copyFallbackBytes{0};

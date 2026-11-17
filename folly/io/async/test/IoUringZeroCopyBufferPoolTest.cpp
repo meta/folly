@@ -254,6 +254,41 @@ TEST(IoUringZeroCopyBufferPoolTest, RefillFlushesBeforeRingExhaustion) {
   EXPECT_EQ(helper.getPendingBuffersSize(), 0);
 }
 
+TEST(IoUringZeroCopyBufferPoolTest, RequestedFlushDrainsRingBelowThreshold) {
+  IoUringZeroCopyBufferPool::Params params = {
+      .ring = nullptr,
+      .numBuffers = 16,
+      .bufferSizeHint = 4096,
+      .rqEntries = 8,
+      .ifindex = 0,
+      .queueId = 0,
+  };
+  auto pool = IoUringZeroCopyBufferPoolTestHelper::create(params, true);
+  IoUringZeroCopyBufferPoolTestHelper helper(*pool);
+
+  io_uring_cqe cqe{};
+  cqe.res = 2048;
+  io_uring_zcrx_cqe zcqe{};
+  for (uint32_t i = 0; i < 5; ++i) {
+    zcqe.off = i * helper.getBufferSize();
+    pool->getIoBuf(&cqe, &zcqe).buffer.reset();
+  }
+
+  EXPECT_FALSE(helper.isRefillFlushPending());
+  EXPECT_EQ(helper.getRingUsedCount(), 5);
+  EXPECT_EQ(helper.getRingFreeCount(), 3);
+  EXPECT_EQ(helper.getPendingBuffersSize(), 0);
+
+  pool->requestRefillQueueFlush();
+  EXPECT_TRUE(helper.isRefillFlushPending());
+
+  helper.flushRefillQueueIfNeeded();
+
+  EXPECT_FALSE(helper.isRefillFlushPending());
+  EXPECT_EQ(helper.getRingUsedCount(), 0);
+  EXPECT_EQ(helper.getRingFreeCount(), 8);
+}
+
 TEST(IoUringZeroCopyBufferPoolTest, DiagnosticsSnapshot) {
   IoUringZeroCopyBufferPool::Params params = {
       .ring = nullptr,

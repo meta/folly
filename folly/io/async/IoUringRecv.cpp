@@ -143,6 +143,9 @@ class IoUringRecvHandle::RecvRequest
     } else if (isEOF(cqe)) {
       handle_->onRecvEOF();
     } else {
+      if (res == -ENOMEM && bufferPool_) {
+        bufferPool_->requestRefillQueueFlush();
+      }
       handle_->onRecvErr(-res);
     }
   }

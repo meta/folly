@@ -732,6 +732,9 @@ void AsyncIoUringSocket::ReadSqe::callback(const io_uring_cqe* cqe) noexcept {
             diagnostics.refillRingTail,
             diagnostics.buffersDispensed,
             diagnostics.pendingBuffers);
+        if (pool) {
+          pool->requestRefillQueueFlush();
+        }
       }
       // assume ECANCELED is not an unrecoverable error state, but we do still
       // have to propagate to the callback as they presumably called the cancel.
