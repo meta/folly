@@ -8,21 +8,7 @@ shipit_fbcode_builder = true
 repo_url = https://github.com/facebook/watchman.git
 
 [build]
-builder = cmake
-
-[dependencies]
-boost
-cpptoml
-edencommon
-fb303
-fbthrift
-folly
-pcre2
-googletest
-python-setuptools-69
-
-[dependencies.fbsource=on]
-rust
+builder = nop
 
 [shipit.pathmap]
 fbcode/watchman = watchman
@@ -31,18 +17,3 @@ fbcode/eden/fs = eden/fs
 
 [shipit.strip]
 ^fbcode/eden/fs/(?!.*\.thrift|service/shipit_test_file\.txt)
-
-[cmake.defines.fb=on]
-ENABLE_EDEN_SUPPORT=ON
-IS_FB_BUILD=ON
-
-# FB macos specific settings
-[cmake.defines.all(fb=on,os=darwin)]
-# this path is coupled with the FB internal watchman-osx.spec
-WATCHMAN_STATE_DIR=/opt/facebook/watchman/var/run/watchman
-# tell cmake not to try to create /opt/facebook/...
-INSTALL_WATCHMAN_STATE_DIR=OFF
-USE_SYS_PYTHON=OFF
-
-[depends.environment]
-WATCHMAN_VERSION_OVERRIDE
