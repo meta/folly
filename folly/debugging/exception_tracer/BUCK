@@ -146,7 +146,6 @@ LIBCXX_BUCKIFIED_SELECTOR = selects.and_(
     selects.cond("ovr_config//cpp:libc++"),
     selects.or_(
         selects.cond("ovr_config//third-party/libcxx:17"),
-        selects.cond("ovr_config//third-party/libcxx:19"),
         selects.cond("ovr_config//third-party/libcxx:21"),
     ),
 )
