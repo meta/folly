@@ -953,7 +953,6 @@ void IoUringBackend::processPollIo(
             std::min<int64_t>(res, std::numeric_limits<short>::max())));
 
     ioSqe->res_ = res;
-    ioSqe->cqeFlags_ = flags;
     activeEvents_.push_back(*ioSqe);
   } else {
     releaseIoSqe(ioSqe);

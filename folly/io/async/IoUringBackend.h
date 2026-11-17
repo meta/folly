@@ -421,7 +421,6 @@ class IoUringBackend : public EventBaseBackendBase {
     IoUringFdRegistrationRecord* fdRecord_{nullptr};
     size_t useCount_{0};
     int res_;
-    uint32_t cqeFlags_;
 
     FOLLY_ALWAYS_INLINE void resetEvent() {
       // remove it from the list
