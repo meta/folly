@@ -207,6 +207,10 @@ AsyncStackFrame::AsyncStackFrame(MakeDetachedRootFrame) noexcept {
   setReturnAddress(detached_task());
 }
 
+AsyncStackFrame::~AsyncStackFrame() {
+  stackRoot = nullptr;
+}
+
 AsyncStackFrame& getDetachedRootAsyncStackFrame() noexcept {
   static auto frame = AsyncStackFrame{AsyncStackFrame::MakeDetachedRootFrame{}};
   return frame;

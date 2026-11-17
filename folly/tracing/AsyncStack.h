@@ -381,7 +381,7 @@ void deactivateSuspendedLeaf(AsyncStackFrame& leafFrame) noexcept;
 struct AsyncStackFrame {
  public:
   AsyncStackFrame() = default;
-  ~AsyncStackFrame() = default;
+  ~AsyncStackFrame();
   AsyncStackFrame(const AsyncStackFrame&) = delete;
   AsyncStackFrame(AsyncStackFrame&&) = delete;
   AsyncStackFrame& operator=(const AsyncStackFrame&) = delete;
