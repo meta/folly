@@ -977,6 +977,7 @@ class ManifestContext:
     This object should be passed as the `ctx` parameter in ManifestParser.get() calls.
     """
 
+    # pyrefly: ignore [unsupported-operation]
     ALLOWED_VARIABLES: set[str] = {
         "os",
         "distro",
