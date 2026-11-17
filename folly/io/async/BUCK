@@ -454,6 +454,7 @@ fb_dirsync_cpp_library(
     deps = [
         "//folly:demangle",
         "//folly:glog",
+        "//folly:indestructible",
         "//folly:scope_guard",
         "//folly:utility",
         "//folly/concurrency/container:single_writer_fixed_hash_map",

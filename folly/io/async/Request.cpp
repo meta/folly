@@ -22,6 +22,7 @@
 
 #include <folly/Demangle.h>
 #include <folly/GLog.h>
+#include <folly/Indestructible.h>
 #include <folly/ScopeGuard.h>
 #include <folly/Utility.h>
 #include <folly/concurrency/container/SingleWriterFixedHashMap.h>
@@ -1084,9 +1085,9 @@ FOLLY_NOINLINE void RequestContext::restoreContextAfterPromotionFailure(
 
 /* static */ RequestContext::SetContextWatcherRegistry&
 RequestContext::getWatcherRegistry() {
-  static SetContextWatcherRegistry registry;
+  static Indestructible<SetContextWatcherRegistry> registry;
 
-  return registry;
+  return *registry;
 }
 
 /* static */ void RequestContext::addSetContextWatcher(

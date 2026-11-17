@@ -719,6 +719,7 @@ folly_add_library(
     folly_concurrency_container_single_writer_fixed_hash_map
     folly_demangle
     folly_glog
+    folly_indestructible
     folly_scope_guard
     folly_tracing_static_tracepoint
     folly_utility
