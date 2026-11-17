@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cassert>
 #include <exception>
+#include <limits>
 #include <mutex>
 #include <typeindex>
 #include <unordered_set>
@@ -38,6 +39,9 @@
 #endif
 
 #if FOLLY_ASYNC_STACK_ROOT_USE_PTHREAD
+#ifndef FOLLY_ASYNC_STACK_SUSPENDED_FRAME_TRACING
+#define FOLLY_ASYNC_STACK_SUSPENDED_FRAME_TRACING 0
+#endif
 
 #include <folly/portability/PThread.h>
 
@@ -86,6 +90,32 @@ volatile bool __folly_instrumented_frame_tracking_enabled = folly::kIsDebug;
 
 volatile std::unordered_set<folly::AsyncStackFrame*>* __folly_leaf_frame_store{
     nullptr};
+
+#if FOLLY_ASYNC_STACK_SUSPENDED_FRAME_TRACING
+// Recently suspended leaves, for debuggers to look up. Count is the next slot
+// to write, so frames[count - 1] is the most recently suspended leaf.
+// Entries are never cleared. They may have since resumed, appear more than
+// once, or point to freed memory. Readers must deduplicate async frame
+// addresses across all threads, handle unreadble addresses and check that
+// stackRoot == __folly_suspended_frame_cookie
+using count_t = std::uint8_t;
+static_assert(std::is_unsigned_v<count_t>);
+using count_lims = std::numeric_limits<count_t>;
+static inline constexpr size_t cap =
+    folly::constexpr_pow(size_t(2), count_lims::digits);
+static_assert(cap == 256);
+
+struct folly_suspended_leaf_ring {
+  count_t count;
+  folly::AsyncStackFrame* frames[cap];
+};
+FOLLY_PUSH_WARNING
+FOLLY_GNU_DISABLE_WARNING("-Wattributes")
+[[FOLLY_ATTR_GNU_USED, FOLLY_ATTR_GNU_RETAIN]]
+FOLLY_EXPORT thread_local folly_suspended_leaf_ring
+    __folly_suspended_leaf_ring{};
+FOLLY_POP_WARNING
+#endif
 }
 
 namespace folly {
@@ -245,6 +275,10 @@ void activateSuspendedLeaf(AsyncStackFrame& leafFrame) noexcept {
   assert(leafFrame.stackRoot == nullptr);
   leafFrame.stackRoot =
       reinterpret_cast<AsyncStackRoot*>(::__folly_suspended_frame_cookie);
+#if FOLLY_ASYNC_STACK_SUSPENDED_FRAME_TRACING
+  auto& ring = __folly_suspended_leaf_ring;
+  ring.frames[ring.count++] = &leafFrame;
+#endif
   if constexpr (folly::kIsDebug) {
     suspendedLeafFrames().wlock()->insert(std::addressof(leafFrame));
   }
