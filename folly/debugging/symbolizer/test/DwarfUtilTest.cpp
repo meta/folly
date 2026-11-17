@@ -309,6 +309,36 @@ TEST(DwarfUtil, RejectsOverflowingDwpDimensions) {
   EXPECT_EQ(DwarfParseErrorCode::integer_overflow, result.error().code);
 }
 
+TEST(DwarfUtil, ResolvesStrxThroughDwarf64DwpContributionOfDwarf32Unit) {
+  const std::vector<uint8_t> strings{'a', 0, 'b', 0};
+  std::vector<uint8_t> stringOffsets(4);
+  append<uint32_t>(stringOffsets, std::numeric_limits<uint32_t>::max());
+  append<uint64_t>(stringOffsets, 20);
+  append<uint16_t>(stringOffsets, 5);
+  append<uint16_t>(stringOffsets, 0);
+  append<uint64_t>(stringOffsets, 0);
+  append<uint64_t>(stringOffsets, 2);
+  CompilationUnit cu{};
+  cu.is64Bit = false;
+  cu.strOffsetsIs64Bit = false;
+  cu.strOffsetsBase = 4;
+  cu.debugSections.debugStr = strings;
+  cu.debugSections.debugStrOffsets = stringOffsets;
+  const std::vector<uint8_t> info{1};
+  DwarfCursor cursor(info);
+  Die die{};
+
+  setDwpStrOffsetsBase(cu);
+  auto result = readAttribute(
+      cu,
+      die,
+      AttributeSpec{.name = DW_AT_name, .form = DW_FORM_strx1},
+      cursor);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_EQ("b", std::get<folly::StringPiece>(result->attrValue));
+}
+
 TEST(DwarfUtil, ParsesAbbreviationDeclaration) {
   const auto bytes = abbreviation();
   DwarfCursor cursor(bytes, 0x20);

@@ -22,6 +22,7 @@
 
 #include <folly/Optional.h>
 #include <folly/Range.h>
+#include <folly/Utility.h>
 #include <folly/debugging/symbolizer/Elf.h>
 #include <folly/debugging/symbolizer/detail/DwarfConstants.h>
 #include <folly/lang/CheckedMath.h>
@@ -566,6 +567,21 @@ DwarfParseResult<bool> findDwpCompilationUnit(
   return true;
 }
 
+void setDwpStrOffsetsBase(CompilationUnit& cu) {
+  const uint64_t contribution = cu.strOffsetsBase.value_or(0);
+  const auto strOffsets = cu.debugSections.debugStrOffsets;
+  if (contribution <= strOffsets.size()) {
+    const size_t offset = folly::to_narrow(contribution);
+    DwarfCursor cursor(strOffsets.subspan(offset), offset);
+    auto initialLength = cursor.read<uint32_t>();
+    if (initialLength.hasValue()) {
+      cu.strOffsetsIs64Bit =
+          *initialLength == std::numeric_limits<uint32_t>::max();
+    }
+  }
+  cu.strOffsetsBase = contribution + (cu.strOffsetsIs64Bit ? 16 : 8);
+}
+
 namespace {
 
 DwarfParseResult<bool> parseCompilationUnitMetadata(
@@ -577,6 +593,7 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
 
   cu.offset = static_cast<uint32_t>(offset);
   cu.is64Bit = header->is64Bit;
+  cu.strOffsetsIs64Bit = header->is64Bit;
   cu.size = header->size;
   cu.version = header->version;
   cu.unitType = header->unitType;
@@ -821,8 +838,7 @@ CompilationUnits getCompilationUnits(
       //     A 2-byte version identifier containing the value 5.
       //  3. padding (uhalf)
       //     Reserved to DWARF (must be zero).
-      splitCU.strOffsetsBase =
-          splitCU.strOffsetsBase.value_or(0) + (splitCU.is64Bit ? 16 : 8);
+      setDwpStrOffsetsBase(splitCU);
       // 7.28 Range List Table
       // 1. unit_length (initial length)
       //    A 4-byte or 12-byte length containing the length of the set of
@@ -1368,7 +1384,7 @@ DwarfParseResult<Attribute> readAttributeImpl(
         cu.debugSections.debugStrOffsets,
         cu.strOffsetsBase.value_or(0),
         index,
-        cu.is64Bit,
+        cu.strOffsetsIs64Bit,
         info.offset());
     if (strOffset.hasError()) {
       return makeUnexpected(strOffset.error());

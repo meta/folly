@@ -72,6 +72,9 @@ struct CompilationUnit {
   DebugSections debugSections;
 
   bool is64Bit = false;
+  // In a .dwp this can differ from is64Bit (llvm-dwp
+  // --dwarf64-str-offsets-promotion).
+  bool strOffsetsIs64Bit = false;
   uint8_t version = 0;
   uint8_t unitType = DW_UT_compile;
   uint8_t addrSize = 0;
@@ -223,6 +226,10 @@ DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
 // result means that no matching, usable entry was found.
 DwarfParseResult<bool> findDwpCompilationUnit(
     std::span<const uint8_t> debugCuIndex, uint64_t dwoId, CompilationUnit& cu);
+
+// Advance cu.strOffsetsBase from the start of its .dwp contribution to the
+// first entry, taking the offset size from the contribution's own header.
+void setDwpStrOffsetsBase(CompilationUnit& cu);
 
 CompilationUnits getCompilationUnits(
     ElfCacheBase* elfCache,
