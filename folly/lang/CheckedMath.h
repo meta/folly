@@ -34,7 +34,7 @@ namespace detail {
 
 template <typename T>
   requires std::is_integral_v<T>
-bool generic_checked_add(T* result, T a, T b) {
+constexpr bool generic_checked_add(T* result, T a, T b) {
   if constexpr (std::is_signed_v<T>) {
     if (a >= 0) {
       if (std::numeric_limits<T>::max() - a < b) [[unlikely]] {
@@ -60,7 +60,7 @@ bool generic_checked_add(T* result, T a, T b) {
 
 template <typename T>
   requires std::is_unsigned_v<T>
-bool generic_checked_small_mul(T* result, T a, T b) {
+constexpr bool generic_checked_small_mul(T* result, T a, T b) {
   static_assert(sizeof(T) < sizeof(uint64_t), "Too large");
   uint64_t res = static_cast<uint64_t>(a) * static_cast<uint64_t>(b);
   constexpr uint64_t overflowMask = ~((1ULL << (sizeof(T) * 8)) - 1);
@@ -74,13 +74,13 @@ bool generic_checked_small_mul(T* result, T a, T b) {
 
 template <typename T>
   requires(std::is_unsigned_v<T> && sizeof(T) < sizeof(uint64_t))
-bool generic_checked_mul(T* result, T a, T b) {
+constexpr bool generic_checked_mul(T* result, T a, T b) {
   return generic_checked_small_mul(result, a, b);
 }
 
 template <typename T>
   requires(std::is_unsigned_v<T> && sizeof(T) == sizeof(uint64_t))
-bool generic_checked_mul(T* result, T a, T b) {
+constexpr bool generic_checked_mul(T* result, T a, T b) {
   constexpr uint64_t halfBits = 32;
   constexpr uint64_t halfMask = (1ULL << halfBits) - 1ULL;
   uint64_t lhs_high = a >> halfBits;
@@ -128,7 +128,7 @@ bool generic_checked_mul(T* result, T a, T b) {
 
 template <typename T>
   requires std::is_integral_v<T>
-bool checked_add(T* result, T a, T b) {
+constexpr bool checked_add(T* result, T a, T b) {
 #if FOLLY_HAS_BUILTIN(__builtin_add_overflow)
   if (!__builtin_add_overflow(a, b, result)) [[likely]] {
     return true;
@@ -142,7 +142,7 @@ bool checked_add(T* result, T a, T b) {
 
 template <typename T>
   requires std::is_unsigned_v<T>
-bool checked_add(T* result, T a, T b, T c) {
+constexpr bool checked_add(T* result, T a, T b, T c) {
   T tmp{};
   if (!checked_add(&tmp, a, b)) [[unlikely]] {
     *result = {};
@@ -158,7 +158,7 @@ bool checked_add(T* result, T a, T b, T c) {
 
 template <typename T>
   requires std::is_unsigned_v<T>
-bool checked_add(T* result, T a, T b, T c, T d) {
+constexpr bool checked_add(T* result, T a, T b, T c, T d) {
   T tmp{};
   if (!checked_add(&tmp, a, b)) [[unlikely]] {
     *result = {};
@@ -177,7 +177,7 @@ bool checked_add(T* result, T a, T b, T c, T d) {
 }
 
 template <typename T>
-bool checked_div(T* result, T dividend, T divisor) {
+constexpr bool checked_div(T* result, T dividend, T divisor) {
   if (divisor == 0) [[unlikely]] {
     *result = {};
     return false;
@@ -187,7 +187,7 @@ bool checked_div(T* result, T dividend, T divisor) {
 }
 
 template <typename T>
-bool checked_mod(T* result, T dividend, T divisor) {
+constexpr bool checked_mod(T* result, T dividend, T divisor) {
   if (divisor == 0) [[unlikely]] {
     *result = {};
     return false;
@@ -198,7 +198,7 @@ bool checked_mod(T* result, T dividend, T divisor) {
 
 template <typename T>
   requires std::is_unsigned_v<T>
-bool checked_mul(T* result, T a, T b) {
+constexpr bool checked_mul(T* result, T a, T b) {
   assert(result != nullptr);
 #if FOLLY_HAS_BUILTIN(__builtin_mul_overflow)
   if (!__builtin_mul_overflow(a, b, result)) [[likely]] {
@@ -208,7 +208,7 @@ bool checked_mul(T* result, T a, T b) {
   return false;
 #elif _MSC_VER && FOLLY_X64
   static_assert(sizeof(T) <= sizeof(unsigned __int64), "Too large");
-  if (sizeof(T) < sizeof(uint64_t)) {
+  if (std::is_constant_evaluated() || sizeof(T) < sizeof(uint64_t)) {
     return detail::generic_checked_mul(result, a, b);
   } else {
     unsigned __int64 high;
@@ -227,7 +227,7 @@ bool checked_mul(T* result, T a, T b) {
 
 template <typename T>
   requires std::is_unsigned_v<T>
-bool checked_muladd(T* result, T base, T mul, T add) {
+constexpr bool checked_muladd(T* result, T base, T mul, T add) {
   T tmp{};
   if (!checked_mul(&tmp, base, mul)) [[unlikely]] {
     *result = {};

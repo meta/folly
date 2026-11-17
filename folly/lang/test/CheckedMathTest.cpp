@@ -414,3 +414,18 @@ TEST(CheckedMath, checkedPtrAddOverflow) {
           &a, &buf[0], std::numeric_limits<uint64_t>::max() - 7));
   EXPECT_EQ(a, nullptr);
 }
+
+TEST(CheckedMath, constexpr) {
+  constexpr auto add = [](auto a, auto b) {
+    decltype(a) r{};
+    return folly::checked_add(&r, a, b) ? r : decltype(a){0};
+  };
+  constexpr auto mul = [](auto a, auto b) {
+    decltype(a) r{};
+    return folly::checked_mul(&r, a, b) ? r : decltype(a){0};
+  };
+  static_assert(add(uint32_t{2}, uint32_t{3}) == 5);
+  static_assert(add(std::numeric_limits<uint64_t>::max(), uint64_t{1}) == 0);
+  static_assert(mul(uint64_t{1} << 32, uint64_t{4}) == uint64_t{1} << 34);
+  static_assert(mul(uint64_t{1} << 32, uint64_t{1} << 32) == 0);
+}
