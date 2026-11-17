@@ -144,38 +144,20 @@ class SQGroupInfoRegistry {
   // a group is a collection of io_uring instances
   // that share up to numThreads SQ poll threads
   struct SQGroupInfo {
-    struct SQSubGroupInfo {
-      folly::F14FastSet<int> fds;
-      size_t count{0};
-
-      void add(int fd) {
-        CHECK(!fds.contains(fd));
-        fds.insert(fd);
-        ++count;
-      }
-
-      size_t remove(int fd) {
-        auto iter = fds.find(fd);
-        CHECK(iter != fds.end());
-        fds.erase(fd);
-        --count;
-
-        return count;
-      }
-    };
+    using FdSet = folly::F14FastSet<int>;
 
     SQGroupInfo(size_t num, std::set<uint32_t> const& cpus)
         : subGroups(num), nextCpu(cpus.begin(), cpus.end()) {}
 
     // returns the least loaded subgroup
-    SQSubGroupInfo* getNextSubgroup() {
+    FdSet* getNextSubgroup() {
       size_t min_idx = 0;
       for (size_t i = 0; i < subGroups.size(); i++) {
-        if (subGroups[i].count == 0) {
+        if (subGroups[i].empty()) {
           return &subGroups[i];
         }
 
-        if (subGroups[i].count < subGroups[min_idx].count) {
+        if (subGroups[i].size() < subGroups[min_idx].size()) {
           min_idx = i;
         }
       }
@@ -183,31 +165,31 @@ class SQGroupInfoRegistry {
       return &subGroups[min_idx];
     }
 
-    size_t add(int fd, SQSubGroupInfo* sg) {
+    size_t add(int fd, FdSet* sg) {
       CHECK(!fdSgMap.contains(fd));
       fdSgMap.emplace(fd, sg);
-      sg->add(fd);
-      ++count;
+      CHECK(!sg->contains(fd));
+      sg->insert(fd);
 
-      return count;
+      return fdSgMap.size();
     }
 
     size_t remove(int fd) {
       auto iter = fdSgMap.find(fd);
       CHECK(iter != fdSgMap.end());
-      iter->second->remove(fd);
+      auto& fds = *iter->second;
+      const auto fdIter = fds.find(fd);
+      CHECK(fdIter != fds.end());
+      fds.erase(fdIter);
       fdSgMap.erase(iter);
-      --count;
 
-      return count;
+      return fdSgMap.size();
     }
 
     // file descriptor to sub group index map
-    folly::F14FastMap<int, SQSubGroupInfo*> fdSgMap;
+    folly::F14FastMap<int, FdSet*> fdSgMap;
     // array of subgoups
-    std::vector<SQSubGroupInfo> subGroups;
-    // number of entries
-    size_t count{0};
+    std::vector<FdSet> subGroups;
     // Set of CPUs we will bind threads to.
     std::vector<uint32_t> nextCpu;
     int nextCpuIndex{0};
@@ -239,9 +221,9 @@ class SQGroupInfoRegistry {
     auto [iter, inserted] = map_.try_emplace(groupName, groupNumThreads, cpus);
     auto& info = iter->second;
     auto* sg = info.getNextSubgroup();
-    if (sg->count) {
+    if (!sg->empty()) {
       // we're adding to a non empty subgroup
-      params.wq_fd = *(sg->fds.begin());
+      params.wq_fd = *(sg->begin());
       params.flags |= IORING_SETUP_ATTACH_WQ;
     } else if (!info.nextCpu.empty()) {
       // First use of this subgroup, pin thread to CPU if specified.

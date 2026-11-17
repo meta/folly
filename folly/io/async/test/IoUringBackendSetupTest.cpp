@@ -236,6 +236,52 @@ TEST_F(IoUringBackendSetupTest, SetupPollWithGroupAndCpu) {
   EXPECT_TRUE(io3.params().flags & IORING_SETUP_ATTACH_WQ);
 }
 
+TEST_F(IoUringBackendSetupTest, SetupPollGroupReusesSubgroupsAfterRemoval) {
+  auto makeOptions = []() {
+    IoUringBackend::Options options;
+    options.setFlags(IoUringBackend::Options::Flags::POLL_SQ)
+        .setSQGroupName("test subgroup reuse")
+        .setSQGroupNumThreads(2);
+    return options;
+  };
+
+  auto first = std::make_unique<IoUringBackend>(makeOptions());
+  IoUringBackend second(makeOptions());
+  auto third = std::make_unique<IoUringBackend>(makeOptions());
+  ASSERT_EQ(first->ioRingPtr()->ring_fd, third->params().wq_fd);
+
+  first.reset();
+  {
+    IoUringBackend replacement(makeOptions());
+    EXPECT_TRUE(replacement.params().flags & IORING_SETUP_ATTACH_WQ);
+    EXPECT_EQ(third->ioRingPtr()->ring_fd, replacement.params().wq_fd);
+  }
+
+  third.reset();
+  IoUringBackend fresh(makeOptions());
+  EXPECT_FALSE(fresh.params().flags & IORING_SETUP_ATTACH_WQ);
+}
+
+TEST_F(IoUringBackendSetupTest, SetupPollGroupResetsAfterLastRemoval) {
+  auto makeOptions = [](uint32_t numThreads) {
+    IoUringBackend::Options options;
+    options.setFlags(IoUringBackend::Options::Flags::POLL_SQ)
+        .setSQGroupName("test group reuse")
+        .setSQGroupNumThreads(numThreads);
+    return options;
+  };
+  {
+    IoUringBackend first(makeOptions(2));
+    IoUringBackend second(makeOptions(2));
+    EXPECT_FALSE(second.params().flags & IORING_SETUP_ATTACH_WQ);
+  }
+
+  IoUringBackend first(makeOptions(1));
+  IoUringBackend second(makeOptions(1));
+  EXPECT_TRUE(second.params().flags & IORING_SETUP_ATTACH_WQ);
+  EXPECT_EQ(first.ioRingPtr()->ring_fd, second.params().wq_fd);
+}
+
 TEST_F(IoUringBackendSetupTest, DisableIoWaitAppliesNoIoWait) {
   IoUringBackend::Options options;
   options.setDisableIoWait(true);
