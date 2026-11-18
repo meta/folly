@@ -371,4 +371,4 @@ function (apply_folly_compile_options_to_target THETARGET)
   endif ()
 endfunction ()
 
-list(APPEND FOLLY_LINK_LIBRARIES Iphlpapi.lib Ws2_32.lib)
+list(APPEND FOLLY_LINK_LIBRARIES Iphlpapi.lib Ws2_32.lib Dbghelp.lib Bcrypt.lib)
