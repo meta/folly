@@ -4,8 +4,9 @@
 # LICENSE file in the root directory of this source tree.
 
 
+import os
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from ..envfuncs import Env
 from ..shared_lib import (
@@ -78,6 +79,31 @@ class ApplyTopLevelCmakeDefinesTest(unittest.TestCase):
         apply_shared_lib_top_level_cmake_defines(defines, opts)
         apply_shared_lib_top_level_cmake_defines(defines, opts)
         self.assertEqual(defines["CMAKE_SHARED_LINKER_FLAGS"], "-Wl,--exclude-libs=ALL")
+
+    def test_env_ldflags_seed_the_linker_flags(self) -> None:
+        defines = {}
+        with patch.dict(os.environ, {"LDFLAGS": "-Wl,-z,relro -Wl,-z,now"}):
+            apply_shared_lib_top_level_cmake_defines(
+                defines, make_build_opts(is_linux=True)
+            )
+        for var in ("CMAKE_SHARED_LINKER_FLAGS", "CMAKE_MODULE_LINKER_FLAGS"):
+            self.assertEqual(
+                defines[var], "-Wl,-z,relro -Wl,-z,now -Wl,--exclude-libs=ALL"
+            )
+
+    def test_explicit_linker_flags_win_over_env_ldflags(self) -> None:
+        defines = {"CMAKE_SHARED_LINKER_FLAGS": "-Wl,--as-needed"}
+        with patch.dict(os.environ, {"LDFLAGS": "-Wl,-z,now"}):
+            apply_shared_lib_top_level_cmake_defines(
+                defines, make_build_opts(is_linux=True)
+            )
+        self.assertEqual(
+            defines["CMAKE_SHARED_LINKER_FLAGS"],
+            "-Wl,--as-needed -Wl,--exclude-libs=ALL",
+        )
+        self.assertEqual(
+            defines["CMAKE_MODULE_LINKER_FLAGS"], "-Wl,-z,now -Wl,--exclude-libs=ALL"
+        )
 
 
 class ApplyDepEnvTest(unittest.TestCase):

@@ -12,6 +12,7 @@ Split out from builder.py so the gating logic
 
 from __future__ import annotations
 
+import os
 import typing
 
 if typing.TYPE_CHECKING:
@@ -36,14 +37,20 @@ def apply_shared_lib_top_level_cmake_defines(
     - On Linux: append -Wl,--exclude-libs=ALL to the shared/module linker
       flags so the deps' symbols stay out of the produced .so's dynamic
       export table (avoids ODR clashes if the host process loads another
-      copy of any dep).
+      copy of any dep). Defining CMAKE_*_LINKER_FLAGS on the command line
+      stops CMake from seeding them from $LDFLAGS, so start from $LDFLAGS
+      (as CMake would) to keep the caller's linker flags, e.g. a distro's
+      hardening flags, on the shared library links.
     """
     if not build_opts.shared_lib:
         return
     defines.setdefault("BUILD_SHARED_LIBS", "ON")
     if build_opts.is_linux():
+        ldflags = os.environ.get("LDFLAGS", "")
         for var in ("CMAKE_SHARED_LINKER_FLAGS", "CMAKE_MODULE_LINKER_FLAGS"):
-            defines[var] = _append_token(defines.get(var, ""), "-Wl,--exclude-libs=ALL")
+            defines[var] = _append_token(
+                defines.get(var, ldflags), "-Wl,--exclude-libs=ALL"
+            )
 
 
 def apply_shared_lib_dep_env(
