@@ -343,7 +343,7 @@ fb_dirsync_rule(
         "python": "3.12",
     },
     deps = [
-        "fbcode//folly/python:weak",  # @manual
+        "//folly/python:weak",  # @manual
         # Pull in libpython so we are linked against it
         "fbsource//third-party/googletest:gtest",  # @manual
         "fbsource//third-party/python:python-for-embedding",  # @manual
@@ -366,7 +366,7 @@ fb_dirsync_rule(
         "python": "3.12",
     },
     deps = [
-        "fbcode//folly/python:weak",  # @manual
         "fbsource//third-party/googletest:gtest",  # @manual
+        "//folly/python:weak",  # @manual
     ],
 )
