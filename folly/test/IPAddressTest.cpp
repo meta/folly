@@ -776,6 +776,19 @@ TEST(IPaddress, fromInverseArpaName) {
           fmt::format(
               "{}.ip6.arpa",
               "3.0.0.0.0.0.0.0.0.0.0.0.c.0.0.b.e.c.a.f.e.f.c.1.0.0.0.0.0.2.6.2")));
+  // Each label must be exactly one hex digit.
+  EXPECT_THROW(
+      IPAddressV6::fromInverseArpaName(
+          fmt::format(
+              "{}.ip6.arpa",
+              "30.0.0.0.0.0.0.0.0.0.0.0.c.0.0.b.e.c.a.f.e.f.c.1.0.0.0.0.0.2.6.2")),
+      IPAddressFormatException);
+  EXPECT_THROW(
+      IPAddressV6::fromInverseArpaName(
+          fmt::format(
+              "{}.ip6.arpa",
+              ".0.0.0.0.0.0.0.0.0.0.0.c.0.0.b.e.c.a.f.e.f.c.1.0.0.0.0.0.2.6.2")),
+      IPAddressFormatException);
 }
 
 // Test that invalid string values are killed

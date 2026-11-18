@@ -230,7 +230,13 @@ IPAddressV6 IPAddressV6::fromInverseArpaName(const std::string& arpaname) {
   size_t pos = 0;
   int count = 0;
   for (size_t i = 1; i <= pieces.size(); i++) {
-    ip[pos] = pieces[pieces.size() - i][0];
+    // Each label is a single hex digit; IPAddressV6 checks that it is hex.
+    auto const label = pieces[pieces.size() - i];
+    if (label.size() != 1) {
+      throw IPAddressFormatException(
+          fmt::format("Invalid input. Got '{}'", piece));
+    }
+    ip[pos] = label[0];
     pos++;
     count++;
     // add ':' every 4 chars
