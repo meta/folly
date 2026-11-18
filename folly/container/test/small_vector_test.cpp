@@ -950,6 +950,24 @@ TEST(smallVector, HeapAllocationSize) {
 }
 
 template <int N>
+void testSelfResize() {
+  for (int i = 1; i < 33; ++i) {
+    folly::small_vector<int, N> vec(i, 42);
+    auto newSize = vec.capacity() + 1;
+    vec.resize(newSize, vec[0]);
+    EXPECT_EQ(vec.size(), newSize);
+    for (auto value : vec) {
+      EXPECT_EQ(value, 42);
+    }
+  }
+}
+
+TEST(smallVector, SelfResize) {
+  testSelfResize<1>();
+  testSelfResize<0>();
+}
+
+template <int N>
 void testSelfPushBack() {
   for (int i = 1; i < 33; ++i) {
     folly::small_vector<std::string, N> vec;
