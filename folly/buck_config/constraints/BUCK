@@ -1,42 +1,35 @@
-load("@fbcode_macros//build_defs:build_file_migration.bzl", "non_fbcode_target")
 load("@fbsource//tools/build_defs:fb_native_wrapper.bzl", "fb_native")
 
 oncall("fbcode_entropy_wardens_folly")
 
-non_fbcode_target(
-    _kind = fb_native.constraint_setting,
+fb_native.constraint_setting(
     name = "singleton",
     visibility = ["PUBLIC"],
 )
 
-non_fbcode_target(
-    _kind = fb_native.constraint_value,
+fb_native.constraint_value(
     name = "singleton-schedule-at-exit-disabled",
     constraint_setting = ":singleton",
     visibility = ["PUBLIC"],
 )
 
-non_fbcode_target(
-    _kind = fb_native.constraint_setting,
+fb_native.constraint_setting(
     name = "f14-fallback",
     visibility = ["PUBLIC"],
 )
 
-non_fbcode_target(
-    _kind = fb_native.constraint_value,
+fb_native.constraint_value(
     name = "f14-fallback-disabled",
     constraint_setting = ":f14-fallback",
     visibility = ["PUBLIC"],
 )
 
-non_fbcode_target(
-    _kind = fb_native.constraint_setting,
+fb_native.constraint_setting(
     name = "gflags",
     visibility = ["PUBLIC"],
 )
 
-non_fbcode_target(
-    _kind = fb_native.constraint_value,
+fb_native.constraint_value(
     name = "gflags-enabled",
     constraint_setting = ":gflags",
     visibility = ["PUBLIC"],
