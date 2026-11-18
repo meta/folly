@@ -445,7 +445,7 @@ class fmt_output_sink {
     } else if constexpr (can_append_range) {
       fmt::detail::get_container(out_).append(str.begin(), str.end());
     } else {
-      out_ = fmt::format_to(out_, FOLLY_FMT_COMPILE("{}"), str);
+      out_ = fmt::format_to(out_, FMT_COMPILE("{}"), str);
     }
   }
 
@@ -546,7 +546,7 @@ namespace folly {
 /// fmt_sized_format
 ///
 /// Two-pass formatting: measure the output, reserve the final std::string,
-/// then format into it. Accepts checked, runtime, and FOLLY_FMT_COMPILE format
+/// then format into it. Accepts checked, runtime, and FMT_COMPILE format
 /// strings.
 ///
 /// The size pass reserves capacity, not a limit on the output. The string

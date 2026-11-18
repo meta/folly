@@ -18,23 +18,4 @@
 
 #include <fmt/compile.h>
 
-#if !defined(FMT_COMPILE)
-
-#define FOLLY_FMT_COMPILE(format_str) format_str
-
-#elif defined(_MSC_VER)
-
-// Workaround broken constexpr in MSVC.
-#define FOLLY_FMT_COMPILE(format_str) format_str
-
-#elif defined(__GNUC__) && !defined(__clang__) && __GNUC__ <= 8
-
-// Forcefully disable compiled format strings for GCC 8 & below until fmt is
-// updated to do this automatically.
-#define FOLLY_FMT_COMPILE(format_str) format_str
-
-#else
-
 #define FOLLY_FMT_COMPILE(format_str) FMT_COMPILE(format_str)
-
-#endif

@@ -469,10 +469,10 @@ folly_add_library(
   HEADERS File.h
   DEPS
     ${GLOG_LIBRARIES}
+    fmt::fmt
     folly_exception
     folly_file_util
     folly_portability_filesystem
-    folly_portability_fmt_compile
     folly_portability_sys_file
     folly_scope_guard
   EXPORTED_DEPS
@@ -1110,7 +1110,6 @@ folly_add_library(
     Singleton-inl.h
     Singleton.h
   DEPS
-    folly_portability_fmt_compile
     folly_system_at_fork
     ${FOLLY_SINGLETON_SELECT_DEPS}
   EXPORTED_DEPS

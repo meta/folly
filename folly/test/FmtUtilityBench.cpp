@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <fmt/compile.h>
+
 #include <folly/FmtUtility.h>
 
 #include <string>
@@ -59,14 +61,14 @@ void formatStrings(unsigned iters) {
       folly::doNotOptimizeAway(fmt::format("{}!{}!{}!{}!", arg, arg, arg, arg));
     } else if constexpr (Method == 1) {
       folly::doNotOptimizeAway(
-          fmt::format(FOLLY_FMT_COMPILE("{}!{}!{}!{}!"), arg, arg, arg, arg));
+          fmt::format(FMT_COMPILE("{}!{}!{}!{}!"), arg, arg, arg, arg));
     } else if constexpr (Method == 2) {
       folly::doNotOptimizeAway(
           folly::fmt_sized_format("{}!{}!{}!{}!", arg, arg, arg, arg));
     } else {
       folly::doNotOptimizeAway(
           folly::fmt_sized_format(
-              FOLLY_FMT_COMPILE("{}!{}!{}!{}!"), arg, arg, arg, arg));
+              FMT_COMPILE("{}!{}!{}!{}!"), arg, arg, arg, arg));
     }
   }
 }

@@ -18,19 +18,19 @@
 
 #include <stdexcept>
 
-#include <folly/portability/FmtCompile.h>
+#include <fmt/compile.h>
 
 namespace folly {
 namespace detail {
 
 std::string familyNameStrDefault(sa_family_t family) {
-  return fmt::format(FOLLY_FMT_COMPILE("sa_family_t({})"), family);
+  return fmt::format(FMT_COMPILE("sa_family_t({})"), family);
 }
 
 [[noreturn]] void getNthMSBitImplThrow(size_t bitCount, sa_family_t family) {
   throw std::invalid_argument(
       fmt::format(
-          FOLLY_FMT_COMPILE("Bit index must be < {} for addresses of type: {}"),
+          FMT_COMPILE("Bit index must be < {} for addresses of type: {}"),
           bitCount,
           familyNameStr(family)));
 }

@@ -24,11 +24,11 @@
 #include <cmath>
 #include <random>
 
+#include <fmt/compile.h>
 #include <fmt/format.h>
 
 #include <folly/Benchmark.h>
 #include <folly/lang/Keep.h>
-#include <folly/portability/FmtCompile.h>
 
 #if __has_include(<charconv>)
 #include <charconv>
@@ -268,7 +268,7 @@ static void to_ascii_go(size_t iters, size_t index, F f) {
 
 static void fmt_formatted_size_10(size_t iters, size_t index) {
   to_ascii_size_go<10>(iters, index, [](auto v) {
-    return fmt::formatted_size(FOLLY_FMT_COMPILE("{}"), v);
+    return fmt::formatted_size(FMT_COMPILE("{}"), v);
   });
 }
 
@@ -333,7 +333,7 @@ BENCHMARK_DRAW_LINE();
 
 static void fmt_formatted_size_16(size_t iters, size_t index) {
   to_ascii_size_go<16>(iters, index, [](auto v) {
-    return fmt::formatted_size(FOLLY_FMT_COMPILE("{:x}"), v);
+    return fmt::formatted_size(FMT_COMPILE("{:x}"), v);
   });
 }
 
@@ -405,7 +405,7 @@ BENCHMARK_DRAW_LINE();
 #define FOLLY_TO_ASCII_BENCH_MIXED(base, half, fmtspec)           \
   BENCHMARK(fmt_formatted_size_halflife_##half##_##base, iters) { \
     to_ascii_size_mixed_go<base, half>(iters, [](auto v) {        \
-      return fmt::formatted_size(FOLLY_FMT_COMPILE(fmtspec), v);  \
+      return fmt::formatted_size(FMT_COMPILE(fmtspec), v);        \
     });                                                           \
   }                                                               \
   FOLLY_TO_ASCII_BENCH_MIXED_SIZE(imuls, base, half)              \

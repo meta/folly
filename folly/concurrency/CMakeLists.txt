@@ -40,7 +40,6 @@ folly_add_library(
     folly_lang_exception
     folly_memory
     folly_portability_fcntl
-    folly_portability_fmt_compile
     folly_portability_unistd
     folly_scope_guard
     folly_system_thread_id

@@ -107,7 +107,6 @@ fb_dirsync_cpp_library(
         "//folly/hash:hash",
         "//folly/lang:exception",
         "//folly/portability:fcntl",
-        "//folly/portability:fmt_compile",
         "//folly/portability:unistd",
         "//folly/system:thread_id",
     ],

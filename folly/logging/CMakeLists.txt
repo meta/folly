@@ -153,7 +153,6 @@ folly_add_library(
     folly_file_util
     folly_map_util
     folly_portability_fcntl
-    folly_portability_fmt_compile
     folly_portability_pthread
     folly_portability_time
     folly_portability_unistd

@@ -727,6 +727,7 @@ fb_dirsync_cpp_benchmark(
     name = "fmt_utility_bench",
     srcs = ["FmtUtilityBench.cpp"],
     deps = [
+        "fbsource//third-party/fmt:fmt",
         "//folly:benchmark",
         "//folly:fmt_utility",
         "//folly/init:init",

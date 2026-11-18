@@ -93,7 +93,7 @@ folly_add_library(
   NAME ip_address
   SRCS IPAddress.cpp
   HEADERS IPAddress.h
-  DEPS folly_portability_fmt_compile
+  DEPS fmt::fmt
   EXPORTED_DEPS folly_portability_sockets
 )
 

@@ -29,6 +29,7 @@
 #include <optional>
 #include <unordered_map>
 
+#include <fmt/compile.h>
 #include <fmt/core.h>
 #include <glog/logging.h>
 #include <folly/Indestructible.h>
@@ -38,7 +39,6 @@
 #include <folly/hash/Hash.h>
 #include <folly/lang/Exception.h>
 #include <folly/portability/Fcntl.h>
-#include <folly/portability/FmtCompile.h>
 #include <folly/portability/Unistd.h>
 #include <folly/system/ThreadId.h>
 

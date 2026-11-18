@@ -32,6 +32,7 @@
 #include <mutex>
 #include <string>
 #include <fmt/chrono.h>
+#include <fmt/compile.h>
 #include <fmt/format.h>
 
 #include <folly/Demangle.h>
@@ -39,7 +40,6 @@
 #include <folly/debugging/symbolizer/Symbolizer.h>
 #include <folly/lang/SafeAssert.h>
 #include <folly/portability/Config.h>
-#include <folly/portability/FmtCompile.h>
 #include <folly/system/AtFork.h>
 // Before registrationComplete() we cannot assume that glog has been
 // initialized, so we need to use RAW_LOG for any message that may be logged
@@ -256,7 +256,7 @@ void singletonPrintDestructionStackTrace(const TypeDescriptor& type) {
 
 [[noreturn]] void singletonThrowNullCreator(const std::type_info& type) {
   auto const msg = fmt::format(
-      FOLLY_FMT_COMPILE(
+      FMT_COMPILE(
           "nullptr_t should be passed if you want {} to be default constructed"),
       folly::StringPiece(demangle(type)));
   throw std::logic_error(msg);

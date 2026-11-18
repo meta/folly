@@ -97,7 +97,7 @@ fb_dirsync_cpp_library(
     apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     deps = [
-        "//folly/portability:fmt_compile",
+        "fbsource//third-party/fmt:fmt",
     ],
     exported_deps = [
         "//folly/portability:sockets",

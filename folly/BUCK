@@ -255,11 +255,11 @@ fb_dirsync_cpp_library(
     headers = ["File.h"],
     use_raw_headers = True,
     deps = [
+        "fbsource//third-party/fmt:fmt",
         "fbsource//third-party/glog:glog",
         ":exception",
         ":file_util",
         ":scope_guard",
-        "//folly/portability:fmt_compile",
         "//folly/portability:sys_file",
     ] + select({
         "DEFAULT": ["//folly/portability:filesystem"],
@@ -2618,7 +2618,6 @@ fb_dirsync_cpp_library(
     shared_under_folly_linkage = True,
     use_raw_headers = True,
     deps = [
-        "//folly/portability:fmt_compile",
         "//folly/system:at_fork",
     ]
     + select({

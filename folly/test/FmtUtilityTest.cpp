@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include <fmt/compile.h>
 #include <fmt/ranges.h>
 #include <gtest/gtest.h>
 
@@ -257,7 +258,7 @@ struct fmt::formatter<DecoratedStringLike> : formatter<fmt::string_view> {
   template <typename Context>
   auto format(DecoratedStringLike const& value, Context& ctx) const {
     ++value.calls;
-    return fmt::format_to(ctx.out(), FOLLY_FMT_COMPILE("[{}]"), value.value);
+    return fmt::format_to(ctx.out(), FMT_COMPILE("[{}]"), value.value);
   }
 };
 
@@ -275,7 +276,7 @@ struct fmt::formatter<NativeMappedString> : formatter<fmt::string_view> {
   auto format(NativeMappedString const& value, Context& ctx) const {
     ++value.calls;
     return fmt::format_to(
-        ctx.out(), FOLLY_FMT_COMPILE("[{}]"), std::string_view(value));
+        ctx.out(), FMT_COMPILE("[{}]"), std::string_view(value));
   }
 };
 
@@ -309,7 +310,7 @@ struct fmt::formatter<ParseConsumesIndex> {
   }
   template <typename Context>
   auto format(ParseConsumesIndex const&, Context& ctx) const {
-    return fmt::format_to(ctx.out(), FOLLY_FMT_COMPILE("parse"));
+    return fmt::format_to(ctx.out(), FMT_COMPILE("parse"));
   }
 };
 
@@ -331,8 +332,7 @@ TEST_F(FmtUtilityTest, formatter_base_size_and_append) {
       EXPECT_EQ(1, sized);
       EXPECT_EQ(1, appended);
       sized = appended = 0;
-      EXPECT_EQ(
-          expected, folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), value));
+      EXPECT_EQ(expected, folly::fmt_sized_format(FMT_COMPILE("{}"), value));
       EXPECT_EQ(1, sized);
       EXPECT_EQ(1, appended);
     }
@@ -345,12 +345,12 @@ TEST_F(FmtUtilityTest, formatter_base_native_calls_append_only) {
   GeneratedText const value("a\0b"sv, 0, sized, appended);
   EXPECT_EQ("[a\0b]"s, fmt::format("{}", value));
   EXPECT_EQ("[a\0b]"s, fmt::format(fmt::runtime("{}"), value));
-  EXPECT_EQ("[a\0b]"s, fmt::format(FOLLY_FMT_COMPILE("{}"), value));
+  EXPECT_EQ("[a\0b]"s, fmt::format(FMT_COMPILE("{}"), value));
   std::string out;
   fmt::format_to(std::back_inserter(out), "{}", value);
   EXPECT_EQ("[a\0b]"s, out);
   std::array<char, 5> raw{};
-  auto end = fmt::format_to(raw.data(), FOLLY_FMT_COMPILE("{}"), value);
+  auto end = fmt::format_to(raw.data(), FMT_COMPILE("{}"), value);
   EXPECT_EQ(raw.data() + raw.size(), end);
   EXPECT_EQ("[a\0b]"s, std::string(raw.data(), raw.size()));
   EXPECT_EQ(0, sized);
@@ -367,7 +367,7 @@ TEST_F(FmtUtilityTest, formatter_base_mixed_and_named_arguments) {
   EXPECT_EQ(
       "001f [text] x    ",
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{:04x} {} {:<{}}"), 31, value, "x", 5));
+          FMT_COMPILE("{:04x} {} {:<{}}"), 31, value, "x", 5));
   EXPECT_EQ(
       "[text] 31",
       folly::fmt_sized_format(
@@ -381,7 +381,7 @@ TEST_F(FmtUtilityTest, formatter_base_mixed_and_named_arguments) {
   EXPECT_EQ(
       "[text] 31",
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{text} {num}"),
+          FMT_COMPILE("{text} {num}"),
           fmt::arg("text", value),
           fmt::arg("num", 31)));
   EXPECT_EQ("[text] [text]", folly::fmt_sized_format("{0} {0}", value));
@@ -394,25 +394,24 @@ TEST_F(FmtUtilityTest, formatter_base_static_named_arguments) {
   unsigned sized = 0;
   unsigned appended = 0;
   GeneratedText const value("text", 4, sized, appended);
-#if FMT_USE_NONTYPE_TEMPLATE_ARGS && !defined(_MSC_VER) && \
-    !(defined(__GNUC__) && !defined(__clang__) && __GNUC__ <= 8)
+#if FMT_USE_NONTYPE_TEMPLATE_ARGS
   EXPECT_EQ(
       "[text] 001f",
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{text} {:04x}"), "text"_a = value, 31));
+          FMT_COMPILE("{text} {:04x}"), "text"_a = value, 31));
   EXPECT_EQ(
       "[text] 001f",
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{text:} {:04x}"), "text"_a = value, 31));
+          FMT_COMPILE("{text:} {:04x}"), "text"_a = value, 31));
 #else
   EXPECT_EQ(
       "[text] 001f",
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{text} {1:04x}"), "text"_a = value, 31));
+          FMT_COMPILE("{text} {1:04x}"), "text"_a = value, 31));
   EXPECT_EQ(
       "[text] 001f",
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{0:} {1:04x}"), "text"_a = value, 31));
+          FMT_COMPILE("{0:} {1:04x}"), "text"_a = value, 31));
 #endif
   EXPECT_EQ(
       "[text] 31",
@@ -431,14 +430,13 @@ TEST_F(FmtUtilityTest, formatter_base_final_and_forwarding_formatters) {
   GeneratedText const value("text", 4, sized, appended);
   FinalText const final{value};
   EXPECT_EQ("[text]", folly::fmt_sized_format("{}", final));
-  EXPECT_EQ("[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), final));
+  EXPECT_EQ("[text]", folly::fmt_sized_format(FMT_COMPILE("{}"), final));
   EXPECT_EQ(2, sized);
   EXPECT_EQ(2, appended);
   sized = appended = 0;
   ForwardedText const forwarded{value};
   EXPECT_EQ("[text]", folly::fmt_sized_format("{}", forwarded));
-  EXPECT_EQ(
-      "[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), forwarded));
+  EXPECT_EQ("[text]", folly::fmt_sized_format(FMT_COMPILE("{}"), forwarded));
   EXPECT_EQ(2, sized);
   EXPECT_EQ(2, appended);
 }
@@ -457,8 +455,8 @@ TEST_F(
       fmt::format(fmt::runtime("x{}"), stringLike),
       folly::fmt_sized_format(fmt::runtime("x{}"), stringLike));
   EXPECT_EQ(
-      fmt::format(FOLLY_FMT_COMPILE("x{}"), stringLike),
-      folly::fmt_sized_format(FOLLY_FMT_COMPILE("x{}"), stringLike));
+      fmt::format(FMT_COMPILE("x{}"), stringLike),
+      folly::fmt_sized_format(FMT_COMPILE("x{}"), stringLike));
   EXPECT_EQ(0, sized);
 }
 
@@ -468,8 +466,7 @@ TEST_F(FmtUtilityTest, formatter_base_size_overflow) {
   GeneratedText const value("text", std::string{}.max_size(), sized, appended);
   EXPECT_THROW(folly::fmt_sized_format("x{}", value), std::length_error);
   EXPECT_THROW(
-      folly::fmt_sized_format(FOLLY_FMT_COMPILE("x{}"), value),
-      std::length_error);
+      folly::fmt_sized_format(FMT_COMPILE("x{}"), value), std::length_error);
   EXPECT_EQ(2, sized);
   EXPECT_EQ(0, appended);
   EXPECT_EQ("[text]", fmt::format("{}", value));
@@ -483,7 +480,7 @@ TEST_F(FmtUtilityTest, formatter_base_invalid_specifiers) {
       folly::fmt_sized_format(fmt::runtime("{:x}"), value), fmt::format_error);
   EXPECT_THROW(
       (void)fmt::format(fmt::runtime("{:x}"), value), fmt::format_error);
-  EXPECT_EQ("[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{:}"), value));
+  EXPECT_EQ("[text]", folly::fmt_sized_format(FMT_COMPILE("{:}"), value));
   EXPECT_EQ(1, sized);
   EXPECT_EQ(1, appended);
 }
@@ -504,18 +501,17 @@ TEST_F(FmtUtilityTest, fmt_sized_format_checked) {
 }
 
 TEST_F(FmtUtilityTest, fmt_sized_format_compiled) {
-  EXPECT_EQ("", folly::fmt_sized_format(FOLLY_FMT_COMPILE("")));
+  EXPECT_EQ("", folly::fmt_sized_format(FMT_COMPILE("")));
   EXPECT_EQ(
       "literal {text}",
-      folly::fmt_sized_format(FOLLY_FMT_COMPILE("literal {{text}}")));
+      folly::fmt_sized_format(FMT_COMPILE("literal {{text}}")));
   EXPECT_EQ(
       "hello world 42",
-      folly::fmt_sized_format(FOLLY_FMT_COMPILE("hello {} {}"), "world", 42));
+      folly::fmt_sized_format(FMT_COMPILE("hello {} {}"), "world", 42));
   EXPECT_EQ(
       "001f 1.25",
-      folly::fmt_sized_format(FOLLY_FMT_COMPILE("{:04x} {:.2f}"), 31, 1.25));
-  EXPECT_EQ(
-      "x    ", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{:<{}}"), "x", 5));
+      folly::fmt_sized_format(FMT_COMPILE("{:04x} {:.2f}"), 31, 1.25));
+  EXPECT_EQ("x    ", folly::fmt_sized_format(FMT_COMPILE("{:<{}}"), "x", 5));
 }
 
 TEST_F(FmtUtilityTest, fmt_sized_format_runtime) {
@@ -534,24 +530,21 @@ TEST_F(FmtUtilityTest, fmt_sized_format_string_lengths) {
     std::string const value(size, 'x');
     auto const expected = "[" + value + "]";
     EXPECT_EQ(expected, folly::fmt_sized_format("[{}]", value));
-    EXPECT_EQ(
-        expected, folly::fmt_sized_format(FOLLY_FMT_COMPILE("[{}]"), value));
+    EXPECT_EQ(expected, folly::fmt_sized_format(FMT_COMPILE("[{}]"), value));
   }
   std::string const value = "a\0b"s;
   EXPECT_EQ("[a\0b]"s, folly::fmt_sized_format("[{}]", value));
-  EXPECT_EQ(
-      "[a\0b]"s, folly::fmt_sized_format(FOLLY_FMT_COMPILE("[{}]"), value));
+  EXPECT_EQ("[a\0b]"s, folly::fmt_sized_format(FMT_COMPILE("[{}]"), value));
 }
 
 TEST_F(FmtUtilityTest, fmt_sized_format_custom_formatter) {
   CustomValue const value("custom");
   EXPECT_EQ("[custom]", folly::fmt_sized_format("[{}]", value));
-  EXPECT_EQ(
-      "[custom]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("[{}]"), value));
+  EXPECT_EQ("[custom]", folly::fmt_sized_format(FMT_COMPILE("[{}]"), value));
   EXPECT_EQ("custom", folly::fmt_sized_format("{}", CustomValue("custom")));
   EXPECT_EQ(
       "custom",
-      folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), CustomValue("custom")));
+      folly::fmt_sized_format(FMT_COMPILE("{}"), CustomValue("custom")));
 }
 
 TEST_F(FmtUtilityTest, fmt_sized_format_named_arguments) {
@@ -559,8 +552,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_named_arguments) {
   auto const named = fmt::arg("name", value);
   EXPECT_EQ("custom", folly::fmt_sized_format("{name}", named));
   EXPECT_EQ("custom", folly::fmt_sized_format(fmt::runtime("{name}"), named));
-  EXPECT_EQ(
-      "custom", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{name}"), named));
+  EXPECT_EQ("custom", folly::fmt_sized_format(FMT_COMPILE("{name}"), named));
 }
 
 TEST_F(FmtUtilityTest, fmt_sized_format_views) {
@@ -568,7 +560,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_views) {
   auto const view = fmt::join(values, ", ");
   EXPECT_EQ("1, 2, 3", folly::fmt_sized_format("{}", view));
   EXPECT_EQ("1, 2, 3", folly::fmt_sized_format(fmt::runtime("{}"), view));
-  EXPECT_EQ("1, 2, 3", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), view));
+  EXPECT_EQ("1, 2, 3", folly::fmt_sized_format(FMT_COMPILE("{}"), view));
   EXPECT_EQ("1, 2, 3", folly::fmt_sized_format("{}", fmt::join(values, ", ")));
 }
 
@@ -583,8 +575,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_preserves_arguments) {
   EXPECT_EQ(expected, value);
   EXPECT_EQ(
       expected,
-      folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{}"), std::move(value))); // NOLINT
+      folly::fmt_sized_format(FMT_COMPILE("{}"), std::move(value))); // NOLINT
   // NOLINTNEXTLINE
   EXPECT_EQ(expected, value);
 }
@@ -621,17 +612,17 @@ TEST_F(FmtUtilityTest, fmt_sized_format_string_specs) {
         fmt::format("[{}] [{:>{}.{}}]", value, value, 12, 2),
         folly::fmt_sized_format("[{}] [{:>{}.{}}]", value, value, 12, 2));
     EXPECT_EQ(
-        fmt::format(FOLLY_FMT_COMPILE("[{}] [{:>{}.{}}]"), value, value, 12, 2),
+        fmt::format(FMT_COMPILE("[{}] [{:>{}.{}}]"), value, value, 12, 2),
         folly::fmt_sized_format(
-            FOLLY_FMT_COMPILE("[{}] [{:>{}.{}}]"), value, value, 12, 2));
+            FMT_COMPILE("[{}] [{:>{}.{}}]"), value, value, 12, 2));
     std::string_view const view(value);
     EXPECT_EQ(
         fmt::format("[{}] [{:>{}.{}}]", view, view, 12, 1),
         folly::fmt_sized_format("[{}] [{:>{}.{}}]", view, view, 12, 1));
     EXPECT_EQ(
-        fmt::format(FOLLY_FMT_COMPILE("[{}] [{:>{}.{}}]"), view, view, 12, 1),
+        fmt::format(FMT_COMPILE("[{}] [{:>{}.{}}]"), view, view, 12, 1),
         folly::fmt_sized_format(
-            FOLLY_FMT_COMPILE("[{}] [{:>{}.{}}]"), view, view, 12, 1));
+            FMT_COMPILE("[{}] [{:>{}.{}}]"), view, view, 12, 1));
   }
   std::string const value = "abc";
   EXPECT_THROW(
@@ -652,9 +643,8 @@ TEST_F(FmtUtilityTest, fmt_sized_format_string_like_types) {
         fmt::format("[{}][{:>12.1}]", value, value),
         folly::fmt_sized_format("[{}][{:>12.1}]", value, value));
     EXPECT_EQ(
-        fmt::format(FOLLY_FMT_COMPILE("[{}][{:>12.1}]"), value, value),
-        folly::fmt_sized_format(
-            FOLLY_FMT_COMPILE("[{}][{:>12.1}]"), value, value));
+        fmt::format(FMT_COMPILE("[{}][{:>12.1}]"), value, value),
+        folly::fmt_sized_format(FMT_COMPILE("[{}][{:>12.1}]"), value, value));
     EXPECT_EQ(
         fmt::format("[{text}]", fmt::arg("text", value)),
         folly::fmt_sized_format("[{text}]", fmt::arg("text", value)));
@@ -679,8 +669,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_decorated_string_like) {
     EXPECT_EQ("[text]", folly::fmt_sized_format(fmt::runtime("{}"), value));
     EXPECT_EQ(2, value.calls);
     value.calls = 0;
-    EXPECT_EQ(
-        "[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), value));
+    EXPECT_EQ("[text]", folly::fmt_sized_format(FMT_COMPILE("{}"), value));
     EXPECT_EQ(2, value.calls);
   };
   check(DecoratedStringLike{"text"});
@@ -692,7 +681,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_conversion_only_string) {
   auto const view = std::string_view(value);
   EXPECT_EQ("[text]", folly::fmt_sized_format("[{}]", view));
   EXPECT_EQ("[text]", folly::fmt_sized_format(fmt::runtime("[{}]"), view));
-  EXPECT_EQ("[text]", folly::fmt_sized_format(FOLLY_FMT_COMPILE("[{}]"), view));
+  EXPECT_EQ("[text]", folly::fmt_sized_format(FMT_COMPILE("[{}]"), view));
 
   auto const check = []<typename T>(T const& arg) {
     if constexpr (fmt::is_formattable<T>::value) {
@@ -738,10 +727,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_mixed_string_projection) {
   EXPECT_EQ(
       "text custom 1,2,3",
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{} {} {}"),
-          text,
-          custom,
-          fmt::join(numbers, ",")));
+          FMT_COMPILE("{} {} {}"), text, custom, fmt::join(numbers, ",")));
 }
 
 TEST_F(FmtUtilityTest, fmt_sized_format_named_strings) {
@@ -757,9 +743,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_named_strings) {
   EXPECT_EQ(
       expected,
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("[{0}] {1:04x}"),
-          "text"_a = value,
-          "number"_a = 31));
+          FMT_COMPILE("[{0}] {1:04x}"), "text"_a = value, "number"_a = 31));
   EXPECT_EQ(
       fmt::format(
           fmt::runtime("{text:>{width}.{precision}}"),
@@ -784,13 +768,13 @@ TEST_F(FmtUtilityTest, fmt_sized_format_preserves_context_arguments) {
     EXPECT_EQ(
         value,
         folly::fmt_sized_format(
-            FOLLY_FMT_COMPILE("{1:}"), value, SiblingString{false}));
+            FMT_COMPILE("{1:}"), value, SiblingString{false}));
     EXPECT_EQ(
         value, folly::fmt_sized_format("{1:}", value, ContextAwareSizedText{}));
     EXPECT_EQ(
         value,
         folly::fmt_sized_format(
-            FOLLY_FMT_COMPILE("{1:}"), value, ContextAwareSizedText{}));
+            FMT_COMPILE("{1:}"), value, ContextAwareSizedText{}));
     SiblingString const readers[] = {{false}};
     EXPECT_EQ(
         fmt::format("{1}", value, readers),
@@ -812,11 +796,11 @@ TEST_F(FmtUtilityTest, fmt_sized_format_preserves_context_arguments) {
             fmt::arg("reader", SiblingString{true})));
     EXPECT_EQ(
         fmt::format(
-            FOLLY_FMT_COMPILE("{1:}"),
+            FMT_COMPILE("{1:}"),
             fmt::arg("source", value),
             fmt::arg("reader", SiblingString{true})),
         folly::fmt_sized_format(
-            FOLLY_FMT_COMPILE("{1:}"),
+            FMT_COMPILE("{1:}"),
             fmt::arg("source", value),
             fmt::arg("reader", SiblingString{true})));
     auto const expected = fmt::format(
@@ -988,8 +972,8 @@ TEST_F(FmtUtilityTest, fmt_sized_format_generic_pointer) {
         fmt::format(fmt::runtime("{:>24p}"), pointer),
         folly::fmt_sized_format(fmt::runtime("{:>24p}"), pointer));
     EXPECT_EQ(
-        fmt::format(FOLLY_FMT_COMPILE("{:p}"), pointer),
-        folly::fmt_sized_format(FOLLY_FMT_COMPILE("{:p}"), pointer));
+        fmt::format(FMT_COMPILE("{:p}"), pointer),
+        folly::fmt_sized_format(FMT_COMPILE("{:p}"), pointer));
   };
   check(static_cast<void const*>(&number));
   check(null);
@@ -999,8 +983,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_generic_pointer) {
 TEST_F(FmtUtilityTest, fmt_sized_format_bulk_copy_dispatch) {
   std::string const value(1024, 'x');
   BulkOutput compiled;
-  folly::detail::fmt_format_to(
-      compiled, FOLLY_FMT_COMPILE("{}{}"), value, value);
+  folly::detail::fmt_format_to(compiled, FMT_COMPILE("{}{}"), value, value);
   EXPECT_EQ(value + value, compiled.value);
   EXPECT_EQ(0, compiled.chars);
   EXPECT_GT(compiled.ranges, 0);
@@ -1052,14 +1035,13 @@ TEST_F(FmtUtilityTest, fmt_sized_format_output_sink) {
   EXPECT_EQ(
       expected,
       folly::fmt_sized_format(
-          FOLLY_FMT_COMPILE("{:+018d}|{:#010x}|{:8.3f}|{:>5}"),
+          FMT_COMPILE("{:+018d}|{:#010x}|{:8.3f}|{:>5}"),
           -123,
           0x12ab,
           1.25,
           true));
   std::string_view const empty;
-  EXPECT_EQ(
-      "x", folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}x{}"), empty, empty));
+  EXPECT_EQ("x", folly::fmt_sized_format(FMT_COMPILE("{}x{}"), empty, empty));
   EXPECT_EQ("x", folly::fmt_sized_format("{}x{}", empty, empty));
   std::string const large(4096, 'x');
   EXPECT_EQ(large + large, folly::fmt_sized_format("{}{}", large, large));
@@ -1073,8 +1055,7 @@ TEST_F(FmtUtilityTest, fmt_sized_format_size_mismatch) {
       EXPECT_EQ(second, folly::fmt_sized_format("{}", value));
       EXPECT_EQ(2, value.calls);
       value.calls = 0;
-      EXPECT_EQ(
-          second, folly::fmt_sized_format(FOLLY_FMT_COMPILE("{}"), value));
+      EXPECT_EQ(second, folly::fmt_sized_format(FMT_COMPILE("{}"), value));
       EXPECT_EQ(2, value.calls);
       value.calls = 0;
       EXPECT_EQ(second, folly::fmt_sized_format(fmt::runtime("{}"), value));

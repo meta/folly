@@ -255,7 +255,6 @@ fb_dirsync_cpp_benchmark(
         "//folly:benchmark",
         "//folly/lang:keep",
         "//folly/lang:to_ascii",
-        "//folly/portability:fmt_compile",
     ],
 )
 
