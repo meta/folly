@@ -69,9 +69,7 @@ TEST(AtomicSharedPtr, exchange) {
 }
 
 TEST(AtomicSharedPtr, PointerBlockVarieties) {
-  // shared_ptr(new T) control blocks must be read directly rather than
-  // wrapped: wrapping breaks owner comparison, so a compare_exchange
-  // against the original owner only succeeds when the block is read.
+  // Allocation and deleter choices preserve shared-pointer CAS identity.
   atomic_shared_ptr<int> asp;
   auto check = [&](std::shared_ptr<int> s, int expect, bool direct) {
     asp.store(s);
@@ -89,15 +87,13 @@ TEST(AtomicSharedPtr, PointerBlockVarieties) {
   // NOLINTNEXTLINE(facebook-hte-SharedPtrFromNew)
   check(std::shared_ptr<int>(new int(1)), 1, true);
   check(std::shared_ptr<int>(new int(2), std::default_delete<int>()), 2, true);
-  // Whether a block with a stateful deleter is read directly or wrapped
-  // depends on the library's block layout; either way the value and the
-  // deleter must survive.
+  // Stateful deleters retain their original pointer and ownership.
   int tag = 0;
   auto deleter = [&tag](int* p) {
     ++tag;
     delete p;
   };
-  check(std::shared_ptr<int>(new int(3), deleter), 3, false);
+  check(std::shared_ptr<int>(new int(3), deleter), 3, true);
   EXPECT_EQ(tag, 1);
 }
 
@@ -133,8 +129,7 @@ TEST(AtomicSharedPtr, BlockDecodingIgnoresT) {
 #endif
 
 TEST(AtomicSharedPtr, OverAlignedMakeShared) {
-  // An over-aligned make_shared object does not sit right after the control
-  // block base; the store path must notice and wrap it.
+  // Over-aligned objects retain their original pointer and ownership.
   struct alignas(64) OverAligned {
     int value = 7;
   };
@@ -143,6 +138,10 @@ TEST(AtomicSharedPtr, OverAlignedMakeShared) {
   asp.store(s);
   EXPECT_EQ(asp.load().get(), s.get());
   EXPECT_EQ(asp.load()->value, 7);
+  auto desired = std::make_shared<OverAligned>();
+  desired->value = 11;
+  EXPECT_TRUE(asp.compare_exchange_strong(s, desired));
+  EXPECT_EQ(asp.load()->value, 11);
 }
 
 TEST(AtomicSharedPtr, AbstractType) {
@@ -153,9 +152,7 @@ TEST(AtomicSharedPtr, AbstractType) {
   struct Derived : Base {
     int f() const override { return 7; }
   };
-  // Abstract T can never name a make_shared block; stores must still work
-  // and loads must unwrap. No compare_exchange here: wrapped values never
-  // compare equal (pre-existing, both STLs).
+  // Base pointers retain ownership of their concrete derived objects.
   atomic_shared_ptr<Base> asp;
   auto s = std::shared_ptr<Base>(std::make_shared<Derived>());
   asp.store(s);
@@ -165,6 +162,8 @@ TEST(AtomicSharedPtr, AbstractType) {
   auto prev = asp.exchange(s2);
   EXPECT_EQ(prev->f(), 7);
   EXPECT_EQ(asp.load()->f(), 7);
+  EXPECT_TRUE(asp.compare_exchange_strong(s2, s));
+  EXPECT_EQ(asp.load().get(), s.get());
 }
 
 TEST(AtomicSharedPtr, foo) {
@@ -254,9 +253,7 @@ TEST(AtomicSharedPtr, ConstOfMakeSharedCompareExchange) {
   EXPECT_EQ(*atom.load(), 100);
 }
 
-// Values stored through the aliased-wrapper path (here: an aliasing
-// shared_ptr) must still compare equal to themselves in compare_exchange, and
-// a failed comparison must not drop a reference.
+// Aliased shared pointers preserve their pointer and ownership in CAS.
 TEST(AtomicSharedPtr, AliasedCompareExchange) {
   auto owner = std::make_shared<std::pair<int, int>>(0, 0);
   atomic_shared_ptr<int> atom(std::shared_ptr<int>(owner, &owner->second));
@@ -428,6 +425,80 @@ TEST(AtomicSharedPtr, ArrayStoredPointer) {
   check(
       std::shared_ptr<const int[]>(new int[2]{7, 11}), // NOLINT
       std::shared_ptr<const int[]>(new int[2]{})); // NOLINT
+}
+
+TEST(AtomicSharedPtr, SameOwnerDifferentPointerCompareExchange) {
+  auto owner = std::make_shared<std::pair<int, int>>(7, 11);
+  auto first = std::shared_ptr<int>(owner, &owner->first);
+  auto second = std::shared_ptr<int>(owner, &owner->second);
+  atomic_shared_ptr<int> ptr(first);
+  auto expected = second;
+  auto desired = std::make_shared<int>(13);
+  EXPECT_FALSE(ptr.compare_exchange_strong(expected, desired));
+  EXPECT_EQ(expected.get(), first.get());
+  EXPECT_FALSE(expected.owner_before(first));
+  EXPECT_FALSE(first.owner_before(expected));
+  EXPECT_EQ(ptr.load().get(), first.get());
+}
+
+TEST(AtomicSharedPtr, SamePointerDifferentOwnerCompareExchange) {
+  int value = 7;
+  auto first = std::shared_ptr<int>(&value, [](int*) {});
+  auto second = std::shared_ptr<int>(&value, [](int*) {});
+  atomic_shared_ptr<int> ptr(second);
+  auto expected = first;
+  auto desired = std::make_shared<int>(13);
+  EXPECT_FALSE(ptr.compare_exchange_strong(expected, desired));
+  EXPECT_EQ(expected.get(), &value);
+  EXPECT_FALSE(expected.owner_before(second));
+  EXPECT_FALSE(second.owner_before(expected));
+  EXPECT_EQ(ptr.load().get(), &value);
+  expected = first;
+  EXPECT_FALSE(ptr.compare_exchange_weak(expected, desired));
+  EXPECT_FALSE(expected.owner_before(second));
+  EXPECT_FALSE(second.owner_before(expected));
+}
+
+TEST(AtomicSharedPtr, OwningNullCompareExchange) {
+  auto owner = std::make_shared<int>(7);
+  auto owning_null = std::shared_ptr<int>(owner, nullptr);
+  atomic_shared_ptr<int> ptr(owning_null);
+  std::shared_ptr<int> expected;
+  EXPECT_FALSE(ptr.compare_exchange_strong(expected, {}));
+  EXPECT_EQ(expected.get(), nullptr);
+  EXPECT_FALSE(expected.owner_before(owner));
+  EXPECT_FALSE(owner.owner_before(expected));
+  EXPECT_TRUE(ptr.compare_exchange_strong(expected, {}));
+  EXPECT_EQ(ptr.load().get(), nullptr);
+  EXPECT_EQ(ptr.load().use_count(), 0);
+  expected = owning_null;
+  EXPECT_FALSE(ptr.compare_exchange_strong(expected, {}));
+  EXPECT_EQ(expected.use_count(), 0);
+  owning_null.reset();
+  EXPECT_EQ(owner.use_count(), 1);
+}
+
+TEST(AtomicSharedPtr, OwnerlessCompareExchangeAndExchange) {
+  int value = 7;
+  auto ownerless = std::shared_ptr<int>(std::shared_ptr<int>{}, &value);
+  atomic_shared_ptr<int> ptr(ownerless);
+  std::shared_ptr<int> expected;
+  EXPECT_FALSE(ptr.compare_exchange_strong(expected, {}));
+  EXPECT_EQ(expected.get(), &value);
+  EXPECT_EQ(expected.use_count(), 0);
+  auto old = ptr.exchange({});
+  EXPECT_EQ(old.get(), &value);
+  EXPECT_EQ(old.use_count(), 0);
+  EXPECT_FALSE(ptr.compare_exchange_strong(expected, ownerless));
+  EXPECT_EQ(expected.get(), nullptr);
+  EXPECT_EQ(expected.use_count(), 0);
+  EXPECT_TRUE(ptr.compare_exchange_strong(expected, ownerless));
+  expected = ownerless;
+  EXPECT_TRUE(ptr.compare_exchange_strong(expected, {}));
+  expected.reset();
+  EXPECT_TRUE(ptr.compare_exchange_strong(expected, {}));
+  ptr.store(std::shared_ptr<int>(std::shared_ptr<int>{}, nullptr));
+  EXPECT_TRUE(ptr.compare_exchange_strong(expected, {}));
 }
 
 #if FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED

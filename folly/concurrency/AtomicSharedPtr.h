@@ -161,7 +161,7 @@ class atomic_shared_ptr {
     PackedPtr oldptr, expectedptr;
 
     oldptr = takeOwnedBase(success);
-    if (!owners_eq(oldptr, CountedDetail::get_counted_base(expected))) {
+    if (!owners_eq(oldptr, expected)) {
       expected = get_shared_ptr(oldptr, false);
       release_external(newptr);
       return false;
@@ -214,7 +214,7 @@ class atomic_shared_ptr {
       if (compare_exchange_weak(expected, n, success, failure)) {
         return true;
       }
-    } while (local_expected == expected);
+    } while (values_eq(local_expected, expected));
 
     return false;
   }
@@ -245,6 +245,11 @@ class atomic_shared_ptr {
     return order == std::memory_order_seq_cst
         ? order
         : std::memory_order_acq_rel;
+  }
+  static bool values_eq(const SharedPtr& a, const SharedPtr& b) {
+    return a.get() == b.get() &&
+        CountedDetail::get_counted_base(a) ==
+        CountedDetail::get_counted_base(b);
   }
   static std::uint16_t get_local_count(const PackedPtr& p) {
     return p.extra() & ~ALIASED_PTR;
@@ -308,18 +313,22 @@ class atomic_shared_ptr {
     ptr_.store(data);
   }
 
-  // Check pointer equality considering wrapped aliased pointers.
-  bool owners_eq(PackedPtr& p1, BasePtr* p2) {
-    bool aliased1 = p1.extra() & ALIASED_PTR;
-    if (aliased1) {
-      // p1 owns a wrapper around the stored shared_ptr: compare that
-      // shared_ptr's owner, reading it in place. The caller's local count keeps
-      // the wrapper alive, and no reference may be taken or dropped here.
-      const auto* p1a =
-          CountedDetail::template get_shared_ptr<SharedPtr>(p1.get());
-      return CountedDetail::get_counted_base(*p1a) == p2;
+  bool owners_eq(const PackedPtr& p, const SharedPtr& expected) {
+    if (p.extra() & ALIASED_PTR) {
+      // The caller's local count keeps the wrapper alive. Read the stored
+      // shared_ptr in place without taking or dropping a reference.
+      const auto* wrapped =
+          CountedDetail::template get_shared_ptr<SharedPtr>(p.get());
+      return values_eq(*wrapped, expected);
     }
-    return p1.get() == p2;
+    auto* base = CountedDetail::get_counted_base(expected);
+    if (p.get() != base) {
+      return false;
+    }
+    if (!base) {
+      return expected.get() == nullptr;
+    }
+    return CountedDetail::template get_shared_ptr<T>(base) == expected.get();
   }
 
   SharedPtr get_shared_ptr(const PackedPtr& p, bool inc = true) const {
