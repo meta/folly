@@ -195,18 +195,6 @@ IoUring::IoUring(
       maxSubmit_((maxSubmit <= capacity) ? maxSubmit : capacity),
       options_(options) {
   ::memset(&ioRing_, 0, sizeof(ioRing_));
-  ::memset(&params_, 0, sizeof(params_));
-
-  if (options_.sqe128) {
-    params_.flags |= IORING_SETUP_SQE128;
-  }
-
-  if (options.cqe32) {
-    params_.flags |= IORING_SETUP_CQE32;
-  }
-
-  params_.flags |= IORING_SETUP_CQSIZE;
-  params_.cq_entries = roundUpToNextPowerOfTwo(capacity_);
 
   // we need to call initializeContext() in the constructor
   // since we have code that relies on registering the pollFd_
@@ -250,8 +238,18 @@ void IoUring::initializeContext() {
   if (!init_.load(std::memory_order_acquire)) {
     std::lock_guard lock(initMutex_);
     if (!init_.load(std::memory_order_relaxed)) {
+      struct io_uring_params params{};
+      if (options_.sqe128) {
+        params.flags |= IORING_SETUP_SQE128;
+      }
+      if (options_.cqe32) {
+        params.flags |= IORING_SETUP_CQE32;
+      }
+      params.flags |= IORING_SETUP_CQSIZE;
+      params.cq_entries = roundUpToNextPowerOfTwo(capacity_);
+
       int rc = ::io_uring_queue_init_params(
-          roundUpToNextPowerOfTwo(maxSubmit_), &ioRing_, &params_);
+          roundUpToNextPowerOfTwo(maxSubmit_), &ioRing_, &params);
       checkKernelError(rc, "IoUring: io_uring_queue_init_params failed");
       DCHECK_GT(ioRing_.ring_fd, 0);
       if (pollMode_ == POLLABLE) {

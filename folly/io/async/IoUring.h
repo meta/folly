@@ -167,7 +167,6 @@ class IoUring : public AsyncBase {
 
   size_t maxSubmit_;
   IoUringOp::Options options_;
-  struct io_uring_params params_;
   struct io_uring ioRing_;
   mutable SharedMutex submitMutex_;
 };
