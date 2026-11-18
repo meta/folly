@@ -304,15 +304,16 @@ IoUringBackend::SocketPair::~SocketPair() {
 }
 
 IoUringBackend::FdRegistry::FdRegistry(io_uring& ioRing, uint32_t n)
-    : ioRing_(ioRing), files_(n, -1), inUse_(n), records_(n) {
+    : ioRing_(ioRing), files_(n, -1), records_(n) {
   if (n > std::numeric_limits<int>::max()) {
     throw std::runtime_error("too many registered files");
   }
 }
 
 int IoUringBackend::FdRegistry::init() {
-  if (inUse_) {
-    int ret = ::io_uring_register_files(&ioRing_, files_.data(), inUse_);
+  if (!files_.empty()) {
+    int ret = ::io_uring_register_files(
+        &ioRing_, files_.data(), static_cast<unsigned int>(files_.size()));
 
     if (!ret) {
       // build and set the free list head if we succeed
@@ -321,7 +322,7 @@ int IoUringBackend::FdRegistry::init() {
         free_.push_front(records_[i]);
       }
     } else {
-      LOG(ERROR) << "io_uring_register_files(" << inUse_ << ") "
+      LOG(ERROR) << "io_uring_register_files(" << files_.size() << ") "
                  << "failed errno = " << errno << ":\""
                  << folly::errnoStr(errno) << "\" " << this;
     }
@@ -475,7 +476,6 @@ void IoUringBackend::processSignalReadIoSqe(
 
 IoUringBackend::IoUringBackend(Options options)
     : options_(std::move(options)),
-      numEntries_(options_.capacity),
       fdRegistry_(ioRing_, options_.registeredFds) {
   // create the timer fd
   timerFd_ = ::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
@@ -537,7 +537,6 @@ IoUringBackend::IoUringBackend(Options options)
                   << " retrying with capacity = " << options_.capacity;
 
         params_.cq_entries = options_.capacity;
-        numEntries_ = options_.capacity;
         continue;
       }
 
@@ -564,8 +563,7 @@ IoUringBackend::IoUringBackend(Options options)
               << "\" ret = " << ret << " fd = " << ioRing_.ring_fd;
   }
 
-  numEntries_ *= 2;
-  poolAllocRemaining_ = numEntries_;
+  poolAllocRemaining_ = options_.capacity * 2;
 
   // timer entry
   timerEntry_ = std::make_unique<IoSqe>(this, false, true /*persist*/);

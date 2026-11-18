@@ -394,7 +394,6 @@ class IoUringBackend : public EventBaseBackendBase {
     bool err_{false};
     io_uring& ioRing_;
     std::vector<int> files_;
-    uint32_t inUse_;
     std::vector<IoUringFdRegistrationRecord> records_;
     IoUringFdRegistrationRecord::FreeList free_;
   };
@@ -826,7 +825,6 @@ class IoUringBackend : public EventBaseBackendBase {
   void initSubmissionLinked();
 
   Options options_;
-  uint32_t numEntries_;
   std::unique_ptr<IoSqe> timerEntry_;
   std::unique_ptr<IoSqe> signalReadEntry_;
   // Holds only IoSqe objects.
