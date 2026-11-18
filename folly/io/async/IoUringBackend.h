@@ -418,7 +418,6 @@ class IoUringBackend : public EventBaseBackendBase {
     const bool poolAlloc_;
     const bool persist_;
     Event* event_{nullptr};
-    IoUringFdRegistrationRecord* fdRecord_{nullptr};
     size_t useCount_{0};
     int res_;
 
@@ -442,56 +441,6 @@ class IoUringBackend : public EventBaseBackendBase {
     void prepPollAdd(io_uring_sqe* sqe, int fd, uint32_t events) noexcept {
       CHECK(sqe);
       ::io_uring_prep_poll_add(sqe, fd, events);
-      ::io_uring_sqe_set_data(sqe, this);
-    }
-
-    void prepRead(
-        io_uring_sqe* sqe,
-        int fd,
-        const iovec* iov,
-        off_t offset,
-        bool registerFd) noexcept {
-      prepUtilFunc(
-          ::io_uring_prep_read,
-          sqe,
-          registerFd,
-          fd,
-          iov->iov_base,
-          static_cast<unsigned int>(iov->iov_len),
-          offset);
-    }
-
-    void prepWrite(
-        io_uring_sqe* sqe,
-        int fd,
-        const iovec* iov,
-        off_t offset,
-        bool registerFd) noexcept {
-      prepUtilFunc(
-          ::io_uring_prep_write,
-          sqe,
-          registerFd,
-          fd,
-          iov->iov_base,
-          static_cast<unsigned int>(iov->iov_len),
-          offset);
-    }
-
-    template <typename Fn, typename... Args>
-    void prepUtilFunc(
-        Fn fn, io_uring_sqe* sqe, bool registerFd, int fd, Args... args) {
-      CHECK(sqe);
-      if (registerFd && !fdRecord_) {
-        fdRecord_ = backend_->registerFd(fd);
-      }
-
-      if (fdRecord_) {
-        fn(sqe, fdRecord_->idx_, std::forward<Args>(args)...);
-        sqe->flags |= IOSQE_FIXED_FILE;
-      } else {
-        fn(sqe, fd, std::forward<Args>(args)...);
-      }
-
       ::io_uring_sqe_set_data(sqe, this);
     }
 
@@ -542,7 +491,15 @@ class IoUringBackend : public EventBaseBackendBase {
     using ReadWriteIoSqe::ReadWriteIoSqe;
 
     void processSubmit(io_uring_sqe* sqe) noexcept override {
-      prepRead(sqe, fd_, iov_.data(), offset_, false);
+      CHECK(sqe);
+      const auto& iov = iov_.front();
+      ::io_uring_prep_read(
+          sqe,
+          fd_,
+          iov.iov_base,
+          static_cast<unsigned int>(iov.iov_len),
+          offset_);
+      ::io_uring_sqe_set_data(sqe, this);
     }
   };
 
@@ -550,7 +507,15 @@ class IoUringBackend : public EventBaseBackendBase {
     using ReadWriteIoSqe::ReadWriteIoSqe;
 
     void processSubmit(io_uring_sqe* sqe) noexcept override {
-      prepWrite(sqe, fd_, iov_.data(), offset_, false);
+      CHECK(sqe);
+      const auto& iov = iov_.front();
+      ::io_uring_prep_write(
+          sqe,
+          fd_,
+          iov.iov_base,
+          static_cast<unsigned int>(iov.iov_len),
+          offset_);
+      ::io_uring_sqe_set_data(sqe, this);
     }
   };
 

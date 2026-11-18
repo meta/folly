@@ -907,12 +907,6 @@ IoUringBackend::IoSqe* IoUringBackend::allocIoSqe() {
 }
 
 void IoUringBackend::releaseIoSqe(IoUringBackend::IoSqe* aioIoSqe) noexcept {
-  // unregister the file dsecriptor record
-  if (aioIoSqe->fdRecord_) {
-    unregisterFd(aioIoSqe->fdRecord_);
-    aioIoSqe->fdRecord_ = nullptr;
-  }
-
   if (aioIoSqe->poolAlloc_) [[likely]] {
     aioIoSqe->event_ = nullptr;
     freeList_.push_front(*aioIoSqe);
