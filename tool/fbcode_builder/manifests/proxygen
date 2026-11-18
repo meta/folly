@@ -36,3 +36,4 @@ googletest
 [shipit.pathmap]
 fbcode/proxygen/public_tld = .
 fbcode/proxygen = proxygen
+xplat/pki/ossdata/export_proxygen = proxygen/lib/ssl/trustbundle
