@@ -1877,14 +1877,15 @@ void IoUringBackend::queueWritev(
 }
 
 void IoUringBackend::queueFsync(int fd, FileOpCallback&& cb) {
-  queueFsync(fd, FSyncFlags::FLAGS_FSYNC, std::move(cb));
+  queueFsync(fd, /*flags=*/0, std::move(cb));
 }
 
 void IoUringBackend::queueFdatasync(int fd, FileOpCallback&& cb) {
-  queueFsync(fd, FSyncFlags::FLAGS_FDATASYNC, std::move(cb));
+  queueFsync(fd, IORING_FSYNC_DATASYNC, std::move(cb));
 }
 
-void IoUringBackend::queueFsync(int fd, FSyncFlags flags, FileOpCallback&& cb) {
+void IoUringBackend::queueFsync(
+    int fd, unsigned int flags, FileOpCallback&& cb) {
   auto* ioSqe = new FSyncIoSqe(this, fd, flags, std::move(cb));
   ioSqe->backendCb_ = processFileOpCB;
 

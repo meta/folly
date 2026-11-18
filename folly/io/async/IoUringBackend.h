@@ -546,32 +546,20 @@ class IoUringBackend : public EventBaseBackendBase {
     }
   };
 
-  enum class FSyncFlags {
-    FLAGS_FSYNC = 0,
-    FLAGS_FDATASYNC = 1,
-  };
-
   struct FSyncIoSqe : public FileOpIoSqe {
     FSyncIoSqe(
-        IoUringBackend* backend, int fd, FSyncFlags flags, FileOpCallback&& cb)
+        IoUringBackend* backend,
+        int fd,
+        unsigned int flags,
+        FileOpCallback&& cb)
         : FileOpIoSqe(backend, fd, std::move(cb)), flags_(flags) {}
 
     void processSubmit(io_uring_sqe* sqe) noexcept override {
-      unsigned int fsyncFlags = 0;
-      switch (flags_) {
-        case FSyncFlags::FLAGS_FSYNC:
-          fsyncFlags = 0;
-          break;
-        case FSyncFlags::FLAGS_FDATASYNC:
-          fsyncFlags = IORING_FSYNC_DATASYNC;
-          break;
-      }
-
-      ::io_uring_prep_fsync(sqe, fd_, fsyncFlags);
+      ::io_uring_prep_fsync(sqe, fd_, flags_);
       ::io_uring_sqe_set_data(sqe, this);
     }
 
-    FSyncFlags flags_;
+    unsigned int flags_;
   };
 
   struct FOpenAtIoSqe : public FileOpIoSqe {
@@ -773,7 +761,7 @@ class IoUringBackend : public EventBaseBackendBase {
   int submitBusyCheck(uint32_t num, WaitForEventsMode waitForEvents) noexcept;
   int submitEager();
 
-  void queueFsync(int fd, FSyncFlags flags, FileOpCallback&& cb);
+  void queueFsync(int fd, unsigned int flags, FileOpCallback&& cb);
 
   void processFileOp(IoSqe* ioSqe, int res) noexcept;
 
