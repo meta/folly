@@ -19,7 +19,8 @@ As an open-source library, there are a few necessary requirements:
 1. Define symbols in namespace `folly`. Prefix macros with `FOLLY_`, and C symbols with `folly_`.
 2. Put library-private symbols in subnamespace `detail` (e.g. `folly::detail::XYZ`)
 3. Restrict dependencies to (a) the standard library, and (b) other Folly libraries.
-   Some exceptions apply, such as select Boost components.
+   Do not add new Boost uses, and declare each third-party dependency in every target whose own
+   sources include it.
 4. Be portable. Notably:
    - Use `throw_exception` from `folly/lang/Exception.h` instead of `throw`
 
