@@ -18,7 +18,9 @@
 #include <folly/channels/test/ChannelTestUtil.h>
 #include <folly/channels/testing/MockNextCallback.h>
 #include <folly/coro/BlockingWait.h>
+#include <folly/coro/Task.h>
 #include <folly/executors/ManualExecutor.h>
+#include <folly/io/async/Request.h>
 #include <folly/portability/GTest.h>
 
 namespace folly {
@@ -259,6 +261,89 @@ TEST(Channel, CancelNextWithoutClose) {
       folly::OperationCancelled);
 
   EXPECT_EQ(folly::coro::blockingWait(receiver.next()).value(), 2);
+}
+
+TEST(Channel, BufferedValuesAndCloseAreReadyInOrder) {
+  auto [receiver, sender] = Channel<int>::create();
+  sender.write(1);
+  sender.write(2);
+  sender.write(3);
+  std::move(sender).close();
+
+  EXPECT_EQ(folly::coro::blockingWait(receiver.next()), 1);
+  for (int expected : {2, 3}) {
+    auto awaiter = receiver.next().operator co_await();
+    ASSERT_TRUE(awaiter.await_ready());
+    EXPECT_EQ(awaiter.await_resume(), expected);
+  }
+  auto closeAwaiter = receiver.next().operator co_await();
+  ASSERT_TRUE(closeAwaiter.await_ready());
+  EXPECT_EQ(closeAwaiter.await_resume(), std::nullopt);
+}
+
+TEST(Channel, BufferedExceptionIsReadyAfterValues) {
+  auto [receiver, sender] = Channel<int>::create();
+  sender.write(1);
+  std::move(sender).close(std::runtime_error("closed with error"));
+
+  EXPECT_EQ(folly::coro::blockingWait(receiver.next()), 1);
+  auto awaiter = receiver.next().operator co_await();
+  ASSERT_TRUE(awaiter.await_ready());
+  EXPECT_THROW(awaiter.await_resume(), std::runtime_error);
+}
+
+TEST(Channel, CancellationAfterBufferedReadiness) {
+  for (bool closeOnCancel : {false, true}) {
+    SCOPED_TRACE(closeOnCancel);
+    auto [receiver, sender] = Channel<int>::create();
+    sender.write(1);
+    sender.write(2);
+    EXPECT_EQ(folly::coro::blockingWait(receiver.next()), 1);
+
+    folly::CancellationSource cancellationSource;
+    auto awaiter =
+        co_withCancellation(
+            cancellationSource.getToken(), receiver.next(closeOnCancel))
+            .operator co_await();
+    ASSERT_TRUE(awaiter.await_ready());
+    cancellationSource.requestCancellation();
+    EXPECT_THROW(awaiter.await_resume(), folly::OperationCancelled);
+    EXPECT_EQ(sender.isReceiverCancelled(), closeOnCancel);
+    if (!closeOnCancel) {
+      EXPECT_EQ(folly::coro::blockingWait(receiver.next()), 2);
+    }
+  }
+}
+
+TEST(Channel, BufferedThenWaitingReadPreservesRequestContext) {
+  folly::ManualExecutor executor;
+  auto [receiver, sender] = Channel<int>::create();
+  sender.write(1);
+  sender.write(2);
+  folly::RequestContextScopeGuard requestContext;
+  auto consumerContext = folly::RequestContext::saveContext();
+  std::vector<int> receivedValues;
+  auto consume = [&]() -> folly::coro::Task<void> {
+    while (auto value = co_await receiver.next()) {
+      EXPECT_EQ(folly::RequestContext::try_get(), consumerContext.get());
+      receivedValues.push_back(*value);
+    }
+  };
+  auto consuming = co_withExecutor(&executor, consume()).start();
+  executor.drain();
+  EXPECT_THAT(receivedValues, ElementsAre(1, 2));
+  EXPECT_FALSE(consuming.isReady());
+
+  {
+    folly::RequestContextScopeGuard producerContext;
+    sender.write(3);
+    std::move(sender).close();
+    executor.drain();
+  }
+  EXPECT_THAT(receivedValues, ElementsAre(1, 2, 3));
+  EXPECT_TRUE(consuming.isReady());
+  folly::coro::blockingWait(std::move(consuming));
+  EXPECT_EQ(folly::RequestContext::try_get(), consumerContext.get());
 }
 
 INSTANTIATE_TEST_SUITE_P(

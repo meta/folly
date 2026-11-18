@@ -78,9 +78,9 @@ class Receiver<TValue>::Waiter : public detail::IChannelCallback {
             makeCancellationCallback(std::move(cancelToken), closeOnCancel)) {}
 
   bool await_ready() const noexcept {
-    // We are ready immediately if the receiver is either cancelled or closed.
     return state_.withRLock([&](const State& state) {
-      return state.cancelled || !state.receiver;
+      return state.cancelled || !state.receiver ||
+          !state.receiver->buffer_.empty();
     });
   }
 

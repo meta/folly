@@ -1,7 +1,22 @@
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_benchmark.bzl", "fb_dirsync_cpp_benchmark")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_unittest.bzl", "fb_dirsync_cpp_unittest")
 
 oncall("fbcode_entropy_wardens_folly")
+
+fb_dirsync_cpp_benchmark(
+    name = "channel_benchmark",
+    srcs = ["ChannelBenchmark.cpp"],
+    deps = [
+        "//folly:benchmark",
+        "//folly:cancellation_token",
+        "//folly/channels:channel",
+        "//folly/coro:blocking_wait",
+        "//folly/coro:task",
+        "//folly/init:init",
+        "//folly/io/async:request_context",
+    ],
+)
 
 fb_dirsync_cpp_unittest(
     name = "channel_processor_test",
@@ -23,7 +38,9 @@ fb_dirsync_cpp_unittest(
         "//folly/channels:channel",
         "//folly/channels/testing:mock_next_callback",
         "//folly/coro:blocking_wait",
+        "//folly/coro:task",
         "//folly/executors:manual_executor",
+        "//folly/io/async:request_context",
         "//folly/portability:gtest",
     ],
 )
