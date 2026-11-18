@@ -79,10 +79,10 @@ struct CompilationUnit {
   uint8_t unitType = DW_UT_compile;
   uint8_t addrSize = 0;
   // Offset in .debug_info of this compilation unit.
-  uint32_t offset = 0;
+  uint64_t offset = 0;
   uint32_t size = 0;
   // Offset in .debug_info for the first DIE in this compilation unit.
-  uint32_t firstDie = 0;
+  uint64_t firstDie = 0;
   folly::Optional<uint64_t> abbrevOffset;
 
   // Compilation directory.
@@ -119,7 +119,7 @@ struct CompilationUnitHeader {
   uint8_t version = 0;
   uint8_t unitType = DW_UT_compile;
   uint8_t addrSize = 0;
-  uint32_t firstDie = 0;
+  uint64_t firstDie = 0;
   uint64_t abbrevOffset = 0;
   folly::Optional<uint64_t> dwoId;
 };
@@ -147,7 +147,7 @@ struct Die {
   // Offset from start to first attribute
   uint8_t attrOffset = 0;
   // Offset within debug info.
-  uint32_t offset = 0;
+  uint64_t offset = 0;
   uint64_t code = 0;
   DIEAbbreviation abbr;
 };
@@ -226,6 +226,10 @@ DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
 // result means that no matching, usable entry was found.
 DwarfParseResult<bool> findDwpCompilationUnit(
     std::span<const uint8_t> debugCuIndex, uint64_t dwoId, CompilationUnit& cu);
+
+// Parse the split unit for dwoId at the offset from findDwpCompilationUnit,
+// which llvm-dwp --continue-on-cu-index-overflow may have truncated to 32 bits.
+bool parseDwpCompilationUnit(CompilationUnit& cu, uint64_t dwoId);
 
 // Advance cu.strOffsetsBase from the start of its .dwp contribution to the
 // first entry, taking the offset size from the contribution's own header.

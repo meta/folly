@@ -261,7 +261,7 @@ DwarfParseResult<DIEAbbreviation> getAbbreviation(
 }
 
 template <typename T>
-DwarfParseResult<T> parseError(DwarfParseErrorCode code, size_t offset) {
+DwarfParseResult<T> parseError(DwarfParseErrorCode code, uint64_t offset) {
   return makeUnexpected(DwarfParseError{code, offset});
 }
 
@@ -286,10 +286,6 @@ DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
   if (offset > debugInfo.size()) {
     return parseError<CompilationUnitHeader>(
         DwarfParseErrorCode::invalid_offset, offset);
-  }
-  if (offset > std::numeric_limits<uint32_t>::max()) {
-    return parseError<CompilationUnitHeader>(
-        DwarfParseErrorCode::integer_overflow, offset);
   }
 
   DwarfCursor lengthCursor(debugInfo.subspan(offset), offset);
@@ -318,8 +314,7 @@ DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
         DwarfParseErrorCode::truncated, lengthCursor.offset());
   }
   const auto unitSize = lengthFieldSize + static_cast<size_t>(unitLength);
-  if (unitSize > std::numeric_limits<uint32_t>::max() ||
-      offset > std::numeric_limits<uint32_t>::max() - unitSize) {
+  if (unitSize > std::numeric_limits<uint32_t>::max()) {
     return parseError<CompilationUnitHeader>(
         DwarfParseErrorCode::integer_overflow, offset);
   }
@@ -353,7 +348,7 @@ DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
     }
     header.unitType = *unitType;
     if (!isSupportedCompilationUnitType(header.unitType)) {
-      header.firstDie = static_cast<uint32_t>(cursor.offset());
+      header.firstDie = cursor.offset();
       return header;
     }
 
@@ -401,7 +396,7 @@ DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
     header.addrSize = *addrSize;
   }
 
-  header.firstDie = static_cast<uint32_t>(cursor.offset());
+  header.firstDie = cursor.offset();
   return header;
 }
 
@@ -591,7 +586,7 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
     return makeUnexpected(header.error());
   }
 
-  cu.offset = static_cast<uint32_t>(offset);
+  cu.offset = offset;
   cu.is64Bit = header->is64Bit;
   cu.strOffsetsIs64Bit = header->is64Bit;
   cu.size = header->size;
@@ -698,6 +693,21 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
 }
 
 } // namespace
+
+bool parseDwpCompilationUnit(CompilationUnit& cu, uint64_t dwoId) {
+  const uint64_t infoSize = cu.debugSections.debugInfo.size();
+  for (uint64_t offset = cu.offset; offset < infoSize;
+       offset += uint64_t{1} << 32) {
+    CompilationUnit candidate = cu;
+    auto result =
+        parseCompilationUnitMetadata(candidate, folly::to_narrow(offset), true);
+    if (result.hasValue() && *result && candidate.dwoId == dwoId) {
+      cu = candidate;
+      return true;
+    }
+  }
+  return false;
+}
 
 CompilationUnits getCompilationUnits(
     ElfCacheBase* elfCache,
@@ -811,12 +821,8 @@ CompilationUnits getCompilationUnits(
         splitCU.debugSections.debugCuIndex,
         *cu.mainCompilationUnit.dwoId,
         splitCU);
-    if (indexResult.hasError() || !*indexResult) {
-      return cu;
-    }
-    auto splitResult =
-        parseCompilationUnitMetadata(splitCU, splitCU.offset, true);
-    if (splitResult.hasError() || !*splitResult) {
+    if (indexResult.hasError() || !*indexResult ||
+        !parseDwpCompilationUnit(splitCU, *cu.mainCompilationUnit.dwoId)) {
       return cu;
     }
     // 3.1.3 Split Full Compilation Unit Entries
@@ -1263,19 +1269,13 @@ DwarfParseResult<Die> getDieAtOffset(
         DwarfParseError{
             DwarfParseErrorCode::invalid_offset, toErrorOffset(offset)});
   }
-  if (offset > std::numeric_limits<uint32_t>::max()) {
-    return makeUnexpected(
-        DwarfParseError{
-            DwarfParseErrorCode::integer_overflow,
-            static_cast<size_t>(offset)});
-  }
 
   Die die;
   DwarfCursor cursor(
       debugInfo.subspan(
           static_cast<size_t>(offset), static_cast<size_t>(unitEnd - offset)),
       static_cast<size_t>(offset));
-  die.offset = static_cast<uint32_t>(offset);
+  die.offset = offset;
   die.is64Bit = cu.is64Bit;
   auto code = cursor.readULEB();
   if (code.hasError()) {

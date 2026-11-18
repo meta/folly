@@ -265,6 +265,7 @@ fb_dirsync_cpp_unittest(
         "//folly:varint",
         "//folly/debugging/symbolizer:dwarf",
         "//folly/portability:gtest",
+        "//folly/portability:sys_mman",
     ],
 )
 

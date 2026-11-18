@@ -26,6 +26,7 @@
 #include <folly/Utility.h>
 #include <folly/Varint.h>
 #include <folly/portability/GTest.h>
+#include <folly/portability/SysMman.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
 
@@ -118,6 +119,74 @@ std::vector<uint8_t> abbreviation() {
       0,
   };
 }
+
+// DWARF 4 split units carry their DWO ID in DW_AT_GNU_dwo_id, DWARF 5 in the
+// unit header.
+std::vector<uint8_t> splitUnitAbbreviation(uint16_t version) {
+  if (version == 5) {
+    return abbreviation();
+  }
+  std::vector<uint8_t> bytes{1, DW_TAG_compile_unit, DW_CHILDREN_yes};
+  appendULEB(bytes, DW_AT_GNU_dwo_id);
+  appendULEB(bytes, DW_FORM_data8);
+  bytes.insert(bytes.end(), {0, 0, 0});
+  return bytes;
+}
+
+std::vector<uint8_t> splitUnit(uint16_t version, uint64_t dwoId) {
+  std::vector<uint8_t> bytes;
+  append<uint32_t>(bytes, 0);
+  append<uint16_t>(bytes, version);
+  if (version == 5) {
+    append<uint8_t>(bytes, DW_UT_split_compile);
+    append<uint8_t>(bytes, sizeof(uintptr_t));
+    append<uint32_t>(bytes, 0);
+    append<uint64_t>(bytes, dwoId);
+    appendULEB(bytes, 1);
+    bytes.insert(bytes.end(), {'x', 0});
+  } else {
+    append<uint32_t>(bytes, 0);
+    append<uint8_t>(bytes, sizeof(uintptr_t));
+    appendULEB(bytes, 1);
+    append<uint64_t>(bytes, dwoId);
+  }
+  bytes.push_back(0);
+  overwrite<uint32_t>(bytes, 0, folly::to_narrow(bytes.size() - 4));
+  return bytes;
+}
+
+class SparseSection {
+ public:
+  explicit SparseSection(size_t size)
+      : size_(size),
+        data_(mmap(
+            nullptr,
+            size,
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,
+            -1,
+            0)) {}
+  SparseSection(const SparseSection&) = delete;
+  SparseSection& operator=(const SparseSection&) = delete;
+  ~SparseSection() {
+    if (valid()) {
+      munmap(data_, size_);
+    }
+  }
+
+  bool valid() const { return data_ != MAP_FAILED; }
+  void write(size_t offset, std::span<const uint8_t> bytes) {
+    std::memcpy(
+        static_cast<uint8_t*>(data_) + offset, bytes.data(), bytes.size());
+  }
+  std::span<const uint8_t> bytes() const {
+    return {static_cast<const uint8_t*>(data_), size_};
+  }
+
+ private:
+  size_t size_;
+  void* data_;
+};
 
 TEST(DwarfUtil, ParsesDwarf4CompilationUnitHeader) {
   const auto bytes = dwarf4Header();
@@ -307,6 +376,48 @@ TEST(DwarfUtil, RejectsOverflowingDwpDimensions) {
 
   ASSERT_TRUE(result.hasError());
   EXPECT_EQ(DwarfParseErrorCode::integer_overflow, result.error().code);
+}
+
+TEST(DwarfUtil, FindsDwpUnitPastTruncatedInfoOffset) {
+  if (sizeof(size_t) < sizeof(uint64_t)) {
+    GTEST_SKIP() << "requires a 64-bit address space";
+  }
+  constexpr uint64_t kTruncatedOffset = 0x10;
+  constexpr uint64_t kOffset = (uint64_t{1} << 32) + kTruncatedOffset;
+  constexpr uint64_t kDwoId = 0x123456789abcdef0;
+  SparseSection info(folly::to_narrow(kOffset + 0x1000));
+  if (!info.valid()) {
+    GTEST_SKIP() << "cannot map a section larger than 4 GiB";
+  }
+  for (uint16_t version : {4, 5}) {
+    SCOPED_TRACE(version);
+    const auto abbrev = splitUnitAbbreviation(version);
+    info.write(kTruncatedOffset, splitUnit(version, kDwoId + 1));
+    info.write(folly::to_narrow(kOffset), splitUnit(version, kDwoId));
+    CompilationUnit cu{};
+    cu.debugSections.debugInfo = info.bytes();
+    cu.debugSections.debugAbbrev = abbrev;
+    cu.offset = kTruncatedOffset;
+
+    EXPECT_TRUE(parseDwpCompilationUnit(cu, kDwoId));
+
+    EXPECT_EQ(kOffset, cu.offset);
+    ASSERT_TRUE(cu.dwoId.hasValue());
+    EXPECT_EQ(kDwoId, *cu.dwoId);
+  }
+}
+
+TEST(DwarfUtil, RejectsDwpUnitWithMismatchedDwoIdWithoutModifyingOutput) {
+  const auto info = splitUnit(5, 0x1234);
+  const auto abbrev = splitUnitAbbreviation(5);
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.debugSections.debugAbbrev = abbrev;
+
+  EXPECT_FALSE(parseDwpCompilationUnit(cu, 0x4321));
+
+  EXPECT_EQ(uint32_t{0}, cu.size);
+  EXPECT_FALSE(cu.dwoId.hasValue());
 }
 
 TEST(DwarfUtil, ResolvesStrxThroughDwarf64DwpContributionOfDwarf32Unit) {

@@ -35,12 +35,10 @@ namespace symbolizer {
 namespace {
 
 template <typename Size = size_t>
-DwarfParseResult<Size> incrementDieOffset(uint32_t offset) {
-  if constexpr (sizeof(Size) <= sizeof(uint32_t)) {
-    if (offset >= std::numeric_limits<Size>::max()) {
-      return makeUnexpected(
-          DwarfParseError{DwarfParseErrorCode::integer_overflow, offset});
-    }
+DwarfParseResult<Size> incrementDieOffset(uint64_t offset) {
+  if (offset >= std::numeric_limits<Size>::max()) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::integer_overflow, offset});
   }
   return static_cast<Size>(offset) + 1;
 }

@@ -38,7 +38,7 @@ enum class DwarfParseErrorCode : uint8_t {
 
 struct DwarfParseError {
   DwarfParseErrorCode code;
-  size_t offset;
+  uint64_t offset;
 
   friend bool operator==(const DwarfParseError&, const DwarfParseError&) =
       default;
