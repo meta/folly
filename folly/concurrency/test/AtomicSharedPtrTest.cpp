@@ -25,6 +25,7 @@
 #include <thread>
 
 #include <folly/Portability.h>
+#include <folly/Traits.h>
 #include <folly/concurrency/test/AtomicSharedPtrCounted.h>
 #include <folly/portability/Config.h>
 #include <folly/portability/GFlags.h>
@@ -284,6 +285,47 @@ TEST(AtomicSharedPtr, counted2) {
       fooptr(foo);
   fooptr.store(foo);
   fooptr.load();
+}
+
+TEST(AtomicSharedPtr, CountedAliasingLifetime) {
+  c_count = 0;
+  d_count = 0;
+  using Ptr = counted_ptr<int>;
+  using AtomicPtr =
+      atomic_shared_ptr<int, std::atomic, counted_ptr_internals<>>;
+  int value = 7;
+  auto owner = make_counted<std::atomic, foo>();
+  Ptr alias(owner, &value);
+  owner.reset();
+  AtomicPtr ptr(std::move(alias));
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_EQ(alias.get(), nullptr);
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_EQ(alias.use_count(), 0);
+  auto loaded = ptr.load();
+  EXPECT_EQ(loaded.get(), &value);
+  EXPECT_EQ(*loaded, 7);
+  ptr.store({});
+  EXPECT_EQ(d_count, 0);
+  loaded.reset();
+  EXPECT_EQ(d_count, 1);
+
+  ptr.store(Ptr(make_counted<std::atomic, foo>(), nullptr));
+  loaded = ptr.load();
+  EXPECT_EQ(loaded.get(), nullptr);
+  EXPECT_GT(loaded.use_count(), 0);
+  ptr.store({});
+  EXPECT_EQ(d_count, 1);
+  loaded.reset();
+  EXPECT_EQ(d_count, 2);
+
+  ptr.store(Ptr(Ptr{}, &value));
+  loaded = ptr.exchange({});
+  EXPECT_EQ(loaded.get(), &value);
+  EXPECT_EQ(loaded.use_count(), 0);
+  loaded.reset();
+  EXPECT_EQ(c_count, 2);
+  EXPECT_EQ(d_count, 2);
 }
 
 #endif
@@ -609,37 +651,44 @@ TEST(AtomicSharedPtr, InjectedAtomicObservesAllLoads) {
 }
 
 TEST(AtomicSharedPtr, DeterministicSharedPtrAliases) {
-  DSched sched(DSched::uniform(FLAGS_seed));
-  auto owner = std::make_shared<std::pair<int, int>>(7, 11);
-  int value = 13;
-  const std::array values{
-      std::shared_ptr<int>(owner, &owner->first),
-      std::shared_ptr<int>(owner, &owner->second),
-      std::shared_ptr<int>(owner, nullptr),
-      std::shared_ptr<int>(std::shared_ptr<int>{}, &value),
-      std::shared_ptr<int>{},
+  auto check = []<typename Internals>(tag_t<Internals>) {
+    DSched sched(DSched::uniform(FLAGS_seed));
+    using Ptr = typename Internals::template CountedPtr<int>;
+    auto owner = Internals::template make_ptr<std::pair<int, int>>(7, 11);
+    int value = 13;
+    const std::array values{
+        Ptr(owner, &owner->first),
+        Ptr(owner, &owner->second),
+        Ptr(owner, nullptr),
+        Ptr(Ptr{}, &value),
+        Ptr{},
+    };
+    atomic_shared_ptr<int, DeterministicAtomic, Internals> ptr(values[0]);
+    std::vector<std::thread> threads;
+    threads.reserve(4);
+    for (unsigned tid = 0; tid < 4; ++tid) {
+      threads.emplace_back(DSched::thread([&, tid] {
+        for (unsigned i = 0; i < 100; ++i) {
+          auto loaded = ptr.load();
+          if (loaded.get()) {
+            EXPECT_TRUE(*loaded == 7 || *loaded == 11 || *loaded == 13);
+          }
+          if (loaded.get() == &value) {
+            EXPECT_EQ(loaded.use_count(), 0);
+          }
+          ptr.compare_exchange_strong(
+              loaded, values[(i + tid) % values.size()]);
+        }
+      }));
+    }
+    for (auto& thread : threads) {
+      DSched::join(thread);
+    }
+    ptr.store({});
+    EXPECT_EQ(owner.use_count(), 4);
   };
-  atomic_shared_ptr<int, DeterministicAtomic> ptr(values[0]);
-  std::vector<std::thread> threads;
-  for (unsigned tid = 0; tid < 4; ++tid) {
-    threads.emplace_back(DSched::thread([&, tid] {
-      for (unsigned i = 0; i < 100; ++i) {
-        auto loaded = ptr.load();
-        if (loaded.get()) {
-          EXPECT_TRUE(*loaded == 7 || *loaded == 11 || *loaded == 13);
-        }
-        if (loaded.get() == &value) {
-          EXPECT_EQ(loaded.use_count(), 0);
-        }
-        ptr.compare_exchange_strong(loaded, values[(i + tid) % values.size()]);
-      }
-    }));
-  }
-  for (auto& thread : threads) {
-    DSched::join(thread);
-  }
-  ptr.store({});
-  EXPECT_EQ(owner.use_count(), 4);
+  check(tag_t<folly::detail::shared_ptr_internals>{});
+  check(tag_t<counted_ptr_internals<DeterministicAtomic>>{});
 }
 
 #endif

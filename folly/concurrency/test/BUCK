@@ -73,6 +73,7 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//third-party/glog:glog",
         "//folly:portability",
+        "//folly:traits",
         "//folly/concurrency:atomic_shared_ptr",
         "//folly/portability:config",
         "//folly/portability:gflags",
