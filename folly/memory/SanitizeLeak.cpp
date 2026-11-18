@@ -28,6 +28,8 @@
 extern "C" void __lsan_ignore_object(void const*);
 extern "C" void __lsan_register_root_region(void const*, std::size_t);
 extern "C" void __lsan_unregister_root_region(void const*, std::size_t);
+extern "C" void __lsan_disable();
+extern "C" void __lsan_enable();
 
 namespace {
 
@@ -40,6 +42,12 @@ FOLLY_CREATE_EXTERN_ACCESSOR( //
 FOLLY_CREATE_EXTERN_ACCESSOR( //
     lsan_unregister_root_region_access_v,
     __lsan_unregister_root_region);
+FOLLY_CREATE_EXTERN_ACCESSOR( //
+    lsan_disable_access_v,
+    __lsan_disable);
+FOLLY_CREATE_EXTERN_ACCESSOR( //
+    lsan_enable_access_v,
+    __lsan_enable);
 
 constexpr bool E = folly::kIsLibrarySanitizeAddress;
 
@@ -58,6 +66,10 @@ FOLLY_STORAGE_CONSTEXPR lsan_register_root_region_t* const //
     lsan_register_root_region_v = lsan_register_root_region_access_v<EnW>;
 FOLLY_STORAGE_CONSTEXPR lsan_unregister_root_region_t* const //
     lsan_unregister_root_region_v = lsan_unregister_root_region_access_v<EnW>;
+FOLLY_STORAGE_CONSTEXPR lsan_disable_t* const //
+    lsan_disable_v = lsan_disable_access_v<EnW>;
+FOLLY_STORAGE_CONSTEXPR lsan_enable_t* const //
+    lsan_enable_v = lsan_enable_access_v<EnW>;
 
 namespace {
 
