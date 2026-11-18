@@ -1041,7 +1041,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ApplyTupleTest.cpp
     TEST
     functional_invoke_test
-    WINDOWS_DISABLED
     SOURCES
     InvokeTest.cpp
     TEST
