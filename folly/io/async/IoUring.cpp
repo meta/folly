@@ -116,10 +116,7 @@ IoUringOp::IoUringOp(NotificationCallback cb, Options options)
 }
 
 void IoUringOp::reset(NotificationCallback cb) {
-  CHECK_NE(state_, State::PENDING);
-  cb_ = std::move(cb);
-  state_ = State::UNINITIALIZED;
-  result_ = -EINVAL;
+  AsyncBaseOp::reset(std::move(cb));
 }
 
 IoUringOp::~IoUringOp() {}
