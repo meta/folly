@@ -20,8 +20,16 @@
 
 #include <folly/logging/LogLevel.h>
 #include <folly/logging/LogMessage.h>
+#include <folly/portability/Config.h>
 #include <folly/portability/Time.h>
 #include <folly/system/ThreadName.h>
+
+// Compiled format strings bloat mobile binaries; keep them on servers only.
+#if FOLLY_MOBILE
+#define FOLLY_GLOG_STYLE_FORMAT_STR(s) (s)
+#else
+#define FOLLY_GLOG_STYLE_FORMAT_STR(s) FMT_COMPILE(s)
+#endif
 
 namespace {
 using folly::LogLevel;
@@ -63,7 +71,7 @@ std::string GlogStyleFormatter::formatMessage(
   auto basename = message.getFileBaseName();
   auto header = log_thread_name_
       ? fmt::format(
-            FMT_COMPILE(
+            FOLLY_GLOG_STYLE_FORMAT_STR(
                 "{}{:02d}{:02d} {:02d}:{:02d}:{:02d}.{:06d} {:5d} [{}] {}:{}{}] "),
             getGlogLevelName(message.getLevel())[0],
             ltime.tm_mon + 1,
@@ -78,7 +86,7 @@ std::string GlogStyleFormatter::formatMessage(
             message.getLineNumber(),
             message.getContextString())
       : fmt::format(
-            FMT_COMPILE(
+            FOLLY_GLOG_STYLE_FORMAT_STR(
                 "{}{:02d}{:02d} {:02d}:{:02d}:{:02d}.{:06d} {:5d} {}:{}{}] "),
             getGlogLevelName(message.getLevel())[0],
             ltime.tm_mon + 1,
@@ -141,4 +149,7 @@ std::string GlogStyleFormatter::formatMessage(
 
   return buffer;
 }
+
+#undef FOLLY_GLOG_STYLE_FORMAT_STR
+
 } // namespace folly
