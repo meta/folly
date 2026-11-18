@@ -111,7 +111,7 @@ class atomic_shared_ptr {
     //
     // TODO: Could use a lock-free external map to fix this
     // corner case.
-    return true;
+    return ptr_.is_lock_free();
   }
 
   SharedPtr load(

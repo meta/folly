@@ -19,7 +19,9 @@
 #include <array>
 #include <atomic>
 #include <barrier>
+#include <cstring>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 #include <folly/Portability.h>
@@ -67,6 +69,59 @@ TEST(AtomicSharedPtr, exchange) {
   auto b = fooptr.exchange(make_shared<int>());
   EXPECT_EQ(*b, 1);
 }
+
+#if FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED
+namespace {
+template <typename T>
+class mutex_atomic {
+ public:
+  bool is_lock_free() const noexcept { return false; }
+
+  T load(std::memory_order) const {
+    std::lock_guard lock(mutex_);
+    return value_;
+  }
+  void store(T value, std::memory_order = std::memory_order_seq_cst) {
+    std::lock_guard lock(mutex_);
+    value_ = value;
+  }
+  T exchange(T value, std::memory_order) {
+    std::lock_guard lock(mutex_);
+    const auto old = value_;
+    value_ = value;
+    return old;
+  }
+  bool compare_exchange_weak(
+      T& expected, T desired, std::memory_order, std::memory_order) {
+    std::lock_guard lock(mutex_);
+    if (std::memcmp(&value_, &expected, sizeof(T)) != 0) {
+      expected = value_;
+      return false;
+    }
+    value_ = desired;
+    return true;
+  }
+  bool compare_exchange_weak(T& expected, T desired, std::memory_order order) {
+    return compare_exchange_weak(
+        expected, desired, order, folly::memory_order_load(order));
+  }
+
+ private:
+  mutable std::mutex mutex_;
+  T value_{};
+};
+} // namespace
+
+TEST(AtomicSharedPtr, IsLockFreeWithMutexAtomic) {
+  atomic_shared_ptr<int, mutex_atomic> ptr(std::make_shared<int>(7));
+  EXPECT_FALSE(ptr.is_lock_free());
+  EXPECT_EQ(*ptr.load(), 7);
+  ptr.store(std::make_shared<int>(11));
+  auto old = ptr.exchange({});
+  EXPECT_EQ(*old, 11);
+  EXPECT_EQ(ptr.load().get(), nullptr);
+}
+#endif
 
 TEST(AtomicSharedPtr, PointerBlockVarieties) {
   // Allocation and deleter choices preserve shared-pointer CAS identity.
