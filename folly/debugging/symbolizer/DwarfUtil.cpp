@@ -19,6 +19,7 @@
 #include <array>
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 #include <folly/Optional.h>
 #include <folly/Range.h>
@@ -233,7 +234,7 @@ DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
         DwarfParseErrorCode::truncated, lengthCursor.offset());
   }
   const auto unitSize = lengthFieldSize + static_cast<size_t>(unitLength);
-  if (unitSize > std::numeric_limits<uint32_t>::max()) {
+  if (!std::in_range<uint32_t>(unitSize)) {
     return parseError<CompilationUnitHeader>(
         DwarfParseErrorCode::integer_overflow, offset);
   }
