@@ -108,6 +108,7 @@ folly_add_library(
   EXPORTED_DEPS
     folly_c_portability
     folly_likely
+    folly_traits
 )
 
 folly_add_library(

@@ -28,6 +28,7 @@
 
 #include <folly/CPortability.h>
 #include <folly/Likely.h>
+#include <folly/Traits.h>
 
 namespace folly {
 namespace detail {
@@ -182,6 +183,17 @@ constexpr bool checked_div(T* result, T dividend, T divisor) {
     *result = {};
     return false;
   }
+  if constexpr (folly::is_integral_v<T> && folly::is_signed_v<T>) {
+    constexpr auto kBits =
+        sizeof(T) * std::numeric_limits<unsigned char>::digits;
+    constexpr T kMin =
+        static_cast<T>(folly::make_unsigned_t<T>{1} << (kBits - 1));
+    constexpr T kMinusOne = static_cast<T>(-1);
+    if (dividend == kMin && divisor == kMinusOne) [[unlikely]] {
+      *result = {};
+      return false;
+    }
+  }
   *result = dividend / divisor;
   return true;
 }
@@ -191,6 +203,20 @@ constexpr bool checked_mod(T* result, T dividend, T divisor) {
   if (divisor == 0) [[unlikely]] {
     *result = {};
     return false;
+  }
+  using R = decltype(dividend % divisor);
+  if constexpr (
+      folly::is_integral_v<T> && folly::is_integral_v<R> &&
+      folly::is_signed_v<R>) {
+    constexpr auto kBits =
+        sizeof(R) * std::numeric_limits<unsigned char>::digits;
+    constexpr R kMin =
+        static_cast<R>(folly::make_unsigned_t<R>{1} << (kBits - 1));
+    constexpr T kMinusOne = static_cast<T>(-1);
+    if (dividend == kMin && divisor == kMinusOne) [[unlikely]] {
+      *result = {};
+      return false;
+    }
   }
   *result = dividend % divisor;
   return true;
