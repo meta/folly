@@ -330,6 +330,15 @@ folly_add_library(
   HEADERS TrapOnAvx512.h
   DEPS folly_portability
 )
+if (IS_X86_64_ARCH)
+  target_compile_options(
+    folly_detail_traponavx512_obj
+    PRIVATE
+      -msse4.2
+      -mavx512f
+      -mavx512vl
+  )
+endif ()
 
 folly_add_library(
   NAME tuple

@@ -149,6 +149,14 @@ if (FOLLY_HAVE_OPENSSL)
 else ()
   folly_exclude_headers(OpenSSL.h)
 endif ()
+if (FOLLY_HAVE_OPENSSL)
+  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(
+      folly_portability_openssl_obj
+      PRIVATE -Wno-unused-function
+    )
+  endif ()
+endif ()
 
 folly_add_library(
   NAME pthread
@@ -187,6 +195,12 @@ folly_add_library(
   NAME source_location
   HEADERS SourceLocation.h
 )
+if (APPLE)
+  target_compile_options(
+    folly_portability_source_location
+    INTERFACE -Wno-nonportable-include-path
+  )
+endif ()
 
 folly_add_library(
   NAME stdio

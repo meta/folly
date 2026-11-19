@@ -932,6 +932,12 @@ folly_add_library(
     folly_traits
     folly_utility
 )
+if (MSVC)
+  target_compile_options(
+    folly_optional
+    INTERFACE /wd4018
+  )
+endif ()
 
 folly_add_library(
   NAME overload
@@ -1128,6 +1134,12 @@ folly_add_library(
     folly_synchronization_baton
     folly_synchronized
 )
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(
+    folly_singleton_obj
+    PRIVATE -Wno-invalid-noreturn
+  )
+endif ()
 
 folly_add_library(
   NAME singleton_thread_local
