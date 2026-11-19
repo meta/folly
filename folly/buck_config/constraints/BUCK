@@ -1,36 +1,42 @@
-load("@fbsource//tools/build_defs:fb_native_wrapper.bzl", "fb_native")
+load("@prelude//configurations:constraint_alias.bzl", "constraint_with_aliases")
 
 oncall("fbcode_entropy_wardens_folly")
 
-fb_native.constraint_setting(
+constraint_with_aliases(
     name = "singleton",
+    aliases = {
+        "singleton-schedule-at-exit-disabled": "schedule-at-exit-disabled",
+    },
+    default = "unspecified",
+    values = [
+        "schedule-at-exit-disabled",
+        "unspecified",
+    ],
     visibility = ["PUBLIC"],
 )
 
-fb_native.constraint_value(
-    name = "singleton-schedule-at-exit-disabled",
-    constraint_setting = ":singleton",
-    visibility = ["PUBLIC"],
-)
-
-fb_native.constraint_setting(
+constraint_with_aliases(
     name = "f14-fallback",
+    aliases = {
+        "f14-fallback-disabled": "disabled",
+    },
+    default = "unspecified",
+    values = [
+        "disabled",
+        "unspecified",
+    ],
     visibility = ["PUBLIC"],
 )
 
-fb_native.constraint_value(
-    name = "f14-fallback-disabled",
-    constraint_setting = ":f14-fallback",
-    visibility = ["PUBLIC"],
-)
-
-fb_native.constraint_setting(
+constraint_with_aliases(
     name = "gflags",
-    visibility = ["PUBLIC"],
-)
-
-fb_native.constraint_value(
-    name = "gflags-enabled",
-    constraint_setting = ":gflags",
+    aliases = {
+        "gflags-enabled": "enabled",
+    },
+    default = "unspecified",
+    values = [
+        "enabled",
+        "unspecified",
+    ],
     visibility = ["PUBLIC"],
 )
