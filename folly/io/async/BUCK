@@ -778,6 +778,7 @@ fb_dirsync_cpp_library(
         "//folly:string",
     ],
     exported_deps = [
+        "//folly/container:f14_hash",
         "//folly/container:intrusive_heap",
         "//folly/io/async:async_base",
     ],

@@ -26,6 +26,7 @@
 #include <set>
 #include <vector>
 
+#include <folly/container/F14Map.h>
 #include <folly/container/IntrusiveHeap.h>
 #include <folly/io/async/EventBaseBackendBase.h>
 
@@ -62,7 +63,15 @@ class EpollBackend : public EventBaseBackendBase {
   bool setEdgeTriggered(Event& event) override;
 
  private:
+  struct EventInfo;
   struct TimerInfo;
+
+  // The Event that holds an fd's epoll entry, and the generation the entry
+  // carries.
+  struct FdEntry {
+    EventInfo* owner{nullptr};
+    uint32_t generation{0};
+  };
 
   class SocketPair {
    public:
@@ -81,6 +90,10 @@ class EpollBackend : public EventBaseBackendBase {
     std::array<int, 2> fds_{{-1, -1}};
   };
 
+  // Ends `info`'s hold on `fd` and drops the fd's epoll entry, unless another
+  // Event took the number over. Returns 0, or -1 with errno.
+  int releaseFd(int fd, EventInfo* info);
+
   void updateTimerFd();
   void addTimerEvent(Event& event, const struct timeval* timeout);
   int removeTimerEvent(Event& event);
@@ -94,6 +107,9 @@ class EpollBackend : public EventBaseBackendBase {
   const Options options_;
 
   int epollFd_{-1};
+
+  F14FastMap<int, FdEntry> fds_;
+  uint32_t nextGeneration_{0};
 
   size_t numInsertedEvents_{0};
   size_t numInternalEvents_{0};

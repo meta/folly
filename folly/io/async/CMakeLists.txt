@@ -409,6 +409,7 @@ folly_add_library(
     folly_map_util
     folly_string
   EXPORTED_DEPS
+    folly_container_f14_hash
     folly_container_intrusive_heap
     folly_io_async_async_base
 )

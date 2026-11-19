@@ -115,6 +115,73 @@ TEST(EpollBackendTest, ARefusedAddLeavesTheEventUnregistered) {
   EXPECT_FALSE(event.isEventRegistered());
 }
 
+TEST(EpollBackendTest, DeletingAfterTheFdClosedSucceeds) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  EventBaseEvent event;
+  event.eb_event_set(sp.fds[0], EV_READ | EV_PERSIST, &noopCallback, nullptr);
+  event.eb_event_base_set(&evb);
+  ASSERT_EQ(0, event.eb_event_add(nullptr));
+  SocketPair::closeFd(sp.fds[0]);
+
+  EXPECT_EQ(0, event.eb_event_del());
+  EXPECT_FALSE(event.isEventRegistered());
+}
+
+TEST(EpollBackendTest, AClosedFdsRegistrationGivesWay) {
+  EventBase evb(epollOptions());
+  SocketPair before;
+  SocketPair after;
+  int fd = before.fds[0];
+  Recorder stale(&evb, fd);
+  ASSERT_TRUE(
+      stale.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  SocketPair::closeFd(before.fds[0]);
+  ASSERT_EQ(fd, ::dup2(after.fds[0], fd));
+
+  Recorder current(&evb, fd);
+  ASSERT_TRUE(
+      current.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  after.sendByte();
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(0, stale.calls);
+  EXPECT_EQ(1, current.calls);
+
+  // Leaves the registration of the Event that took the number over.
+  stale.unregisterHandler();
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(2, current.calls);
+  current.unregisterHandler();
+  ::close(fd);
+}
+
+// A dup keeps the closed fd's file, and so its epoll entry, alive.
+TEST(EpollBackendTest, AnEntryLeftByAClosedFdIsIgnored) {
+  EventBase evb(epollOptions());
+  SocketPair old;
+  int fd = old.fds[0];
+  int dup = ::dup(fd);
+  Recorder first(&evb, fd);
+  ASSERT_TRUE(
+      first.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  SocketPair::closeFd(old.fds[0]);
+  first.unregisterHandler();
+
+  SocketPair fresh;
+  ASSERT_EQ(fd, ::dup2(fresh.fds[0], fd));
+  Recorder second(&evb, fd);
+  ASSERT_TRUE(
+      second.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  // Readies the old file only.
+  old.sendByte();
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(0, second.calls);
+
+  second.unregisterHandler();
+  ::close(fd);
+  ::close(dup);
+}
+
 } // namespace test
 } // namespace folly
 

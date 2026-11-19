@@ -36,20 +36,16 @@ extern "C" FOLLY_ATTR_WEAK void eb_poll_loop_post_hook(
 namespace folly {
 namespace {
 
-struct EventInfo {
-  static void freeFunction(void* v) { delete static_cast<EventInfo*>(v); }
+// `epoll_event.data` of the entries that are not an Event's fd. As fds they
+// would be -1 and -2.
+constexpr uint64_t kTimerData = ~uint64_t{0};
+constexpr uint64_t kSignalData = ~uint64_t{0} - 1;
 
-  void resetEvent() {
-    listHook.unlink(); // Remove from the info list.
-    ev = nullptr;
-  }
-
-  folly::IntrusiveListHook listHook;
-  EventBaseBackendBase::Event* ev{nullptr};
-  int what_{0};
-};
-
-using EventInfoList = folly::IntrusiveList<EventInfo, &EventInfo::listHook>;
+// `epoll_event.data` of an Event's fd: a stale entry, one that outlived the
+// fd's close through a dup of it, carries a generation the fd no longer has.
+uint64_t entryData(int fd, uint32_t generation) {
+  return (uint64_t{generation} << 32) | static_cast<uint32_t>(fd);
+}
 
 struct SignalRegistry {
   struct SigInfo {
@@ -139,6 +135,19 @@ uint32_t getPollFlags(short events) {
 
 } // namespace
 
+struct EpollBackend::EventInfo {
+  static void freeFunction(void* v) { delete static_cast<EventInfo*>(v); }
+
+  void resetEvent() {
+    listHook.unlink(); // Remove from the info list.
+    ev = nullptr;
+  }
+
+  folly::IntrusiveListHook listHook;
+  EventBaseBackendBase::Event* ev{nullptr};
+  int what_{0};
+};
+
 struct EpollBackend::TimerInfo : public IntrusiveHeapNode<> {
   bool operator<(const TimerInfo& other) const {
     // IntrusiveHeap is a max-heap.
@@ -189,17 +198,14 @@ EpollBackend::EpollBackend(Options options) : options_(options) {
     }
     struct epoll_event epev = {};
     epev.events = EPOLLIN;
-    // epoll_data is a union, so we need to use pointers for all events. We can
-    // use any unique pointer to distinguish the timerfd event, use the address
-    // of the fd variable.
-    epev.data.ptr = &timerFd_;
+    epev.data.u64 = kTimerData;
     PCHECK(::epoll_ctl(epollFd_, EPOLL_CTL_ADD, timerFd_, &epev) == 0);
   }
 
   {
     struct epoll_event epev = {};
     epev.events = EPOLLIN;
-    epev.data.ptr = &signalFds_;
+    epev.data.u64 = kSignalData;
     PCHECK(
         ::epoll_ctl(epollFd_, EPOLL_CTL_ADD, signalFds_.readFd(), &epev) == 0);
   }
@@ -257,17 +263,26 @@ int EpollBackend::eb_event_base_loop(int flags) {
     bool shouldProcessSignals = false;
     // Callbacks may delete other active events, so we accumulate active events
     // first into an intrusive list that is updated if events in it are deleted.
-    EventInfoList infoList;
+    IntrusiveList<EventInfo, &EventInfo::listHook> infoList;
     for (int i = 0; i < numEvents; ++i) {
-      if (events_[i].data.ptr == &timerFd_) {
+      uint64_t data = events_[i].data.u64;
+      if (data == kTimerData) {
         shouldProcessTimers = true;
         continue;
-      } else if (events_[i].data.ptr == &signalFds_) {
+      } else if (data == kSignalData) {
         shouldProcessSignals = true;
         continue;
       }
 
-      auto* info = static_cast<EventInfo*>(events_[i].data.ptr);
+      int fd = static_cast<int>(static_cast<uint32_t>(data));
+      auto it = fds_.find(fd);
+      // The kernel cannot be told to drop a stale entry, so it is skipped for
+      // as long as the dup keeps it alive.
+      if (it == fds_.end() ||
+          it->second.generation != static_cast<uint32_t>(data >> 32)) {
+        continue;
+      }
+      auto* info = it->second.owner;
       auto* event = info->ev;
       info->what_ = events_[i].events;
       // if not persistent we need to remove it
@@ -283,9 +298,7 @@ int EpollBackend::eb_event_base_loop(int flags) {
             numInternalEvents_--;
           }
 
-          PCHECK(
-              ::epoll_ctl(
-                  epollFd_, EPOLL_CTL_DEL, event->eb_ev_fd(), nullptr) == 0);
+          PCHECK(releaseFd(fd, info) == 0);
         }
       }
 
@@ -374,15 +387,20 @@ int EpollBackend::eb_event_add(Event& event, const struct timeval* timeout) {
     event.setUserData(info, EventInfo::freeFunction);
   }
 
+  int fd = event.eb_ev_fd();
+  uint32_t generation = ++nextGeneration_;
   struct epoll_event epev = {};
   epev.events = getPollFlags(event.eb_ev_events() & (EV_READ | EV_WRITE));
-  epev.data.ptr = info;
+  epev.data.u64 = entryData(fd, generation);
 
   // A refused Event stays unregistered, so that the eb_event_del a caller
   // cleans up with does not take down the registration it collided with.
-  if (::epoll_ctl(epollFd_, EPOLL_CTL_ADD, event.eb_ev_fd(), &epev) != 0) {
+  if (::epoll_ctl(epollFd_, EPOLL_CTL_ADD, fd, &epev) != 0) {
     return -1;
   }
+  // The kernel had no entry for this fd's file, so an Event that held the
+  // number before had its fd closed under it; that Event gives way.
+  fds_[fd] = FdEntry{info, generation};
   info->ev = &event;
   event.eb_set_registration(Event::Registration::kInserted);
   numInsertedEvents_++;
@@ -432,11 +450,27 @@ int EpollBackend::eb_event_del(Event& event) {
       numInternalEvents_--;
     }
 
-    return ::epoll_ctl(epollFd_, EPOLL_CTL_DEL, event.eb_ev_fd(), nullptr);
+    return releaseFd(event.eb_ev_fd(), info);
   }
 
   errno = EINVAL;
   return -1;
+}
+
+int EpollBackend::releaseFd(int fd, EventInfo* info) {
+  auto it = fds_.find(fd);
+  // Another Event took the number over after this one's fd was closed.
+  if (it == fds_.end() || it->second.owner != info) {
+    return 0;
+  }
+  fds_.erase(it);
+  // ENOENT or EBADF: the fd was closed. Its entry went with it, unless a dup
+  // keeps the file open, and then no fd can reach the entry.
+  if (::epoll_ctl(epollFd_, EPOLL_CTL_DEL, fd, nullptr) != 0 &&
+      errno != ENOENT && errno != EBADF) {
+    return -1;
+  }
+  return 0;
 }
 
 bool EpollBackend::setEdgeTriggered(Event& event) {
@@ -444,11 +478,15 @@ bool EpollBackend::setEdgeTriggered(Event& event) {
   if (info == nullptr) {
     return false;
   }
+  auto it = fds_.find(event.eb_ev_fd());
+  if (it == fds_.end() || it->second.owner != info) {
+    return false;
+  }
 
   struct epoll_event epev = {};
   epev.events =
       getPollFlags(event.eb_ev_events() & (EV_READ | EV_WRITE)) | EPOLLET;
-  epev.data.ptr = info;
+  epev.data.u64 = entryData(event.eb_ev_fd(), it->second.generation);
 
   int ret = ::epoll_ctl(epollFd_, EPOLL_CTL_MOD, event.eb_ev_fd(), &epev);
   return ret == 0;
