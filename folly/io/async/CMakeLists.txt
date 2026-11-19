@@ -51,7 +51,6 @@ folly_add_library(
     folly_system_thread_name
   EXPORTED_DEPS
     ${GLOG_LIBRARIES}
-    Boost::headers
     folly_container_f14_hash
     folly_container_intrusive_list
     folly_exception

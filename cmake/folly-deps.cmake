@@ -53,21 +53,26 @@ else ()
 endif ()
 set(Boost_USE_STATIC_LIBS "${FOLLY_BOOST_LINK_STATIC}")
 
-# Note: We find these components so the CMake targets exist, but we don't
-# link them globally. Targets that need specific Boost libraries should
-# add them to their EXTERNAL_DEPS (e.g., Boost::regex).
-set(FOLLY_BOOST_COMPONENTS "")
+# Boost is optional: folly's core libraries don't use it. Only folly/cli's
+# ProgramOptions, the libraries that need Boost.Regex, and the tests and
+# benchmarks that use those or Boost itself need it, and they are left out
+# without it. A parent project that asks for Boost's libraries in
+# BOOST_INCLUDE_LIBRARIES, as eden does for filesystem, gets it fetched by
+# default.
+if (BOOST_INCLUDE_LIBRARIES)
+  set(folly_fetch_boost_default ON)
+else ()
+  set(folly_fetch_boost_default OFF)
+endif ()
+option(FOLLY_FETCH_BOOST "Fetch Boost if it is not found"
+       ${folly_fetch_boost_default})
 
 # CMake 4 dropped FindBoost, so this config-only probe warns without QUIET.
-# folly/cli's ProgramOptions is built only if Boost.ProgramOptions is found,
-# and the libraries that need Boost.Regex only if it is.
-find_package(Boost 1.69.0 QUIET COMPONENTS ${FOLLY_BOOST_COMPONENTS}
-             OPTIONAL_COMPONENTS program_options regex)
-if (NOT Boost_FOUND)
+# The targets that need a Boost library list it in their EXTERNAL_DEPS.
+find_package(Boost 1.69.0 QUIET OPTIONAL_COMPONENTS program_options regex)
+if (NOT Boost_FOUND AND FOLLY_FETCH_BOOST)
   set(BOOST_ENABLE_CMAKE ON)
-  # A parent project that builds folly can ask for more of Boost's libraries
-  # in BOOST_INCLUDE_LIBRARIES, as eden does for filesystem.
-  list(APPEND BOOST_INCLUDE_LIBRARIES ${FOLLY_BOOST_COMPONENTS} regex)
+  list(APPEND BOOST_INCLUDE_LIBRARIES regex)
   list(REMOVE_DUPLICATES BOOST_INCLUDE_LIBRARIES)
   # Boost 1.83's libs/predef and libs/filesystem still ask for
   # cmake_minimum_required 2.8 and 3.0. CMake 4 rejects anything below 3.5 and
@@ -76,13 +81,13 @@ if (NOT Boost_FOUND)
   folly_fetch_from_manifest(Boost boost)
   unset(CMAKE_POLICY_VERSION_MINIMUM)
   # In the modular layout Boost::headers points at libs/headers/include, which
-  # is empty, so gather every module's include directory instead. folly reads
-  # the variable below; thrift's lib/cpp links the target.
+  # is empty, so gather every module's include directory instead. thrift's
+  # lib/cpp links the target too.
   FetchContent_GetProperties(Boost SOURCE_DIR folly_boost_source_dir)
-  file(GLOB Boost_INCLUDE_DIRS "${folly_boost_source_dir}/libs/*/include"
+  file(GLOB folly_boost_include_dirs "${folly_boost_source_dir}/libs/*/include"
        "${folly_boost_source_dir}/libs/numeric/*/include")
   target_include_directories(
-    boost_headers INTERFACE "$<BUILD_INTERFACE:${Boost_INCLUDE_DIRS}>")
+    boost_headers INTERFACE "$<BUILD_INTERFACE:${folly_boost_include_dirs}>")
   # Both the alias and the underlying name get linked.
   set(folly_boost_local Boost::headers boost_headers)
   foreach (folly_boost_component IN LISTS BOOST_INCLUDE_LIBRARIES)
@@ -91,10 +96,11 @@ if (NOT Boost_FOUND)
   endforeach ()
   set_property(GLOBAL APPEND PROPERTY FOLLY_BUILD_LOCAL_TARGETS
                                       ${folly_boost_local})
+elseif (NOT Boost_FOUND)
+  message(STATUS "Boost not found, so the folly libraries, tests and "
+                 "benchmarks that need it are left out. Install Boost, or set "
+                 "FOLLY_FETCH_BOOST to fetch it.")
 endif ()
-# Only add include directories globally, not libraries
-# Per-target Boost dependencies are specified via EXTERNAL_DEPS
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
 
 find_package(FastFloat MODULE)
 if (NOT FASTFLOAT_FOUND)
@@ -709,10 +715,17 @@ if (FOLLY_LIBRARY_SANITIZE_ADDRESS)
   endif ()
 endif ()
 
-# folly/cli's ProgramOptions needs gflags and Boost.ProgramOptions. The library,
-# its installed headers and the components folly-config.cmake asks for all
-# follow this.
-if (TARGET Boost::program_options AND (LIBGFLAGS_FOUND OR gflags_FOUND))
+# folly/cli's ProgramOptions needs gflags and an installed Boost.ProgramOptions:
+# its headers include Boost's, and a fetched Boost is not installed. The
+# library, its installed headers and the components folly-config.cmake asks
+# for all follow this.
+if (TARGET Boost::program_options AND NOT Boost_FOUND)
+  message(STATUS "folly/cli's ProgramOptions is left out: its headers need an "
+                 "installed Boost.ProgramOptions, not a fetched one.")
+endif ()
+if (Boost_FOUND
+    AND TARGET Boost::program_options
+    AND (LIBGFLAGS_FOUND OR gflags_FOUND))
   set(FOLLY_BUILD_CLI_PROGRAM_OPTIONS ON)
   set(FOLLY_BOOST_PROGRAM_OPTIONS program_options)
 else ()
@@ -721,13 +734,27 @@ else ()
 endif ()
 
 # Likewise for the libraries that need Boost.Regex: JSONSchema, RegexMatchCache
-# and the PCRE matching in testing/TestUtil.
+# and the PCRE matching in testing/TestUtil. Their installed headers don't
+# include Boost, and Boost.Regex is header-only, so a fetched one serves too.
 if (TARGET Boost::regex)
   set(FOLLY_BUILD_REGEX ON)
   set(FOLLY_BOOST_REGEX regex)
 else ()
   set(FOLLY_BUILD_REGEX OFF)
   set(FOLLY_BOOST_REGEX "")
+  if (Boost_FOUND)
+    message(STATUS "Boost.Regex not found, so JSONSchema, RegexMatchCache, "
+                   "EXPECT_PCRE_MATCH and the tests that use them are left out.")
+  endif ()
+endif ()
+
+# folly-config.cmake.in substitutes this, so it has to be a literal ON or OFF.
+# Only a system Boost reaches folly's export set, and only through these
+# libraries.
+if (Boost_FOUND AND (FOLLY_BUILD_CLI_PROGRAM_OPTIONS OR FOLLY_BUILD_REGEX))
+  set(FOLLY_BOOST_SYSTEM ON)
+else ()
+  set(FOLLY_BOOST_SYSTEM OFF)
 endif ()
 
 add_library(folly_deps INTERFACE)

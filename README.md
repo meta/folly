@@ -125,33 +125,24 @@ build them, which also fetches googletest and gflags if they are not installed
     cmake --build build
     (cd build && ctest)
 
-Whether folly uses gflags is decided when folly is built and recorded in the
-installed `folly/folly-config.h`; linking gflags into a program later does not
-turn it on. Without gflags, `folly::Init` does not parse command-line flags,
-`folly::gflags::FlagSaver` and `folly::gflags::SetCommandLineOption` do
-nothing, and the `cli` libraries are not built. Declare folly's flags with the
-`FOLLY_GFLAGS_DECLARE_*` macros from `folly/portability/GFlags.h`, not with
-gflags' `DECLARE_*`, which would not match how folly defined them: without
-gflags, for example, a string flag is a `std::string` rather than a reference.
+### Dependencies
 
-OpenSSL is optional too. Without it, the libraries that need it are not built
-or installed: `folly/ssl`, `AsyncSSLSocket`, `SSLContext`, `SSLOptions` and the
-rest of `folly/io/async/ssl`, as well as `FmtUtility`, `hash/UniqueHashKey` and
-`container/RegexMatchCache`, which hash with OpenSSL. `FOLLY_HAVE_OPENSSL` in
-the installed `folly/folly-config.h` says which way folly was built. To build
-OpenSSL from source when it is not installed, configure with
-`-DFOLLY_BUILD_OPENSSL=ON`, which is the default when folly is built as part
-of another project.
+folly has minimal required dependencies: [fmt](https://github.com/fmtlib/fmt),
+[glog](https://github.com/google/glog), [libevent](https://libevent.org/) and,
+without floating-point `std::from_chars`,
+[fast_float](https://github.com/fastfloat/fast_float). The CMake build fetches
+any that are missing.
 
-Boost.Regex is optional too. Without it, `json/JSONSchema` and
-`container/RegexMatchCache` are not built or installed, `EXPECT_PCRE_MATCH` and
-`EXPECT_NO_PCRE_MATCH` from `testing/TestUtil.h` are not available, and the
-tests that use any of them are left out. Downstream projects can check for
-`TARGET Folly::folly_testing_test_util_pcre` to see whether the PCRE helpers
-are available.
+Optional dependencies enable more features:
 
-fast_float is optional with a standard library that has floating-point
-`std::from_chars`, such as libstdc++ 11 or newer and libc++ 20 or newer.
+  * gflags: flag parsing in `folly::Init` and `cli`.
+  * OpenSSL: `folly/ssl` and `folly/io/async/ssl` (`-DFOLLY_BUILD_OPENSSL=ON`
+    builds it).
+  * Boost: `JSONSchema`, `RegexMatchCache`, `EXPECT_PCRE_MATCH` and
+    `cli/ProgramOptions` (`-DFOLLY_FETCH_BOOST=ON` fetches it;
+    `ProgramOptions` needs an installed Boost).
+  * Compression codecs (zlib, bzip2, LZMA, LZ4, zstd, Snappy), libsodium,
+    libunwind, libiberty, libaio and liburing.
 
 `cmake --install` needs CMake 3.28 or newer once anything has been fetched,
 because fetched dependencies are deliberately left out of what folly installs.

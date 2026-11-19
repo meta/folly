@@ -34,12 +34,14 @@ jobs:
 
     # Whatever the runner already has is used; the rest is fetched or built by
     # the CMake build itself, so there is no dependency install step. OpenSSL
-    # is optional; FOLLY_BUILD_OPENSSL builds it if the runner lacks it, so the
-    # TLS libraries are tested too.
+    # and Boost are optional; FOLLY_BUILD_OPENSSL and FOLLY_FETCH_BOOST get
+    # them if the runner lacks them, so the libraries that need them are
+    # tested too.
     - name: Configure
       run: >
         cmake -B build
         -DFOLLY_BUILD_OPENSSL=ON
+        -DFOLLY_FETCH_BOOST=ON
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DBUILD_TESTS=ON
         -DCMAKE_C_COMPILER_LAUNCHER=sccache

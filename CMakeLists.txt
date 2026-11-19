@@ -2000,11 +2000,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     spin_lock_test
     SOURCES
     SpinLockTest.cpp
-    BENCHMARK
-    string_benchmark
-    WINDOWS_DISABLED
-    SOURCES
-    StringBenchmark.cpp
     TEST
     string_test
     WINDOWS_DISABLED
@@ -2243,6 +2238,22 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
         SOURCES
         RegexMatchCacheTest.cpp
       )
+    endif ()
+  endif ()
+
+  # This compares against Boost's string algorithms.
+  if (TARGET Boost::headers)
+    folly_define_tests(
+      DIRECTORY
+      test/
+      BENCHMARK
+      string_benchmark
+      WINDOWS_DISABLED
+      SOURCES
+      StringBenchmark.cpp
+    )
+    if (TARGET string_benchmark)
+      target_link_libraries(string_benchmark PRIVATE Boost::headers)
     endif ()
   endif ()
 
