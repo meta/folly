@@ -172,6 +172,7 @@ folly_add_library(
     folly_ext_backtrace
     folly_file_util
     folly_indestructible
+    folly_lang_hint
     folly_lang_safe_assert
     folly_lang_to_ascii
     folly_memory

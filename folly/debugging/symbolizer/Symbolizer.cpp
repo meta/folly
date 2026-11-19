@@ -30,6 +30,7 @@
 #include <folly/debugging/symbolizer/SymbolCache.h>
 #include <folly/debugging/symbolizer/detail/Debug.h>
 #include <folly/debugging/symbolizer/detail/SignalSafeLibc.h>
+#include <folly/lang/Hint.h>
 #include <folly/lang/SafeAssert.h>
 #include <folly/lang/ToAscii.h>
 #include <folly/memory/SanitizeAddress.h>
@@ -726,8 +727,10 @@ UnsafeSelfAllocateStackTracePrinter::UnsafeSelfAllocateStackTracePrinter(int fd)
 #if FOLLY_HAVE_ELF && FOLLY_HAVE_DWARF
     constexpr uint8_t kTerminator[] = {0};
     std::span<const uint8_t> terminated{kTerminator};
+    compiler_must_not_predict(terminated);
     DwarfCursor cursor{terminated};
-    (void)cursor.readCString();
+    auto string = cursor.readCString();
+    compiler_must_not_elide(string);
 #endif
     char demangled[8];
     (void)folly::demangle("_Z1fv", demangled, sizeof(demangled));

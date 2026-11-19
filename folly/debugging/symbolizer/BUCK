@@ -193,6 +193,7 @@ fb_dirsync_cpp_library(
         "//folly:small_vector",
         "//folly/debugging/symbolizer/detail:debug",
         "//folly/debugging/symbolizer/detail:signal_safe_libc",
+        "//folly/lang:hint",
         "//folly/lang:safe_assert",
         "//folly/lang:to_ascii",
         "//folly/memory:sanitize_address",
