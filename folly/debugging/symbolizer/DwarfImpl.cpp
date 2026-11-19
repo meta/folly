@@ -24,7 +24,6 @@
 #include <folly/ScopeGuard.h>
 #include <folly/debugging/symbolizer/DwarfUtil.h>
 #include <folly/debugging/symbolizer/detail/DwarfConstants.h>
-#include <folly/lang/SafeAssert.h>
 #include <folly/portability/Config.h>
 
 #if FOLLY_HAVE_DWARF && FOLLY_HAVE_ELF
@@ -81,7 +80,6 @@ bool DwarfImpl::findLocation(
   // Partial compilation unit (DW_TAG_partial_unit) is not supported.
   if (die.abbr.tag != DW_TAG_compile_unit &&
       die.abbr.tag != DW_TAG_skeleton_unit) {
-    FOLLY_SAFE_DFATAL("Unsupported die.abbr.tag: ", die.abbr.tag);
     return false;
   }
 

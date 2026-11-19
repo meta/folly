@@ -24,6 +24,7 @@
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
 #include <folly/debugging/symbolizer/Dwarf.h>
+#include <folly/debugging/symbolizer/DwarfCursor.h>
 #include <folly/debugging/symbolizer/Elf.h>
 #include <folly/debugging/symbolizer/ElfCache.h>
 #include <folly/debugging/symbolizer/SymbolCache.h>
@@ -725,7 +726,8 @@ UnsafeSelfAllocateStackTracePrinter::UnsafeSelfAllocateStackTracePrinter(int fd)
 #if FOLLY_HAVE_ELF && FOLLY_HAVE_DWARF
     constexpr uint8_t kTerminator[] = {0};
     std::span<const uint8_t> terminated{kTerminator};
-    (void)readNullTerminated(terminated);
+    DwarfCursor cursor{terminated};
+    (void)cursor.readCString();
 #endif
     char demangled[8];
     (void)folly::demangle("_Z1fv", demangled, sizeof(demangled));

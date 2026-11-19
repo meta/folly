@@ -172,39 +172,6 @@ struct Attribute {
 // Get an ELF section by name.
 std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name);
 
-// Span-based read* functions advance their input and abort if there is not
-// enough room. DwarfCursor overloads return structured errors instead.
-
-// Read (bitwise) one object of type T
-template <class T>
-  requires(std::is_standard_layout_v<T> && std::is_trivial_v<T>)
-T read(std::span<const uint8_t>& bytes) {
-  FOLLY_SAFE_CHECK(bytes.size() >= sizeof(T), "underflow");
-  T x;
-  memcpy(&x, bytes.data(), sizeof(T));
-  bytes = bytes.subspan(sizeof(T));
-  return x;
-}
-
-// Read (bitwise) an unsigned number of N bytes (N in 1, 2, 3, 4).
-template <size_t N>
-uint64_t readU64(std::span<const uint8_t>& bytes);
-
-// Read ULEB (unsigned) varint value; algorithm from the DWARF spec
-uint64_t readULEB(
-    std::span<const uint8_t>& bytes, uint8_t& shift, uint8_t& val);
-uint64_t readULEB(std::span<const uint8_t>& bytes);
-
-// Read SLEB (signed) varint value; algorithm from the DWARF spec
-int64_t readSLEB(std::span<const uint8_t>& bytes);
-
-// Read a value of "section offset" type, which may be 4 or 8 bytes
-uint64_t readOffset(std::span<const uint8_t>& bytes, bool is64Bit);
-
-// Read "len" bytes
-std::span<const uint8_t> readBytes(
-    std::span<const uint8_t>& bytes, uint64_t len);
-
 DwarfParseResult<folly::Optional<AttributeSpec>> readAttributeSpec(
     DwarfCursor& cursor);
 
@@ -212,12 +179,6 @@ DwarfParseResult<folly::Optional<AttributeSpec>> readAttributeSpec(
 // table.
 DwarfParseResult<folly::Optional<DIEAbbreviation>> readAbbreviation(
     DwarfCursor& cursor);
-
-// Read a null-terminated string
-folly::StringPiece readNullTerminated(std::span<const uint8_t>& bytes);
-
-folly::StringPiece getStringFromStringSection(
-    std::span<const uint8_t> bytes, uint64_t offset);
 
 DwarfParseResult<CompilationUnitHeader> parseCompilationUnitHeader(
     std::span<const uint8_t> debugInfo, size_t offset);

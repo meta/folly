@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <folly/debugging/symbolizer/DwarfImpl.h>
 #include <folly/debugging/symbolizer/DwarfSection.h>
 #include <folly/debugging/symbolizer/DwarfUtil.h>
 
@@ -107,10 +108,10 @@ std::vector<uint8_t> dwpIndex(uint64_t dwoId, uint32_t unitIndex = 1) {
   return bytes;
 }
 
-std::vector<uint8_t> abbreviation() {
+std::vector<uint8_t> abbreviation(uint8_t tag = DW_TAG_compile_unit) {
   return {
       1,
-      DW_TAG_compile_unit,
+      tag,
       DW_CHILDREN_yes,
       DW_AT_name,
       DW_FORM_string,
@@ -187,6 +188,38 @@ class SparseSection {
   size_t size_;
   void* data_;
 };
+
+TEST(DwarfImpl, RejectsUnsupportedRootTagWithoutAborting) {
+  const std::vector<uint8_t> info{1};
+  const auto abbrev = abbreviation(DW_TAG_partial_unit);
+  CompilationUnits units{};
+  auto& cu = units.mainCompilationUnit;
+  cu.debugSections.debugInfo = info;
+  cu.debugSections.debugAbbrev = abbrev;
+  cu.size = static_cast<uint32_t>(info.size());
+  cu.abbrevOffset = 0;
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL);
+  SymbolizedFrame frame;
+
+  EXPECT_FALSE(dwarf.findLocation(
+      0, frame, folly::Range<SymbolizedFrame*>{}, [](folly::StringPiece) {}));
+}
+
+TEST(DwarfImpl, RejectsNonUnitRootTagWithoutAborting) {
+  const std::vector<uint8_t> info{1};
+  const auto abbrev = abbreviation(DW_TAG_subprogram);
+  CompilationUnits units{};
+  auto& cu = units.mainCompilationUnit;
+  cu.debugSections.debugInfo = info;
+  cu.debugSections.debugAbbrev = abbrev;
+  cu.size = static_cast<uint32_t>(info.size());
+  cu.abbrevOffset = 0;
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL);
+  SymbolizedFrame frame;
+
+  EXPECT_FALSE(dwarf.findLocation(
+      0, frame, folly::Range<SymbolizedFrame*>{}, [](folly::StringPiece) {}));
+}
 
 TEST(DwarfUtil, ParsesDwarf4CompilationUnitHeader) {
   const auto bytes = dwarf4Header();
