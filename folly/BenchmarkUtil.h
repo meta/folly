@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <span>
+
 #include <folly/Portability.h>
 #include <folly/lang/Hint.h>
 
@@ -46,7 +48,14 @@ FOLLY_ALWAYS_INLINE void makeUnpredictable(T& datum) {
 
 namespace detail {
 size_t bm_llc_size_fallback();
-}
+
+/// bm_llc_evict_touch
+///
+/// Writes the first word of each stride and the last word of the region.
+/// words_per_line must be positive.
+void bm_llc_evict_touch(
+    std::span<size_t volatile> region, size_t words_per_line, size_t value);
+} // namespace detail
 
 /// bm_llc_size
 ///
@@ -55,8 +64,9 @@ size_t bm_llc_size();
 
 /// bm_llc_evict
 ///
-/// Write to a large block of memory and evict whatever cache lines might
-/// currently be resident in any levels of cache.
+/// Applies cache pressure with a region twice the detected LLC size.
+/// Eviction is best effort, not a guarantee that subsequent accesses reach
+/// DRAM.
 void bm_llc_evict(size_t value);
 
 } // namespace folly

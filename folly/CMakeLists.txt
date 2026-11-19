@@ -120,6 +120,7 @@ folly_add_library(
   DEPS
     fmt::fmt
     folly_lang_align
+    folly_lang_exception
     folly_portability_sched
     folly_portability_windows
     folly_system_arch_x86

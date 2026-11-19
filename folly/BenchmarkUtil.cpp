@@ -19,11 +19,14 @@
 #include <array> // @manual
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <stdexcept>
 #include <string>
 
 #include <fmt/format.h>
 
 #include <folly/lang/Align.h>
+#include <folly/lang/Exception.h>
 #include <folly/portability/Sched.h>
 #include <folly/portability/Windows.h>
 #include <folly/system/arch/x86.h>
@@ -124,25 +127,36 @@ size_t bm_llc_size() {
 }
 
 void bm_llc_evict(size_t value) {
-  constexpr auto step =
-      folly::hardware_constructive_interference_size / sizeof(size_t);
-
   constexpr auto words_per_line =
-      folly::hardware_constructive_interference_size / step;
+      folly::hardware_constructive_interference_size / sizeof(size_t);
+  static_assert(words_per_line > 0);
 
-  static auto const llc_size = bm_llc_size();
-
-  auto const llc_lines =
-      llc_size / folly::hardware_constructive_interference_size;
-
-  static std::unique_ptr<size_t volatile[]> const vec{
-      new size_t[llc_lines * words_per_line]};
-
-  // do N passes over the region, each time touching one word per line
-  for (size_t j = 0; j < step; ++j) {
-    for (size_t i = 0; i < llc_lines; i += step) {
-      vec[i * words_per_line + j] = value;
+  static auto const word_count = [] {
+    auto const llc_size = bm_llc_size();
+    if (llc_size == 0) {
+      throw_exception<std::runtime_error>("Unable to determine LLC size");
     }
+    auto const max_llc_bytes =
+        align_floor(std::numeric_limits<size_t>::max() / 2, sizeof(size_t));
+    if (llc_size > max_llc_bytes) {
+      throw_exception<std::length_error>("LLC eviction region is too large");
+    }
+    auto const llc_words =
+        align_ceil(llc_size, sizeof(size_t)) / sizeof(size_t);
+    return 2 * llc_words;
+  }();
+  static std::unique_ptr<size_t volatile[]> const region{
+      new size_t[word_count]};
+  detail::bm_llc_evict_touch({region.get(), word_count}, words_per_line, value);
+}
+
+void detail::bm_llc_evict_touch(
+    std::span<size_t volatile> region, size_t words_per_line, size_t value) {
+  for (size_t i = 0; i < region.size(); i += words_per_line) {
+    region[i] = value;
+  }
+  if (!region.empty()) {
+    region.back() = value;
   }
 }
 

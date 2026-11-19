@@ -103,6 +103,7 @@ fb_dirsync_cpp_library(
     deps = [
         "fbsource//third-party/fmt:fmt",
         "//folly/lang:align",
+        "//folly/lang:exception",
         "//folly/portability:sched",
         "//folly/portability:windows",
         "//folly/system/arch:x86",
