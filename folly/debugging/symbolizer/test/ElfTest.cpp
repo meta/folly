@@ -17,6 +17,7 @@
 #include <array>
 #include <cstring>
 #include <span>
+#include <stdexcept>
 #include <string_view>
 #include <folly/debugging/symbolizer/Elf.h>
 
@@ -41,8 +42,12 @@
 
 #if FOLLY_HAVE_ELF
 
+using folly::symbolizer::ElfEhdr;
 using folly::symbolizer::ElfFile;
 using folly::symbolizer::ElfNhdr;
+using folly::symbolizer::ElfPhdr;
+using folly::symbolizer::ElfShdr;
+using folly::symbolizer::ElfSym;
 
 // Add some symbols for testing. Note that we have to be careful with type
 // signatures here to prevent name mangling
@@ -65,10 +70,55 @@ class ElfTest : public ::testing::Test {
   ElfFile elfFile_{kDefaultElf};
 };
 
+std::vector<uint8_t> relocatableElf(size_t sectionCount = 1) {
+  ElfFile source(kDefaultElf);
+  auto header = source.elfHeader();
+  header.e_type = ET_REL;
+  header.e_phoff = 0;
+  header.e_phnum = 0;
+  header.e_phentsize = 0;
+  header.e_shoff = sizeof(ElfEhdr);
+  header.e_shentsize = sizeof(ElfShdr);
+  header.e_shnum = static_cast<decltype(header.e_shnum)>(sectionCount);
+  header.e_shstrndx = SHN_UNDEF;
+
+  std::vector<uint8_t> bytes(sizeof(header) + sectionCount * sizeof(ElfShdr));
+  std::memcpy(bytes.data(), &header, sizeof(header));
+  return bytes;
+}
+
+void overwriteHeader(std::vector<uint8_t>& bytes, const ElfEhdr& header) {
+  ASSERT_GE(bytes.size(), sizeof(header));
+  std::memcpy(bytes.data(), &header, sizeof(header));
+}
+
+ElfEhdr readHeader(const std::vector<uint8_t>& bytes) {
+  EXPECT_GE(bytes.size(), sizeof(ElfEhdr));
+  ElfEhdr header{};
+  std::memcpy(&header, bytes.data(), sizeof(header));
+  return header;
+}
+
 TEST_F(ElfTest, IntegerValue) {
   auto sym = elfFile_.getSymbolByName("kIntegerValue");
   EXPECT_NE(nullptr, sym.first) << "Failed to look up symbol kIntegerValue";
   EXPECT_EQ(kIntegerValue, *elfFile_.getSymbolValue<uint64_t>(sym.second));
+}
+
+TEST_F(ElfTest, UnalignedAddressValue) {
+  auto sym = elfFile_.getSymbolByName("kIntegerValue");
+  ASSERT_NE(nullptr, sym.first) << "Failed to look up symbol kIntegerValue";
+  const auto* value =
+      elfFile_.getAddressValue<uint32_t>(sym.second->st_value + 1);
+  ASSERT_NE(nullptr, value);
+  uint32_t expected;
+  std::memcpy(
+      &expected,
+      reinterpret_cast<const char*>(&kIntegerValue) + 1,
+      sizeof(expected));
+  uint32_t actual;
+  std::memcpy(&actual, value, sizeof(actual));
+  EXPECT_EQ(expected, actual);
 }
 
 TEST_F(ElfTest, PointerValue) {
@@ -111,6 +161,13 @@ TEST_F(ElfTest, SymbolByName) {
   sym = elfFile_.getSymbolByName("kIntegerValue", {STT_OBJECT});
   EXPECT_NE(nullptr, sym.first)
       << "Failed to look up symbol kIntegerValue when specifying type";
+}
+
+TEST_F(ElfTest, NullNamesReturnNoResults) {
+  EXPECT_EQ(nullptr, elfFile_.getSectionByName(nullptr));
+  const auto symbol = elfFile_.getSymbolByName(nullptr);
+  EXPECT_EQ(nullptr, symbol.first);
+  EXPECT_EQ(nullptr, symbol.second);
 }
 
 TEST_F(ElfTest, SymbolsByNameSuccess) {
@@ -162,6 +219,21 @@ TEST_F(ElfTest, iterateProgramHeaders) {
   EXPECT_EQ(body.size(), phdr->p_filesz);
 }
 
+TEST_F(ElfTest, NoProgramHeadersReturnsNull) {
+  auto bytes = relocatableElf();
+  auto header = readHeader(bytes);
+  header.e_phnum = 0;
+  overwriteHeader(bytes, header);
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+
+  EXPECT_EQ(nullptr, elfFile.iterateProgramHeaders([](const ElfPhdr&) {
+    return true;
+  }));
+}
+
 TEST_F(ElfTest, TinyNonElfFile) {
   folly::test::TemporaryFile tmpFile;
   const static folly::StringPiece contents = "!";
@@ -171,6 +243,168 @@ TEST_F(ElfTest, TinyNonElfFile) {
   auto res = elfFile.openNoThrow(tmpFile.path().c_str());
   EXPECT_EQ(ElfFile::kInvalidElfFile, res.code);
   EXPECT_STREQ("not an ELF file (too short)", res.msg);
+}
+
+TEST_F(ElfTest, TruncatedElfHeaderIsRejected) {
+  folly::test::TemporaryFile tmpFile;
+  const std::array<uint8_t, SELFMAG> contents{
+      ELFMAG0, ELFMAG1, ELFMAG2, ELFMAG3};
+  folly::writeFull(tmpFile.fd(), contents.data(), contents.size());
+
+  ElfFile elfFile;
+  const auto result = elfFile.openNoThrow(tmpFile.path().c_str());
+
+  EXPECT_EQ(ElfFile::kInvalidElfFile, result.code);
+  EXPECT_STREQ("not an ELF file (too short)", result.msg);
+}
+
+TEST_F(ElfTest, ThrowingOpenReportsMalformedElf) {
+  folly::test::TemporaryFile tmpFile;
+  const std::array<uint8_t, SELFMAG> contents{
+      ELFMAG0, ELFMAG1, ELFMAG2, ELFMAG3};
+  folly::writeFull(tmpFile.fd(), contents.data(), contents.size());
+
+  EXPECT_THROW(ElfFile(tmpFile.path().c_str()), std::runtime_error);
+}
+
+TEST_F(ElfTest, InvalidExtendedSectionMetadataReturnsNoSections) {
+  auto bytes = relocatableElf();
+  auto header = readHeader(bytes);
+  header.e_shnum = 0;
+  header.e_shoff = bytes.size() - 1;
+  header.e_shstrndx = SHN_XINDEX;
+  overwriteHeader(bytes, header);
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+
+  EXPECT_EQ(nullptr, elfFile.getSectionByIndex(0));
+  EXPECT_EQ(nullptr, elfFile.getSectionByName(".text"));
+  EXPECT_EQ(nullptr, elfFile.iterateSections([](const ElfShdr&) {
+    return true;
+  }));
+}
+
+TEST_F(ElfTest, InvalidSectionIndexReturnsNull) {
+  const auto bytes = relocatableElf();
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+
+  EXPECT_EQ(nullptr, elfFile.getSectionByIndex(1));
+  EXPECT_EQ(
+      nullptr, elfFile.getSectionByIndex(std::numeric_limits<size_t>::max()));
+}
+
+TEST_F(ElfTest, OutOfBoundsSectionAndSegmentBodiesAreEmpty) {
+  const auto bytes = relocatableElf();
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+  ElfShdr section{};
+  section.sh_type = SHT_PROGBITS;
+  section.sh_offset = bytes.size();
+  section.sh_size = 1;
+  ElfPhdr segment{};
+  segment.p_offset = bytes.size();
+  segment.p_filesz = 1;
+
+  EXPECT_TRUE(elfFile.getSectionBody(section).empty());
+  EXPECT_TRUE(elfFile.getSegmentBody(segment).empty());
+}
+
+TEST_F(ElfTest, MalformedStringTablesReturnNull) {
+  const auto bytes = relocatableElf();
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+  ElfShdr stringTable{};
+  stringTable.sh_type = SHT_STRTAB;
+  stringTable.sh_offset = bytes.size();
+  stringTable.sh_size = 1;
+
+  EXPECT_EQ(nullptr, elfFile.getString(stringTable, 0));
+  stringTable.sh_offset = sizeof(ElfEhdr);
+  EXPECT_EQ(nullptr, elfFile.getString(stringTable, 1));
+  stringTable.sh_type = SHT_PROGBITS;
+  EXPECT_EQ(nullptr, elfFile.getString(stringTable, 0));
+}
+
+TEST_F(ElfTest, InvalidSectionEntrySizeReturnsNull) {
+  const auto bytes = relocatableElf();
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+  ElfShdr section{};
+  section.sh_entsize = 1;
+  section.sh_size = 1;
+
+  EXPECT_EQ(
+      nullptr,
+      elfFile.iterateSectionEntries<ElfSym>(section, [](const ElfSym&) {
+        return false;
+      }));
+}
+
+TEST_F(ElfTest, EmptySectionEntriesReturnNull) {
+  const auto bytes = relocatableElf();
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+  ElfShdr section{};
+  section.sh_entsize = sizeof(ElfSym);
+  section.sh_size = 0;
+
+  EXPECT_EQ(
+      nullptr,
+      elfFile.iterateSectionEntries<ElfSym>(section, [](const ElfSym&) {
+        return false;
+      }));
+}
+
+TEST_F(ElfTest, SectionEntriesIgnoreTrailingPartialEntry) {
+  auto bytes = relocatableElf();
+  const auto entriesOffset = bytes.size();
+  bytes.resize(entriesOffset + sizeof(ElfSym) + 1);
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+  ElfShdr section{};
+  section.sh_offset = entriesOffset;
+  section.sh_size = sizeof(ElfSym) + 1;
+  section.sh_entsize = sizeof(ElfSym);
+  size_t entries = 0;
+
+  elfFile.iterateSectionEntries<ElfSym>(section, [&](const ElfSym&) {
+    ++entries;
+    return false;
+  });
+
+  EXPECT_EQ(1, entries);
+}
+
+TEST_F(ElfTest, SectionAddressRangeDoesNotOverflow) {
+  auto bytes = relocatableElf();
+  ElfShdr section{};
+  section.sh_addr = std::numeric_limits<ElfW(Addr)>::max() - 1;
+  section.sh_size = 4;
+  std::memcpy(bytes.data() + sizeof(ElfEhdr), &section, sizeof(section));
+  folly::test::TemporaryFile tmpFile;
+  folly::writeFull(tmpFile.fd(), bytes.data(), bytes.size());
+  ElfFile elfFile;
+  ASSERT_EQ(ElfFile::kSuccess, elfFile.openNoThrow(tmpFile.path().c_str()));
+
+  EXPECT_NE(
+      nullptr,
+      elfFile.getSectionContainingAddress(
+          std::numeric_limits<ElfW(Addr)>::max()));
 }
 
 TEST_F(ElfTest, NonElfScript) {
@@ -317,6 +551,17 @@ TEST(TestNoteParsing, RejectsPartialDescriptorPadding) {
   ASSERT_TRUE(result.hasError());
   EXPECT_EQ(
       ElfFile::FindNoteFailureCode::NoteUndersized, result.error().failureCode);
+}
+
+TEST(TestNoteParsing, RejectsUnalignedHeader) {
+  alignas(ElfNhdr) std::array<uint8_t, sizeof(ElfNhdr) + 1> bytes{};
+  const auto unaligned = std::span<const uint8_t>(bytes).subspan(1);
+
+  const auto result = ElfFile::Note::parse(unaligned);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(
+      ElfFile::FindNoteFailureCode::NoteUnaligned, result.error().failureCode);
 }
 
 TEST(TestNoteParsing, AcceptsNullPaddedName) {

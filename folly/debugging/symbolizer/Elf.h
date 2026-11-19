@@ -487,6 +487,10 @@ class ElfFile {
         return Unexpected(FindNoteError(FindNoteFailureCode::NoteUndersized));
       }
 
+      if (reinterpret_cast<uintptr_t>(noteBody.data()) % alignof(ElfNhdr) !=
+          0) {
+        return Unexpected(FindNoteError(FindNoteFailureCode::NoteUnaligned));
+      }
       const ElfNhdr* nhdr = reinterpret_cast<const ElfNhdr*>(noteBody.data());
       const size_t nameSize = nhdr->n_namesz;
       const size_t namePadding = (4 - nameSize % 4) % 4;
@@ -606,15 +610,42 @@ class ElfFile {
   // of section header 0.
   size_t getSectionHeaderStrIndex() const noexcept;
 
-  void validateStringTable(const ElfShdr& stringTable) const noexcept;
+  bool validateStringTable(const ElfShdr& stringTable) const noexcept;
 
+  /**
+   * Return a pointer if sizeof(T) bytes fit at offset in the mapped file.
+   * The returned pointer is not necessarily sufficiently aligned for T.
+   */
   template <class T>
-  const T& at(ElfOff offset) const noexcept {
+  const T* atIfInBounds(ElfOff offset) const noexcept {
     static_assert(
         std::is_standard_layout<T>::value && std::is_trivial<T>::value,
         "non-pod");
+    const auto start = static_cast<size_t>(offset);
+    if (static_cast<ElfOff>(start) != offset) {
+      return nullptr;
+    }
+    size_t end;
+    if (!folly::checked_add(&end, start, sizeof(T)) || end > length_) {
+      return nullptr;
+    }
+    return reinterpret_cast<const T*>(file_ + start);
+  }
+
+  template <class T>
+  const T* atIfValid(ElfOff offset) const noexcept {
+    const auto* value = atIfInBounds<T>(offset);
+    if (reinterpret_cast<uintptr_t>(value) % alignof(T) != 0) {
+      return nullptr;
+    }
+    return value;
+  }
+
+  template <class T>
+  const T& at(ElfOff offset) const noexcept {
+    const auto* value = atIfValid<T>(offset);
     FOLLY_SAFE_CHECK(
-        offset + sizeof(T) <= length_,
+        value != nullptr,
         "Offset (",
         static_cast<size_t>(offset),
         " + ",
@@ -623,7 +654,7 @@ class ElfFile {
         filepath_,
         ") of length ",
         length_);
-    return *reinterpret_cast<T*>(file_ + offset);
+    return *value;
   }
 
   template <class T>
@@ -641,8 +672,12 @@ class ElfFile {
           elfHeader().e_type == ET_CORE)) {
       return nullptr;
     }
-    if (!(addr >= section.sh_addr &&
-          (addr + sizeof(T)) <= (section.sh_addr + section.sh_size))) {
+    if (addr < section.sh_addr) {
+      return nullptr;
+    }
+    const auto relativeOffset = addr - section.sh_addr;
+    if (relativeOffset > section.sh_size ||
+        sizeof(T) > section.sh_size - relativeOffset) {
       return nullptr;
     }
 
@@ -655,9 +690,14 @@ class ElfFile {
       return &t;
     }
 
-    ElfOff offset = section.sh_offset + (addr - section.sh_addr);
-
-    return (offset + sizeof(T) <= length_) ? &at<T>(offset) : nullptr;
+    ElfOff offset;
+    if (!folly::checked_add(
+            &offset, section.sh_offset, static_cast<ElfOff>(relativeOffset))) {
+      return nullptr;
+    }
+    // Values at symbol addresses, such as instruction immediates, need not be
+    // aligned for T.
+    return atIfInBounds<T>(offset);
   }
 
   // Helper to iterate notes in a section or segment.

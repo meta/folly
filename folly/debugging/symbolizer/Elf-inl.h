@@ -22,6 +22,9 @@ namespace symbolizer {
 template <class Fn>
 const ElfPhdr* ElfFile::iterateProgramHeaders(Fn fn) const
     noexcept(is_nothrow_invocable_v<Fn&, ElfPhdr const&>) {
+  if (elfHeader().e_phnum == 0) {
+    return nullptr;
+  }
   // Validate that all program headers fit within the mapped file bounds.
   // There exist malformed ELF binaries with invalid header counts/offsets,
   // which can cause SIGBUS when iterating past the valid mapped memory
@@ -38,7 +41,10 @@ const ElfPhdr* ElfFile::iterateProgramHeaders(Fn fn) const
     return nullptr;
   }
 
-  const ElfPhdr* ptr = &at<ElfPhdr>(elfHeader().e_phoff);
+  const ElfPhdr* ptr = atIfValid<ElfPhdr>(elfHeader().e_phoff);
+  if (ptr == nullptr) {
+    return nullptr;
+  }
   for (size_t i = 0; i < elfHeader().e_phnum; i++, ptr++) {
     if (fn(*ptr)) {
       return ptr;
@@ -55,6 +61,9 @@ const ElfShdr* ElfFile::iterateSections(Fn fn) const
   // which can cause SIGBUS when iterating past the valid mapped memory
   // region. This code must handle malformed binaries without crashing.
   auto numSections = getNumSections();
+  if (numSections == 0) {
+    return nullptr;
+  }
   size_t sectionsSize;
   size_t sectionsEnd;
   if (!folly::checked_mul(&sectionsSize, numSections, sizeof(ElfShdr)) ||
@@ -66,7 +75,10 @@ const ElfShdr* ElfFile::iterateSections(Fn fn) const
     return nullptr;
   }
 
-  const ElfShdr* ptr = &at<ElfShdr>(elfHeader().e_shoff);
+  const ElfShdr* ptr = atIfValid<ElfShdr>(elfHeader().e_shoff);
+  if (ptr == nullptr) {
+    return nullptr;
+  }
   for (size_t i = 0; i < numSections; i++, ptr++) {
     if (fn(*ptr)) {
       return ptr;
@@ -96,7 +108,9 @@ const ElfShdr* ElfFile::iterateSectionsWithTypes(
 template <class Fn>
 const char* ElfFile::iterateStrings(const ElfShdr& stringTable, Fn fn) const
     noexcept(is_nothrow_invocable_v<Fn&, const char*>) {
-  validateStringTable(stringTable);
+  if (!validateStringTable(stringTable)) {
+    return nullptr;
+  }
 
   const char* start = file_ + stringTable.sh_offset;
   const char* end = start + stringTable.sh_size;
@@ -113,8 +127,9 @@ template <typename E, class Fn>
 const E* ElfFile::iterateSectionEntries(const ElfShdr& section, Fn&& fn) const
 
     noexcept(is_nothrow_invocable_v<E const&>) {
-  FOLLY_SAFE_CHECK(
-      section.sh_entsize == sizeof(E), "invalid entry size in table");
+  if (section.sh_entsize != sizeof(E)) {
+    return nullptr;
+  }
 
   // Validate that the entire section data is within the mapped file bounds.
   // There exist malformed ELF binaries with invalid section offsets/sizes,
@@ -129,7 +144,13 @@ const E* ElfFile::iterateSectionEntries(const ElfShdr& section, Fn&& fn) const
     return nullptr;
   }
 
-  const E* ent = &at<E>(section.sh_offset);
+  if (section.sh_size == 0) {
+    return nullptr;
+  }
+  const E* ent = atIfValid<E>(section.sh_offset);
+  if (ent == nullptr) {
+    return nullptr;
+  }
   const E* end = ent + (section.sh_size / section.sh_entsize);
 
   while (ent < end) {
