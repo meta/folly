@@ -15,12 +15,19 @@
  */
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <map>
 #include <random>
+#include <stdexcept>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -31,6 +38,8 @@
 #include <folly/Random.h>
 #include <folly/hash/Hash.h>
 #include <folly/init/Init.h>
+#include <folly/lang/Align.h>
+#include <folly/lang/Exception.h>
 #include <folly/portability/GFlags.h>
 
 #include <folly/container/F14Map.h>
@@ -51,6 +60,28 @@ DEFINE_int32(
     "max number of entries to benchmark each map with (inclusive)");
 DEFINE_int32(
     map_size_step, 32, "multiplier for each benchmark between iterations");
+
+DEFINE_bool(
+    map_locality, false, "Run the fixed-work F14 locality matrix instead.");
+DEFINE_uint32(
+    map_locality_small_entries,
+    128,
+    "Entries for non-collision hot/eviction fixtures; collisions use fixed 6/64.");
+DEFINE_uint32(
+    map_locality_evict_iters,
+    128,
+    "Eviction lookups, a positive multiple of 128.");
+DEFINE_uint32(map_locality_seed, 42, "Fixed locality query-shuffle seed.");
+DEFINE_uint32(
+    map_locality_large_llc_factor,
+    2,
+    "Minimum large header-line footprint / LLC.");
+DEFINE_uint64(
+    map_locality_hot_max_bytes, 16384, "Hot map+query allocation budget.");
+DEFINE_uint64(
+    map_locality_max_bytes,
+    uint64_t{8} << 30,
+    "Per-process active map+query+reserved eviction-buffer budget, not RSS.");
 
 //////// Key related preparation ////////
 
@@ -453,6 +484,452 @@ void runAllHashMapTests() {
   }
 }
 
+namespace {
+
+#if FOLLY_F14_VECTOR_INTRINSICS_AVAILABLE
+
+using std::literals::operator""sv;
+
+enum class LookupLocality { hot, eviction, large };
+enum class LookupPattern {
+  hit,
+  miss,
+  mixed,
+  no_tag,
+  false_tag,
+  overflow_no_tag,
+  overflow_false_tag,
+  overflow_last_hit,
+};
+
+struct LookupConfig {
+  std::string name;
+  LookupLocality locality;
+  LookupPattern pattern;
+};
+
+constexpr std::array kLookupLocalities{
+    std::pair{LookupLocality::hot, "Hot"sv},
+    std::pair{LookupLocality::eviction, "Eviction"sv},
+    std::pair{LookupLocality::large, "Large"sv},
+};
+constexpr std::array kLookupPatterns{
+    std::pair{LookupPattern::hit, "hit"sv},
+    std::pair{LookupPattern::miss, "miss"sv},
+    std::pair{LookupPattern::mixed, "mixed"sv},
+    std::pair{LookupPattern::no_tag, "no_tag"sv},
+    std::pair{LookupPattern::false_tag, "false_tag"sv},
+    std::pair{LookupPattern::overflow_no_tag, "overflow_no_tag"sv},
+    std::pair{LookupPattern::overflow_false_tag, "overflow_false_tag"sv},
+    std::pair{LookupPattern::overflow_last_hit, "overflow_last_hit"sv},
+};
+
+bool noTagPattern(LookupPattern pattern) {
+  return pattern == LookupPattern::no_tag ||
+      pattern == LookupPattern::overflow_no_tag;
+}
+
+bool overflowPattern(LookupPattern pattern) {
+  return pattern == LookupPattern::overflow_no_tag ||
+      pattern == LookupPattern::overflow_false_tag ||
+      pattern == LookupPattern::overflow_last_hit;
+}
+
+bool collisionPattern(LookupPattern pattern) {
+  return noTagPattern(pattern) || pattern == LookupPattern::false_tag ||
+      overflowPattern(pattern);
+}
+
+size_t maxProbe(std::vector<size_t> const& histo) {
+  for (size_t i = histo.size(); i != 0; --i) {
+    if (histo[i - 1] != 0) {
+      return i - 1;
+    }
+  }
+  return 0;
+}
+
+struct LookupCollisionHash {
+  // Intentionally non-avalanching; opt out of remixing to preserve fixture
+  // tags.
+  using folly_is_avalanching = std::true_type;
+  size_t operator()(uint64_t key) const {
+    return static_cast<size_t>(key & 255) << (sizeof(size_t) * 8 - 8);
+  }
+};
+
+struct LookupCountEqual {
+  size_t* calls;
+  bool operator()(uint64_t a, uint64_t b) const {
+    ++*calls;
+    return a == b;
+  }
+};
+
+size_t localityEntries(LookupConfig const& config, size_t llc) {
+  if (collisionPattern(config.pattern)) {
+    return overflowPattern(config.pattern) ? 64 : 6;
+  }
+  if (config.locality != LookupLocality::large) {
+    return FLAGS_map_locality_small_entries;
+  }
+  auto const factor = FLAGS_map_locality_large_llc_factor;
+  if (llc == 0 || llc > std::numeric_limits<size_t>::max() / factor) {
+    throw_exception<std::length_error>("Invalid large locality footprint");
+  }
+  auto const bytes = llc * factor;
+  auto const lines = bytes / hardware_constructive_interference_size +
+      (bytes % hardware_constructive_interference_size != 0);
+  if (lines > std::numeric_limits<uint32_t>::max() / 32) {
+    throw_exception<std::length_error>("Too many locality entries");
+  }
+  // At most 16 slots per chunk; size the allocated header-line arena beyond
+  // LLC.
+  return lines * 16;
+}
+
+uint64_t localityKey(size_t id, bool collision, uint8_t tag = 17) {
+  return collision
+      ? (uint64_t{id} << 8) | tag
+      : keyGen<uint64_t>(static_cast<uint32_t>(id));
+}
+
+template <typename V>
+V localityValue(size_t id) {
+  V result{};
+  result[0] = static_cast<uint8_t>(id * 3);
+  return result;
+}
+
+bool localityHit(LookupPattern pattern, size_t i) {
+  return pattern == LookupPattern::hit ||
+      pattern == LookupPattern::overflow_last_hit ||
+      (pattern == LookupPattern::mixed && i % 2 == 0);
+}
+
+template <typename Map>
+struct LookupFixture {
+  Map map;
+  std::vector<uint64_t> queries;
+  size_t entries = 0;
+  size_t expected_hits = 0;
+  uint64_t expected_sum = 0;
+  uint64_t trace_hash = 0;
+};
+
+template <typename Map>
+LookupFixture<Map> makeLookupFixture(LookupConfig const& config, size_t llc) {
+  LookupFixture<Map> fixture;
+  fixture.entries = localityEntries(config, llc);
+  auto const collision = collisionPattern(config.pattern);
+  auto const query_count =
+      config.locality == LookupLocality::large ? fixture.entries : size_t{128};
+  auto const estimate =
+      sizeof(typename Map::value_type) + 128 + sizeof(uint64_t);
+  auto const limit = std::min<uint64_t>(
+      FLAGS_map_locality_max_bytes, std::numeric_limits<size_t>::max());
+  if (fixture.entries == 0 ||
+      fixture.entries > std::numeric_limits<uint32_t>::max() / 2 ||
+      fixture.entries > limit / estimate) {
+    throw_exception<std::length_error>(
+        "Locality fixture exceeds entry or memory budget");
+  }
+  fixture.map.reserve(collision ? 128 : fixture.entries);
+  for (size_t i = 0; i < fixture.entries; ++i) {
+    fixture.map.emplace(
+        localityKey(i, collision), localityValue<typename Map::mapped_type>(i));
+  }
+  fixture.queries.reserve(query_count);
+  for (size_t i = 0; i < query_count; ++i) {
+    auto const hit = localityHit(config.pattern, i);
+    auto const id = config.pattern == LookupPattern::overflow_last_hit
+        ? fixture.entries - 1
+        : i % fixture.entries + (hit ? 0 : fixture.entries);
+    // Tags 17 and 33 have the same probe delta modulo the 16-chunk fixture.
+    auto const tag = noTagPattern(config.pattern) ? 33 : 17;
+    fixture.queries.push_back(localityKey(id, collision, tag));
+    fixture.expected_hits += hit;
+    if (hit) {
+      fixture.expected_sum +=
+          uint64_t{static_cast<uint8_t>((id % fixture.entries) * 3)} + 1;
+    }
+  }
+  std::mt19937 rng{FLAGS_map_locality_seed};
+  std::shuffle(fixture.queries.begin(), fixture.queries.end(), rng);
+  uint64_t sum = 0;
+  size_t hits = 0;
+  for (auto key : fixture.queries) {
+    auto const found = fixture.map.find(key);
+    if (found != fixture.map.end()) {
+      ++hits;
+      sum += uint64_t{found->second[0]} + 1;
+    }
+    fixture.trace_hash = hash::hash_combine(fixture.trace_hash, key);
+  }
+  if (hits != fixture.expected_hits || sum != fixture.expected_sum) {
+    throw_exception<std::runtime_error>("Locality query oracle failed");
+  }
+  return fixture;
+}
+
+template <template <class...> class Map, typename V>
+void checkCollisionFixture(
+    LookupConfig const& config,
+    LookupFixture<Map<uint64_t, V, LookupCollisionHash>> const& fixture) {
+  size_t calls = 0;
+  Map<uint64_t, V, LookupCollisionHash, LookupCountEqual> shadow(
+      0, LookupCollisionHash{}, LookupCountEqual{&calls});
+  shadow.reserve(128);
+  for (size_t i = 0; i < fixture.entries; ++i) {
+    shadow.emplace(localityKey(i, true), localityValue<V>(i));
+  }
+  auto const stats = fixture.map.computeStats();
+  auto const shadow_stats = shadow.computeStats();
+  if (stats.chunkCount != 16 ||
+      stats.chunkOccupancyHisto != shadow_stats.chunkOccupancyHisto ||
+      stats.chunkOutboundOverflowHisto !=
+          shadow_stats.chunkOutboundOverflowHisto ||
+      (overflowPattern(config.pattern)
+           ? maxProbe(stats.keyProbeLengthHisto) <= 1
+           : maxProbe(stats.keyProbeLengthHisto) != 1)) {
+    throw_exception<std::runtime_error>(
+        "Locality collision fixture oracle failed");
+  }
+  auto const no_tag = noTagPattern(config.pattern);
+  for (auto key : fixture.queries) {
+    calls = 0;
+    auto const found = shadow.find(key);
+    if (calls != (no_tag ? 0 : fixture.entries) ||
+        (found != shadow.end()) !=
+            (config.pattern == LookupPattern::overflow_last_hit)) {
+      throw_exception<std::runtime_error>("Locality candidate oracle failed");
+    }
+  }
+}
+
+template <typename Map>
+FOLLY_NOINLINE uint64_t localityFind(Map const& map, uint64_t key) {
+  std::atomic_signal_fence(std::memory_order_seq_cst);
+  auto const found = map.find(key);
+  return found == map.end() ? 0 : uint64_t{found->second[0]} + 1;
+}
+
+FOLLY_NOINLINE uint64_t localityEmpty(uint64_t key) {
+  std::atomic_signal_fence(std::memory_order_seq_cst);
+  doNotOptimizeAway(key);
+  return 1;
+}
+
+template <typename Find>
+uint64_t localitySweep(std::vector<uint64_t> const& queries, Find const& find) {
+  uint64_t sum = 0;
+  for (auto key : queries) {
+    sum += find(key);
+  }
+  return sum;
+}
+
+template <typename Map, typename Check>
+unsigned runLookupLocality(
+    LookupConfig const& config, unsigned requested_iters, Check const& check) {
+  BenchmarkSuspender suspend;
+  auto const llc = bm_llc_size();
+  if (config.locality != LookupLocality::hot && llc == 0) {
+    throw_exception<std::runtime_error>(
+        "Unable to determine LLC for locality run");
+  }
+  auto fixture = makeLookupFixture<Map>(config, llc);
+  check(fixture);
+  auto const stats = fixture.map.computeStats();
+  auto const query_bytes = fixture.queries.capacity() * sizeof(uint64_t);
+  auto const map_bytes = fixture.map.getAllocatedMemorySize() + sizeof(Map);
+  auto const fixture_bytes = uint64_t{map_bytes} + query_bytes;
+  if (llc > FLAGS_map_locality_max_bytes / 2) {
+    throw_exception<std::length_error>(
+        "Eviction reserve exceeds locality memory budget");
+  }
+  auto const eviction_bytes = uint64_t{llc} * 2;
+  if (fixture_bytes > FLAGS_map_locality_max_bytes - eviction_bytes ||
+      (config.locality == LookupLocality::hot &&
+       fixture_bytes > FLAGS_map_locality_hot_max_bytes) ||
+      (config.locality == LookupLocality::large &&
+       stats.chunkCount < llc * FLAGS_map_locality_large_llc_factor /
+               hardware_constructive_interference_size)) {
+    throw_exception<std::length_error>(
+        "Locality fixture footprint is outside its budget");
+  }
+  auto const wanted = config.locality == LookupLocality::eviction
+      ? FLAGS_map_locality_evict_iters
+      : requested_iters;
+  auto const passes =
+      wanted / fixture.queries.size() + (wanted % fixture.queries.size() != 0);
+  if (passes == 0 ||
+      passes > std::numeric_limits<unsigned>::max() / fixture.queries.size()) {
+    throw_exception<std::length_error>("Invalid locality lookup count");
+  }
+  auto const operations = passes * fixture.queries.size();
+  LOG(INFO) << fmt::format(
+      "LookupLocality {} seed={} entries={} llc_bytes={} map_bytes={} query_bytes={} "
+      "header_line_bytes={} lookups={} hits={} trace_hash={} reserved_eviction_bytes_per_process={} "
+      "paired_fixture_and_eviction_bytes_estimate={}",
+      config.name,
+      FLAGS_map_locality_seed,
+      fixture.entries,
+      llc,
+      map_bytes,
+      query_bytes,
+      stats.chunkCount * hardware_constructive_interference_size,
+      operations,
+      passes * fixture.expected_hits,
+      fixture.trace_hash,
+      eviction_bytes,
+      2 * (fixture_bytes + eviction_bytes));
+  makeUnpredictable(fixture.map);
+  makeUnpredictable(fixture.queries);
+  auto const find = [&](uint64_t key) {
+    return localityFind(fixture.map, key);
+  };
+  doNotOptimizeAway(localitySweep(fixture.queries, find));
+  uint64_t sum = 0;
+  if (config.locality == LookupLocality::eviction) {
+    for (size_t p = 0; p < passes; ++p) {
+      for (auto key : fixture.queries) {
+        bm_llc_evict(key);
+        suspend.dismissing([&] { sum += find(key); });
+      }
+    }
+  } else {
+    suspend.dismissing([&] {
+      for (size_t p = 0; p < passes; ++p) {
+        sum += localitySweep(fixture.queries, find);
+      }
+    });
+  }
+  doNotOptimizeAway(sum);
+  if (sum != passes * fixture.expected_sum) {
+    throw_exception<std::runtime_error>("Timed locality checksum mismatch");
+  }
+  return static_cast<unsigned>(operations);
+}
+
+unsigned runLocalityControl(bool eviction, unsigned requested_iters) {
+  BenchmarkSuspender suspend;
+  if (bm_llc_size() > FLAGS_map_locality_max_bytes / 2) {
+    throw_exception<std::length_error>(
+        "Eviction control exceeds locality memory budget");
+  }
+  auto const operations =
+      eviction ? FLAGS_map_locality_evict_iters : requested_iters;
+  uint64_t sum = 0;
+  if (eviction) {
+    for (unsigned i = 0; i < operations; ++i) {
+      bm_llc_evict(i);
+      suspend.dismissing([&] { sum += localityEmpty(i); });
+    }
+  } else {
+    suspend.dismissing([&] {
+      for (unsigned i = 0; i < operations; ++i) {
+        sum += localityEmpty(i);
+      }
+    });
+  }
+  doNotOptimizeAway(sum);
+  return operations;
+}
+
+template <template <class...> class Map, size_t Bytes>
+void addLocalityMap(std::string_view map_name) {
+  using V = std::array<uint8_t, Bytes>;
+  using Regular = Map<uint64_t, V, f14::DefaultHasher<uint64_t>>;
+  using Collision = Map<uint64_t, V, LookupCollisionHash>;
+  for (auto const& [locality, locality_name] : kLookupLocalities) {
+    for (auto const& [pattern, pattern_name] : kLookupPatterns) {
+      if (locality == LookupLocality::large && collisionPattern(pattern)) {
+        continue;
+      }
+      LookupConfig config{
+          fmt::format(
+              "Lookup{}_{}_<u64,a[{}]>_{}",
+              locality_name,
+              map_name,
+              Bytes,
+              pattern_name),
+          locality,
+          pattern};
+      addBenchmark(__FILE__, config.name, [config](unsigned iters) {
+        if (collisionPattern(config.pattern)) {
+          return runLookupLocality<Collision>(
+              config, iters, [&](auto const& fixture) {
+                checkCollisionFixture<Map, V>(config, fixture);
+              });
+        }
+        return runLookupLocality<Regular>(config, iters, [](auto const&) {});
+      });
+    }
+  }
+}
+
+void runLookupLocalityBenchmarks() {
+  if (FLAGS_map_locality_small_entries < 32 ||
+      FLAGS_map_locality_small_entries >
+          std::numeric_limits<uint32_t>::max() / 2 ||
+      FLAGS_map_locality_evict_iters == 0 ||
+      FLAGS_map_locality_evict_iters % 128 != 0 ||
+      FLAGS_map_locality_large_llc_factor < 2 ||
+      FLAGS_map_locality_large_llc_factor > 16) {
+    throw_exception<std::invalid_argument>(
+        "Invalid locality benchmark configuration");
+  }
+  folly::gflags::SetCommandLineOptionWithMode(
+      "bm_mode", "best-of", folly::gflags::SET_FLAG_IF_DEFAULT);
+  folly::gflags::SetCommandLineOptionWithMode(
+      "bm_profile", "true", folly::gflags::SET_FLAG_IF_DEFAULT);
+  folly::gflags::SetCommandLineOptionWithMode(
+      "bm_profile_iters", "65536", folly::gflags::SET_FLAG_IF_DEFAULT);
+  folly::gflags::SetCommandLineOptionWithMode(
+      "bm_regex", "^Lookup", folly::gflags::SET_FLAG_IF_DEFAULT);
+  std::string mode;
+  std::string profile;
+  std::string profile_iters;
+  folly::gflags::GetCommandLineOption("bm_mode", &mode);
+  folly::gflags::GetCommandLineOption("bm_profile", &profile);
+  folly::gflags::GetCommandLineOption("bm_profile_iters", &profile_iters);
+  auto const count = to<int64_t>(profile_iters);
+  if (mode != "best-of" || profile != "true" || count <= 0 ||
+      static_cast<uint64_t>(count) > std::numeric_limits<unsigned>::max()) {
+    throw_exception<std::invalid_argument>(
+        "Locality benchmarks require valid fixed profiling mode");
+  }
+  LOG(INFO)
+      << "Fixed-work profiles; repeat paired process/worker runs for confidence. "
+      << "Hot/eviction share fixtures. Large cases cover the full trace. "
+      << "Eviction applies LLC pressure, not guaranteed DRAM access. "
+      << "Wrapper controls are diagnostic, not subtracted.";
+  addLocalityMap<F14ValueMap, 1>("f14val");
+  addLocalityMap<F14ValueMap, 17>("f14val");
+  addLocalityMap<F14NodeMap, 1>("f14node");
+  addLocalityMap<F14NodeMap, 17>("f14node");
+  addLocalityMap<F14VectorMap, 1>("f14vec");
+  addLocalityMap<F14VectorMap, 17>("f14vec");
+  addBenchmark(__FILE__, "LookupHot_wrapper_control", [](unsigned n) {
+    return runLocalityControl(false, n);
+  });
+  addBenchmark(__FILE__, "LookupEviction_wrapper_control", [](unsigned n) {
+    return runLocalityControl(true, n);
+  });
+}
+
+#else
+
+void runLookupLocalityBenchmarks() {
+  throw_exception<std::runtime_error>(
+      "F14 locality benchmarks are unsupported without vector intrinsics");
+}
+
+#endif
+
+} // namespace
+
 // Pointer-chase over a randomly permuted cycle of n cache lines. Not a map
 // benchmark: it's a baseline for the raw memory latency of the host running
 // this binary, so that the Find/ManyFind results above at large map sizes
@@ -563,6 +1040,16 @@ int main(int argc, char** argv) {
       "bm_min_iters", "10000", folly::gflags::SET_FLAG_IF_DEFAULT);
   folly::gflags::SetCommandLineOptionWithMode(
       "bm_max_secs", "1", folly::gflags::SET_FLAG_IF_DEFAULT);
+  if (FLAGS_map_locality) {
+    try {
+      runLookupLocalityBenchmarks();
+      runBenchmarks();
+      return 0;
+    } catch (std::exception const& error) {
+      LOG(ERROR) << error.what();
+      return 1;
+    }
+  }
   LOG(INFO) << "Preparing benchmark...";
   runAllHashMapTests();
   LOG(INFO) << "Running benchmark, which could take tens of minutes...";

@@ -683,6 +683,7 @@ fb_dirsync_cpp_unittest(
 fb_dirsync_cpp_binary(
     name = "hash_maps_bench",
     srcs = ["HashMapsBench.cpp"],
+    labels = _F14_FALLBACK_CI_LABELS,
     deps = [
         "fbsource//third-party/fmt:fmt",
         "fbsource//third-party/glog:glog",
@@ -694,6 +695,8 @@ fb_dirsync_cpp_binary(
         "//folly/container:f14_hash",
         "//folly/hash:hash",
         "//folly/init:init",
+        "//folly/lang:align",
+        "//folly/lang:exception",
         "//folly/portability:gflags",
     ],
 )
