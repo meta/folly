@@ -41,9 +41,6 @@ IoUringBackend::Options ioUringOptionsWithTwoProvidedBuffers() {
 class NoopRecvCallback final : public IoUringRecvCallback {
  public:
   void recvSuccess(std::unique_ptr<IOBuf> /*data*/) override {}
-  void recvSuccessWithCmsgs(
-      std::unique_ptr<IOBuf> /*data*/,
-      detail::IoUringRecvmsgControl /*control*/) override {}
   void recvEOF() noexcept override {}
   void recvErr(
       int /*err*/,

@@ -1436,16 +1436,62 @@ AsyncSocket::ErrMessageCallback* AsyncSocket::getErrMessageCallback() const {
 }
 
 void AsyncSocket::setReadAncillaryDataCB(ReadAncillaryDataCallback* callback) {
-  CHECK(!useIoUring_);
   VLOG(6) << "AsyncSocket::setReadAncillaryDataCB() this=" << this << ", fd="
           << fd_ << ", callback=" << callback << ", state=" << state_;
 
+  if (readAncillaryDataCallback_ == callback) {
+    return;
+  }
   readAncillaryDataCallback_ = callback;
+  if (!useIoUring_ || !iouRecvHandle_ || !eventBase_) {
+    return;
+  }
+
+  DestructorGuard dg(this);
+  if (!iouRecvHandleDetached_) {
+    iouRecvHandle_->detachEventBase();
+  }
+  iouRecvHandle_ = IoUringRecvHandle::clone(
+      eventBase_,
+      fd_,
+      addr_,
+      this,
+      std::move(iouRecvHandle_),
+      shouldUseIoUringRecvmsgCmsg(),
+      getIoUringRecvmsgControlLength());
+  iouRecvHandleDetached_ = false;
+  if (!iouRecvHandle_) {
+    // The backend cannot support plain io_uring recv. Fall back to the
+    // EventHandler path now that the receive handle no longer masks READ.
+    (void)updateEventRegistration();
+    return;
+  }
+  iouRecvHandle_->update(eventFlags_);
+  if (eventFlags_ & EventHandler::READ) {
+    iouRecvHandle_->submit();
+    iouRecvHandle_->drainCompletedReads();
+  }
 }
 
 AsyncSocket::ReadAncillaryDataCallback*
 AsyncSocket::getReadAncillaryDataCallback() const {
   return readAncillaryDataCallback_;
+}
+
+bool AsyncSocket::shouldUseIoUringRecvmsgCmsg() const {
+  return readAncillaryDataCallback_ != nullptr || useIoUringRecvmsgCmsg();
+}
+
+size_t AsyncSocket::getIoUringRecvmsgControlLength() const {
+  size_t controlLength = 0;
+  if (readAncillaryDataCallback_) {
+    controlLength =
+        readAncillaryDataCallback_->getAncillaryDataCtrlBuffer().size();
+  }
+  if (useIoUringRecvmsgCmsg()) {
+    controlLength = std::max(controlLength, CMSG_SPACE(sizeof(uint8_t)));
+  }
+  return controlLength;
 }
 
 void AsyncSocket::setSendMsgParamCB(SendMsgParamsCallback* callback) {
@@ -1516,13 +1562,22 @@ void AsyncSocket::setReadCB(ReadCallback* callback) {
       if (readCallback_) {
         eventFlags_ |= EventHandler::READ;
         if (useIoUring_ && !iouRecvHandle_) {
-          iouRecvHandle_ =
-              IoUringRecvHandle::create(eventBase_, fd_, addr_, this);
-          CHECK(iouRecvHandle_);
+          iouRecvHandle_ = IoUringRecvHandle::create(
+              eventBase_,
+              fd_,
+              addr_,
+              this,
+              shouldUseIoUringRecvmsgCmsg(),
+              getIoUringRecvmsgControlLength());
         } else if (useIoUring_ && iouRecvHandleDetached_) {
           iouRecvHandle_ = IoUringRecvHandle::clone(
-              eventBase_, fd_, addr_, this, std::move(iouRecvHandle_));
-          CHECK(iouRecvHandle_);
+              eventBase_,
+              fd_,
+              addr_,
+              this,
+              std::move(iouRecvHandle_),
+              shouldUseIoUringRecvmsgCmsg(),
+              getIoUringRecvmsgControlLength());
           iouRecvHandleDetached_ = false;
         }
       } else {
@@ -2656,11 +2711,16 @@ void AsyncSocket::attachEventBase(EventBase* eventBase) {
 
   eventBase_ = eventBase;
   if (useIoUring_) {
-    if (eventFlags_ & EventHandler::READ) {
-      CHECK(iouRecvHandle_ != nullptr);
+    if ((eventFlags_ & EventHandler::READ) && iouRecvHandle_) {
       CHECK(readCallback_ != nullptr);
       iouRecvHandle_ = IoUringRecvHandle::clone(
-          eventBase, fd_, addr_, this, std::move(iouRecvHandle_));
+          eventBase,
+          fd_,
+          addr_,
+          this,
+          std::move(iouRecvHandle_),
+          shouldUseIoUringRecvmsgCmsg(),
+          getIoUringRecvmsgControlLength());
       iouRecvHandleDetached_ = false;
     }
     if (iouSendHandle_) {
@@ -2704,16 +2764,14 @@ void AsyncSocket::detachEventBase() {
 
   eventBase_ = nullptr;
 
-  if (useIoUring_) {
-    if (iouRecvHandle_ && !iouRecvHandleDetached_) {
-      iouRecvHandle_->detachEventBase();
-      iouRecvHandleDetached_ = true;
-    }
+  if (iouRecvHandle_ && !iouRecvHandleDetached_) {
+    iouRecvHandle_->detachEventBase();
+    iouRecvHandleDetached_ = true;
+  }
 
-    if (iouSendHandle_) {
-      iouSendHandle_->update(EventHandler::NONE);
-      iouSendHandle_->detachEventBase();
-    }
+  if (iouSendHandle_) {
+    iouSendHandle_->update(EventHandler::NONE);
+    iouSendHandle_->detachEventBase();
   }
 
   ioHandler_.unregisterHandler();
@@ -3864,8 +3922,13 @@ void AsyncSocket::handleInitialReadWrite() noexcept {
     assert(state_ == StateEnum::ESTABLISHED);
     assert((shutdownFlags_ & SHUT_READ) == 0);
     if (useIoUring_ && !iouRecvHandle_) {
-      iouRecvHandle_ = IoUringRecvHandle::create(eventBase_, fd_, addr_, this);
-      CHECK(iouRecvHandle_);
+      iouRecvHandle_ = IoUringRecvHandle::create(
+          eventBase_,
+          fd_,
+          addr_,
+          this,
+          shouldUseIoUringRecvmsgCmsg(),
+          getIoUringRecvmsgControlLength());
     }
     if (!updateEventRegistration(EventHandler::READ, 0)) {
       assert(state_ == StateEnum::ERROR);
@@ -4380,17 +4443,19 @@ bool AsyncSocket::updateEventRegistration() {
   VLOG(5) << "AsyncSocket::updateEventRegistration(this=" << this
           << ", fd=" << fd_ << ", evb=" << eventBase_ << ", state=" << state_
           << ", events=" << std::hex << eventFlags_;
+  auto ioHandlerFlags = eventFlags_;
   if (useIoUring_) {
     if (iouSendHandle_) {
       iouSendHandle_->update(eventFlags_);
+      ioHandlerFlags &= ~EventHandler::WRITE;
     }
     if (iouRecvHandle_) {
       iouRecvHandle_->update(eventFlags_);
+      ioHandlerFlags &= ~EventHandler::READ;
     }
-    return true;
   }
 
-  if (eventFlags_ == EventHandler::NONE) {
+  if (ioHandlerFlags == EventHandler::NONE) {
     if (ioHandler_.isHandlerRegistered()) {
       DCHECK(eventBase_ != nullptr);
       eventBase_->dcheckIsInEventBaseThread();
@@ -4404,7 +4469,7 @@ bool AsyncSocket::updateEventRegistration() {
   // Always register for persistent events, so we don't have to re-register
   // after being called back.
   if (!ioHandler_.registerHandler(
-          uint16_t(eventFlags_ | EventHandler::PERSIST))) {
+          uint16_t(ioHandlerFlags | EventHandler::PERSIST))) {
     eventFlags_ = EventHandler::NONE; // we're not registered after error
     AsyncSocketException ex(
         AsyncSocketException::INTERNAL_ERROR,
@@ -5044,9 +5109,63 @@ void AsyncSocket::sendErr(int err) {
 
 void AsyncSocket::recvSuccess(std::unique_ptr<IOBuf> buf) {
   DestructorGuard dg(this);
-  DCHECK(readAncillaryDataCallback_ == nullptr);
   CHECK(readCallback_);
+  if (readAncillaryDataCallback_) {
+    recvSuccessWithCmsgs(std::move(buf), {});
+    return;
+  }
+  deliverIoUringRead(std::move(buf));
+}
 
+void AsyncSocket::recvSuccessWithCmsgs(
+    std::unique_ptr<IOBuf> buf, detail::IoUringRecvmsgControl control) {
+#if FOLLY_HAS_LIBURING
+  DestructorGuard dg(this);
+  CHECK(readCallback_);
+  if (!readAncillaryDataCallback_) {
+    recvSuccess(std::move(buf));
+    return;
+  }
+
+  auto controlBuffer = readAncillaryDataCallback_->getAncillaryDataCtrlBuffer();
+  msghdr msg{};
+  if (!detail::serializeCmsgs(
+          control, controlBuffer.data(), controlBuffer.size(), msg)) {
+    AsyncSocketException ex(
+        AsyncSocketException::INTERNAL_ERROR,
+        withAddr("invalid ancillary data control buffer"));
+    failRead(__func__, ex);
+    return;
+  }
+
+  auto* previousReadCallback = readCallback_;
+  auto ancillaryDataResult = readAncillaryDataCallback_->ancillaryData(msg);
+  if (ancillaryDataResult.hasError()) {
+    failRead(__func__, ancillaryDataResult.error());
+    return;
+  }
+  if (readCallback_ != previousReadCallback) {
+    CHECK_EQ((shutdownFlags_ & SHUT_READ), SHUT_READ);
+    CHECK(readCallback_ == nullptr);
+    return;
+  }
+  if (msg.msg_flags & MSG_CTRUNC) {
+    readErr_ = READ_ERROR;
+    AsyncSocketException ex(
+        AsyncSocketException::INTERNAL_ERROR,
+        withAddr("io_uring recvmsg() got MSG_CTRUNC"));
+    failRead(__func__, ex);
+    return;
+  }
+
+  deliverIoUringRead(std::move(buf));
+#else
+  (void)control;
+  recvSuccess(std::move(buf));
+#endif
+}
+
+void AsyncSocket::deliverIoUringRead(std::unique_ptr<IOBuf> buf) {
   if (preReceivedData_ && !preReceivedData_->empty()) {
     preReceivedData_->appendToChain(std::move(buf));
     auto bytes = preReceivedData_->computeChainDataLength();

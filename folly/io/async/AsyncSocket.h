@@ -1976,11 +1976,20 @@ class AsyncSocket
    * IoUringRecvCallback
    */
   void recvSuccess(std::unique_ptr<IOBuf> data) override;
+  void recvSuccessWithCmsgs(
+      std::unique_ptr<IOBuf> data,
+      detail::IoUringRecvmsgControl control) override;
   void recvEOF() noexcept override;
   void recvErr(
       int err,
       std::unique_ptr<const AsyncSocketException> exception) noexcept override;
   void recvBuffersScarce(bool scarce) noexcept override;
+
+  virtual bool useIoUringRecvmsgCmsg() const { return false; }
+
+  bool shouldUseIoUringRecvmsgCmsg() const;
+  size_t getIoUringRecvmsgControlLength() const;
+  void deliverIoUringRead(std::unique_ptr<IOBuf> data);
 
   using ZeroCopyEnablePolicy =
       std::variant<std::monostate, AsyncWriter::ZeroCopyEnableFunc, size_t>;

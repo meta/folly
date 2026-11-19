@@ -241,6 +241,137 @@ std::vector<ConnectTestParam> getBackendTFOTestingValues() {
 // constructor related tests
 ///////////////////////////////////////////////////////////////////////////
 
+class CmsgFallbackSocket : public AsyncSocket {
+ public:
+  using UniquePtr = std::unique_ptr<CmsgFallbackSocket, Destructor>;
+
+  CmsgFallbackSocket(EventBase* eventBase, NetworkSocket fd)
+      : AsyncSocket(eventBase, fd) {}
+
+  static UniquePtr newSocket(EventBase* eventBase, NetworkSocket fd) {
+    return UniquePtr(new CmsgFallbackSocket(eventBase, fd));
+  }
+
+  size_t cmsgReadCount() const { return cmsgReadCount_; }
+
+ protected:
+  bool useIoUringRecvmsgCmsg() const override { return true; }
+
+  void recvSuccessWithCmsgs(
+      std::unique_ptr<IOBuf> data,
+      folly::detail::IoUringRecvmsgControl control) override {
+    ++cmsgReadCount_;
+    AsyncSocket::recvSuccessWithCmsgs(std::move(data), std::move(control));
+  }
+
+ private:
+  size_t cmsgReadCount_{0};
+};
+
+TEST(AsyncSocketIoUringTest, CmsgCompletionWaitsWhileReadCallbackIsPaused) {
+#if FOLLY_HAS_LIBURING
+  std::unique_ptr<EventBase> eventBase;
+  try {
+    eventBase = makeIoUringEventBase(ioUringOptionsWithProvidedBuffers);
+  } catch (IoUringBackend::NotAvailable const&) {
+    GTEST_SKIP() << "IoUringBackend not available";
+  }
+
+  NetworkSocket sockets[2];
+  ASSERT_EQ(netops::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+  SCOPE_EXIT {
+    netops::close(sockets[0]);
+  };
+
+  auto receiver = CmsgFallbackSocket::newSocket(eventBase.get(), sockets[1]);
+  ReadCallback firstReadCallback;
+  firstReadCallback.dataAvailableCallback = [&] {
+    receiver->setReadCB(nullptr);
+    eventBase->terminateLoopSoon();
+  };
+  receiver->setReadCB(&firstReadCallback);
+
+  constexpr std::string_view kFirstPayload = "first";
+  ASSERT_EQ(
+      static_cast<ssize_t>(kFirstPayload.size()),
+      ::write(sockets[0].toFd(), kFirstPayload.data(), kFirstPayload.size()));
+  eventBase->loop();
+  ASSERT_EQ(1, receiver->cmsgReadCount());
+
+  constexpr std::string_view kSecondPayload = "second";
+  ASSERT_EQ(
+      static_cast<ssize_t>(kSecondPayload.size()),
+      ::write(sockets[0].toFd(), kSecondPayload.data(), kSecondPayload.size()));
+  eventBase->loopOnce();
+  EXPECT_EQ(1, receiver->cmsgReadCount());
+
+  ReadCallback secondReadCallback;
+  secondReadCallback.dataAvailableCallback = [&] {
+    eventBase->terminateLoopSoon();
+  };
+  receiver->setReadCB(&secondReadCallback);
+  if (receiver->cmsgReadCount() == 1) {
+    eventBase->loop();
+  }
+  EXPECT_EQ(2, receiver->cmsgReadCount());
+  EXPECT_EQ(kSecondPayload.size(), secondReadCallback.dataRead());
+  secondReadCallback.verifyData(kSecondPayload.data(), kSecondPayload.size());
+  receiver->setReadCB(nullptr);
+#else
+  GTEST_SKIP() << "io_uring is unavailable";
+#endif
+}
+
+TEST(AsyncSocketIoUringTest, CmsgCompletionSurvivesEventBaseMove) {
+#if FOLLY_HAS_LIBURING
+  std::unique_ptr<EventBase> firstEventBase;
+  std::unique_ptr<EventBase> secondEventBase;
+  try {
+    firstEventBase = makeIoUringEventBase(ioUringOptionsWithProvidedBuffers);
+    secondEventBase = makeIoUringEventBase(ioUringOptionsWithProvidedBuffers);
+  } catch (IoUringBackend::NotAvailable const&) {
+    GTEST_SKIP() << "IoUringBackend not available";
+  }
+
+  NetworkSocket sockets[2];
+  ASSERT_EQ(netops::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+  SCOPE_EXIT {
+    netops::close(sockets[0]);
+  };
+
+  auto receiver =
+      CmsgFallbackSocket::newSocket(firstEventBase.get(), sockets[1]);
+  ReadCallback readCallback;
+  readCallback.dataAvailableCallback = [&] {
+    secondEventBase->terminateLoopSoon();
+  };
+  receiver->setReadCB(&readCallback);
+
+  firstEventBase->runInLoop([&] { firstEventBase->terminateLoopSoon(); });
+  firstEventBase->loop();
+
+  constexpr std::string_view kPayload = "in-flight cmsg";
+  ASSERT_EQ(
+      static_cast<ssize_t>(kPayload.size()),
+      ::write(sockets[0].toFd(), kPayload.data(), kPayload.size()));
+  ASSERT_TRUE(receiver->isDetachable());
+  receiver->detachEventBase();
+  receiver->attachEventBase(secondEventBase.get());
+
+  firstEventBase->loop();
+  if (readCallback.dataRead() == 0) {
+    secondEventBase->loop();
+  }
+
+  EXPECT_EQ(1, receiver->cmsgReadCount());
+  EXPECT_EQ(kPayload.size(), readCallback.dataRead());
+  readCallback.verifyData(kPayload.data(), kPayload.size());
+  receiver->setReadCB(nullptr);
+#else
+  GTEST_SKIP() << "io_uring is unavailable";
+#endif
+}
+
 class AsyncSocketTest : public ::testing::TestWithParam<BackendType> {
  protected:
   void SetUp() override {
@@ -11674,6 +11805,7 @@ class TestRXTimestampsCallback
         continue;
       }
       callCount_++;
+      cmsgPayloadSize_ = cmsg->cmsg_len - CMSG_LEN(0);
       timespec* ts = (struct timespec*)CMSG_DATA(cmsg);
       actualRxTimestampSec_ = ts[0].tv_sec;
     }
@@ -11684,12 +11816,13 @@ class TestRXTimestampsCallback
   }
 
   uint32_t callCount_{0};
+  size_t cmsgPayloadSize_{0};
   long actualRxTimestampSec_{0};
   bool closeSocket_{false};
 
  private:
   AsyncSocket* socket_;
-  std::array<uint8_t, 1024> ancillaryDataCtrlBuffer_;
+  alignas(cmsghdr) std::array<uint8_t, 1024> ancillaryDataCtrlBuffer_;
 };
 
 /**
@@ -11765,6 +11898,58 @@ TEST(AsyncSocketTest, readAncillaryData) {
   acceptedSocket->write(wbuf.data(), wbuf.size());
   evb.loopOnce();
   ASSERT_TRUE(socket->isClosedBySelf());
+}
+
+TEST(AsyncSocketIoUringTest, ReadAncillaryTimestampData) {
+#if FOLLY_HAS_LIBURING
+  TestServer server;
+  std::unique_ptr<EventBase> eventBase;
+  try {
+    eventBase = makeIoUringEventBase(ioUringOptionsWithProvidedBuffers);
+  } catch (IoUringBackend::NotAvailable const&) {
+    GTEST_SKIP() << "IoUringBackend not available";
+  }
+
+  auto socket = AsyncSocket::newSocket(eventBase.get());
+  ConnCallback connectCallback;
+  socket->connect(&connectCallback, server.getAddress(), 1000);
+
+  int flags = folly::netops::SOF_TIMESTAMPING_SOFTWARE |
+      folly::netops::SOF_TIMESTAMPING_RX_SOFTWARE;
+  SocketOptionKey timestampOption = {SOL_SOCKET, SO_TIMESTAMPING};
+  ASSERT_EQ(timestampOption.apply(socket->getNetworkSocket(), flags), 0);
+
+  auto acceptedSocket = server.accept();
+  eventBase->loop();
+  ASSERT_EQ(STATE_SUCCEEDED, connectCallback.state);
+
+  TestRXTimestampsCallback timestampCallback{socket.get()};
+  ReadCallback readCallback(100);
+  SCOPE_EXIT {
+    socket->setReadCB(nullptr);
+    socket->setReadAncillaryDataCB(nullptr);
+  };
+  readCallback.dataAvailableCallback = [&] {
+    EXPECT_GT(timestampCallback.callCount_, 0);
+    eventBase->terminateLoopSoon();
+  };
+  socket->setReadCB(&readCallback);
+  socket->setReadAncillaryDataCB(&timestampCallback);
+  eventBase->loopOnce();
+
+  timespec writeTime{};
+  ASSERT_EQ(0, clock_gettime(CLOCK_REALTIME, &writeTime));
+  std::vector<uint8_t> payload(128, 'a');
+  acceptedSocket->write(payload.data(), payload.size());
+  eventBase->loop();
+
+  ASSERT_GT(timestampCallback.callCount_, 0);
+  EXPECT_EQ(sizeof(timespec) * 3, timestampCallback.cmsgPayloadSize_);
+  EXPECT_GE(timestampCallback.actualRxTimestampSec_, writeTime.tv_sec);
+  EXPECT_EQ(payload.size(), readCallback.dataRead());
+#else
+  GTEST_SKIP() << "io_uring is unavailable";
+#endif
 }
 
 class AsyncSocketWriteCallbackTest : public ::testing::Test {
