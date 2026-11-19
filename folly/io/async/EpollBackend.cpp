@@ -368,25 +368,28 @@ int EpollBackend::eb_event_add(Event& event, const struct timeval* timeout) {
     return 0;
   }
 
-  if (event.eb_internal()) {
-    numInternalEvents_++;
-  }
-
-  event.eb_set_registration(Event::Registration::kInserted);
-  numInsertedEvents_++;
-
   EventInfo* info = static_cast<EventInfo*>(event.getUserData());
   if (!info) {
     info = new EventInfo();
     event.setUserData(info, EventInfo::freeFunction);
   }
-  info->ev = &event;
 
   struct epoll_event epev = {};
   epev.events = getPollFlags(event.eb_ev_events() & (EV_READ | EV_WRITE));
   epev.data.ptr = info;
 
-  return ::epoll_ctl(epollFd_, EPOLL_CTL_ADD, event.eb_ev_fd(), &epev);
+  // A refused Event stays unregistered, so that the eb_event_del a caller
+  // cleans up with does not take down the registration it collided with.
+  if (::epoll_ctl(epollFd_, EPOLL_CTL_ADD, event.eb_ev_fd(), &epev) != 0) {
+    return -1;
+  }
+  info->ev = &event;
+  event.eb_set_registration(Event::Registration::kInserted);
+  numInsertedEvents_++;
+  if (event.eb_internal()) {
+    numInternalEvents_++;
+  }
+  return 0;
 }
 
 int EpollBackend::eb_event_del(Event& event) {

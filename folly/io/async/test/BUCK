@@ -1166,9 +1166,12 @@ fb_dirsync_cpp_unittest(
     supports_static_listing = False,
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
+        "//folly/io/async:async_base",
         "//folly/io/async:epoll_backend",
         "//folly/io/async/test:async_signal_handler_test_lib",  # @manual
         "//folly/io/async/test:event_base_test_lib",  # @manual
+        "//folly/portability:sockets",
+        "//folly/portability:unistd",
     ],
 )
 
