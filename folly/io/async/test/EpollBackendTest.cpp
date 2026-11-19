@@ -19,6 +19,7 @@
 #if FOLLY_HAS_EPOLL
 
 #include <cerrno>
+#include <string>
 
 #include <folly/io/async/EventHandler.h>
 #include <folly/io/async/test/AsyncSignalHandlerTestLib.h>
@@ -180,6 +181,143 @@ TEST(EpollBackendTest, AnEntryLeftByAClosedFdIsIgnored) {
   second.unregisterHandler();
   ::close(fd);
   ::close(dup);
+}
+
+TEST(EpollBackendTest, ReadAndWriteEventsOnOneFdAreIndependent) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder reader(&evb, sp.fds[0]);
+  Recorder writer(&evb, sp.fds[0]);
+  ASSERT_TRUE(
+      reader.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  ASSERT_TRUE(
+      writer.registerHandler(EventHandler::WRITE | EventHandler::PERSIST));
+  sp.sendByte();
+
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(EventHandler::READ, reader.seen);
+  EXPECT_EQ(EventHandler::WRITE, writer.seen);
+
+  writer.unregisterHandler();
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(2, reader.calls);
+  EXPECT_EQ(1, writer.calls);
+}
+
+TEST(EpollBackendTest, OneShotEventsPerDirectionOnOneFdEachFireOnce) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder reader(&evb, sp.fds[0]);
+  Recorder writer(&evb, sp.fds[0]);
+  ASSERT_TRUE(reader.registerHandler(EventHandler::READ));
+  ASSERT_TRUE(writer.registerHandler(EventHandler::WRITE));
+  // Keeps the loop polling once the Events under test are gone.
+  evb.runAfterDelay([] {}, 60'000);
+
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(1, writer.calls);
+  EXPECT_EQ(0, reader.calls);
+  EXPECT_TRUE(reader.isHandlerRegistered());
+
+  sp.sendByte();
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(1, reader.calls);
+  EXPECT_EQ(1, writer.calls);
+}
+
+TEST(EpollBackendTest, AHangUpWakesTheEventsOfBothDirections) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder reader(&evb, sp.fds[0]);
+  Recorder writer(&evb, sp.fds[0]);
+  ASSERT_TRUE(reader.registerHandler(EventHandler::READ));
+  // Leaves the writer nothing to wake for but the hang-up.
+  std::string chunk(4096, 'x');
+  while (::write(sp.fds[0], chunk.data(), chunk.size()) > 0) {
+  }
+  ASSERT_TRUE(writer.registerHandler(EventHandler::WRITE));
+  SocketPair::closeFd(sp.fds[1]);
+
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(EventHandler::READ, reader.seen);
+  EXPECT_EQ(EventHandler::WRITE, writer.seen);
+}
+
+TEST(EpollBackendTest, EdgeTriggeringIsRefusedWhileAnotherEventSharesTheFd) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder reader(&evb, sp.fds[0]);
+  Recorder writer(&evb, sp.fds[0]);
+  ASSERT_TRUE(
+      reader.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  ASSERT_TRUE(
+      writer.registerHandler(EventHandler::WRITE | EventHandler::PERSIST));
+
+  EXPECT_FALSE(reader.setEdgeTriggered());
+}
+
+TEST(EpollBackendTest, AnEventCannotJoinAnFdHeldEdgeTriggered) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder reader(&evb, sp.fds[0]);
+  ASSERT_TRUE(
+      reader.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  ASSERT_TRUE(reader.setEdgeTriggered());
+
+  EventBaseEvent writer;
+  writer.eb_event_set(sp.fds[0], EV_WRITE, &noopCallback, nullptr);
+  writer.eb_event_base_set(&evb);
+  errno = 0;
+  EXPECT_EQ(-1, writer.eb_event_add(nullptr));
+  EXPECT_EQ(EBUSY, errno);
+}
+
+TEST(EpollBackendTest, EdgeTriggeringAgainMakesNoEpollCall) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder reader(&evb, sp.fds[0]);
+  ASSERT_TRUE(
+      reader.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  ASSERT_TRUE(reader.setEdgeTriggered());
+  // Every epoll_ctl on the fd fails from here on.
+  SocketPair::closeFd(sp.fds[0]);
+
+  EXPECT_TRUE(reader.setEdgeTriggered());
+}
+
+TEST(EpollBackendTest, AddingARegisteredEventAgainChangesNothing) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder writer(&evb, sp.fds[0]);
+  ASSERT_TRUE(
+      writer.registerHandler(EventHandler::WRITE | EventHandler::PERSIST));
+  EventBaseEvent reader;
+  reader.eb_event_set(sp.fds[0], EV_READ | EV_PERSIST, &noopCallback, nullptr);
+  reader.eb_event_base_set(&evb);
+  ASSERT_EQ(0, reader.eb_event_add(nullptr));
+  EXPECT_EQ(0, reader.eb_event_add(nullptr));
+
+  reader.eb_event_del();
+  writer.unregisterHandler();
+  // Only the EventBase's internal Events are left.
+  EXPECT_EQ(1, evb.getBackend()->eb_event_base_loop(EVLOOP_NONBLOCK));
+}
+
+TEST(EpollBackendTest, AnEventWithoutDirectionsTakesNoFd) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  EventBaseEvent bare;
+  bare.eb_event_set(sp.fds[0], EV_PERSIST, &noopCallback, nullptr);
+  bare.eb_event_base_set(&evb);
+  ASSERT_EQ(0, bare.eb_event_add(nullptr));
+
+  Recorder reader(&evb, sp.fds[0]);
+  ASSERT_TRUE(
+      reader.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+  sp.sendByte();
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(1, reader.calls);
 }
 
 } // namespace test

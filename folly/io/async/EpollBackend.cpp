@@ -22,6 +22,9 @@
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
 
+#include <array>
+#include <utility>
+
 #include <folly/IntrusiveList.h>
 #include <folly/MapUtil.h>
 #include <folly/String.h>
@@ -45,6 +48,16 @@ constexpr uint64_t kSignalData = ~uint64_t{0} - 1;
 // fd's close through a dup of it, carries a generation the fd no longer has.
 uint64_t entryData(int fd, uint32_t generation) {
   return (uint64_t{generation} << 32) | static_cast<uint32_t>(fd);
+}
+
+// The directions an fd entry holds an Event for, in FdEntry::owners order.
+constexpr std::array<short, 2> kDirections{{EV_READ, EV_WRITE}};
+constexpr std::array<uint32_t, 2> kDirectionFlags{{EPOLLIN, EPOLLOUT}};
+
+// The fd was closed. Its entry went with it, unless a dup keeps the file open,
+// and then no fd can reach the entry.
+bool isGone(int err) {
+  return err == ENOENT || err == EBADF;
 }
 
 struct SignalRegistry {
@@ -120,19 +133,6 @@ void SignalRegistry::setNotifyFd(int sig, int fd) {
   }
 }
 
-uint32_t getPollFlags(short events) {
-  uint32_t ret = 0;
-  if (events & EV_READ) {
-    ret |= EPOLLIN;
-  }
-
-  if (events & EV_WRITE) {
-    ret |= EPOLLOUT;
-  }
-
-  return ret;
-}
-
 } // namespace
 
 struct EpollBackend::EventInfo {
@@ -141,11 +141,13 @@ struct EpollBackend::EventInfo {
   void resetEvent() {
     listHook.unlink(); // Remove from the info list.
     ev = nullptr;
+    res = 0;
   }
 
   folly::IntrusiveListHook listHook;
   EventBaseBackendBase::Event* ev{nullptr};
-  int what_{0};
+  // The directions that fired in the batch being collected.
+  short res{0};
 };
 
 struct EpollBackend::TimerInfo : public IntrusiveHeapNode<> {
@@ -282,28 +284,45 @@ int EpollBackend::eb_event_base_loop(int flags) {
           it->second.generation != static_cast<uint32_t>(data >> 32)) {
         continue;
       }
-      auto* info = it->second.owner;
-      auto* event = info->ev;
-      info->what_ = events_[i].events;
-      // if not persistent we need to remove it
-      if (~event->eb_ev_events() & EV_PERSIST) {
-        if (event->eb_registration() == Event::Registration::kInserted) {
-          event->eb_set_registration(Event::Registration::kNone);
-
-          DCHECK_GT(numInsertedEvents_, 0);
-          numInsertedEvents_--;
-
-          if (event->eb_internal()) {
-            DCHECK_GT(numInternalEvents_, 0);
-            numInternalEvents_--;
-          }
-
-          PCHECK(releaseFd(fd, info) == 0);
+      uint32_t what = events_[i].events;
+      // A hang-up or an error belongs to the fd, so it wakes every direction
+      // its Events asked for.
+      bool hangUp = (what & (EPOLLHUP | EPOLLERR)) != 0;
+      // Copied: releasing a one-shot Event below changes the entry.
+      auto owners = it->second.owners;
+      for (size_t d = 0; d < kDirections.size(); ++d) {
+        auto* info = owners[d];
+        if (info == nullptr || (!hangUp && (what & kDirectionFlags[d]) == 0)) {
+          continue;
         }
-      }
+        auto* event = info->ev;
+        info->res |= hangUp
+            ? (event->eb_ev_events() & (EV_READ | EV_WRITE))
+            : kDirections[d];
+        // A READ|WRITE Event already collected through its other direction.
+        if (info->listHook.is_linked()) {
+          continue;
+        }
+        // if not persistent we need to remove it
+        if (~event->eb_ev_events() & EV_PERSIST) {
+          if (event->eb_registration() == Event::Registration::kInserted) {
+            event->eb_set_registration(Event::Registration::kNone);
 
-      event->eb_set_active(true);
-      infoList.push_back(*info);
+            DCHECK_GT(numInsertedEvents_, 0);
+            numInsertedEvents_--;
+
+            if (event->eb_internal()) {
+              DCHECK_GT(numInternalEvents_, 0);
+              numInternalEvents_--;
+            }
+
+            PCHECK(releaseFd(fd, info) == 0);
+          }
+        }
+
+        event->eb_set_active(true);
+        infoList.push_back(*info);
+      }
     }
 
     // Process timers and signals first.
@@ -319,39 +338,11 @@ int EpollBackend::eb_event_base_loop(int flags) {
       infoList.pop_front();
 
       Event* event = info->ev;
-
-      int what = info->what_;
-      short ev = 0;
-
-      bool evRead = (event->eb_ev_events() & EV_READ) != 0;
-      bool evWrite = (event->eb_ev_events() & EV_WRITE) != 0;
-
-      if (what & EPOLLERR) {
-        if (evRead) {
-          ev |= EV_READ;
-        }
-        if (evWrite) {
-          ev |= EV_WRITE;
-        }
-      } else if ((what & EPOLLHUP) && !(what & EPOLLRDHUP)) {
-        if (evRead) {
-          ev |= EV_READ;
-        }
-        if (evWrite) {
-          ev |= EV_WRITE;
-        }
-      } else {
-        if (evRead && (what & EPOLLIN)) {
-          ev |= EV_READ;
-        }
-        if (evWrite && (what & EPOLLOUT)) {
-          ev |= EV_WRITE;
-        }
-      }
+      short res = std::exchange(info->res, 0);
 
       event->eb_set_active(false);
-      event->eb_set_ev_res(ev);
-      if (event->eb_ev_res()) {
+      event->eb_set_ev_res(res);
+      if (res != 0) {
         event->eb_ev_invoke_callback();
       }
     }
@@ -381,6 +372,17 @@ int EpollBackend::eb_event_add(Event& event, const struct timeval* timeout) {
     return 0;
   }
 
+  // Adding an Event that is already registered changes nothing.
+  if (event.eb_registration() == Event::Registration::kInserted) {
+    return 0;
+  }
+
+  short dirs = event.eb_ev_events() & (EV_READ | EV_WRITE);
+  // An Event with neither READ nor WRITE takes no entry.
+  if (dirs == 0) {
+    return 0;
+  }
+
   EventInfo* info = static_cast<EventInfo*>(event.getUserData());
   if (!info) {
     info = new EventInfo();
@@ -388,19 +390,30 @@ int EpollBackend::eb_event_add(Event& event, const struct timeval* timeout) {
   }
 
   int fd = event.eb_ev_fd();
-  uint32_t generation = ++nextGeneration_;
-  struct epoll_event epev = {};
-  epev.events = getPollFlags(event.eb_ev_events() & (EV_READ | EV_WRITE));
-  epev.data.u64 = entryData(fd, generation);
+  bool shared = false;
+  bool conflict = false;
+  bool edge = false;
+  if (auto it = fds_.find(fd); it != fds_.end()) {
+    for (size_t d = 0; d < kDirections.size(); ++d) {
+      auto* owner = it->second.owners[d];
+      if (owner != nullptr && owner != info) {
+        shared = true;
+        conflict = conflict || (dirs & kDirections[d]) != 0;
+      }
+    }
+    edge = it->second.edge;
+  }
 
   // A refused Event stays unregistered, so that the eb_event_del a caller
   // cleans up with does not take down the registration it collided with.
-  if (::epoll_ctl(epollFd_, EPOLL_CTL_ADD, fd, &epev) != 0) {
+  bool join = shared && !conflict && !edge;
+  if ((join ? joinFd(fd, info, dirs) : holdFdAlone(fd, info, dirs)) != 0) {
+    // EPOLLET would apply to the other Event too.
+    if (errno == EEXIST && shared && !conflict) {
+      errno = EBUSY;
+    }
     return -1;
   }
-  // The kernel had no entry for this fd's file, so an Event that held the
-  // number before had its fd closed under it; that Event gives way.
-  fds_[fd] = FdEntry{info, generation};
   info->ev = &event;
   event.eb_set_registration(Event::Registration::kInserted);
   numInsertedEvents_++;
@@ -457,17 +470,89 @@ int EpollBackend::eb_event_del(Event& event) {
   return -1;
 }
 
-int EpollBackend::releaseFd(int fd, EventInfo* info) {
-  auto it = fds_.find(fd);
-  // Another Event took the number over after this one's fd was closed.
-  if (it == fds_.end() || it->second.owner != info) {
+uint32_t EpollBackend::interest(const FdEntry& entry) {
+  uint32_t events = 0;
+  for (size_t d = 0; d < kDirections.size(); ++d) {
+    if (entry.owners[d] != nullptr) {
+      events |= kDirectionFlags[d];
+    }
+  }
+  if (events != 0 && entry.edge) {
+    events |= EPOLLET;
+  }
+  return events;
+}
+
+int EpollBackend::holdFdAlone(int fd, EventInfo* info, short dirs) {
+  FdEntry entry;
+  entry.generation = ++nextGeneration_;
+  for (size_t d = 0; d < kDirections.size(); ++d) {
+    if (dirs & kDirections[d]) {
+      entry.owners[d] = info;
+    }
+  }
+  struct epoll_event epev = {};
+  epev.events = interest(entry);
+  epev.data.u64 = entryData(fd, entry.generation);
+  if (::epoll_ctl(epollFd_, EPOLL_CTL_ADD, fd, &epev) != 0) {
+    return -1;
+  }
+  // The kernel had no entry for this fd's file, so any Event that held the
+  // number before had its fd closed under it; it gives way.
+  fds_[fd] = entry;
+  return 0;
+}
+
+int EpollBackend::joinFd(int fd, EventInfo* info, short dirs) {
+  FdEntry& entry = fds_.at(fd);
+  FdEntry joined = entry;
+  for (size_t d = 0; d < kDirections.size(); ++d) {
+    if (dirs & kDirections[d]) {
+      joined.owners[d] = info;
+    }
+  }
+  struct epoll_event epev = {};
+  epev.events = interest(joined);
+  epev.data.u64 = entryData(fd, entry.generation);
+  if (::epoll_ctl(epollFd_, EPOLL_CTL_MOD, fd, &epev) == 0) {
+    entry = joined;
     return 0;
   }
-  fds_.erase(it);
-  // ENOENT or EBADF: the fd was closed. Its entry went with it, unless a dup
-  // keeps the file open, and then no fd can reach the entry.
-  if (::epoll_ctl(epollFd_, EPOLL_CTL_DEL, fd, nullptr) != 0 &&
-      errno != ENOENT && errno != EBADF) {
+  if (!isGone(errno)) {
+    return -1;
+  }
+  // The other Event's fd was closed under it.
+  return holdFdAlone(fd, info, dirs);
+}
+
+int EpollBackend::releaseFd(int fd, EventInfo* info) {
+  auto it = fds_.find(fd);
+  if (it == fds_.end()) {
+    return 0;
+  }
+  FdEntry& entry = it->second;
+  bool held = false;
+  for (auto& owner : entry.owners) {
+    if (owner == info) {
+      owner = nullptr;
+      held = true;
+    }
+  }
+  // Another Event took the number over after this one's fd was closed.
+  if (!held) {
+    return 0;
+  }
+  int rc = 0;
+  if (uint32_t events = interest(entry); events == 0) {
+    fds_.erase(it);
+    rc = ::epoll_ctl(epollFd_, EPOLL_CTL_DEL, fd, nullptr);
+  } else {
+    struct epoll_event epev = {};
+    epev.events = events;
+    epev.data.u64 = entryData(fd, entry.generation);
+    rc = ::epoll_ctl(epollFd_, EPOLL_CTL_MOD, fd, &epev);
+  }
+  if (rc != 0 && !isGone(errno)) {
     return -1;
   }
   return 0;
@@ -479,17 +564,34 @@ bool EpollBackend::setEdgeTriggered(Event& event) {
     return false;
   }
   auto it = fds_.find(event.eb_ev_fd());
-  if (it == fds_.end() || it->second.owner != info) {
+  if (it == fds_.end()) {
     return false;
   }
+  FdEntry& entry = it->second;
+  bool held = false;
+  for (auto* owner : entry.owners) {
+    // EPOLLET would apply to the other Event too.
+    if (owner != nullptr && owner != info) {
+      return false;
+    }
+    held = held || owner == info;
+  }
+  if (!held) {
+    return false;
+  }
+  if (entry.edge) {
+    return true;
+  }
 
+  entry.edge = true;
   struct epoll_event epev = {};
-  epev.events =
-      getPollFlags(event.eb_ev_events() & (EV_READ | EV_WRITE)) | EPOLLET;
-  epev.data.u64 = entryData(event.eb_ev_fd(), it->second.generation);
-
-  int ret = ::epoll_ctl(epollFd_, EPOLL_CTL_MOD, event.eb_ev_fd(), &epev);
-  return ret == 0;
+  epev.events = interest(entry);
+  epev.data.u64 = entryData(event.eb_ev_fd(), entry.generation);
+  if (::epoll_ctl(epollFd_, EPOLL_CTL_MOD, event.eb_ev_fd(), &epev) != 0) {
+    entry.edge = false;
+    return false;
+  }
+  return true;
 }
 
 void EpollBackend::addTimerEvent(Event& event, const struct timeval* timeout) {

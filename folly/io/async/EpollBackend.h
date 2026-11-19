@@ -20,6 +20,7 @@
 
 #if FOLLY_HAS_EPOLL
 
+#include <array>
 #include <chrono>
 #include <map>
 #include <optional>
@@ -66,11 +67,12 @@ class EpollBackend : public EventBaseBackendBase {
   struct EventInfo;
   struct TimerInfo;
 
-  // The Event that holds an fd's epoll entry, and the generation the entry
-  // carries.
+  // The Event that holds each direction of an fd's epoll entry, and the
+  // generation the entry carries.
   struct FdEntry {
-    EventInfo* owner{nullptr};
+    std::array<EventInfo*, 2> owners{};
     uint32_t generation{0};
+    bool edge{false};
   };
 
   class SocketPair {
@@ -90,8 +92,14 @@ class EpollBackend : public EventBaseBackendBase {
     std::array<int, 2> fds_{{-1, -1}};
   };
 
-  // Ends `info`'s hold on `fd` and drops the fd's epoll entry, unless another
-  // Event took the number over. Returns 0, or -1 with errno.
+  static uint32_t interest(const FdEntry& entry);
+  // These return 0, or -1 with errno.
+  // Gives `info` a new entry for `fd`: EEXIST while another Event's
+  // registration on the fd is live.
+  int holdFdAlone(int fd, EventInfo* info, short dirs);
+  // Adds `dirs`, which no Event holds, to the entry of `fd`.
+  int joinFd(int fd, EventInfo* info, short dirs);
+  // Ends `info`'s hold on `fd`, unless another Event took the number over.
   int releaseFd(int fd, EventInfo* info);
 
   void updateTimerFd();
