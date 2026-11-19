@@ -404,10 +404,13 @@ folly_add_library(
     Epoll.h
     EpollBackend.h
   DEPS
+    folly_conv
     folly_file_util
     folly_intrusive_list
+    folly_lang_exception
     folly_map_util
     folly_string
+    folly_system_pid
   EXPORTED_DEPS
     folly_container_f14_hash
     folly_container_intrusive_heap

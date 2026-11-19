@@ -18,6 +18,8 @@
 
 #if FOLLY_HAS_EPOLL
 
+#include <sys/wait.h>
+
 #include <cerrno>
 #include <chrono>
 #include <string>
@@ -87,6 +89,20 @@ struct Recorder : EventHandler {
 };
 
 void noopCallback(libevent_fd_t, short, void*) {}
+
+// Runs `fn` in a forked child and returns its wait status.
+template <typename F>
+int inChild(F&& fn) {
+  pid_t pid = ::fork();
+  PCHECK(pid >= 0);
+  if (pid == 0) {
+    fn();
+    ::_exit(0);
+  }
+  int status = 0;
+  PCHECK(::waitpid(pid, &status, 0) == pid);
+  return status;
+}
 
 } // namespace
 
@@ -390,6 +406,34 @@ TEST(EpollBackendTest, ATimeoutScheduledAfterACancelFiresOnTime) {
   EXPECT_TRUE(fired);
   EXPECT_GE(
       std::chrono::steady_clock::now() - start, std::chrono::milliseconds(40));
+}
+
+// The child shares the parent's epoll fd.
+TEST(EpollBackendTest, ADeleteInAForkedChildLeavesTheParentsRegistration) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder reader(&evb, sp.fds[0]);
+  ASSERT_TRUE(
+      reader.registerHandler(EventHandler::READ | EventHandler::PERSIST));
+
+  EXPECT_EQ(0, inChild([&] { reader.unregisterHandler(); }));
+  sp.sendByte();
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_EQ(1, reader.calls);
+}
+
+TEST(EpollBackendTest, UseInAForkedChildTerminates) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  Recorder reader(&evb, sp.fds[0]);
+
+  int status = inChild([&] { reader.registerHandler(EventHandler::READ); });
+  EXPECT_TRUE(WIFSIGNALED(status));
+  EXPECT_EQ(SIGABRT, WTERMSIG(status));
+
+  status = inChild([&] { evb.loopOnce(EVLOOP_NONBLOCK); });
+  EXPECT_TRUE(WIFSIGNALED(status));
+  EXPECT_EQ(SIGABRT, WTERMSIG(status));
 }
 
 } // namespace test

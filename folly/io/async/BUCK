@@ -772,10 +772,13 @@ fb_dirsync_cpp_library(
     modular_headers = False,
     use_raw_headers = True,
     deps = [
+        "//folly:conv",
         "//folly:file_util",
         "//folly:intrusive_list",
         "//folly:map_util",
         "//folly:string",
+        "//folly/lang:exception",
+        "//folly/system:pid",
     ],
     exported_deps = [
         "//folly/container:f14_hash",

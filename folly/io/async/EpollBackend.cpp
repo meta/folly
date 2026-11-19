@@ -23,12 +23,17 @@
 #include <sys/timerfd.h>
 
 #include <array>
+#include <stdexcept>
+#include <string>
 #include <utility>
 
+#include <folly/Conv.h>
 #include <folly/IntrusiveList.h>
 #include <folly/MapUtil.h>
 #include <folly/String.h>
 #include <folly/io/async/EpollBackend.h>
+#include <folly/lang/Exception.h>
+#include <folly/system/Pid.h>
 
 #include <folly/FileUtil.h>
 
@@ -184,7 +189,8 @@ EpollBackend::SocketPair::~SocketPair() {
   }
 }
 
-EpollBackend::EpollBackend(Options options) : options_(options) {
+EpollBackend::EpollBackend(Options options)
+    : options_(options), pid_(get_cached_pid()) {
   epollFd_ = ::epoll_create1(EPOLL_CLOEXEC);
 
   if (epollFd_ == -1) {
@@ -220,7 +226,24 @@ EpollBackend::~EpollBackend() {
   fileops::close(timerFd_);
 }
 
+bool EpollBackend::inOtherProcess() const {
+  return FOLLY_UNLIKELY(pid_ != get_cached_pid());
+}
+
+void EpollBackend::checkPid() const {
+  if (inOtherProcess()) {
+    checkPidFail();
+  }
+}
+
+[[noreturn]] FOLLY_NOINLINE void EpollBackend::checkPidFail() const {
+  terminate_with<std::runtime_error>(
+      "pid mismatch: EpollBackend of pid " + to<std::string>(pid_) +
+      " used in pid " + to<std::string>(get_cached_pid()));
+}
+
 int EpollBackend::eb_event_base_loop(int flags) {
+  checkPid();
   const bool waitForEvents = (flags & EVLOOP_NONBLOCK) == 0;
   while (true) {
     if (loopBreak_) {
@@ -359,6 +382,7 @@ int EpollBackend::eb_event_base_loopbreak() {
 }
 
 int EpollBackend::eb_event_add(Event& event, const struct timeval* timeout) {
+  checkPid();
   // we do not support read/write timeouts
   if (timeout) {
     event.eb_set_registration(Event::Registration::kTimeout);
@@ -542,6 +566,12 @@ int EpollBackend::releaseFd(int fd, EventInfo* info) {
   if (!held) {
     return 0;
   }
+  if (inOtherProcess()) {
+    if (interest(entry) == 0) {
+      fds_.erase(it);
+    }
+    return 0;
+  }
   int rc = 0;
   if (uint32_t events = interest(entry); events == 0) {
     fds_.erase(it);
@@ -560,7 +590,7 @@ int EpollBackend::releaseFd(int fd, EventInfo* info) {
 
 bool EpollBackend::setEdgeTriggered(Event& event) {
   EventInfo* info = static_cast<EventInfo*>(event.getUserData());
-  if (info == nullptr) {
+  if (info == nullptr || inOtherProcess()) {
     return false;
   }
   auto it = fds_.find(event.eb_ev_fd());

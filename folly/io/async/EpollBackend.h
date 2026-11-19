@@ -20,6 +20,8 @@
 
 #if FOLLY_HAS_EPOLL
 
+#include <sys/types.h>
+
 #include <array>
 #include <chrono>
 #include <map>
@@ -44,6 +46,9 @@ class EpollBackend : public EventBaseBackendBase {
     }
   };
 
+  // The epoll fd and the timerfd are shared with a forked child. Adding an
+  // Event or looping in the child terminates with "pid mismatch"; deleting one
+  // there, as destructors do, leaves the kernel alone.
   explicit EpollBackend(Options options);
   ~EpollBackend() override;
 
@@ -92,6 +97,10 @@ class EpollBackend : public EventBaseBackendBase {
     std::array<int, 2> fds_{{-1, -1}};
   };
 
+  bool inOtherProcess() const;
+  void checkPid() const;
+  [[noreturn]] void checkPidFail() const;
+
   static uint32_t interest(const FdEntry& entry);
   // These return 0, or -1 with errno.
   // Gives `info` a new entry for `fd`: EEXIST while another Event's
@@ -115,6 +124,7 @@ class EpollBackend : public EventBaseBackendBase {
   void processSignals();
 
   const Options options_;
+  const pid_t pid_;
 
   int epollFd_{-1};
 
