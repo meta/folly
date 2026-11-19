@@ -611,7 +611,7 @@ void EpollBackend::addTimerEvent(Event& event, const struct timeval* timeout) {
     timers_.push(info);
   }
 
-  updateTimerFd();
+  armTimerFd();
 }
 
 int EpollBackend::removeTimerEvent(Event& event) {
@@ -623,47 +623,39 @@ int EpollBackend::removeTimerEvent(Event& event) {
 
   DCHECK_EQ(event.getFreeFunction(), TimerInfo::freeFunction);
   timers_.erase(info);
-  updateTimerFd();
   return 0;
 }
 
-void EpollBackend::updateTimerFd() {
-  std::optional<std::chrono::steady_clock::time_point> expiration;
-  if (auto* earliest = timers_.top()) {
-    expiration = earliest->expiration;
-  }
-  if (expiration == timerFdExpiration_) {
-    return; // Nothing to do.
+void EpollBackend::armTimerFd() {
+  auto* earliest = timers_.top();
+  if (earliest == nullptr ||
+      (timerFdExpiration_ && *timerFdExpiration_ <= earliest->expiration)) {
+    return;
   }
 
-  if (!expiration) {
-    struct itimerspec val = {}; // Disable.
-    PCHECK(::timerfd_settime(timerFd_, 0, &val, nullptr) == 0);
-  } else {
-    auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-        *expiration - std::chrono::steady_clock::now());
-    if (delta < std::chrono::microseconds(1000)) {
-      delta = std::chrono::microseconds(1000);
-    }
-
-    struct itimerspec val;
-    val.it_interval = {0, 0};
-    val.it_value.tv_sec =
-        std::chrono::duration_cast<std::chrono::seconds>(delta).count();
-    val.it_value.tv_nsec =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(delta).count() %
-        1'000'000'000LL;
-
-    PCHECK(::timerfd_settime(timerFd_, 0, &val, nullptr) == 0);
+  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
+      earliest->expiration - std::chrono::steady_clock::now());
+  if (delta < std::chrono::microseconds(1000)) {
+    delta = std::chrono::microseconds(1000);
   }
 
-  timerFdExpiration_ = expiration;
+  struct itimerspec val = {};
+  val.it_interval = {0, 0};
+  val.it_value.tv_sec =
+      std::chrono::duration_cast<std::chrono::seconds>(delta).count();
+  val.it_value.tv_nsec =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(delta).count() %
+      1'000'000'000LL;
+
+  PCHECK(::timerfd_settime(timerFd_, 0, &val, nullptr) == 0);
+  timerFdExpiration_ = earliest->expiration;
 }
 
 void EpollBackend::processTimers() {
   // Consume the event.
   uint64_t data = 0;
   PCHECK(folly::readNoInt(timerFd_, &data, sizeof(data)) == sizeof(data));
+  timerFdExpiration_.reset();
 
   while (!timers_.empty() &&
          timers_.top()->expiration <= std::chrono::steady_clock::now()) {
@@ -675,7 +667,7 @@ void EpollBackend::processTimers() {
     ev->eb_ev_invoke_callback();
   }
 
-  updateTimerFd();
+  armTimerFd();
 }
 
 void EpollBackend::addSignalEvent(Event& event) {

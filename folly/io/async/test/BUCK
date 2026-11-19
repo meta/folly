@@ -1172,6 +1172,7 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async/test:event_base_test_lib",  # @manual
         "//folly/portability:sockets",
         "//folly/portability:unistd",
+        "//folly/synchronization:baton",
     ],
 )
 

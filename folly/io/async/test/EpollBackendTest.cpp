@@ -19,13 +19,17 @@
 #if FOLLY_HAS_EPOLL
 
 #include <cerrno>
+#include <chrono>
 #include <string>
+#include <thread>
 
+#include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/EventHandler.h>
 #include <folly/io/async/test/AsyncSignalHandlerTestLib.h>
 #include <folly/io/async/test/EventBaseTestLib.h>
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
+#include <folly/synchronization/Baton.h>
 
 namespace folly {
 namespace test {
@@ -318,6 +322,74 @@ TEST(EpollBackendTest, AnEventWithoutDirectionsTakesNoFd) {
   sp.sendByte();
   evb.loopOnce(EVLOOP_NONBLOCK);
   EXPECT_EQ(1, reader.calls);
+}
+
+// What MuxIOThreadPoolExecutor waits on while a loop is suspended.
+TEST(EpollBackendTest, ADueTimerTurnsThePollableFdReadable) {
+  EventBase evb(epollOptions());
+  bool fired = false;
+  evb.runAfterDelay([&] { fired = true; }, 20);
+  int fd = evb.getBackend()->getPollableFd();
+
+  for (int round = 0; round < 10 && !fired; ++round) {
+    if (evb.loopWithSuspension() != EventBase::LoopStatus::kSuspended) {
+      break;
+    }
+    pollfd pfd{fd, POLLIN, 0};
+    ASSERT_EQ(1, ::poll(&pfd, 1, 5000)) << "suspended with a timer pending";
+  }
+  EXPECT_TRUE(fired);
+}
+
+// A caller that loops without blocking, then waits on the pollable fd itself.
+TEST(EpollBackendTest, ATimerScheduledDuringAPassTurnsThePollableFdReadable) {
+  EventBase evb(epollOptions());
+  SocketPair sp;
+  bool fired = false;
+  auto timeout = AsyncTimeout::make(evb, [&]() noexcept { fired = true; });
+  struct Scheduler : Recorder {
+    using Recorder::Recorder;
+    void handlerReady(uint16_t events) noexcept override {
+      Recorder::handlerReady(events);
+      timeout->scheduleTimeout(20);
+    }
+    AsyncTimeout* timeout{nullptr};
+  } scheduler(&evb, sp.fds[0]);
+  scheduler.timeout = timeout.get();
+  ASSERT_TRUE(scheduler.registerHandler(EventHandler::READ));
+  sp.sendByte();
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  ASSERT_EQ(1, scheduler.calls);
+
+  pollfd pfd{evb.getBackend()->getPollableFd(), POLLIN, 0};
+  ASSERT_EQ(1, ::poll(&pfd, 1, 5000));
+  evb.loopOnce(EVLOOP_NONBLOCK);
+  EXPECT_TRUE(fired);
+}
+
+TEST(EpollBackendTest, ATimeoutScheduledAfterACancelFiresOnTime) {
+  EventBase evb(epollOptions());
+  auto cancelled = AsyncTimeout::make(evb, []() noexcept {});
+  bool fired = false;
+  auto later = AsyncTimeout::make(evb, [&]() noexcept { fired = true; });
+  // Leaves the timerfd armed for 10 ms, earlier than anything pending.
+  cancelled->scheduleTimeout(10);
+  cancelled->cancelTimeout();
+  auto start = std::chrono::steady_clock::now();
+  later->scheduleTimeout(40);
+
+  Baton<> looped;
+  std::thread guard([&] {
+    if (!looped.try_wait_for(std::chrono::seconds(5))) {
+      evb.terminateLoopSoon();
+    }
+  });
+  evb.loop();
+  looped.post();
+  guard.join();
+  EXPECT_TRUE(fired);
+  EXPECT_GE(
+      std::chrono::steady_clock::now() - start, std::chrono::milliseconds(40));
 }
 
 } // namespace test

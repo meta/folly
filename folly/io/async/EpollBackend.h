@@ -102,7 +102,9 @@ class EpollBackend : public EventBaseBackendBase {
   // Ends `info`'s hold on `fd`, unless another Event took the number over.
   int releaseFd(int fd, EventInfo* info);
 
-  void updateTimerFd();
+  // Arms the timerfd for the earliest timer unless it is armed no later than
+  // that. Cancelling a timer leaves it armed early, which costs one wake.
+  void armTimerFd();
   void addTimerEvent(Event& event, const struct timeval* timeout);
   int removeTimerEvent(Event& event);
   void processTimers();
@@ -126,6 +128,8 @@ class EpollBackend : public EventBaseBackendBase {
   std::vector<struct epoll_event> events_; // Cache allocation.
 
   int timerFd_{-1};
+  // The deadline the timerfd is armed for, never later than the earliest
+  // timer's. The timerfd fires then, or 1 ms after arming if that is later.
   std::optional<std::chrono::steady_clock::time_point> timerFdExpiration_;
   IntrusiveHeap<TimerInfo> timers_;
 
