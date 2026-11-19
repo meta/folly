@@ -18,7 +18,6 @@
 
 #include <atomic>
 #include <cassert>
-#include <cstdlib>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -27,6 +26,7 @@
 
 #include <folly/concurrency/CacheLocality.h>
 #include <folly/lang/Bits.h>
+#include <folly/lang/New.h>
 
 namespace folly {
 
@@ -75,7 +75,7 @@ struct alignas(hardware_destructive_interference_size) ProducerConsumerQueue {
       }
     }
 
-    std::free(producer_.records);
+    deallocate(producer_.records);
   }
 
   //  Checks a private, unsynchronized cache of the other side's cursor
@@ -211,7 +211,7 @@ struct alignas(hardware_destructive_interference_size) ProducerConsumerQueue {
 
   //  Bundles the three values makeState() computes, so the delegating
   //  constructor below can initialize both producer_ and consumer_ from a
-  //  single malloc() call rather than validating/allocating twice.
+  //  single allocation rather than validating/allocating twice.
   struct State {
     T* records{};
     uint32_t mask{};
@@ -240,7 +240,7 @@ struct alignas(hardware_destructive_interference_size) ProducerConsumerQueue {
 
   //  Computed in 64 bits and checked against size_t's actual range before
   //  narrowing: sizeof(T) * (mask + 1) can legally exceed the 32-bit size_t
-  //  that std::malloc() takes on a 32-bit platform, even though mask itself
+  //  that the allocator takes on a 32-bit platform, even though mask itself
   //  always fits in uint32_t. Silently truncating that byte count would
   //  allocate a smaller buffer than record indices (computed mod mask+1 in
   //  the wider sense) are entitled to touch.
@@ -253,14 +253,24 @@ struct alignas(hardware_destructive_interference_size) ProducerConsumerQueue {
     return static_cast<size_t>(bytes);
   }
 
+  //  std::malloc() only guarantees alignof(std::max_align_t), so storage is
+  //  always drawn from the aligned allocator to support a T with a stricter
+  //  alignas; constructing using storage allocated with malloc() would be
+  //  misaligned, and can fault on the aligned SIMD instructions the compiler
+  //  is then entitled to use.
+  static T* allocate(uint32_t mask) {
+    size_t const bytes = allocationSize(mask);
+    return static_cast<T*>(operator_new(bytes, std::align_val_t{alignof(T)}));
+  }
+
+  static void deallocate(T* records) noexcept {
+    operator_delete(records, std::align_val_t{alignof(T)});
+  }
+
   static State makeState(uint32_t size) {
     uint32_t const validSize = validateSize(size); // in [1, 1 << 31]
     uint32_t const mask = nextPowTwo(validSize) - 1; // in [1, 1 << 31)
-    auto* const records = static_cast<T*>(std::malloc(allocationSize(mask)));
-    if (!records) {
-      throw std::bad_alloc();
-    }
-    return State{records, mask, validSize};
+    return State{allocate(mask), mask, validSize};
   }
 
   explicit ProducerConsumerQueue(State st) noexcept

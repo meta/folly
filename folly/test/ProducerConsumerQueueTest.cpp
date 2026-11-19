@@ -24,6 +24,7 @@
 
 #include <glog/logging.h>
 
+#include <folly/lang/Align.h>
 #include <folly/portability/GTest.h>
 
 //////////////////////////////////////////////////////////////////////
@@ -213,6 +214,26 @@ struct DtorChecker {
 
 unsigned int DtorChecker::numInstances = 0;
 
+template <size_t Align>
+struct alignas(Align) OverAligned {};
+
+template <class T>
+void checkOverAlignedStorage() {
+  // Keep every queue alive such that each ring is a separate allocation. If
+  // they were freed, malloc() could return the same block on each iteration,
+  // and one block whose address is a multiple of alignof(T) would pass every
+  // check.
+  std::vector<std::unique_ptr<folly::ProducerConsumerQueue<T>>> queues;
+
+  for (int i = 0; i < 32; ++i) {
+    queues.push_back(std::make_unique<folly::ProducerConsumerQueue<T>>(2));
+    EXPECT_TRUE(queues.back()->write());
+
+    auto* const front = queues.back()->frontPtr();
+    EXPECT_EQ(front, folly::align_floor(front, alignof(T)));
+  }
+}
+
 } // namespace
 
 //////////////////////////////////////////////////////////////////////
@@ -316,4 +337,11 @@ TEST(PCQ, MinimumSize) {
   EXPECT_TRUE(queue.write(3));
   EXPECT_TRUE(queue.read(value));
   EXPECT_EQ(value, 3);
+}
+
+TEST(PCQ, OverAlignedStorage) {
+  // 32 bytes is the first alignment malloc() does not guarantee, and 256
+  // exceeds the cache-line-sized alignment an implementation may hardcode.
+  checkOverAlignedStorage<OverAligned<32>>();
+  checkOverAlignedStorage<OverAligned<256>>();
 }
