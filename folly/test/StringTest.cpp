@@ -378,6 +378,18 @@ TEST(Escape, cUnescape) {
       cUnescape<std::string>("hello\\q"),
       std::invalid_argument,
       "invalid escape sequence");
+
+  // \x must be followed by at least one hex digit, also before other text.
+  EXPECT_THROW_RE(
+      cUnescape<std::string>("hello\\xg"),
+      std::invalid_argument,
+      "incomplete hex escape sequence");
+  EXPECT_THROW_RE(
+      cUnescape<std::string>("\\x\\n"),
+      std::invalid_argument,
+      "incomplete hex escape sequence");
+  EXPECT_EQ("hello\\xg", cUnescape<std::string>("hello\\xg", false));
+  EXPECT_EQ("\\x\n", cUnescape<std::string>("\\x\\n", false));
 }
 
 TEST(Escape, uriEscape) {
