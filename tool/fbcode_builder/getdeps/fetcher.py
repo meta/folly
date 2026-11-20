@@ -348,7 +348,10 @@ class GitFetcher(Fetcher):
             return ChangeStatus()
 
         print("Updating %s -> %s" % (self.repo_dir, self.rev))
-        run_cmd(["git", "fetch", "origin", self.rev], cwd=self.repo_dir)
+        run_cmd(
+            ["git", "fetch", "--depth=" + str(self.depth), "origin", self.rev],
+            cwd=self.repo_dir,
+        )
         run_cmd(["git", "checkout", self.rev], cwd=self.repo_dir)
         run_cmd(["git", "submodule", "update", "--init"], cwd=self.repo_dir)
 
