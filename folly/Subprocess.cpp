@@ -127,30 +127,37 @@ static Ret subprocess_libc_load(
   return !kIsSanitize ? ptr : reinterpret_cast<Ret>(::dlsym(handle, name));
 }
 
-#define FOLLY_DETAIL_SUBPROCESS_LIBC_X_BASE(X) \
-  X(_exit, _exit)                              \
-  X(close, close)                              \
-  X(dup2, dup2)                                \
-  X(fcntl, fcntl)                              \
-  X(pthread_sigmask, pthread_sigmask)          \
-  X(signal, signal)                            \
-  X(sprintf, sprintf)                          \
-  X(strtol, strtol)                            \
-  X(vfork, vfork)                              \
-  X(write, write)
+#define FOLLY_DETAIL_SUBPROCESS_LIBC_X_BASE(X)                     \
+  X(_exit, _exit, decltype(::_exit))                               \
+  X(close, close, decltype(::close))                               \
+  X(dup2, dup2, decltype(::dup2))                                  \
+  X(fcntl, fcntl, decltype(::fcntl))                               \
+  X(pthread_sigmask, pthread_sigmask, decltype(::pthread_sigmask)) \
+  X(signal, signal, decltype(::signal))                            \
+  X(sprintf, sprintf, decltype(::sprintf))                         \
+  X(strtol, strtol, decltype(::strtol))                            \
+  X(vfork, vfork, decltype(::vfork))                               \
+  X(write, write, decltype(::write))
+
+//  open and openat are spelled with explicit types since some libcs declare
+//  them as overload sets under fortify, e.g. glibc >= 2.40 with clang, where
+//  decltype(::open) is ill-formed.
+using subprocess_libc_open_t = int(char const*, int, ...);
+using subprocess_libc_openat_t = int(int, char const*, int, ...);
 
 #if defined(__BIONIC_INCLUDE_FORTIFY_HEADERS)
 #define FOLLY_DETAIL_SUBPROCESS_LIBC_X_OPEN(X) \
-  X(open, __open_real)                         \
-  X(openat, __openat_real)
+  X(open, __open_real, subprocess_libc_open_t) \
+  X(openat, __openat_real, subprocess_libc_openat_t)
 #else
 #define FOLLY_DETAIL_SUBPROCESS_LIBC_X_OPEN(X) \
-  X(open, open)                                \
-  X(openat, openat)
+  X(open, open, subprocess_libc_open_t)        \
+  X(openat, openat, subprocess_libc_openat_t)
 #endif
 
 #if defined(__linux__)
-#define FOLLY_DETAIL_SUBPROCESS_LIBC_X_PRCTL(X) X(prctl, prctl)
+#define FOLLY_DETAIL_SUBPROCESS_LIBC_X_PRCTL(X) \
+  X(prctl, prctl, decltype(::prctl))
 #else
 #define FOLLY_DETAIL_SUBPROCESS_LIBC_X_PRCTL(X)
 #endif
@@ -160,12 +167,13 @@ static Ret subprocess_libc_load(
   FOLLY_DETAIL_SUBPROCESS_LIBC_X_OPEN(X)  \
   FOLLY_DETAIL_SUBPROCESS_LIBC_X_PRCTL(X)
 
-#define FOLLY_DETAIL_SUBPROCESS_LIBC_FIELD_DECL(name, func) \
-  static decltype(&::func) name;
-#define FOLLY_DETAIL_SUBPROCESS_LIBC_FIELD_DEFN(name, func) \
-  decltype(&::func) subprocess_libc::name;
-#define FOLLY_DETAIL_SUBPROCESS_LIBC_INIT(name, func) \
-  subprocess_libc::name = subprocess_libc_load(handle, &::func, #name);
+#define FOLLY_DETAIL_SUBPROCESS_LIBC_FIELD_DECL(name, func, type) \
+  static type* name;
+#define FOLLY_DETAIL_SUBPROCESS_LIBC_FIELD_DEFN(name, func, type) \
+  type* subprocess_libc::name;
+#define FOLLY_DETAIL_SUBPROCESS_LIBC_INIT(name, func, type) \
+  subprocess_libc::name =                                   \
+      subprocess_libc_load(handle, static_cast<type*>(&::func), #name);
 
 struct subprocess_libc {
   FOLLY_DETAIL_SUBPROCESS_LIBC_X(FOLLY_DETAIL_SUBPROCESS_LIBC_FIELD_DECL)
