@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <stdexcept>
+#include <string>
+
 #include <folly/json/dynamic.h>
 #include <folly/json/json.h>
 #include <folly/logging/LogCategory.h>
@@ -49,6 +52,22 @@ auto MatchLogHandler(
 }
 
 } // namespace
+
+TEST(ConfigUpdate, duplicateFactoryOwnedType) {
+  LoggerDB db{LoggerDB::TESTING};
+  const std::string type(128, 'x');
+  db.registerHandlerFactory(std::make_unique<TestLogHandlerFactory>(type));
+  const auto expectedError =
+      std::string("a LogHandlerFactory for the type \"") + type +
+      "\" already exists";
+  try {
+    db.registerHandlerFactory(std::make_unique<TestLogHandlerFactory>(type));
+    FAIL() << "duplicate factory registration must fail";
+  } catch (const std::range_error& error) {
+    EXPECT_EQ(expectedError, error.what());
+  }
+  db.unregisterHandlerFactory(type);
+}
 
 TEST(ConfigUpdate, updateLogLevels) {
   LoggerDB db{LoggerDB::TESTING};

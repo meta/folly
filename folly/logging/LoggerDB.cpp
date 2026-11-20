@@ -543,7 +543,8 @@ void LoggerDB::registerHandlerFactory(
   if (replaceExisting) {
     handlerInfo->factories[type.str()] = std::move(factory);
   } else {
-    auto ret = handlerInfo->factories.emplace(type.str(), std::move(factory));
+    auto ret =
+        handlerInfo->factories.try_emplace(type.str(), std::move(factory));
     if (!ret.second) {
       throw std::range_error(
           to<std::string>(
