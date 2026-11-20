@@ -233,6 +233,7 @@ class ConcurrentSkipList {
       NodeType* node = pred->skip(layer);
       while (greater(data, node)) {
         pred = node;
+        __builtin_prefetch(node->skip(layer), 0, 0);
         node = node->skip(layer);
       }
       if (foundLayer == -1 && !less(data, node)) { // the two keys equal
@@ -469,6 +470,7 @@ class ConcurrentSkipList {
       // stepping right
       while (greater(data, node)) {
         pred = node;
+        __builtin_prefetch(node->skip(ht), 0, 0);
         node = node->skip(ht);
       }
       found = !less(data, node);
@@ -487,6 +489,7 @@ class ConcurrentSkipList {
       node = pred->skip(layer);
       while (greater(data, node)) {
         pred = node;
+        __builtin_prefetch(node->skip(layer), 0, 0);
         node = node->skip(layer);
       }
       found = !less(data, node);
@@ -497,6 +500,7 @@ class ConcurrentSkipList {
   NodeType* lower_bound(const value_type& data) const {
     auto node = findNode(data).first;
     while (node != nullptr && node->markedForRemoval()) {
+      __builtin_prefetch(node->skip(0), 0, 0);
       node = node->skip(0);
     }
     return node;
