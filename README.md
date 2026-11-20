@@ -97,10 +97,11 @@ Folly is published on GitHub at https://github.com/meta/folly.
 Because folly does not provide any ABI compatibility guarantees from commit to
 commit, we generally recommend building folly as a static library.
 
-folly supports gcc, clang, or MSVC with C++20 support. It should run on Linux
-(x86-32, x86-64, and ARM), iOS, macOS, and Windows (x86-64). The CMake build is
-only tested on some of these platforms; at a minimum, we aim to support macOS
-and Linux (on the latest Ubuntu LTS release or newer.)
+folly requires C++20 and GCC 10, Clang 15 (or Apple clang 15), MSVC from Visual
+Studio 2019 16.11, or newer. It should run on Linux (x86-32, x86-64, and ARM),
+iOS, macOS, and Windows (x86-64). The CMake build is only tested on some of
+these platforms; at a minimum, we aim to support macOS and Linux (on the latest
+Ubuntu LTS release or newer.)
 
 ## Build with CMake
 

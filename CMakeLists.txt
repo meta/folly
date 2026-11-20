@@ -152,12 +152,13 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     message(FATAL_ERROR "Folly requires a 64bit target architecture.")
   endif ()
 
-  if (MSVC_VERSION LESS 1900)
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND
+      CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.29.30133)
     message(
       FATAL_ERROR
         "This build script only supports building Folly on 64-bit Windows with "
-        "at least Visual Studio 2017. "
-        "MSVC version '${MSVC_VERSION}' is not supported."
+        "at least Visual Studio 2019 16.11. "
+        "MSVC version '${CMAKE_CXX_COMPILER_VERSION}' is not supported."
     )
   endif ()
 endif ()
