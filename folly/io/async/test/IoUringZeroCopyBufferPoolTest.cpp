@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cerrno>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -21,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include <folly/io/async/IoUringZeroCopyBufferPool.h>
+#include <folly/portability/SysMman.h>
 #include <folly/portability/Unistd.h>
 
 using namespace ::testing;
@@ -57,6 +59,32 @@ class IoUringZeroCopyBufferPoolTestHelper {
 } // namespace folly
 
 using namespace ::folly;
+
+TEST(IoUringZeroCopyBufferPoolTest, BufferKeepsMappingAliveAfterPoolDestroy) {
+  IoUringZeroCopyBufferPool::Params params = {
+      .ring = nullptr,
+      .numBuffers = 32,
+      .bufferSizeHint = 4096,
+      .rqEntries = 8,
+      .ifindex = 0,
+      .queueId = 0,
+  };
+  auto pool = IoUringZeroCopyBufferPoolTestHelper::create(params);
+  io_uring_cqe cqe{};
+  cqe.res = 2048;
+  io_uring_zcrx_cqe zcqe{};
+  auto buffer = pool->getIoBuf(&cqe, &zcqe).buffer;
+  ASSERT_NE(buffer, nullptr);
+  auto* address = const_cast<uint8_t*>(buffer->data());
+  const size_t pageSize = static_cast<size_t>(sysconf(_SC_PAGESIZE));
+  unsigned char resident{};
+
+  pool.reset();
+  EXPECT_EQ(::mincore(address, pageSize, &resident), 0);
+  buffer.reset();
+  EXPECT_EQ(::mincore(address, pageSize, &resident), -1);
+  EXPECT_EQ(errno, ENOMEM);
+}
 
 // TODO: T264228475: remove this once liburing/uapi headers are updated.
 struct TestZcrxNotifStats {

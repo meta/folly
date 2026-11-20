@@ -1378,6 +1378,7 @@ fb_dirsync_cpp_unittest(
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:io_uring_zero_copy_buffer_pool",
+        "//folly/portability:sys_mman",
         "//folly/portability:unistd",
     ],
 )

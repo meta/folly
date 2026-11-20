@@ -336,10 +336,10 @@ IoUringZeroCopyBufferPoolImpl::IoUringZeroCopyBufferPoolImpl(
   }
 
   bufAreaSize_ = params.numBuffers * bufferSize_;
-  mapMemory();
-
   pendingBuffers_ = DynamicRingQueue<Buffer*>(
       static_cast<uint32_t>(params.numBuffers * (bufferSize_ / kMTU)));
+
+  mapMemory();
 
   if (!test) {
     initialRegister(params, pageSize);
