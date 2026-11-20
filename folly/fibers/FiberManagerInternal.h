@@ -37,8 +37,8 @@
 #include <folly/io/async/Request.h>
 
 #include <folly/executors/ExecutionObserver.h>
-#include <folly/fibers/BoostContextCompatibility.h>
 #include <folly/fibers/Fiber.h>
+#include <folly/fibers/FiberImpl.h>
 #include <folly/fibers/GuardPageAllocator.h>
 #include <folly/fibers/LoopController.h>
 #include <folly/fibers/traits.h>

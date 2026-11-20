@@ -54,15 +54,6 @@ folly_add_library(
 )
 
 folly_add_library(
-  NAME boost_context_compatibility
-  HEADERS BoostContextCompatibility.h
-  EXPORTED_DEPS
-    ${GLOG_LIBRARIES}
-    folly_external_boost-fcontext_fcontext
-    folly_function
-)
-
-folly_add_library(
   NAME core
   SRCS
     Baton.cpp
@@ -96,7 +87,7 @@ folly_add_library(
     folly_detail_futex
     folly_executor
     folly_executors_execution_observer
-    folly_fibers_boost_context_compatibility
+    folly_fibers_fiber_impl
     folly_fibers_guard_page_allocator
     folly_fibers_loop_controller
     folly_fibers_traits
@@ -162,6 +153,15 @@ folly_add_library(
 )
 
 folly_add_library(
+  NAME fiber_impl
+  HEADERS FiberImpl.h
+  EXPORTED_DEPS
+    ${GLOG_LIBRARIES}
+    folly_external_boost-fcontext_fcontext
+    folly_function
+)
+
+folly_add_library(
   NAME fiber_manager_map
   HEADERS
     FiberManagerMap-inl.h
@@ -185,10 +185,10 @@ folly_add_library(
     folly_fibers_atomic_batch_dispatcher
     folly_fibers_batch_dispatcher
     folly_fibers_batch_semaphore
-    folly_fibers_boost_context_compatibility
     folly_fibers_core
     folly_fibers_core_manager
     folly_fibers_event_base_loop_controller
+    folly_fibers_fiber_impl
     folly_fibers_fiber_manager_map
     folly_fibers_for_each
     folly_fibers_generic_baton

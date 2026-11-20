@@ -25,7 +25,7 @@
 #include <folly/Function.h>
 #include <folly/IntrusiveList.h>
 #include <folly/Portability.h>
-#include <folly/fibers/BoostContextCompatibility.h>
+#include <folly/fibers/FiberImpl.h>
 #include <folly/io/async/Request.h>
 #include <folly/lang/Thunk.h>
 #include <folly/portability/PThread.h>

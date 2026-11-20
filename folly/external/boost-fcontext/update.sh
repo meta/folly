@@ -61,4 +61,4 @@ for abi in $abis; do
 done
 
 echo "Check that the context layout that make_*.S saves still matches what"
-echo "folly/fibers/BoostContextCompatibility.h reads for frame pointers."
+echo "folly/fibers/FiberImpl.h reads for frame pointers."

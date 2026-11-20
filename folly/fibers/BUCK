@@ -53,17 +53,6 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
-    name = "boost_context_compatibility",
-    headers = ["BoostContextCompatibility.h"],
-    use_raw_headers = True,
-    exported_deps = [
-        "fbsource//third-party/glog:glog",
-        "//folly:function",
-        "//folly/external/boost-fcontext:fcontext",
-    ],
-)
-
-fb_dirsync_cpp_library(
     name = "core",
     srcs = [
         "Baton.cpp",
@@ -94,7 +83,7 @@ fb_dirsync_cpp_library(
         "//folly/synchronization:sanitize_thread",
     ],
     exported_deps = [
-        ":boost_context_compatibility",
+        ":fiber_impl",
         ":guard_page_allocator",
         ":loop_controller",
         ":traits",
@@ -179,6 +168,17 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
+    name = "fiber_impl",
+    headers = ["FiberImpl.h"],
+    use_raw_headers = True,
+    exported_deps = [
+        "fbsource//third-party/glog:glog",
+        "//folly:function",
+        "//folly/external/boost-fcontext:fcontext",
+    ],
+)
+
+fb_dirsync_cpp_library(
     name = "fiber_manager_map",
     headers = [
         "FiberManagerMap.h",
@@ -205,10 +205,10 @@ fb_dirsync_cpp_library(
         ":atomic_batch_dispatcher",  # @manual
         ":batch_dispatcher",  # @manual
         ":batch_semaphore",  # @manual
-        ":boost_context_compatibility",  # @manual
         ":core",  # @manual
         ":core_manager",  # @manual
         ":event_base_loop_controller",  # @manual
+        ":fiber_impl",  # @manual
         ":fiber_manager_map",  # @manual
         ":for_each",  # @manual
         ":generic_baton",  # @manual
