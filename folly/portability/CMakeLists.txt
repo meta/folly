@@ -75,12 +75,6 @@ folly_add_library(
 )
 
 folly_add_library(
-  NAME fmt_compile
-  HEADERS FmtCompile.h
-  EXPORTED_DEPS fmt::fmt
-)
-
-folly_add_library(
   NAME gflags
   HEADERS GFlags.h
   EXPORTED_DEPS folly_portability_config

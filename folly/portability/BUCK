@@ -107,16 +107,6 @@ fb_dirsync_cpp_library(
     exported_deps = [],
 )
 
-fb_dirsync_cpp_library(
-    name = "fmt_compile",
-    headers = ["FmtCompile.h"],
-    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
-    use_raw_headers = True,
-    exported_deps = [
-        "fbsource//third-party/fmt:fmt",
-    ],
-)
-
 # because certain arvr builds duplicate gflags and do this in an exec dependency, we need this until we fix that behavior.
 _GFLAGS_DEPS = [
     "fbsource//arvr/third-party/gflags:gflags" if is_arvr_mode() else "fbsource//third-party/gflags:gflags",

@@ -25,11 +25,11 @@
 #include <utility>
 
 #include <fmt/args.h>
+#include <fmt/compile.h>
 #include <fmt/format.h>
 
 #include <folly/CppAttributes.h>
 #include <folly/lang/Exception.h>
-#include <folly/portability/FmtCompile.h>
 
 namespace folly {
 

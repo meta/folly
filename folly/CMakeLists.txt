@@ -541,7 +541,6 @@ if (FOLLY_HAVE_OPENSSL)
       fmt::fmt
       folly_cpp_attributes
       folly_lang_exception
-      folly_portability_fmt_compile
   )
 else ()
   folly_exclude_headers(FmtUtility.h)
