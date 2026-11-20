@@ -16,6 +16,8 @@
 
 #include <folly/observer/detail/Core.h>
 
+#include <vector>
+
 #include <folly/ExceptionString.h>
 #include <folly/observer/detail/ObserverManager.h>
 
@@ -182,8 +184,7 @@ void Core::maybeRemoveStaleDependents() {
     if (++dstate.numPotentiallyExpiredDependents < deps.size() / 4) {
       return;
     }
-    auto const pred = [](auto const& d) { return d.expired(); };
-    deps.erase(std::remove_if(deps.begin(), deps.end(), pred), deps.end());
+    std::erase_if(deps, [](auto const& d) { return d.expired(); });
     dstate.numPotentiallyExpiredDependents = 0;
   });
 }

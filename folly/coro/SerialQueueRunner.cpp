@@ -16,7 +16,6 @@
 
 #include <folly/coro/SerialQueueRunner.h>
 
-#include <functional>
 #include <stdexcept>
 #include <utility>
 
@@ -79,8 +78,7 @@ void SerialQueueRunner::cancel() {
 
 Task<> SerialQueueRunner::await() {
   CancellationCallback cb{
-      co_await co_current_cancellation_token,
-      std::bind(&SerialQueueRunner::cancel, this)};
+      co_await co_current_cancellation_token, [this] { cancel(); }};
   co_await *baton_;
 }
 

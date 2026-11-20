@@ -167,12 +167,7 @@ void GlobalThreadPoolListImpl::registerThreadPool(
 void GlobalThreadPoolListImpl::unregisterThreadPool(
     ThreadPoolListHook* threadPoolId) {
   auto& vector = pools_.vector();
-  vector.erase(
-      std::remove_if(
-          vector.begin(),
-          vector.end(),
-          [=](PoolInfo& i) { return i.addr == threadPoolId; }),
-      vector.end());
+  std::erase_if(vector, [=](PoolInfo& i) { return i.addr == threadPoolId; });
 }
 
 void GlobalThreadPoolListImpl::registerThreadPoolThread(

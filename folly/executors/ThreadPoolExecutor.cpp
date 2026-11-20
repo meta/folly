@@ -19,6 +19,7 @@
 #include <ctime>
 #include <span>
 #include <type_traits>
+#include <vector>
 
 #include <folly/ExceptionString.h>
 #include <folly/GLog.h>
@@ -44,7 +45,7 @@ void ThreadPoolExecutor::registerThreadPoolExecutor(ThreadPoolExecutor* tpe) {
 
 void ThreadPoolExecutor::deregisterThreadPoolExecutor(ThreadPoolExecutor* tpe) {
   getSyncVecThreadPoolExecutors().withWLock([tpe](auto& tpes) {
-    tpes.erase(std::remove(tpes.begin(), tpes.end(), tpe), tpes.end());
+    std::erase(tpes, tpe);
   });
 }
 
@@ -303,8 +304,9 @@ void ThreadPoolExecutor::addThreads(size_t n) {
     }
   });
   for (auto& thread : newThreads) {
-    thread->handle = threadFactory_->newThread(
-        std::bind(&ThreadPoolExecutor::threadRun, this, thread));
+    thread->handle = threadFactory_->newThread([this, thread] {
+      threadRun(thread);
+    });
     ++created;
   }
   auto startupException = afterConstructThreads(newThreads);
@@ -319,8 +321,9 @@ void ThreadPoolExecutor::addThreads(size_t n) {
 bool ThreadPoolExecutor::tryAddOneThread() noexcept {
   auto thread = makeThread();
   try {
-    thread->handle = threadFactory_->newThread(
-        std::bind(&ThreadPoolExecutor::threadRun, this, thread));
+    thread->handle = threadFactory_->newThread([this, thread] {
+      threadRun(thread);
+    });
   } catch (...) {
     FB_LOG_EVERY_MS(ERROR, 1000)
         << "ThreadPoolExecutor: thread creation failed: "
