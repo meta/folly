@@ -284,14 +284,9 @@ bool validateZeroCopyRxOptions(IoUringOptions& options) {
 } // namespace
 
 IoUringBackend::SocketPair::SocketPair() {
-  if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds_.data())) {
+  const auto socktype = SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC;
+  if (::socketpair(AF_UNIX, socktype, 0, fds_.data())) {
     throw std::runtime_error("socketpair error");
-  }
-
-  // set the sockets to non blocking mode
-  for (auto fd : fds_) {
-    auto flags = ::fcntl(fd, F_GETFL, 0);
-    ::fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   }
 }
 
