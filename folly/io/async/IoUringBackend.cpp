@@ -566,12 +566,12 @@ IoUringBackend::IoUringBackend(Options options)
   poolAllocRemaining_ = options_.capacity * 2;
 
   // timer entry
-  timerEntry_ = std::make_unique<IoSqe>(this, false, true /*persist*/);
-  timerEntry_->backendCb_ = IoUringBackend::processTimerIoSqe;
+  timerEntry_ =
+      std::make_unique<IoSqe>(this, processTimerIoSqe, false, true /*persist*/);
 
   // signal entry
-  signalReadEntry_ = std::make_unique<IoSqe>(this, false, true /*persist*/);
-  signalReadEntry_->backendCb_ = IoUringBackend::processSignalReadIoSqe;
+  signalReadEntry_ = std::make_unique<IoSqe>(
+      this, processSignalReadIoSqe, false, true /*persist*/);
   // delay adding the timer and signal fds until running the loop first time
 
   if (!usingDeferTaskrun_) {
@@ -1846,7 +1846,6 @@ void IoUringBackend::queueRead(
     int fd, void* buf, size_t nbytes, off_t offset, FileOpCallback&& cb) {
   iovec iov{buf, nbytes};
   auto* ioSqe = new ReadIoSqe(this, fd, &iov, offset, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1855,7 +1854,6 @@ void IoUringBackend::queueWrite(
     int fd, const void* buf, size_t nbytes, off_t offset, FileOpCallback&& cb) {
   iovec iov{const_cast<void*>(buf), nbytes};
   auto* ioSqe = new WriteIoSqe(this, fd, &iov, offset, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1863,7 +1861,6 @@ void IoUringBackend::queueWrite(
 void IoUringBackend::queueReadv(
     int fd, Range<const iovec*> iovecs, off_t offset, FileOpCallback&& cb) {
   auto* ioSqe = new ReadvIoSqe(this, fd, iovecs, offset, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1871,7 +1868,6 @@ void IoUringBackend::queueReadv(
 void IoUringBackend::queueWritev(
     int fd, Range<const iovec*> iovecs, off_t offset, FileOpCallback&& cb) {
   auto* ioSqe = new WritevIoSqe(this, fd, iovecs, offset, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1887,7 +1883,6 @@ void IoUringBackend::queueFdatasync(int fd, FileOpCallback&& cb) {
 void IoUringBackend::queueFsync(
     int fd, unsigned int flags, FileOpCallback&& cb) {
   auto* ioSqe = new FSyncIoSqe(this, fd, flags, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1895,7 +1890,6 @@ void IoUringBackend::queueFsync(
 void IoUringBackend::queueOpenat(
     int dfd, const char* path, int flags, mode_t mode, FileOpCallback&& cb) {
   auto* ioSqe = new FOpenAtIoSqe(this, dfd, path, flags, mode, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1903,14 +1897,12 @@ void IoUringBackend::queueOpenat(
 void IoUringBackend::queueOpenat2(
     int dfd, const char* path, open_how* how, FileOpCallback&& cb) {
   auto* ioSqe = new FOpenAt2IoSqe(this, dfd, path, how, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
 
 void IoUringBackend::queueClose(int fd, FileOpCallback&& cb) {
   auto* ioSqe = new FCloseIoSqe(this, fd, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1924,7 +1916,6 @@ void IoUringBackend::queueStatx(
     FileOpCallback&& cb) {
   auto* ioSqe = new FStatxIoSqe(
       this, dirfd, pathname, flags, mask, statxbuf, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1932,7 +1923,6 @@ void IoUringBackend::queueStatx(
 void IoUringBackend::queueRename(
     const char* oldPath, const char* newPath, FileOpCallback&& cb) {
   auto* ioSqe = new FRenameIoSqe(this, oldPath, newPath, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1940,7 +1930,6 @@ void IoUringBackend::queueRename(
 void IoUringBackend::queueUnlinkat(
     int dirfd, const char* path, int flags, FileOpCallback&& cb) {
   auto* ioSqe = new FUnlinkIoSqe(this, dirfd, path, flags, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1952,7 +1941,6 @@ void IoUringBackend::queueUnlink(const char* path, FileOpCallback&& cb) {
 void IoUringBackend::queueFallocate(
     int fd, int mode, off_t offset, off_t len, FileOpCallback&& cb) {
   auto* ioSqe = new FAllocateIoSqe(this, fd, mode, offset, len, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1960,7 +1948,6 @@ void IoUringBackend::queueFallocate(
 void IoUringBackend::queueSendmsg(
     int fd, const msghdr* msg, unsigned int flags, FileOpCallback&& cb) {
   auto* ioSqe = new SendmsgIoSqe(this, fd, msg, flags, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }
@@ -1968,7 +1955,6 @@ void IoUringBackend::queueSendmsg(
 void IoUringBackend::queueRecvmsg(
     int fd, msghdr* msg, unsigned int flags, FileOpCallback&& cb) {
   auto* ioSqe = new RecvmsgIoSqe(this, fd, msg, flags, std::move(cb));
-  ioSqe->backendCb_ = processFileOpCB;
 
   submitImmediateIoSqe(*ioSqe);
 }

@@ -401,10 +401,14 @@ class IoUringBackend : public EventBaseBackendBase {
   struct IoSqe : public IoSqeBase {
     using BackendCb = void(IoUringBackend*, IoSqe*, const io_uring_cqe*);
     explicit IoSqe(
-        IoUringBackend* backend = nullptr,
+        IoUringBackend* backend,
+        BackendCb* backendCb,
         bool poolAlloc = false,
         bool persist = false)
-        : backend_(backend), poolAlloc_(poolAlloc), persist_(persist) {}
+        : backend_(backend),
+          backendCb_(backendCb),
+          poolAlloc_(poolAlloc),
+          persist_(persist) {}
 
     void callback(const io_uring_cqe* cqe) noexcept override {
       backendCb_(backend_, this, cqe);
@@ -413,7 +417,7 @@ class IoUringBackend : public EventBaseBackendBase {
     virtual void release() noexcept;
 
     IoUringBackend* backend_;
-    BackendCb* backendCb_{nullptr};
+    BackendCb* backendCb_;
     const bool poolAlloc_;
     const bool persist_;
     Event* event_{nullptr};
@@ -454,7 +458,7 @@ class IoUringBackend : public EventBaseBackendBase {
 
   struct FileOpIoSqe : public IoSqe {
     FileOpIoSqe(IoUringBackend* backend, int fd, FileOpCallback&& cb)
-        : IoSqe(backend, false), fd_(fd), cb_(std::move(cb)) {}
+        : IoSqe(backend, processFileOpCB), fd_(fd), cb_(std::move(cb)) {}
 
     void processActive() override { cb_(res_); }
 
@@ -780,11 +784,10 @@ class IoUringBackend : public EventBaseBackendBase {
   IoUringBackend::IoSqe* allocNewIoSqe() {
     // allow pool alloc if poolAllocRemaining_ > 0
     bool poolAlloc = poolAllocRemaining_ > 0;
-    auto* ret = new IoSqe(this, poolAlloc);
+    auto* ret = new IoSqe(this, processPollIoSqe, poolAlloc);
     if (poolAlloc) {
       --poolAllocRemaining_;
     }
-    ret->backendCb_ = IoUringBackend::processPollIoSqe;
 
     return ret;
   }
