@@ -104,7 +104,6 @@ class IoUringZeroCopyBufferPoolImpl {
     bool notification{false};
     uint32_t notifFlags{0};
     uint32_t notifStatsSize{0};
-    uint32_t notifStatsOffAlignment{0};
   };
 
   explicit IoUringZeroCopyBufferPoolImpl(
@@ -173,7 +172,6 @@ class IoUringZeroCopyBufferPoolImpl {
  private:
   void mapMemory();
   void checkZcRxFeatures();
-  uint32_t getNotifStatSize();
   void initialRegister(
       const IoUringZeroCopyBufferPool::Params& params, uint32_t pageSize);
   void delayedDestroy(uint32_t refs) noexcept;
@@ -262,10 +260,6 @@ constexpr uint32_t kMTU = 4096;
 
 } // namespace
 
-uint32_t IoUringZeroCopyBufferPoolImpl::getNotifStatSize() {
-  return supportedFeatures_.notifStatsSize;
-}
-
 void IoUringZeroCopyBufferPoolImpl::checkZcRxFeatures() {
   struct io_uring_query_zcrx zcrxQuery{};
   if (!ioUringQuery(IO_URING_QUERY_ZCRX, zcrxQuery)) {
@@ -287,8 +281,6 @@ void IoUringZeroCopyBufferPoolImpl::checkZcRxFeatures() {
   if (ioUringQuery(IO_URING_QUERY_ZCRX_NOTIF, notifQuery)) {
     supportedFeatures_.notifFlags = notifQuery.notif_flags;
     supportedFeatures_.notifStatsSize = notifQuery.notif_stats_size;
-    supportedFeatures_.notifStatsOffAlignment =
-        notifQuery.notif_stats_off_alignment;
   }
 }
 
@@ -331,12 +323,10 @@ IoUringZeroCopyBufferPoolImpl::IoUringZeroCopyBufferPoolImpl(
     supportedFeatures_.pageSize = true;
     supportedFeatures_.notifStatsSize =
         sizeof(struct io_uring_zcrx_notif_stats);
-    supportedFeatures_.notifStatsOffAlignment =
-        alignof(struct io_uring_zcrx_notif_stats);
   }
   auto refillRingSize = getRefillRingSize(rqEntries_);
-  rqRingAreaSize_ =
-      refillRingSize + folly::align_ceil(getNotifStatSize(), pageSize);
+  rqRingAreaSize_ = refillRingSize +
+      folly::align_ceil(supportedFeatures_.notifStatsSize, pageSize);
 
   if (bufferSize_ > pageSize && !supportedFeatures_.pageSize) {
     LOG_FIRST_N(WARNING, 1)
