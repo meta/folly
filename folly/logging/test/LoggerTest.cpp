@@ -42,7 +42,7 @@ class LoggerTest : public ::testing::Test {
   static StringPiece pathBasename(StringPiece path) {
     auto idx = path.rfind('/');
     if (idx == StringPiece::npos) {
-      return path.str();
+      return path;
     }
     return path.subpiece(idx + 1);
   }
@@ -51,6 +51,29 @@ class LoggerTest : public ::testing::Test {
   Logger logger_{&db_, "test"};
   std::shared_ptr<TestLogHandler> handler_;
 };
+
+TEST_F(LoggerTest, pathBasenameBorrow) {
+  const std::string shortName{"file.cpp"};
+  const auto shortView = pathBasename(shortName);
+  EXPECT_EQ(shortName, shortView);
+  EXPECT_EQ(shortName.data(), shortView.data());
+
+  const std::string fullPath{"src/file.cpp"};
+  const auto basename = pathBasename(fullPath);
+  EXPECT_EQ("file.cpp", basename);
+  EXPECT_EQ(fullPath.data() + 4, basename.data());
+
+  const std::string countedName{"file\0.cpp", 9};
+  const auto countedView = pathBasename(countedName);
+  EXPECT_EQ(countedName.size(), countedView.size());
+  EXPECT_EQ(countedName.data(), countedView.data());
+  EXPECT_EQ(countedName, countedView);
+
+  const std::string emptyName;
+  const auto emptyView = pathBasename(emptyName);
+  EXPECT_TRUE(emptyView.empty());
+  EXPECT_EQ(emptyName.data(), emptyView.data());
+}
 
 TEST_F(LoggerTest, basic) {
   // Simple log message
