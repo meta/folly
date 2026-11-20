@@ -38,12 +38,13 @@
 #define FOLLY_ASYNC_STACK_ROOT_USE_PTHREAD 0
 #endif
 
-#if FOLLY_ASYNC_STACK_ROOT_USE_PTHREAD
 #ifndef FOLLY_ASYNC_STACK_SUSPENDED_FRAME_TRACING
 #define FOLLY_ASYNC_STACK_SUSPENDED_FRAME_TRACING 0
 #endif
 
 #include <folly/portability/PThread.h>
+
+#if FOLLY_ASYNC_STACK_ROOT_USE_PTHREAD
 
 // Use a global TLS key variable to make it easier for profilers/debuggers
 // to lookup the current thread's AsyncStackRoot by walking the pthread
