@@ -753,6 +753,24 @@ function (folly_add_library)
                                PUBLIC ${FOLLY_LIB_EXTERNAL_INCLUDE_DIRS})
   endif ()
 
+  # Shared builds don't link the object target to the folly libraries in DEPS
+  # and EXPORTED_DEPS, since all the objects end up in the monolithic folly.
+  # The external libraries there still have to be linked here: compiling these
+  # sources needs their include directories and compile definitions, and the
+  # monolithic folly's link to them doesn't supply those.
+  if (BUILD_SHARED_LIBS)
+    get_property(_build_local_targets GLOBAL PROPERTY FOLLY_BUILD_LOCAL_TARGETS)
+    foreach (_dep IN LISTS FOLLY_LIB_DEPS FOLLY_LIB_EXPORTED_DEPS)
+      if (TARGET ${_dep})
+        get_target_property(_imported ${_dep} IMPORTED)
+        if (_imported OR _dep IN_LIST _ext_targets
+            OR _dep IN_LIST _build_local_targets)
+          target_link_libraries(${_obj_target} PRIVATE ${_dep})
+        endif ()
+      endif ()
+    endforeach ()
+  endif ()
+
   # Defer internal folly dependencies until all targets are created
   # (Only for static builds - for shared builds, OBJECT targets are bundled into monolithic folly)
   if (NOT BUILD_SHARED_LIBS)
