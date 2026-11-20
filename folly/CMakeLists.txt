@@ -91,6 +91,7 @@ folly_add_library(
     Benchmark.h
     detail/BenchmarkAdaptive.h
   DEPS
+    fmt::fmt
     folly_detail_perf_scoped
     folly_file_util
     folly_json_dynamic

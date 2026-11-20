@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <fmt/format.h>
 #include <folly/Benchmark.h>
 
 #include <algorithm>
@@ -499,7 +500,7 @@ static string humanReadable(
   }
 
   const double scaledValue = n / scale->boundary;
-  return stringPrintf("%.*f%s", decimals, scaledValue, scale->suffix);
+  return fmt::format("{:.{}f}{}", scaledValue, decimals, scale->suffix);
 }
 
 namespace detail {
@@ -531,14 +532,7 @@ std::string headerContents(std::string_view file, size_t columns) {
     fname.erase(0, fname.size() - maxFileNameChars);
     fname.replace(0, overflowFilePrefix.size(), overflowFilePrefix);
   }
-  return stringPrintf(
-      "%-.*s%*s%*s",
-      static_cast<int>(fname.size()),
-      fname.c_str(),
-      static_cast<int>(kUnitHeadersPadding.size()),
-      kUnitHeadersPadding.data(),
-      static_cast<int>(kUnitHeaders.size()),
-      kUnitHeaders.data());
+  return fmt::format("{}{}{}", fname, kUnitHeadersPadding, kUnitHeaders);
 }
 
 [[noreturn]] void fatalUsage(const std::string& msg);
@@ -553,7 +547,7 @@ std::string formatBenchmarkTime(double seconds) {
   for (const auto& scale : kTimeSuffixes) {
     if (scale.suffix != nullptr && unit == scale.suffix) {
       return std::isfinite(seconds)
-          ? stringPrintf("%.2f%s", seconds / scale.boundary, scale.suffix)
+          ? fmt::format("{:.2f}{}", seconds / scale.boundary, scale.suffix)
           : detail::readableTime(seconds, 2);
     }
   }
@@ -633,21 +627,19 @@ class BenchmarkResultsPrinter {
           : (1 / secPerIter);
       std::string row;
       if (!useBaseline) {
-        row = stringPrintf(
-            "%*s%8.8s  %9s  %8.8s",
-            static_cast<int>(s.size()),
-            s.c_str(),
+        row = fmt::format(
+            "{}{:>8.8}  {:>9}  {:>8.8}",
+            s,
             "", // Padding for "relative" header.
-            formatBenchmarkTime(secPerIter).c_str(),
-            metricReadable(itersPerSec, 2).c_str());
+            formatBenchmarkTime(secPerIter),
+            metricReadable(itersPerSec, 2));
       } else {
-        row = stringPrintf(
-            "%*s%#7.5g%%  %9s  %8.8s",
-            static_cast<int>(s.size()),
-            s.c_str(),
+        row = fmt::format(
+            "{}{:#7.5g}%  {:>9}  {:>8.8}",
+            s,
             baselineNsPerIter_ / nsPerIter * 100.0,
-            formatBenchmarkTime(secPerIter).c_str(),
-            metricReadable(itersPerSec, 2).c_str());
+            formatBenchmarkTime(secPerIter),
+            metricReadable(itersPerSec, 2));
       }
       for (auto const& name : counterNames_) {
         if (auto ptr = folly::get_ptr(datum.counters, name)) {
@@ -656,31 +648,35 @@ class BenchmarkResultsPrinter {
             // implicit cast from long to double when formatting the output
             case UserMetric::Type::TIME:
               folly::variant_match(ptr->value, [&](auto value) {
-                row += stringPrintf(
-                    "  %*s",
-                    int(name.length()),
-                    formatBenchmarkTime(value).c_str());
+                fmt::format_to(
+                    std::back_inserter(row),
+                    "  {:>{}}",
+                    formatBenchmarkTime(value),
+                    name.length());
               });
               break;
             case UserMetric::Type::METRIC:
               folly::variant_match(ptr->value, [&](auto value) {
-                row += stringPrintf(
-                    "  %*s",
-                    int(name.length()),
-                    metricReadable(value, 2).c_str());
+                fmt::format_to(
+                    std::back_inserter(row),
+                    "  {:>{}}",
+                    metricReadable(value, 2),
+                    name.length());
               });
               break;
             case UserMetric::Type::CUSTOM:
             default:
               folly::variant_match(ptr->value, [&](auto value) {
-                row += stringPrintf(
-                    "  %*" PRId64,
-                    int(name.length()),
-                    static_cast<int64_t>(value));
+                fmt::format_to(
+                    std::back_inserter(row),
+                    "  {:>{}}",
+                    static_cast<int64_t>(value),
+                    name.length());
               });
           }
         } else {
-          row += stringPrintf("  %*s", int(name.length()), "NaN");
+          fmt::format_to(
+              std::back_inserter(row), "  {:>{}}", "NaN", name.length());
         }
       }
       if (i < annotations.size() && !annotations[i].empty()) {
