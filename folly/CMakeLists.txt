@@ -1269,13 +1269,6 @@ folly_add_library(
 )
 
 folly_add_library(
-  NAME test_socket_address_test_helper
-  SRCS test/SocketAddressTestHelper.cpp
-  HEADERS test/SocketAddressTestHelper.h
-  DEPS folly_net_tcpinfo_dispatcher
-)
-
-folly_add_library(
   NAME test_test_utils
   HEADERS test/TestUtils.h
   EXPORTED_DEPS

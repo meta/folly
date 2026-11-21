@@ -1277,22 +1277,6 @@ fb_dirsync_cpp_library(
     ],
 )
 
-fb_dirsync_cpp_library(
-    name = "test_socket_address_test_helper",
-    srcs = [
-        "test/SocketAddressTestHelper.cpp",
-    ],
-    headers = [
-        "test/SocketAddressTestHelper.h",
-    ],
-    use_raw_headers = True,
-    xplat_impl = folly_xplat_library,
-    deps = [
-        "fbsource//xplat/folly/portability:sockets",
-        "//folly/net:tcpinfo_dispatcher",
-    ],
-)
-
 # Folly test targets
 non_fbcode_target(
     _kind = fb_xplat_cxx_library,

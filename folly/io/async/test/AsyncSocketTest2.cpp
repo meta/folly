@@ -47,7 +47,7 @@
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
 #include <folly/synchronization/Baton.h>
-#include <folly/test/SocketAddressTestHelper.h>
+#include <folly/testing/SocketAddressTestHelper.h>
 #include <folly/testing/TestUtil.h>
 
 using std::min;

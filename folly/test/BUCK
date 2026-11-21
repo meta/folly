@@ -1431,22 +1431,13 @@ fb_dirsync_cpp_unittest(
     name = "socket_address_test",
     srcs = ["SocketAddressTest.cpp"],
     deps = [
-        ":socket_address_test_helper",
         "//folly:network_address",
         "//folly:string",
         "//folly/container:array",
         "//folly/portability:gtest",
         "//folly/portability:sockets",
+        "//folly/testing:socket_address_test_helper",
         "//folly/testing:test_util",
-    ],
-)
-
-fb_dirsync_cpp_library(
-    name = "socket_address_test_helper",
-    srcs = ["SocketAddressTestHelper.cpp"],
-    headers = ["SocketAddressTestHelper.h"],
-    deps = [
-        "//folly/portability:sockets",
     ],
 )
 

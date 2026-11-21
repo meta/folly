@@ -38,3 +38,12 @@ fb_dirsync_cpp_library(
         "//folly:range",
     ],
 )
+
+fb_dirsync_cpp_library(
+    name = "socket_address_test_helper",
+    srcs = ["SocketAddressTestHelper.cpp"],
+    headers = ["SocketAddressTestHelper.h"],
+    deps = [
+        "//folly/portability:sockets",
+    ],
+)

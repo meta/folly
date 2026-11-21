@@ -25,7 +25,7 @@
 #include <folly/container/Array.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/Sockets.h>
-#include <folly/test/SocketAddressTestHelper.h>
+#include <folly/testing/SocketAddressTestHelper.h>
 #include <folly/testing/TestUtil.h>
 
 using folly::NetworkSocket;

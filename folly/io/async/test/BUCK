@@ -180,7 +180,7 @@ fb_dirsync_cpp_unittest(
         "//folly/portability:unistd",
         "//folly/synchronization:baton",
         "//folly/synchronization:rw_spin_lock",
-        "//folly/test:socket_address_test_helper",
+        "//folly/testing:socket_address_test_helper",
         "//folly/testing:test_util",
     ],
 )
@@ -1131,7 +1131,7 @@ fb_dirsync_cpp_unittest(
         "//folly/portability:sockets",
         "//folly/portability:unistd",
         "//folly/system:shell",
-        "//folly/test:socket_address_test_helper",
+        "//folly/testing:socket_address_test_helper",
     ],
 )
 

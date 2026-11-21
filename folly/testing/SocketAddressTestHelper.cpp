@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <folly/test/SocketAddressTestHelper.h>
+#include <folly/testing/SocketAddressTestHelper.h>
 
 #include <folly/portability/Sockets.h>
 

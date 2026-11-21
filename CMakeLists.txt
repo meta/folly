@@ -520,8 +520,8 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ${FOLLY_DIR}/test/DeterministicSchedule.cpp
     ${FOLLY_DIR}/test/DeterministicSchedule.h
     ${FOLLY_DIR}/test/SingletonTestStructs.cpp
-    ${FOLLY_DIR}/test/SocketAddressTestHelper.cpp
-    ${FOLLY_DIR}/test/SocketAddressTestHelper.h
+    ${FOLLY_DIR}/testing/SocketAddressTestHelper.cpp
+    ${FOLLY_DIR}/testing/SocketAddressTestHelper.h
     ${FOLLY_DIR}/compression/test/CodingTestUtils.cpp
     ${FOLLY_DIR}/container/test/F14TestUtil.h
     ${FOLLY_DIR}/container/test/TrackingTypes.h
