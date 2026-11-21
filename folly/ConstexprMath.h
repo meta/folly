@@ -738,6 +738,21 @@ constexpr T constexpr_sub_overflow_clamped(T a, T b) {
   static_assert(
       !std::is_integral<T>::value || sizeof(T) <= sizeof(M),
       "Integral type too large!");
+  if (!std::is_constant_evaluated()) {
+    if constexpr (std::is_integral_v<T>) {
+      T ret{};
+      if (!checked_sub(&ret, a, b)) [[unlikely]] {
+        if constexpr (std::is_unsigned_v<T>) {
+          return T(0);
+        } else {
+          // Overflow happens only when a and b have different signs, so the
+          // sign of a decides the saturation limit.
+          return (a < 0) ? L::min() : L::max();
+        }
+      }
+      return ret;
+    }
+  }
   // clang-format off
   return
     // don't do anything special for non-integral types.

@@ -1550,6 +1550,70 @@ TEST_F(ConstexprMathTest, constexpr_sub_overflow_clamped) {
     }
   }
 
+  // Runtime wide-type boundaries. These operands are not constant
+  // expressions, so they exercise the checked_sub fast path
+  // (!is_constant_evaluated()) at full width. The constexpr cases below
+  // only cover the constant-evaluation fallback.
+  {
+    int64_t a = 23;
+    int64_t b = 12;
+    EXPECT_EQ(int64_t(11), folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    int64_t a = 23;
+    int64_t b = kInt64Min;
+    EXPECT_EQ(kInt64Max, folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    int64_t a = kInt64Min;
+    int64_t b = 1;
+    EXPECT_EQ(kInt64Min, folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    int64_t a = kInt64Max;
+    int64_t b = -1;
+    EXPECT_EQ(kInt64Max, folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    int64_t a = kInt64Min;
+    int64_t b = kInt64Min;
+    EXPECT_EQ(int64_t(0), folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    int64_t a = -1;
+    int64_t b = kInt64Min;
+    EXPECT_EQ(kInt64Max, folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    int64_t a = -23;
+    int64_t b = kInt64Min;
+    EXPECT_EQ(kInt64Max - 22, folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    uint64_t a = 12;
+    uint64_t b = 23;
+    EXPECT_EQ(uint64_t(0), folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    uint64_t a = 0;
+    uint64_t b = kUInt64Max;
+    EXPECT_EQ(uint64_t(0), folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    int32_t a = std::numeric_limits<int32_t>::max();
+    int32_t b = -1;
+    EXPECT_EQ(
+        std::numeric_limits<int32_t>::max(),
+        folly::constexpr_sub_overflow_clamped(a, b));
+  }
+  {
+    int32_t a = std::numeric_limits<int32_t>::min();
+    int32_t b = 1;
+    EXPECT_EQ(
+        std::numeric_limits<int32_t>::min(),
+        folly::constexpr_sub_overflow_clamped(a, b));
+  }
+
   constexpr auto v1 =
       folly::constexpr_sub_overflow_clamped(int64_t(23), int64_t(12));
   EXPECT_EQ(int64_t(11), v1);
