@@ -152,73 +152,31 @@ An installed folly expects its dependencies on the consumer's system instead;
 
 ## `getdeps.py`
 
-`getdeps.py` also builds folly's sibling projects. Prefer the CMake build above
-unless you need that.
+`getdeps.py` builds folly together with its dependencies at the versions
+Meta's OSS projects use, and also builds folly's sibling projects. Prefer the
+CMake build above unless you need that. It needs Python 3.10 or newer and works
+on Linux, macOS and Windows. folly's build settings are in its manifest,
+`tool/fbcode_builder/manifests/folly`.
 
-This script is used by many of Meta's OSS tools.  It will download and build all of the necessary dependencies first, and will then invoke cmake etc to build folly.  This will help ensure that you build with relevant versions of all of the dependent libraries, taking into account what versions are installed locally on your system.
+On Linux, or on macOS with Homebrew, install the system packages first to avoid
+building them (`--dry-run` lists them without installing):
 
-It's written in python so you'll need python3.6 or later on your PATH.  It works on Linux, macOS and Windows.
-
-The settings for folly's cmake build are held in its getdeps manifest `tool/fbcode_builder/manifests/folly`, which you can edit locally if desired.
-
-### Dependencies
-
-If on Linux or MacOS (with homebrew installed) you can install system dependencies to save building them:
-
-    # Clone the repo
-    git clone https://github.com/meta/folly
-    # Install dependencies
-    cd folly
     sudo tool/fbcode_builder/getdeps.py install-system-deps --recursive
 
-If you'd like to see the packages before installing them:
+Then build and test:
 
-    tool/fbcode_builder/getdeps.py install-system-deps --dry-run --recursive
-
-On other platforms or if on Linux and without system dependencies `getdeps.py` will mostly download and build them for you during the build step.
-
-Some of the dependencies `getdeps.py` uses and installs are:
-
-  * boost.
-  * googletest is required to build and run folly's tests.
-
-### Build
-
-    # Clone the repo
-    git clone https://github.com/meta/folly
-    cd folly
-    # Build, using system dependencies if available
     python3 tool/fbcode_builder/getdeps.py --allow-system-packages build
-
-It puts output in its scratch area:
-
-  * `installed/folly/lib/libfolly.a`: Library
-
-You can also specify a `--scratch-path` argument to control
-the location of the scratch directory used for the build. You can find the default scratch install location from logs or with `python3 tool/fbcode_builder/getdeps.py show-inst-dir`.
-
-There are also
-`--install-dir` and `--install-prefix` arguments to provide some more
-fine-grained control of the installation directories. However, given that
-folly provides no compatibility guarantees between commits we generally
-recommend building and installing the libraries to a temporary location, and
-then pointing your project's build at this temporary location, rather than
-installing folly in the traditional system installation directories. e.g., if you are building with CMake you can use the `CMAKE_PREFIX_PATH` variable to allow CMake to find folly in this temporary installation directory when
-building your project.
-
-### Run tests
-
-By default `getdeps.py` will build the tests for folly. To run them:
-
-    cd folly
     python3 tool/fbcode_builder/getdeps.py --allow-system-packages test
 
-### Iterating on a `getdeps.py` build
+The library ends up in `installed/folly/lib/libfolly.a` under the scratch
+directory, which `--scratch-path` sets and `getdeps.py show-inst-dir` prints.
+`--install-dir` and `--install-prefix` give finer control. Since folly makes no
+compatibility guarantees between commits, install it to a temporary location
+and point your project at it, for example with `CMAKE_PREFIX_PATH`, rather than
+installing it system-wide.
 
-To invoke `cmake` again against a build getdeps made, there is a helpful `run_cmake.py` script output in the scratch-path build directory. You can find the scratch build directory from logs or with `python3 tool/fbcode_builder/getdeps.py show-build-dir`.
-
-Running tests with ctests also works if you cd to the build dir, e.g.
-`(cd $(python3 tool/fbcode_builder/getdeps.py show-build-dir) && ctest)`
+To iterate, use the build directory that `getdeps.py show-build-dir` prints:
+its `run_cmake.py` reruns CMake, and `ctest` there runs the tests.
 
 ## Ubuntu LTS, CentOS Stream, Fedora
 
