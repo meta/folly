@@ -1748,6 +1748,45 @@ TEST(F14FastMap, eraseInto) {
 }
 
 template <typename M>
+void runEraseIntoEmptyRangeTest() {
+  M m;
+  size_t callbacks = 0;
+  auto beforeDestroy = [&](auto&&, auto&&) { ++callbacks; };
+
+  EXPECT_EQ(m.end(), m.eraseInto(m.cbegin(), m.cend(), beforeDestroy));
+  EXPECT_TRUE(m.empty());
+
+  m.emplace(10, 1);
+  m.emplace(20, 2);
+  m.emplace(30, 3);
+  auto middle = std::next(m.cbegin());
+  for (auto pos : {m.cbegin(), middle, m.cend()}) {
+    EXPECT_EQ(pos, m.eraseInto(pos, pos, beforeDestroy));
+    EXPECT_EQ(3, m.size());
+    EXPECT_EQ(1, m.at(10));
+    EXPECT_EQ(2, m.at(20));
+    EXPECT_EQ(3, m.at(30));
+  }
+  EXPECT_EQ(0, callbacks);
+}
+
+TEST(F14ValueMap, eraseIntoEmptyRange) {
+  runEraseIntoEmptyRangeTest<F14ValueMap<int, int>>();
+}
+
+TEST(F14NodeMap, eraseIntoEmptyRange) {
+  runEraseIntoEmptyRangeTest<F14NodeMap<int, int>>();
+}
+
+TEST(F14VectorMap, eraseIntoEmptyRange) {
+  runEraseIntoEmptyRangeTest<F14VectorMap<int, int>>();
+}
+
+TEST(F14FastMap, eraseIntoEmptyRange) {
+  runEraseIntoEmptyRangeTest<F14FastMap<int, int>>();
+}
+
+template <typename M>
 void runEraseIntoEmptyFromEraseTest() {
   M m;
   m.emplace(0, 0);
