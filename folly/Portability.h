@@ -36,15 +36,21 @@
 static_assert(FOLLY_CPLUSPLUS >= 202002L, "__cplusplus >= 202002L");
 
 #if defined(__GNUC__) && !defined(__clang__)
-#if defined(FOLLY_CONFIG_TEMPORARY_DOWNGRADE_GCC)
-static_assert(__GNUC__ >= 9, "__GNUC__ >= 9");
-#else
 static_assert(__GNUC__ >= 10, "__GNUC__ >= 10");
 #endif
+
+// LLVM clang 15 (also the base of Cadence xt-clang) or Apple clang 15 (Xcode
+// 15). Apple clang has its own version numbers, but the same floor works.
+#if defined(__clang__)
+static_assert(__clang_major__ >= 15, "__clang_major__ >= 15");
 #endif
 
-#if defined(_MSC_VER)
-static_assert(_MSC_VER >= 1920);
+// Visual Studio 2019 16.11 is the first MSVC with /std:c++20. clang-cl reports
+// the MSVC version it emulates (-fmsc-version), not its own.
+#if defined(_MSC_VER) && defined(__clang__)
+static_assert(_MSC_VER >= 1928, "_MSC_VER >= 1928");
+#elif defined(_MSC_VER)
+static_assert(_MSC_FULL_VER >= 192930133, "_MSC_FULL_VER >= 192930133");
 #endif
 
 #if defined(_MSC_VER) || defined(_CPPLIB_VER)
@@ -759,29 +765,7 @@ constexpr auto kCpplibVer = 0;
 #define FOLLY_HAS_COROUTINES 0
 #endif
 
-#if !FOLLY_HAS_COROUTINES
-#define FOLLY_HAS_IMMOVABLE_COROUTINES 0
-// This logic is written as "good until proven broken" because it's possible
-// that there's a good compiler older than the oldest good version I checked.
-#elif defined(__clang_major__) && __clang_major__ <= 14
-//  - 12.0.1 is bad: https://godbolt.org/z/6s489xE8P
-//  - 14 is still bad: https://godbolt.org/z/nW1W8cWvb
-//  - 15.0.0 is good: https://godbolt.org/z/Tco4c9hbq and sEaKKTf8r
-#define FOLLY_HAS_IMMOVABLE_COROUTINES 0
-// On Windows, Clang with -fms-compatibility defines _MSC_FULL_VER to
-// emulate MSVC - even for newer versions of Clang.
-// Explicitly allow Clang 15+, prior to checking _MSC_FULL_VER
-#elif defined(__clang_major__) && __clang_major__ >= 15
-#define FOLLY_HAS_IMMOVABLE_COROUTINES 1
-// BEWARE: Older versions of Clang pretend to be MSVC and define
-// `_MSC_FULL_VER`
-#elif defined(_MSC_FULL_VER) && _MSC_FULL_VER <= 192930040
-//  - 192930040 is bad: https://godbolt.org/z/E797W8xTT
-//  - 192930153 is good: https://godbolt.org/z/cM4nW5rTK
-#define FOLLY_HAS_IMMOVABLE_COROUTINES 0
-#else
-#define FOLLY_HAS_IMMOVABLE_COROUTINES 1 // good until proven broken
-#endif
+#define FOLLY_HAS_IMMOVABLE_COROUTINES FOLLY_HAS_COROUTINES
 #endif // FOLLY_CFG_NO_COROUTINES
 
 #if FOLLY_HAS_COROUTINES

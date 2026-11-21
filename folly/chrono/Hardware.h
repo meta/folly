@@ -91,11 +91,7 @@ inline std::uint64_t hardware_timestamp_measurement_start() noexcept {
   return ret;
 #elif defined(__GNUC__) && FOLLY_X64
   uint64_t ret = 0;
-#if !defined(__clang_major__) || __clang_major__ >= 11
   asm volatile inline(
-#else
-  asm volatile(
-#endif
       "lfence\n"
       "rdtsc\n" // loads 64-bit tsc into edx:eax
       "shl $32, %%rdx\n" // prep rdx for combine into rax
@@ -128,11 +124,7 @@ inline std::uint64_t hardware_timestamp_measurement_stop() noexcept {
   return ret;
 #elif defined(__GNUC__) && FOLLY_X64
   uint64_t ret = 0;
-#if !defined(__clang_major__) || __clang_major__ >= 11
   asm volatile inline(
-#else
-  asm volatile(
-#endif
       "rdtscp\n" // loads 64-bit tsc into edx:eax, clobbers ecx
       "shl $32, %%rdx\n" // prep rdx for combine into rax
       "or %%rdx, %[ret]\n" // combine rdx into rax
