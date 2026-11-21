@@ -18,6 +18,7 @@
 
 #include <cstdlib>
 #include <span>
+#include <string_view>
 
 #include <folly/Demangle.h>
 #include <folly/FileUtil.h>
@@ -731,6 +732,13 @@ UnsafeSelfAllocateStackTracePrinter::UnsafeSelfAllocateStackTracePrinter(int fd)
     DwarfCursor cursor{terminated};
     auto string = cursor.readCString();
     compiler_must_not_elide(string);
+    // `std::string_view` equality (section-name lookup) lowers to `bcmp` in
+    // opt builds; resolve its binding before installing signal handlers.
+    const std::string_view nameA{".a"};
+    const std::string_view nameB{".b"};
+    compiler_must_not_predict(nameA);
+    compiler_must_not_predict(nameB);
+    compiler_must_not_elide(nameA == nameB);
 #endif
     char demangled[8];
     (void)folly::demangle("_Z1fv", demangled, sizeof(demangled));
