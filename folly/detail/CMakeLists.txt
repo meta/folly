@@ -286,6 +286,7 @@ folly_add_library(
     folly_hash_murmur_hash
     folly_lang_hint
     folly_memory_sanitize_leak
+    folly_portability_gflags
     folly_random_hash
     folly_synchronization_call_once
     folly_utility

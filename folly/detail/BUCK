@@ -280,6 +280,7 @@ fb_dirsync_cpp_library(
         "//folly/hash:murmur_hash",
         "//folly/lang:hint",
         "//folly/memory:sanitize_leak",
+        "//folly/portability:gflags",
         "//folly/random:hash",
         "//folly/synchronization:call_once",
     ],

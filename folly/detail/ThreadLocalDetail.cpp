@@ -27,8 +27,14 @@
 #include <folly/hash/MurmurHash.h>
 #include <folly/lang/Hint.h>
 #include <folly/memory/SanitizeLeak.h>
+#include <folly/portability/GFlags.h>
 #include <folly/random/hash.h>
 #include <folly/synchronization/CallOnce.h>
+
+FOLLY_GFLAGS_DEFINE_bool(
+    folly_thread_local_debug_disable_set_consistency_check,
+    false,
+    "Disable the ThreadEntry set-consistency DCHECK in ThreadLocalPtr::get");
 
 constexpr auto kSmallGrowthFactor = 1.1;
 constexpr auto kBigGrowthFactor = 1.7;
@@ -184,6 +190,10 @@ bool ThreadEntrySet::compressible() const {
 
 bool ThreadEntry::cachedInSetMatchesElementsArray(uint32_t id) {
   if constexpr (!kIsDebug) {
+    return true;
+  }
+
+  if (FLAGS_folly_thread_local_debug_disable_set_consistency_check) {
     return true;
   }
 
