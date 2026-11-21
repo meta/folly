@@ -60,6 +60,33 @@ constexpr bool generic_checked_add(T* result, T a, T b) {
 }
 
 template <typename T>
+  requires std::is_integral_v<T>
+constexpr bool generic_checked_sub(T* result, T a, T b) {
+  if constexpr (std::is_signed_v<T>) {
+    if (b >= 0) {
+      // min() + b is exact: b >= 0 puts it in [min(), -1].
+      if (a < std::numeric_limits<T>::min() + b) [[unlikely]] {
+        *result = {};
+        return false;
+      }
+    } else if (a > std::numeric_limits<T>::max() + b) [[unlikely]] {
+      // max() + b is exact: b < 0 puts it in [-1, max() - 1].
+      *result = {};
+      return false;
+    }
+    *result = a - b;
+    return true;
+  } else {
+    if (a < b) [[unlikely]] {
+      *result = {};
+      return false;
+    }
+    *result = a - b;
+    return true;
+  }
+}
+
+template <typename T>
   requires std::is_unsigned_v<T>
 constexpr bool generic_checked_small_mul(T* result, T a, T b) {
   static_assert(sizeof(T) < sizeof(uint64_t), "Too large");
@@ -138,6 +165,20 @@ constexpr bool checked_add(T* result, T a, T b) {
   return false;
 #else
   return detail::generic_checked_add(result, a, b);
+#endif
+}
+
+template <typename T>
+  requires std::is_integral_v<T>
+constexpr bool checked_sub(T* result, T a, T b) {
+#if FOLLY_HAS_BUILTIN(__builtin_sub_overflow)
+  if (!__builtin_sub_overflow(a, b, result)) [[likely]] {
+    return true;
+  }
+  *result = {};
+  return false;
+#else
+  return detail::generic_checked_sub(result, a, b);
 #endif
 }
 
