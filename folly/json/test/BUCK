@@ -161,9 +161,9 @@ fb_dirsync_cpp_unittest(
     headers = [],
     deps = [
         "fbsource//third-party/glog:glog",
+        "//folly/json:json_mock_util",
         "//folly/portability:gmock",
         "//folly/portability:gtest",
-        "//folly/test:json_mock_util",
         "//folly/test:json_test_util",
     ],
 )

@@ -599,17 +599,6 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
-    name = "json_mock_util",
-    exported_headers = {
-        "test/JsonMockUtil.h": "test/JsonMockUtil.h",
-    },
-    platforms = (CXX, ANDROID, APPLE, WINDOWS, FBCODE),
-    exported_deps = [
-        "//folly/json:json_mock_util",
-    ],
-)
-
-fb_dirsync_cpp_library(
     name = "comparison_operator_test_util",
     exported_headers = {
         "test/ComparisonOperatorTestUtil.h": "test/ComparisonOperatorTestUtil.h",

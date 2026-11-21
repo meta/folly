@@ -1874,16 +1874,6 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_library(
-    name = "json_mock_util",
-    headers = [
-        "JsonMockUtil.h",
-    ],
-    exported_deps = [
-        "//folly/json:json_mock_util",
-    ],
-)
-
-fb_dirsync_cpp_library(
     name = "json_test_util",
     headers = [
         "JsonTestUtil.h",

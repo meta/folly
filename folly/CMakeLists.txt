@@ -635,11 +635,6 @@ folly_add_library(
 )
 
 folly_add_library(
-  NAME json_mock_util
-  EXPORTED_DEPS folly_json_json_mock_util
-)
-
-folly_add_library(
   NAME json_patch
   HEADERS json_patch.h
   EXPORTED_DEPS folly_json_json_patch
