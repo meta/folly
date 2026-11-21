@@ -1597,6 +1597,7 @@ fb_dirsync_cpp_library(
         "fbsource//third-party/glog:glog",
         "//folly:random",
         "//folly:synchronized",
+        "//folly/concurrency/testing:run_parallel",
         "//folly/container:foreach",
         "//folly/portability:gtest",
     ],

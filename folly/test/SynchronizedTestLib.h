@@ -57,4 +57,5 @@ void testInPlaceConstruction();
 } // namespace sync_tests
 } // namespace folly
 
+#include <folly/concurrency/testing/RunParallel.h>
 #include <folly/test/SynchronizedTestLib-inl.h>

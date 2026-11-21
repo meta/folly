@@ -157,3 +157,4 @@ folly_add_library(
 
 add_subdirectory(container)
 add_subdirectory(memory)
+add_subdirectory(testing)

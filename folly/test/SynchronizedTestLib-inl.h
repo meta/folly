@@ -43,64 +43,6 @@ inline void randomSleep(
   std::this_thread::sleep_for(duration);
 }
 
-/*
- * Run a functon simultaneously in a number of different threads.
- *
- * The function will be passed the index number of the thread it is running in.
- * This function makes an attempt to synchronize the start of the threads as
- * best as possible.  It waits for all threads to be allocated and started
- * before invoking the function.
- */
-template <class Function>
-void runParallel(size_t numThreads, const Function& function) {
-  std::vector<std::thread> threads;
-  threads.reserve(numThreads);
-
-  // Variables used to synchronize all threads to try and start them
-  // as close to the same time as possible
-  folly::Synchronized<size_t, std::mutex> threadsReady(0);
-  std::condition_variable readyCV;
-  folly::Synchronized<bool, std::mutex> go(false);
-  std::condition_variable goCV;
-
-  auto worker = [&](size_t threadIndex) {
-    // Signal that we are ready
-    ++(*threadsReady.lock());
-    readyCV.notify_one();
-
-    // Wait until we are given the signal to start
-    // The purpose of this is to try and make sure all threads start
-    // as close to the same time as possible.
-    {
-      auto lockedGo = go.lock();
-      goCV.wait(lockedGo.as_lock(), [&] { return *lockedGo; });
-    }
-
-    function(threadIndex);
-  };
-
-  // Start all of the threads
-  for (size_t threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
-    threads.emplace_back([threadIndex, &worker]() { worker(threadIndex); });
-  }
-
-  // Wait for all threads to become ready
-  {
-    auto readyLocked = threadsReady.lock();
-    readyCV.wait(readyLocked.as_lock(), [&] {
-      return *readyLocked == numThreads;
-    });
-  }
-  // Now signal the threads that they can go
-  go = true;
-  goCV.notify_all();
-
-  // Wait for all threads to finish
-  for (auto& thread : threads) {
-    thread.join();
-  }
-}
-
 // testBasic() version for shared lock types
 template <class Mutex>
 std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<Mutex>>
@@ -487,7 +429,7 @@ void testConcurrency() {
       std::this_thread::yield();
     }
   };
-  runParallel(numThreads, pushNumbers);
+  folly::test::run_parallel(numThreads, pushNumbers);
 
   std::vector<int> result;
   v.swap(result);
@@ -520,7 +462,7 @@ void testAcquireLocked() {
     }
   };
   static const size_t numThreads = 100;
-  runParallel(numThreads, dualLockWorker);
+  folly::test::run_parallel(numThreads, dualLockWorker);
 
   std::vector<int> result;
   v.swap(result);
@@ -551,7 +493,7 @@ void testAcquireLockedWithConst() {
     }
   };
   static const size_t numThreads = 100;
-  runParallel(numThreads, dualLockWorker);
+  folly::test::run_parallel(numThreads, dualLockWorker);
 
   std::vector<int> result;
   v.swap(result);
@@ -584,7 +526,7 @@ template <class Mutex>
     }
   };
   static const size_t numThreads = 100;
-  runParallel(numThreads, dualLockWorker);
+  folly::test::run_parallel(numThreads, dualLockWorker);
 
   std::vector<int> result;
   v.swap(result);
@@ -618,7 +560,7 @@ template <class Mutex>
     }
   };
   static const size_t numThreads = 100;
-  runParallel(numThreads, dualLockWorker);
+  folly::test::run_parallel(numThreads, dualLockWorker);
 
   std::vector<int> result;
   v.swap(result);
@@ -657,7 +599,7 @@ void testTimed() {
   };
 
   static const size_t numThreads = 100;
-  runParallel(numThreads, worker);
+  folly::test::run_parallel(numThreads, worker);
 
   std::vector<int> result;
   v.swap(result);
@@ -722,7 +664,7 @@ void testTimedShared() {
   };
 
   static const size_t numThreads = 100;
-  runParallel(numThreads, worker);
+  folly::test::run_parallel(numThreads, worker);
 
   std::vector<int> result;
   v.swap(result);

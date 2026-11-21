@@ -1,0 +1,10 @@
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+
+oncall("fbcode_entropy_wardens_folly")
+
+fb_dirsync_cpp_library(
+    name = "run_parallel",
+    headers = [
+        "RunParallel.h",
+    ],
+)
