@@ -267,7 +267,7 @@ endif ()
 list(
   APPEND
   hfiles
-  ${FOLLY_DIR}/container/test/F14TestUtil.h
+  ${FOLLY_DIR}/container/testing/F14TestUtil.h
   ${FOLLY_DIR}/container/test/TrackingTypes.h
   ${FOLLY_DIR}/io/async/test/AsyncSocketTest2.h
   ${FOLLY_DIR}/io/async/test/CallbackStateEnum.h
@@ -523,7 +523,7 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ${FOLLY_DIR}/testing/SocketAddressTestHelper.cpp
     ${FOLLY_DIR}/testing/SocketAddressTestHelper.h
     ${FOLLY_DIR}/compression/test/CodingTestUtils.cpp
-    ${FOLLY_DIR}/container/test/F14TestUtil.h
+    ${FOLLY_DIR}/container/testing/F14TestUtil.h
     ${FOLLY_DIR}/container/test/TrackingTypes.h
     ${FOLLY_DIR}/executors/testing/SimpleThreadPoolExecutor.cpp
     ${FOLLY_DIR}/executors/testing/SimpleThreadPoolExecutor.h

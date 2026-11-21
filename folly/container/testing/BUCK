@@ -1,0 +1,13 @@
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+
+oncall("fbcode_entropy_wardens_folly")
+
+fb_dirsync_cpp_library(
+    name = "f14_test_util",
+    headers = [
+        "F14TestUtil.h",
+    ],
+    exported_deps = [
+        "//folly/container/detail:f14_hash_detail",
+    ],
+)

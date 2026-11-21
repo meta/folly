@@ -37,9 +37,9 @@ FOLLY_GNU_DISABLE_WARNING("-Wdeprecated-declarations")
 #include <folly/Benchmark.h>
 #include <folly/Conv.h>
 #include <folly/FBString.h>
-#include <folly/container/test/F14TestUtil.h>
 #include <folly/container/test/IteratorTestUtil.h>
 #include <folly/container/test/TrackingTypes.h>
+#include <folly/container/testing/F14TestUtil.h>
 #include <folly/lang/Keep.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>

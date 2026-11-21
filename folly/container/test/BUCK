@@ -92,8 +92,8 @@ fb_dirsync_cpp_unittest(
         "fbsource//xplat/folly/portability:gmock",
         "fbsource//xplat/folly/portability:gtest",
         "fbsource//xplat/folly/test:test_utils",
-        ":f14_test_util",
         ":tracking_types",
+        "//folly/container/testing:f14_test_util",
     ],
 )
 
@@ -126,8 +126,8 @@ fb_dirsync_cpp_unittest(
         "fbsource//xplat/folly/portability:gmock",
         "fbsource//xplat/folly/portability:gtest",
         "fbsource//xplat/folly/test:test_utils",
-        ":f14_test_util",
         ":tracking_types",
+        "//folly/container/testing:f14_test_util",
     ],
 )
 
@@ -288,16 +288,6 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
-fb_dirsync_cpp_library(
-    name = "f14_test_util",
-    headers = [
-        "F14TestUtil.h",
-    ],
-    exported_deps = [
-        "//folly/container/detail:f14_hash_detail",
-    ],
-)
-
 fb_dirsync_cpp_unittest(
     name = "f14_fwd_test",
     srcs = [
@@ -317,7 +307,6 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly/portability:gmock",
-        ":f14_test_util",
         ":iterator_test_util",
         ":tracking_types",
         "//folly:benchmark",
@@ -325,6 +314,7 @@ fb_dirsync_cpp_unittest(
         "//folly:fbstring",
         "//folly:portability",
         "//folly/container:f14_hash",
+        "//folly/container/testing:f14_test_util",
         "//folly/hash:hash",
         "//folly/portability:gtest",
         "//folly/test:test_utils",
@@ -341,7 +331,6 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly/portability:gmock",
-        ":f14_test_util",
         ":iterator_test_util",
         ":tracking_types",
         "//folly:benchmark",
@@ -349,6 +338,7 @@ fb_dirsync_cpp_unittest(
         "//folly:fbstring",
         "//folly:portability",
         "//folly/container:f14_hash",
+        "//folly/container/testing:f14_test_util",
         "//folly/hash:hash",
         "//folly/portability:gtest",
         "//folly/test:test_utils",
@@ -377,7 +367,6 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly/portability:gmock",
-        ":f14_test_util",
         ":iterator_test_util",
         ":tracking_types",
         "//folly:benchmark",
@@ -385,6 +374,7 @@ fb_dirsync_cpp_unittest(
         "//folly:fbstring",
         "//folly:portability",
         "//folly/container:f14_hash",
+        "//folly/container/testing:f14_test_util",
         "//folly/lang:keep",
         "//folly/portability:gtest",
         "//folly/test:test_utils",
@@ -401,7 +391,6 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly/portability:gmock",
-        ":f14_test_util",
         ":iterator_test_util",
         ":tracking_types",
         "//folly:benchmark",
@@ -409,6 +398,7 @@ fb_dirsync_cpp_unittest(
         "//folly:fbstring",
         "//folly:portability",
         "//folly/container:f14_hash",
+        "//folly/container/testing:f14_test_util",
         "//folly/lang:keep",
         "//folly/portability:gtest",
         "//folly/test:test_utils",
