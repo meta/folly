@@ -20,7 +20,7 @@
 
 #include <folly/Optional.h>
 #include <folly/Range.h>
-#include <folly/container/test/TrackingTypes.h>
+#include <folly/container/testing/TrackingTypes.h>
 #include <folly/portability/GTest.h>
 
 using namespace folly::test;

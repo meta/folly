@@ -92,8 +92,8 @@ fb_dirsync_cpp_unittest(
         "fbsource//xplat/folly/portability:gmock",
         "fbsource//xplat/folly/portability:gtest",
         "fbsource//xplat/folly/test:test_utils",
-        ":tracking_types",
         "//folly/container/testing:f14_test_util",
+        "//folly/container/testing:tracking_types",
     ],
 )
 
@@ -126,8 +126,8 @@ fb_dirsync_cpp_unittest(
         "fbsource//xplat/folly/portability:gmock",
         "fbsource//xplat/folly/portability:gtest",
         "fbsource//xplat/folly/test:test_utils",
-        ":tracking_types",
         "//folly/container/testing:f14_test_util",
+        "//folly/container/testing:tracking_types",
     ],
 )
 
@@ -308,13 +308,13 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly/portability:gmock",
         ":iterator_test_util",
-        ":tracking_types",
         "//folly:benchmark",
         "//folly:conv",
         "//folly:fbstring",
         "//folly:portability",
         "//folly/container:f14_hash",
         "//folly/container/testing:f14_test_util",
+        "//folly/container/testing:tracking_types",
         "//folly/hash:hash",
         "//folly/portability:gtest",
         "//folly/test:test_utils",
@@ -332,13 +332,13 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly/portability:gmock",
         ":iterator_test_util",
-        ":tracking_types",
         "//folly:benchmark",
         "//folly:conv",
         "//folly:fbstring",
         "//folly:portability",
         "//folly/container:f14_hash",
         "//folly/container/testing:f14_test_util",
+        "//folly/container/testing:tracking_types",
         "//folly/hash:hash",
         "//folly/portability:gtest",
         "//folly/test:test_utils",
@@ -368,13 +368,13 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly/portability:gmock",
         ":iterator_test_util",
-        ":tracking_types",
         "//folly:benchmark",
         "//folly:conv",
         "//folly:fbstring",
         "//folly:portability",
         "//folly/container:f14_hash",
         "//folly/container/testing:f14_test_util",
+        "//folly/container/testing:tracking_types",
         "//folly/lang:keep",
         "//folly/portability:gtest",
         "//folly/test:test_utils",
@@ -392,13 +392,13 @@ fb_dirsync_cpp_unittest(
         "fbsource//third-party/glog:glog",
         "fbsource//xplat/folly/portability:gmock",
         ":iterator_test_util",
-        ":tracking_types",
         "//folly:benchmark",
         "//folly:conv",
         "//folly:fbstring",
         "//folly:portability",
         "//folly/container:f14_hash",
         "//folly/container/testing:f14_test_util",
+        "//folly/container/testing:tracking_types",
         "//folly/lang:keep",
         "//folly/portability:gtest",
         "//folly/test:test_utils",
@@ -603,19 +603,6 @@ fb_dirsync_cpp_benchmark(
     ],
 )
 
-fb_dirsync_cpp_library(
-    name = "tracking_types",
-    headers = [
-        "TrackingTypes.h",
-    ],
-    exported_deps = [
-        "//folly:function",
-        "//folly/hash:hash",
-        "//folly/lang:safe_assert",
-        "//folly/portability:asm",
-    ],
-)
-
 fb_dirsync_cpp_benchmark(
     name = "tape_bench",
     srcs = ["tape_bench.cpp"],
@@ -632,10 +619,10 @@ fb_dirsync_cpp_unittest(
     headers = [],
     deps = [
         "fbsource//third-party/glog:glog",
-        ":tracking_types",
         "//folly:optional",
         "//folly:range",
         "//folly/container/detail:util",
+        "//folly/container/testing:tracking_types",
         "//folly/portability:gtest",
     ],
 )

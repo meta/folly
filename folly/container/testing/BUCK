@@ -11,3 +11,16 @@ fb_dirsync_cpp_library(
         "//folly/container/detail:f14_hash_detail",
     ],
 )
+
+fb_dirsync_cpp_library(
+    name = "tracking_types",
+    headers = [
+        "TrackingTypes.h",
+    ],
+    exported_deps = [
+        "//folly:function",
+        "//folly/hash:hash",
+        "//folly/lang:safe_assert",
+        "//folly/portability:asm",
+    ],
+)

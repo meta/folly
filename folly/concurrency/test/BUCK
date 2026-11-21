@@ -158,7 +158,7 @@ fb_dirsync_cpp_unittest(
     deps = [
         "//folly:traits",
         "//folly/concurrency:concurrent_hash_map",
-        "//folly/container/test:tracking_types",
+        "//folly/container/testing:tracking_types",
         "//folly/hash:hash",
         "//folly/portability:gflags",
         "//folly/portability:gtest",
@@ -199,7 +199,7 @@ fb_dirsync_cpp_unittest(
     deps = [
         "//folly:traits",
         "//folly/concurrency:concurrent_hash_map",
-        "//folly/container/test:tracking_types",
+        "//folly/container/testing:tracking_types",
         "//folly/hash:hash",
         "//folly/portability:gflags",
         "//folly/portability:gtest",

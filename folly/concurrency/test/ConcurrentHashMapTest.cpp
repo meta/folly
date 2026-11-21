@@ -23,7 +23,7 @@
 #include <vector>
 
 #include <folly/Traits.h>
-#include <folly/container/test/TrackingTypes.h>
+#include <folly/container/testing/TrackingTypes.h>
 #include <folly/hash/Hash.h>
 #include <folly/portability/GFlags.h>
 #include <folly/portability/GTest.h>

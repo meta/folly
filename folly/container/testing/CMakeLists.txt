@@ -19,3 +19,13 @@ folly_add_library(
   HEADERS F14TestUtil.h
   EXPORTED_DEPS folly_container_detail_f14_hash_detail
 )
+
+folly_add_library(
+  NAME tracking_types
+  HEADERS TrackingTypes.h
+  EXPORTED_DEPS
+    folly_function
+    folly_hash_hash
+    folly_lang_safe_assert
+    folly_portability_asm
+)
