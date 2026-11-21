@@ -82,10 +82,16 @@ void MeteredExecutorImpl<Atom>::modifyState(F f) {
     DCHECK_LE(newState >> kInQueueShift, options_.maxInQueue);
     // No more in queue than pending tasks.
     DCHECK_LE(newState >> kInQueueShift, newState & kSizeMask);
+  // acq_rel suffices: state_ only needs to linearize its own bit-packed
+  // counters (guaranteed by the CAS itself regardless of ordering) and
+  // publish/acquire this thread's surrounding effects to whichever thread
+  // next observes the new value. Task transfer through queue_ and worker
+  // dispatch through kaInner_->add() carry their own synchronization, so
+  // nothing here depends on state_ taking part in a seq_cst total order.
   } while (!state_.compare_exchange_strong(
       oldState,
       newState,
-      std::memory_order_seq_cst,
+      std::memory_order_acq_rel,
       std::memory_order_relaxed));
 }
 
