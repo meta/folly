@@ -14,6 +14,10 @@ builder = nop
 builder = cmake
 subdir = .
 
+# getdeps has never built the BPF programs, and its builders may lack clang.
+[cmake.defines]
+KATRAN_BUILD_BPF=OFF
+
 [cmake.defines.test=on]
 BUILD_TESTS=ON
 
