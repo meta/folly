@@ -101,12 +101,16 @@ std::string getExtOid(const X509_EXTENSION* extension) {
   std::string ret(buf_size, '\0');
   auto length = OBJ_obj2txt(ret.data(), ret.size(), object, 1);
 
-  if (length > buf_size) {
+  if (length < 0) {
+    return {};
+  }
+
+  if (length >= buf_size) {
     // Reserve one byte for the terminating zero
-    ret.resize(length, '\0');
+    ret.resize(static_cast<size_t>(length) + 1, '\0');
     OBJ_obj2txt(ret.data(), ret.size(), object, 1);
   }
-  ret.resize(length);
+  ret.resize(static_cast<size_t>(length));
   return ret;
 }
 
