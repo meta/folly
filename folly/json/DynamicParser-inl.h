@@ -32,20 +32,10 @@ class IdentifyCallable {
   enum class Kind { Function, MemberFunction };
   template <typename Fn>
   constexpr static Kind getKind() {
-    return test<Fn>(nullptr);
-  }
-
- private:
-  template <typename Fn>
-  using IsMemFn = std::is_member_pointer<decltype(&Fn::operator())>;
-  template <typename Fn>
-  constexpr static typename std::enable_if<IsMemFn<Fn>::value, Kind>::type test(
-      IsMemFn<Fn>*) {
-    return IdentifyCallable::Kind::MemberFunction;
-  }
-  template <typename>
-  constexpr static Kind test(...) {
-    return IdentifyCallable::Kind::Function;
+    constexpr auto is_mem_fn = requires {
+      requires std::is_member_pointer_v<decltype(&Fn::operator())>;
+    };
+    return is_mem_fn ? Kind::MemberFunction : Kind::Function;
   }
 };
 
@@ -76,14 +66,11 @@ using ArgumentTypes =
 // reference, leaving that choice up to the caller.
 template <typename Fn, typename... Args>
 struct HasArgumentTypes : std::is_same<ArgumentTypes<Fn>, tag_t<Args...>> {};
-template <typename... Args>
-using EnableForArgTypes =
-    typename std::enable_if<HasArgumentTypes<Args...>::value, void>::type;
 
 // No arguments
 template <typename Fn>
-EnableForArgTypes<Fn> invokeForKeyValue(
-    Fn f, const folly::dynamic&, const folly::dynamic&) {
+  requires HasArgumentTypes<Fn>::value
+void invokeForKeyValue(Fn f, const folly::dynamic&, const folly::dynamic&) {
   f();
 }
 
@@ -91,32 +78,32 @@ EnableForArgTypes<Fn> invokeForKeyValue(
 //
 // folly::dynamic (no conversion)
 template <typename Fn>
-EnableForArgTypes<Fn, folly::dynamic> invokeForKeyValue(
-    Fn fn, const folly::dynamic&, const folly::dynamic& v) {
+  requires HasArgumentTypes<Fn, folly::dynamic>::value
+void invokeForKeyValue(Fn fn, const folly::dynamic&, const folly::dynamic& v) {
   fn(v);
 }
 // int64_t
 template <typename Fn>
-EnableForArgTypes<Fn, int64_t> invokeForKeyValue(
-    Fn fn, const folly::dynamic&, const folly::dynamic& v) {
+  requires HasArgumentTypes<Fn, int64_t>::value
+void invokeForKeyValue(Fn fn, const folly::dynamic&, const folly::dynamic& v) {
   fn(v.asInt());
 }
 // bool
 template <typename Fn>
-EnableForArgTypes<Fn, bool> invokeForKeyValue(
-    Fn fn, const folly::dynamic&, const folly::dynamic& v) {
+  requires HasArgumentTypes<Fn, bool>::value
+void invokeForKeyValue(Fn fn, const folly::dynamic&, const folly::dynamic& v) {
   fn(v.asBool());
 }
 // double
 template <typename Fn>
-EnableForArgTypes<Fn, double> invokeForKeyValue(
-    Fn fn, const folly::dynamic&, const folly::dynamic& v) {
+  requires HasArgumentTypes<Fn, double>::value
+void invokeForKeyValue(Fn fn, const folly::dynamic&, const folly::dynamic& v) {
   fn(v.asDouble());
 }
 // std::string
 template <typename Fn>
-EnableForArgTypes<Fn, std::string> invokeForKeyValue(
-    Fn fn, const folly::dynamic&, const folly::dynamic& v) {
+  requires HasArgumentTypes<Fn, std::string>::value
+void invokeForKeyValue(Fn fn, const folly::dynamic&, const folly::dynamic& v) {
   fn(v.asString());
 }
 
@@ -128,31 +115,36 @@ EnableForArgTypes<Fn, std::string> invokeForKeyValue(
 //
 // folly::dynamic, folly::dynamic (no conversion of value, either)
 template <typename Fn>
-EnableForArgTypes<Fn, folly::dynamic, folly::dynamic> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, folly::dynamic, folly::dynamic>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k, v);
 }
 // folly::dynamic, int64_t
 template <typename Fn>
-EnableForArgTypes<Fn, folly::dynamic, int64_t> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, folly::dynamic, int64_t>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k, v.asInt());
 }
 // folly::dynamic, bool
 template <typename Fn>
-EnableForArgTypes<Fn, folly::dynamic, bool> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, folly::dynamic, bool>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k, v.asBool());
 }
 // folly::dynamic, double
 template <typename Fn>
-EnableForArgTypes<Fn, folly::dynamic, double> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, folly::dynamic, double>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k, v.asDouble());
 }
 // folly::dynamic, std::string
 template <typename Fn>
-EnableForArgTypes<Fn, folly::dynamic, std::string> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, folly::dynamic, std::string>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k, v.asString());
 }
@@ -161,31 +153,36 @@ EnableForArgTypes<Fn, folly::dynamic, std::string> invokeForKeyValue(
 //
 // std::string, folly::dynamic (no conversion of value)
 template <typename Fn>
-EnableForArgTypes<Fn, std::string, folly::dynamic> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, std::string, folly::dynamic>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asString(), v);
 }
 // std::string, int64_t
 template <typename Fn>
-EnableForArgTypes<Fn, std::string, int64_t> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, std::string, int64_t>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asString(), v.asInt());
 }
 // std::string, bool
 template <typename Fn>
-EnableForArgTypes<Fn, std::string, bool> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, std::string, bool>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asString(), v.asBool());
 }
 // std::string, double
 template <typename Fn>
-EnableForArgTypes<Fn, std::string, double> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, std::string, double>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asString(), v.asDouble());
 }
 // std::string, std::string
 template <typename Fn>
-EnableForArgTypes<Fn, std::string, std::string> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, std::string, std::string>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asString(), v.asString());
 }
@@ -194,31 +191,36 @@ EnableForArgTypes<Fn, std::string, std::string> invokeForKeyValue(
 //
 // int64_t, folly::dynamic (no conversion of value)
 template <typename Fn>
-EnableForArgTypes<Fn, int64_t, folly::dynamic> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, int64_t, folly::dynamic>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asInt(), v);
 }
 // int64_t, int64_t
 template <typename Fn>
-EnableForArgTypes<Fn, int64_t, int64_t> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, int64_t, int64_t>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asInt(), v.asInt());
 }
 // int64_t, bool
 template <typename Fn>
-EnableForArgTypes<Fn, int64_t, bool> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, int64_t, bool>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asInt(), v.asBool());
 }
 // int64_t, double
 template <typename Fn>
-EnableForArgTypes<Fn, int64_t, double> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, int64_t, double>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asInt(), v.asDouble());
 }
 // int64_t, std::string
 template <typename Fn>
-EnableForArgTypes<Fn, int64_t, std::string> invokeForKeyValue(
+  requires HasArgumentTypes<Fn, int64_t, std::string>::value
+void invokeForKeyValue(
     Fn fn, const folly::dynamic& k, const folly::dynamic& v) {
   fn(k.asInt(), v.asString());
 }

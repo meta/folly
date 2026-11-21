@@ -90,7 +90,13 @@ namespace dynamic_detail {
 template <typename T>
 using detect_construct_string = decltype(std::string(
     FOLLY_DECLVAL(T const&).data(), FOLLY_DECLVAL(T const&).size()));
-}
+
+// Keys for heterogeneous lookup and mutation on objects: at(), find(),
+// count(), erase(), operator[]
+template <typename K>
+concept non_string_dynamic_convertible =
+    !std::is_convertible_v<K, StringPiece> && std::is_convertible_v<K, dynamic>;
+} // namespace dynamic_detail
 
 struct dynamic {
   enum Type {
@@ -221,10 +227,8 @@ struct dynamic {
   /// Initializes as a string.
   /* implicit */ dynamic(std::string s);
   /// Initializes as a string.
-  template <
-      typename Stringish,
-      typename = std::enable_if_t<
-          is_detected_v<dynamic_detail::detect_construct_string, Stringish>>>
+  template <typename Stringish>
+    requires is_detected_v<dynamic_detail::detect_construct_string, Stringish>
   /* implicit */ dynamic(Stringish&& s);
 
   /*
@@ -570,20 +574,6 @@ struct dynamic {
   template <class T>
   struct IterableProxy;
 
-  /*
-   * Helper for heterogeneous lookup and mutation on objects: at(), find(),
-   * count(), erase(), operator[]
-   */
-  template <typename K, typename T>
-  using IfIsNonStringDynamicConvertible = std::enable_if_t<
-      !std::is_convertible<K, StringPiece>::value &&
-          std::is_convertible<K, dynamic>::value,
-      T>;
-
-  template <typename K, typename T>
-  using IfNotIterator =
-      std::enable_if_t<!std::is_convertible<K, iterator>::value, T>;
-
  public:
   /*
    * You can iterate over the keys, values, or items (std::pair of key and
@@ -630,9 +620,11 @@ struct dynamic {
    * @methodset Object
    */
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, const_item_iterator> find(K&&) const;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  const_item_iterator find(K&&) const;
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, item_iterator> find(K&&);
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  item_iterator find(K&&);
   const_item_iterator find(StringPiece) const;
   item_iterator find(StringPiece);
 
@@ -648,7 +640,8 @@ struct dynamic {
    * @methodset Object
    */
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, std::size_t> count(K&&) const;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  std::size_t count(K&&) const;
   std::size_t count(StringPiece) const;
 
   /**
@@ -661,7 +654,8 @@ struct dynamic {
    * Otherwise throws TypeError.
    */
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, bool> contains(K&&) const;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  bool contains(K&&) const;
   bool contains(StringPiece) const;
 
  private:
@@ -681,13 +675,14 @@ struct dynamic {
    * @methodset Element access
    */
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic const&> at(
-      K&&) const& [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic const& at(K&&) const& [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic&> at(
-      K&&) & [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic& at(K&&) & [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic&&> at(K&&) &&;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic&& at(K&&) &&;
 
   dynamic const& at(StringPiece) const& [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
   dynamic& at(StringPiece) & [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
@@ -794,11 +789,14 @@ struct dynamic {
    * will throw a TypeError.
    */
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, const dynamic*> get_ptr(K&&) const&;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  const dynamic* get_ptr(K&&) const&;
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic*> get_ptr(K&&) &;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic* get_ptr(K&&) &;
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic*> get_ptr(K&&) && = delete;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic* get_ptr(K&&) && = delete;
 
   const dynamic* get_ptr(StringPiece) const&;
   dynamic* get_ptr(StringPiece) &;
@@ -823,13 +821,14 @@ struct dynamic {
    * @methodset Element access
    */
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic&> operator[](
-      K&&) & [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic& operator[](K&&) & [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic const&> operator[](
-      K&&) const& [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic const& operator[](K&&) const& [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic&&> operator[](K&&) &&;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic&& operator[](K&&) &&;
 
   dynamic& operator[](StringPiece) & [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]];
   dynamic const& operator[](
@@ -847,16 +846,17 @@ struct dynamic {
    * @methodset Object
    */
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic> getDefault(
-      K&& k, const dynamic& v = dynamic::object) const&;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic getDefault(K&& k, const dynamic& v = dynamic::object) const&;
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic> getDefault(
-      K&& k, dynamic&& v) const&;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic getDefault(K&& k, dynamic&& v) const&;
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic> getDefault(
-      K&& k, const dynamic& v = dynamic::object) &&;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic getDefault(K&& k, const dynamic& v = dynamic::object) &&;
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic> getDefault(K&& k, dynamic&& v) &&;
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic getDefault(K&& k, dynamic&& v) &&;
 
   dynamic getDefault(StringPiece k, const dynamic& v = dynamic::object) const&;
   dynamic getDefault(StringPiece k, dynamic&& v) const&;
@@ -875,7 +875,8 @@ struct dynamic {
    * @methodset Object
    */
   template <typename K, typename V>
-  IfIsNonStringDynamicConvertible<K, dynamic&> setDefault(K&& k, V&& v);
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic& setDefault(K&& k, V&& v);
   template <typename V>
   dynamic& setDefault(StringPiece k, V&& v);
   // MSVC 2015 Update 3 needs these extra overloads because if V were a
@@ -883,10 +884,11 @@ struct dynamic {
   // reference rather than a universal reference, resulting in it not being
   // able to find the correct overload to construct a dynamic with.
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic&> setDefault(K&& k, dynamic&& v);
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic& setDefault(K&& k, dynamic&& v);
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, dynamic&> setDefault(
-      K&& k, const dynamic& v = dynamic::object);
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  dynamic& setDefault(K&& k, const dynamic& v = dynamic::object);
 
   dynamic& setDefault(StringPiece k, dynamic&& v);
   dynamic& setDefault(StringPiece k, const dynamic& v = dynamic::object);
@@ -932,7 +934,8 @@ struct dynamic {
    * @methodset Container
    */
   template <class K, class V>
-  IfNotIterator<K, void> insert(K&&, V&& val);
+  void insert(K&&, V&& val)
+    requires(!std::is_convertible_v<K, iterator>);
 
   /**
    * Overwriting emplacement.
@@ -1038,7 +1041,8 @@ struct dynamic {
    * @methodset Container
    */
   template <typename K>
-  IfIsNonStringDynamicConvertible<K, std::size_t> erase(K&&);
+    requires dynamic_detail::non_string_dynamic_convertible<K>
+  std::size_t erase(K&&);
 
   std::size_t erase(StringPiece);
 
@@ -1302,10 +1306,8 @@ struct const_dynamic_view {
   //  - If the view is empty, the default argument is returned instead.
   std::string string_or(char const* val) const;
   std::string string_or(std::string val) const;
-  template <
-      typename Stringish,
-      typename = std::enable_if_t<
-          is_detected_v<dynamic_detail::detect_construct_string, Stringish>>>
+  template <typename Stringish>
+    requires is_detected_v<dynamic_detail::detect_construct_string, Stringish>
   std::string string_or(Stringish&& val) const;
 
   double double_or(double val) const noexcept;
@@ -1323,8 +1325,8 @@ struct const_dynamic_view {
   template <typename Key>
   dynamic const* descend_(Key const& key) const noexcept;
   template <typename Key>
-  dynamic::IfIsNonStringDynamicConvertible<Key, dynamic const*>
-  descend_unchecked_(Key const& key) const noexcept;
+    requires dynamic_detail::non_string_dynamic_convertible<Key>
+  dynamic const* descend_unchecked_(Key const& key) const noexcept;
   dynamic const* descend_unchecked_(StringPiece key) const noexcept;
 
   dynamic const* d_ = nullptr;
@@ -1369,10 +1371,8 @@ struct dynamic_view : public const_dynamic_view {
   // std::move'd to initialize a new instance which is returned.
   std::string move_string_or(std::string val) noexcept;
   std::string move_string_or(char const* val);
-  template <
-      typename Stringish,
-      typename = std::enable_if_t<
-          is_detected_v<dynamic_detail::detect_construct_string, Stringish>>>
+  template <typename Stringish>
+    requires is_detected_v<dynamic_detail::detect_construct_string, Stringish>
   std::string move_string_or(Stringish&& val);
 
  private:
