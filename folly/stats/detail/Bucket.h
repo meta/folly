@@ -17,6 +17,7 @@
 #pragma once
 
 #include <chrono>
+#include <concepts>
 #include <cstdint>
 #include <type_traits>
 
@@ -40,7 +41,7 @@ ReturnType avgHelper(long double sum, uint64_t count) {
     return ReturnType(0);
   }
   const long double countf = count;
-  if constexpr (std::is_integral<ReturnType>::value) {
+  if constexpr (std::integral<ReturnType>) {
     return constexpr_clamp_cast<ReturnType>(sum / countf);
   }
   return static_cast<ReturnType>(sum / countf);
@@ -51,16 +52,14 @@ ReturnType avgHelper(long double sum, uint64_t count) {
 //
 // If the ReturnType is integral, the result might be clamped to avoid overflow.
 template <typename ReturnType, typename ValueType>
-typename std::enable_if<
-    !std::is_same<typename std::remove_cv<ValueType>::type, long double>::value,
-    ReturnType>::type
-avgHelper(ValueType sum, uint64_t count) {
+  requires(!std::same_as<ValueType, long double>)
+ReturnType avgHelper(ValueType sum, uint64_t count) {
   if (count == 0) {
     return ReturnType(0);
   }
   const double sumf = double(sum);
   const double countf = double(count);
-  if constexpr (std::is_integral<ReturnType>::value) {
+  if constexpr (std::integral<ReturnType>) {
     return constexpr_clamp_cast<ReturnType>(sumf / countf);
   }
   return static_cast<ReturnType>(sumf / countf);
@@ -70,32 +69,28 @@ avgHelper(ValueType sum, uint64_t count) {
 // ever causing undefined behavior
 //
 // For non-integral vlaues everyhing is easy
-template <
-    typename ValueType,
-    typename std::enable_if<!std::is_integral<ValueType>::value, int>::type = 0>
+template <typename ValueType>
+  requires(!std::integral<ValueType>)
 void addHelper(ValueType& a, const ValueType& b) {
   a += b;
 }
 
-template <
-    typename ValueType,
-    typename std::enable_if<!std::is_integral<ValueType>::value, int>::type = 0>
+template <typename ValueType>
+  requires(!std::integral<ValueType>)
 void subtractHelper(ValueType& a, const ValueType& b) {
   a -= b;
 }
 
 // For integral values we use folly/ConstexprMath.h to make
 // the math safe and predictable
-template <
-    typename ValueType,
-    typename std::enable_if<std::is_integral<ValueType>::value, int>::type = 0>
+template <typename ValueType>
+  requires(std::integral<ValueType>)
 void addHelper(ValueType& a, const ValueType& b) {
   a = constexpr_add_overflow_clamped(a, b);
 }
 
-template <
-    typename ValueType,
-    typename std::enable_if<std::is_integral<ValueType>::value, int>::type = 0>
+template <typename ValueType>
+  requires(std::integral<ValueType>)
 void subtractHelper(ValueType& a, const ValueType& b) {
   a = constexpr_sub_overflow_clamped(a, b);
 }
