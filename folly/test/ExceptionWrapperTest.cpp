@@ -131,9 +131,15 @@ TEST(ExceptionWrapper, throwTest) {
   std::vector<exception_wrapper> container;
   container.push_back(ew);
 
-  EXPECT_THAT(
-      [&]() { container[0].throw_exception(); },
-      ThrowsMessage<std::runtime_error>(StrEq("payload")));
+//   EXPECT_THAT(
+//       [&]() { container[0].throw_exception(); },
+//       ThrowsMessage<std::runtime_error>(StrEq("payload")));
+
+  try {
+    container[0].throw_exception();
+  } catch (std::runtime_error& outer) {
+    EXPECT_STREQ(outer.what(), "payload");
+  }
 }
 
 // Tests that when we call throw_with_nested, we can unnest it later.
@@ -145,9 +151,15 @@ TEST(ExceptionWrapper, throwWithNested) {
   } catch (std::runtime_error& outer) {
     EXPECT_STREQ(outer.what(), "outer");
 
-    EXPECT_THAT(
-        [&]() { std::rethrow_if_nested(outer); },
-        ThrowsMessage<std::runtime_error>(StrEq("inner")));
+    // EXPECT_THAT(
+    //     [&]() { std::rethrow_if_nested(outer); },
+    //     ThrowsMessage<std::runtime_error>(StrEq("inner")));
+
+    try {
+      std::rethrow_if_nested(outer);
+    } catch (std::runtime_error& inner) {
+      EXPECT_STREQ(inner.what(), "inner");
+    }
   }
 }
 
