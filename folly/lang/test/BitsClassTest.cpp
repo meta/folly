@@ -91,14 +91,15 @@ void runSimpleTest64() {
 
   Bits<T>::set(buf, 300);
   Bits<T>::set(buf, 319);
-  EXPECT_EQ((uint64_t(1) << 44) | (uint64_t(1) << 63), load(buf[4]));
+  EXPECT_EQ(
+      Endian::little((uint64_t(1) << 44) | (uint64_t(1) << 63)), load(buf[4]));
   EXPECT_EQ(0, load(buf[5]));
   Bits<T>::clear(buf, 319);
-  EXPECT_EQ(uint64_t(1) << 44, load(buf[4]));
+  EXPECT_EQ(Endian::little(uint64_t(1) << 44), load(buf[4]));
   EXPECT_EQ(0, load(buf[5]));
   Bits<T>::set(buf, 320);
-  EXPECT_EQ(uint64_t(1) << 44, load(buf[4]));
-  EXPECT_EQ(1, load(buf[5]));
+  EXPECT_EQ(Endian::little(uint64_t(1) << 44), load(buf[4]));
+  EXPECT_EQ(Endian::little<uint64_t>(1), load(buf[5]));
 
   EXPECT_EQ(2, Bits<T>::count(buf, buf + 256));
 }
@@ -182,7 +183,9 @@ TEST(Bits, SignedMultiBit8) {
 template <class T, class R = T>
 void runMultiBitTest64() {
   auto load = detail::BitsTraits<T>::load;
-  T buf[] = {0x123456789abcdef0, 0x13579bdf2468ace0};
+  T buf[] = {
+      Endian::little<R>(0x123456789abcdef0),
+      Endian::little<R>(0x13579bdf2468ace0)};
 
   EXPECT_EQ(0x123456789abcdef0, load(Bits<T>::get(buf, 0, 64)));
   EXPECT_EQ(0xf0, load(Bits<T>::get(buf, 0, 8)));

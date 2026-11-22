@@ -204,7 +204,8 @@ struct Bits {
 
 template <class T, class Traits>
 inline void Bits<T, Traits>::set(T* p, size_t bit) {
-  auto mask = static_cast<UnderlyingType>(one << bitOffset(bit));
+  auto mask =
+      Endian::little(static_cast<UnderlyingType>(one << bitOffset(bit)));
   T& block = p[blockIndex(bit)];
   Traits::store(block, Traits::loadRMW(block) | mask);
 }
@@ -212,7 +213,7 @@ inline void Bits<T, Traits>::set(T* p, size_t bit) {
 template <class T, class Traits>
 inline void Bits<T, Traits>::clear(T* p, size_t bit) {
   auto mask = static_cast<UnderlyingType>(one << bitOffset(bit));
-  auto ksam = static_cast<UnderlyingType>(~mask);
+  auto ksam = Endian::little(static_cast<UnderlyingType>(~mask));
   T& block = p[blockIndex(bit)];
   Traits::store(block, Traits::loadRMW(block) & ksam);
 }
@@ -251,15 +252,16 @@ template <class T, class Traits>
 inline void Bits<T, Traits>::innerSet(
     T* p, size_t offset, size_t count, UnderlyingType value) {
   // Mask out bits and set new value
-  UnderlyingType v = Traits::loadRMW(*p);
+  UnderlyingType v = Endian::little(Traits::loadRMW(*p));
   v &= ~(ones(count) << offset);
   v |= (value << offset);
-  Traits::store(*p, v);
+  Traits::store(*p, Endian::little(v));
 }
 
 template <class T, class Traits>
 inline bool Bits<T, Traits>::test(const T* p, size_t bit) {
-  return Traits::load(p[blockIndex(bit)]) & (one << bitOffset(bit));
+  return Endian::little(Traits::load(p[blockIndex(bit)])) &
+      (one << bitOffset(bit));
 }
 
 template <class T, class Traits>
@@ -293,13 +295,14 @@ inline auto Bits<T, Traits>::get(const T* p, size_t bitStart, size_t count)
 template <class T, class Traits>
 inline auto Bits<T, Traits>::innerGet(const T* p, size_t offset, size_t count)
     -> UnderlyingType {
+  const auto bits = Endian::little(Traits::load(*p));
 #ifdef __BMI__
   return _bextr_u64(
-      Traits::load(*p),
+      bits,
       static_cast<unsigned int>(offset),
       static_cast<unsigned int>(count));
 #else
-  return (Traits::load(*p) >> offset) & ones(count);
+  return (bits >> offset) & ones(count);
 #endif
 }
 
