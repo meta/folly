@@ -1,0 +1,35 @@
+load("@fbcode_macros//build_defs:cython_library.bzl", "cython_library")
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_rule.bzl", "fb_dirsync_rule")
+
+oncall("fbcode_entropy_wardens_folly")
+
+fb_dirsync_rule(
+    name = "iobuf_helper",
+    srcs = [
+        "IOBufTestUtils.cpp",
+        "iobuf_helper.pyx",
+    ],
+    headers = [
+        "IOBufTestUtils.h",
+        "iobuf_helper.pxd",
+    ],
+    header_namespace = "folly/python/test",
+    cpp_deps = [
+        "//folly/executors:cpu_thread_pool_executor",
+        "//folly/python:iobuf_ext",
+    ],
+    fbcode_rule = cython_library,
+    # Pin the Python module namespace so the cython stub is published as
+    # `folly.python.test.iobuf_helper` in both cells. Without it the xplat
+    # cell derives the base module from its package path
+    # (`xplat.folly.python.test.iobuf_helper`), which breaks consumers that
+    # build against xplat folly. Mirrors `//folly/python:iobuf`.
+    package = "folly/python/test",
+    types = [
+        "iobuf_helper.pyi",
+    ],
+    visibility = ["PUBLIC"],
+    deps = [
+        "//folly/python:iobuf",
+    ],
+)

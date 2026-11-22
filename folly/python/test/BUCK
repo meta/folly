@@ -42,8 +42,8 @@ fb_dirsync_rule(
     supports_static_listing = False,
     typing = True,
     deps = [
-        ":iobuf_helper",
         "//folly/python:iobuf",
+        "//folly/python/testing:iobuf_helper",
     ],
 )
 
@@ -60,37 +60,6 @@ fb_dirsync_rule(
     deps = [
         "//folly/python:fibers",
         "//folly/python:futures",
-    ],
-)
-
-fb_dirsync_rule(
-    name = "iobuf_helper",
-    srcs = [
-        "IOBufTestUtils.cpp",
-        "iobuf_helper.pyx",
-    ],
-    headers = [
-        "IOBufTestUtils.h",
-        "iobuf_helper.pxd",
-    ],
-    header_namespace = "folly/python/test",
-    cpp_deps = [
-        "//folly/executors:cpu_thread_pool_executor",
-        "//folly/python:iobuf_ext",
-    ],
-    fbcode_rule = cython_library,
-    # Pin the Python module namespace so the cython stub is published as
-    # `folly.python.test.iobuf_helper` in both cells. Without it the xplat
-    # cell derives the base module from its package path
-    # (`xplat.folly.python.test.iobuf_helper`), which breaks consumers that
-    # build against xplat folly. Mirrors `//folly/python:iobuf`.
-    package = "folly/python/test",
-    types = [
-        "iobuf_helper.pyi",
-    ],
-    visibility = ["PUBLIC"],
-    deps = [
-        "//folly/python:iobuf",
     ],
 )
 
