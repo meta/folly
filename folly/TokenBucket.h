@@ -193,14 +193,14 @@ class TokenBucketStorage {
    * into the future.
    */
   double returnTokensImpl(double tokenCount, double rate) {
-    auto zeroTimeOld = zeroTime_.load(std::memory_order_relaxed);
-
+    double zeroTimeOld; 
     double zeroTimeNew;
     do {
+      zeroTimeOld = zeroTime();
       zeroTimeNew = zeroTimeOld - tokenCount / rate;
-
     } while (FOLLY_UNLIKELY(
         !compare_exchange_weak_relaxed(zeroTime_, zeroTimeOld, zeroTimeNew)));
+    
     return zeroTimeNew;
   }
 
