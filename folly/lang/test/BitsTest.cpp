@@ -599,6 +599,9 @@ TYPED_TEST(BitsAllUintsTest, SetNMostSignificantBits) {
 TYPED_TEST(BitsAllUintsTest, GetBitAt) {
   using T = TypeParam;
 
+  static_assert(sizeof(std::size_t) == 8, "");
+  static_assert(sizeof(unsigned long) == 8, "");
+
   constexpr std::size_t kBitSize = sizeof(T) * 8;
 
   T kOnes = folly::set_n_least_significant_bits(T{}, kBitSize);
