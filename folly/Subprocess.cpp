@@ -77,6 +77,12 @@
   __attribute__((noinline, no_sanitize("address", "undefined", "thread")))
 #endif
 
+#if defined(__APPLE__) && !defined(__clang__)
+#define FOLLY_DETAIL_SUBPROCESS_CONSTRUCTOR __attribute__((constructor))
+#else
+#define FOLLY_DETAIL_SUBPROCESS_CONSTRUCTOR __attribute__((constructor(101)))
+#endif
+
 constexpr int kExecFailure = 127;
 constexpr int kChildFailure = 126;
 
@@ -181,7 +187,7 @@ struct subprocess_libc {
 
 FOLLY_DETAIL_SUBPROCESS_LIBC_X(FOLLY_DETAIL_SUBPROCESS_LIBC_FIELD_DEFN)
 
-__attribute__((constructor(101))) static void subprocess_libc_init() {
+FOLLY_DETAIL_SUBPROCESS_CONSTRUCTOR static void subprocess_libc_init() {
   auto handle = !kIsSanitize
       ? nullptr
       : ::dlopen(
