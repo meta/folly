@@ -15,9 +15,15 @@
  */
 
 #include <thread>
+#include <glog/logging.h>
+#include <gtest/gtest_pred_impl.h>
 
+#include <folly/executors/CPUThreadPoolExecutor.h>
+#include <folly/executors/GlobalExecutor.h>
 #include <folly/futures/Future.h>
 #include <folly/portability/GTest.h>
+#include <folly/system/ThreadId.h>
+#include <folly/system/ThreadName.h>
 
 using namespace folly;
 
@@ -202,4 +208,46 @@ TEST(Then, objectAliveDuringDeferredNoParamContinuation) {
 TEST(Then, voidThenShouldPropagateExceptions) {
   EXPECT_FALSE(makeFuture(42).then().hasException());
   EXPECT_TRUE(makeFuture<int>(std::runtime_error("err")).then().hasException());
+}
+
+using namespace std::chrono;
+TEST(Then, thenInlineFollowContinuationReturnsValue) {
+  uint64_t threadId0 = folly::getCurrentThreadID();
+  uint64_t threadId1 = 0;
+  folly::makeFuture()
+      .via(folly::getGlobalCPUExecutor())
+      .thenValue([&threadId1](auto&&) { // callback-1
+        threadId1 = folly::getCurrentThreadID();
+        return true;
+      })
+      .thenInline([&threadId0, &threadId1](auto&&) { // callback-2
+        auto threadId2 = folly::getCurrentThreadID();
+        EXPECT_PRED3(
+            [](auto t0, auto t1, auto t2) {
+              // There is a race condition that when this 'thenInline' is
+              // executed, has callback-1 already finished:
+              //  - Yes, hence this(callback-2) is executed inline in threadId0
+              //  - No, hence this(callback-2) is executed inline in threadId1
+              return t2 == t0 || t2 == t1;
+            },
+            threadId0,
+            threadId1,
+            threadId2);
+      })
+      .wait();
+}
+
+TEST(Then, thenInlineFollowContinuationReturnsImmeidateFuture) {
+  uint64_t threadId1 = 0;
+  folly::makeFuture()
+      .via(folly::getGlobalCPUExecutor())
+      .thenValue([&threadId1](auto&&) {
+        threadId1 = folly::getCurrentThreadID();
+        return folly::makeFuture(true);
+      })
+      .thenInline([&threadId1](auto&&) {
+        auto threadId2 = folly::getCurrentThreadID();
+        ASSERT_EQ(threadId1, threadId2);
+      })
+      .wait();
 }

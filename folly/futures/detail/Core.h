@@ -523,7 +523,9 @@ class CoreBase {
 
   void setResult_(Executor::KeepAlive<>&& completingKA);
   void setProxy_(CoreBase* proxy);
-  void doCallback(Executor::KeepAlive<>&& completingKA, State priorState);
+  void doCallback(
+      Executor::KeepAlive<>&& completingKA,
+      futures::detail::InlineContinuation allowInline);
   void proxyCallback(State priorState);
 
   void detachOne() noexcept;

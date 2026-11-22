@@ -20,6 +20,7 @@
 
 #include <fmt/core.h>
 #include <folly/Utility.h>
+#include <folly/futures/detail/Types.h>
 #include <folly/lang/Assume.h>
 
 namespace folly {
@@ -470,7 +471,11 @@ void CoreBase::setCallback_(
             std::memory_order_relaxed)) {
       terminate_unexpected_state("setCallback", state);
     }
-    doCallback(Executor::KeepAlive<>{}, state);
+    auto&& completingKA =
+        allowInline == futures::detail::InlineContinuation::permit
+        ? executor_.getKeepAliveExecutor()
+        : Executor::KeepAlive<>{};
+    doCallback(std::move(completingKA), allowInline);
   } else if (state == State::Proxy) {
     if (!folly::atomic_compare_exchange_strong_explicit(
             &state_,
@@ -512,7 +517,11 @@ void CoreBase::setResult_(Executor::KeepAlive<>&& completingKA) {
               std::memory_order_relaxed)) {
         terminate_unexpected_state("setResult", state);
       }
-      doCallback(std::move(completingKA), state);
+      doCallback(
+          std::move(completingKA),
+          state == State::OnlyCallbackAllowInline
+              ? futures::detail::InlineContinuation::permit
+              : futures::detail::InlineContinuation::forbid);
       return;
     case State::OnlyResult:
     case State::Proxy:
@@ -566,7 +575,8 @@ void CoreBase::setProxy_(CoreBase* proxy) {
 
 // May be called at most once.
 void CoreBase::doCallback(
-    Executor::KeepAlive<>&& completingKA, State priorState) {
+    Executor::KeepAlive<>&& completingKA,
+    futures::detail::InlineContinuation allowInline) {
   DCHECK(state_ == State::Done);
 
   auto executor = std::exchange(executor_, KeepAliveOrDeferred{});
@@ -593,7 +603,7 @@ void CoreBase::doCallback(
 
   if (executor) {
     // If we are not allowing inline, clear the completing KA to disallow
-    if (!(priorState == State::OnlyCallbackAllowInline)) {
+    if (allowInline == futures::detail::InlineContinuation::forbid) {
       completingKA = Executor::KeepAlive<>{};
     }
     exception_wrapper ew;
