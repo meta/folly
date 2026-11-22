@@ -54,6 +54,7 @@ class FutureSplitter {
   explicit FutureSplitter(Future<T>&& future)
       : promise_(std::make_shared<SharedPromise<T>>()),
         e_(getExecutorFrom(future)) {
+    promise_->setInterruptHandler(future.getCore().getInterruptHandler());
     std::move(future).thenTry([promise = promise_](Try<T>&& theTry) {
       promise->setTry(std::move(theTry));
     });
