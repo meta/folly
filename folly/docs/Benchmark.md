@@ -66,8 +66,11 @@ about it. Sometimes the function itself would want to do that
 iteration---for example how about inserting `n` elements instead of
 100 elements? To do the iteration internally, use `BENCHMARK` with two
 parameters. The second parameter is the number of iterations and is
-passed by the framework down to the function. The type of the count is
-implicitly `unsigned`. Consider a slightly reworked example:
+passed by the framework down to the function (folly benchmark runs as many as
+iterations until the time spent exceeds a threshold defined in the code.
+To increase iterations, especially for high-latency methods, adjust the `bm_min_usec` flag
+and `bm_max_secs` flag to allow higher time budget. Or adjust `bm_min_iters` to increase the minium iterations.).
+The type of the count is implicitly `unsigned`. Consider a slightly reworked example:
 
 ``` Cpp
     #include <folly/Benchmark.h>
