@@ -650,6 +650,10 @@ inline Expected<Tgt, ConversionCode> digits_to(
   using UT = make_unsigned_t<Tgt>;
   assert(b <= e);
 
+  if (b == e) [[unlikely]] {
+    return makeUnexpected(ConversionCode::NO_DIGITS);
+  }
+
   SignedValueHandler<Tgt> sgn;
 
   auto err = sgn.init(b);

@@ -1090,7 +1090,7 @@ TEST(Conv, ConversionErrorStrToInt) {
 
 TEST(Conv, ConversionErrorPtrPairToInt) {
   // signed integers
-  EXPECT_CONV_ERROR_PP(int, "", INVALID_LEADING_CHAR);
+  EXPECT_CONV_ERROR_PP(int, "", NO_DIGITS);
   EXPECT_CONV_ERROR_PP(int, " ", INVALID_LEADING_CHAR);
   EXPECT_CONV_ERROR_PP(int, "*", INVALID_LEADING_CHAR);
   EXPECT_CONV_ERROR_PP(int, "+", NO_DIGITS);
@@ -1104,6 +1104,24 @@ TEST(Conv, ConversionErrorPtrPairToInt) {
   EXPECT_CONV_ERROR_PP(unsigned, "", NO_DIGITS);
   EXPECT_CONV_ERROR_PP(uint8_t, "256", POSITIVE_OVERFLOW);
   EXPECT_CONV_ERROR_PP(unsigned, "junk", NON_DIGIT_CHAR);
+}
+
+template <typename T>
+ConversionCode emptyRangeError(const char* p) {
+  return tryTo<T>(p, p).error();
+}
+
+TEST(Conv, PtrPairEmptyRangeReadsNothing) {
+  // The empty range sits at the end of a heap buffer, so ASAN reports a read of
+  // the byte after it.
+  auto buf = std::make_unique<char[]>(3);
+  std::memcpy(buf.get(), "123", 3);
+  const char* end = buf.get() + 3;
+  EXPECT_EQ(ConversionCode::NO_DIGITS, emptyRangeError<int8_t>(end));
+  EXPECT_EQ(ConversionCode::NO_DIGITS, emptyRangeError<int>(end));
+  EXPECT_EQ(ConversionCode::NO_DIGITS, emptyRangeError<int64_t>(end));
+  EXPECT_EQ(ConversionCode::NO_DIGITS, emptyRangeError<unsigned>(end));
+  EXPECT_EQ(123, tryTo<int>(buf.get(), end).value());
 }
 
 namespace {
