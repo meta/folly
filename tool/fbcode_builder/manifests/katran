@@ -3,6 +3,7 @@ name = katran
 fbsource_path = fbcode/katran
 shipit_project = katran
 shipit_fbcode_builder = true
+shipit_fbcode_builder_layout = tool
 
 [git]
 repo_url = https://github.com/facebookincubator/katran.git
