@@ -244,16 +244,19 @@ T HistogramBuckets<T, BucketType>::getPercentileEstimate(
   // Assume that the median value in this bucket is the same as the average
   // value.
   double medianPct = (lowPct + highPct) / 2.0;
+  auto lerpEstimate = [](ValueType x0, ValueType x1, double t) {
+    return T(x0 + ((x1 - x0) * t));
+  };
   if (pct < medianPct) {
     // Assume that the data points lower than the median of this bucket
     // are uniformly distributed between low and avg
     double pctThroughSection = (pct - lowPct) / (medianPct - lowPct);
-    return T(low + ((avg - low) * pctThroughSection));
+    return lerpEstimate(low, avg, pctThroughSection);
   } else {
     // Assume that the data points greater than the median of this bucket
     // are uniformly distributed between avg and high
     double pctThroughSection = (pct - medianPct) / (highPct - medianPct);
-    return T(avg + ((high - avg) * pctThroughSection));
+    return lerpEstimate(avg, high, pctThroughSection);
   }
 }
 
