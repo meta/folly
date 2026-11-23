@@ -16,7 +16,9 @@
 
 #pragma once
 
+#include <array>
 #include <atomic>
+#include <bit>
 #include <cstdint>
 #include <thread>
 
@@ -24,7 +26,6 @@
 #include <folly/Portability.h>
 #include <folly/concurrency/detail/AtomicSharedPtr-detail.h>
 #include <folly/memory/SanitizeLeak.h>
-#include <folly/synchronization/AtomicStruct.h>
 #include <folly/synchronization/AtomicUtil.h>
 
 #if (defined(__GLIBCXX__) || FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED_LIBCXX) && \
@@ -55,31 +56,16 @@ namespace folly {
  * * the pointer to the control block
  * * the aliased pointer, if any.
  *
- * The Williams version does it with DWcas: 32 bits for local count, 64
- * bits for control block ptr, and he changes the shared_ptr
- * implementation to also store the aliased pointers using a linked list
- * like structure, and provides 32-bit index accessors to them (like
- * IndexedMemPool trick).
+ * The backends store the object pointer alongside a packed control-block
+ * pointer and local count in one 16-byte atomic. This preserves aliases
+ * directly without inspecting control-block types or allocating a wrapper.
+ * Reconstruction takes both the control block and the stored object pointer.
  *
- * This version instead stores the 48 bits of address, plus 16 bits of
- * local count in a single 8byte pointer.  This avoids 'lock cmpxchg16b',
- * which is much slower than 'lock xchg' in the normal 'store' case.  In
- * the less-common aliased pointer scenario, we just allocate it in a new
- * block, and store a pointer to that instead.
- *
- * Note that even if we only want to use the 3-bits of pointer alignment,
- * this trick should still work - Any more than 4 concurrent accesses
- * will have to go to an external map count instead (slower, but lots of
- * concurrent access will be slow anyway due to bouncing cachelines).
- *
- * As a perf optimization, we currently batch up local count and only
- * move it global every once in a while.  This means load() is usually
- * only a single atomic operation, instead of 3.  For this trick to work,
- * we probably need at least 8 bits to make batching worth it.
+ * Batching avoids a separate control-block reference-count update on most
+ * owning loads. Each owning load seeds a snapshot, then reserves a local
+ * reference with a validating CAS. Keeping enough local-count bits makes
+ * these batches worthwhile.
  */
-
-// A note on noexcept: If the pointer is an aliased pointer,
-// store() will allocate.  Otherwise is noexcept.
 
 template <
     typename T,
@@ -88,7 +74,39 @@ template <
 class atomic_shared_ptr {
   using SharedPtr = typename CountedDetail::template CountedPtr<T>;
   using BasePtr = typename CountedDetail::counted_base;
-  using PackedPtr = folly::PackedSyncPtr<BasePtr>;
+  using ValuePtr = decltype(std::declval<const SharedPtr&>().get());
+
+  struct alignas(16) stored_pointer {
+    folly::PackedSyncPtr<BasePtr> counted;
+    ValuePtr value;
+
+    void init(
+        BasePtr* base = nullptr,
+        std::uint16_t count = 0,
+        ValuePtr ptr = nullptr) {
+      counted.init(base, count);
+      value = ptr;
+    }
+    BasePtr* get() const { return counted.get(); }
+    std::uint16_t extra() const { return counted.extra(); }
+    void setExtra(std::uint16_t count) { counted.setExtra(count); }
+
+    template <typename Stream>
+    friend Stream& operator<<(Stream& out, const stored_pointer& p) {
+      return out << p.counted << ' ' << p.value;
+    }
+  };
+  static_assert(sizeof(stored_pointer) == 16);
+  using PackedPtr = stored_pointer;
+  using AtomicPtr = Atom<PackedPtr>;
+  static constexpr bool kNativeLockFreeAtomic =
+      std::is_same_v<AtomicPtr, std::atomic<PackedPtr>> &&
+      std::atomic<PackedPtr>::is_always_lock_free;
+  static constexpr bool kUseArmRelaxedFullWidthSeed =
+      kIsArchAArch64Lse2 && kNativeLockFreeAtomic;
+  static constexpr bool kSplitLoad = (kIsArchAArch64 || kIsArchAmd64) &&
+      !kIsSanitizeThread && !kUseArmRelaxedFullWidthSeed &&
+      kNativeLockFreeAtomic;
 
  public:
   atomic_shared_ptr() noexcept { init(); }
@@ -105,12 +123,9 @@ class atomic_shared_ptr {
   void operator=(const atomic_shared_ptr<T>&) = delete;
 
   bool is_lock_free() const noexcept {
-    // lock free unless more than EXTERNAL_OFFSET threads are
-    // contending and they all get unlucky and scheduled out during
-    // load().
-    //
-    // TODO: Could use a lock-free external map to fix this
-    // corner case.
+    // Reports lock freedom of the stored-pointer atomic and selected backend.
+    // Even when true, load() can spin at the EXTERNAL_OFFSET local-count limit.
+    // TODO: A lock-free external map could avoid this local-count limit.
     return ptr_.is_lock_free();
   }
 
@@ -138,7 +153,7 @@ class atomic_shared_ptr {
 
     SharedPtr old_ptr;
 
-    if (old.get()) {
+    if (!is_empty(old)) {
       old_ptr = get_shared_ptr(old);
       release_external(old);
     }
@@ -176,7 +191,7 @@ class atomic_shared_ptr {
       }
       return true;
     } else {
-      if (oldptr.get()) {
+      if (!is_empty(oldptr)) {
         expected = get_shared_ptr(oldptr, false);
       } else {
         expected = SharedPtr(nullptr);
@@ -238,21 +253,78 @@ class atomic_shared_ptr {
   // counts.  This is the max number of threads that can access this
   // atomic_shared_ptr at once before we start blocking.
   static constexpr std::uint16_t EXTERNAL_OFFSET{0x2000};
-  // Bit signifying aliased constructor
-  static constexpr std::uint16_t ALIASED_PTR{0x4000};
+  // Marks a non-null stored pointer without a control block.
+  static constexpr std::uint16_t OWNERLESS_PTR{0x4000};
 
   static std::memory_order update_order(std::memory_order order) {
     return order == std::memory_order_seq_cst
         ? order
         : std::memory_order_acq_rel;
   }
+  static bool is_empty(const PackedPtr& p) {
+    // Canonical empty has both words zero. A non-null value without an owner
+    // always carries OWNERLESS_PTR, so the counted word alone identifies empty.
+    return p.get() == nullptr && p.extra() == 0;
+  }
+  static bool is_ownerless(const PackedPtr& p) {
+    return p.get() == nullptr && (p.extra() & OWNERLESS_PTR) != 0;
+  }
   static bool values_eq(const SharedPtr& a, const SharedPtr& b) {
     return a.get() == b.get() &&
         CountedDetail::get_counted_base(a) ==
         CountedDetail::get_counted_base(b);
   }
-  static std::uint16_t get_local_count(const PackedPtr& p) {
-    return p.extra() & ~ALIASED_PTR;
+
+  template <bool kLoadSecond>
+  std::array<std::uint64_t, 2> load_words_unsafe(
+      std::memory_order order) const noexcept {
+    static_assert(sizeof(AtomicPtr) == 16 && alignof(AtomicPtr) == 16);
+    // Deliberate C++ UB: these atomic<uint64_t> objects do not exist.
+    // Full-width validation does not make these reads defined.
+    //
+    // Native x86 owning loads benefit from avoiding SIMD-to-GPR transfers
+    // for CAS, even with AVX2; older x86 loads may themselves use CAS.
+    // ARM LSE2 targets use defined relaxed full-width seeds instead, with
+    // first-word empty confirmation avoiding a full-width ordered-load barrier.
+    // Keep splitting on older ARM targets without cheap untorn loads.
+    // Retire splitting when defined loads avoid these costs.
+    //
+    // Only the zero discriminator is final. Owned snapshots reserve a
+    // reference by CAS; ownerless snapshots need a full-width ordered reload.
+    const auto* words =
+        reinterpret_cast<const std::atomic<std::uint64_t>*>(&ptr_);
+    std::array<std::uint64_t, 2> result{words[0].load(order), 0};
+    if constexpr (kLoadSecond) {
+      if (result[0] != 0) {
+        result[1] = words[1].load(std::memory_order_relaxed);
+      }
+    }
+    return result;
+  }
+
+  PackedPtr load_ptr(std::memory_order order) const noexcept {
+    if constexpr (kUseArmRelaxedFullWidthSeed) {
+      if (kIsArchAArch64Lrcpc3 && order != std::memory_order_seq_cst) {
+        return ptr_.load(order);
+      }
+      // Owned seeds acquire through the validating CAS. Null-owner seeds need
+      // an ordered observation before returning without CAS.
+      const auto seed = ptr_.load(std::memory_order_relaxed);
+      if (seed.get()) {
+        return seed;
+      }
+      if constexpr (!kIsSanitizeThread) {
+        if (is_empty(seed) && load_words_unsafe<false>(order)[0] == 0) {
+          return {};
+        }
+      }
+      // Ownerless or a nonempty discriminator observed after the empty seed.
+      return ptr_.load(order);
+    } else if constexpr (kSplitLoad) {
+      return std::bit_cast<PackedPtr>(load_words_unsafe<true>(order));
+    } else {
+      return ptr_.load(order);
+    }
   }
 
   static void add_external(BasePtr* res, int64_t c = 0) {
@@ -265,10 +337,10 @@ class atomic_shared_ptr {
       return;
     }
     annotate_object_collected(res.get());
-    int64_t count = get_local_count(res) + c;
+    int64_t count = res.extra() + c;
     int64_t diff = EXTERNAL_OFFSET - count;
     assert(diff >= 0);
-    CountedDetail::template release_shared<T>(res.get(), diff);
+    CountedDetail::release_shared(res.get(), diff);
   }
 
   static PackedPtr get_newptr(const SharedPtr& n) {
@@ -279,31 +351,16 @@ class atomic_shared_ptr {
   }
   template <bool kOwn, class S>
   static PackedPtr get_newptr_impl(S&& n) {
-    std::uint16_t count = 0;
     BasePtr* newval = CountedDetail::get_counted_base(n);
-    if (!n && newval == nullptr) {
-      // n is default-constructed, nothing to do.
-    } else if (
-        newval == nullptr ||
-        n.get() != CountedDetail::template get_shared_ptr<T>(newval)) {
-      // This is an aliased sharedptr.  Make an un-aliased one by wrapping in
-      // *another* shared_ptr.
-      auto data =
-          CountedDetail::template make_ptr<SharedPtr>(std::forward<S>(n));
-      newval = CountedDetail::get_counted_base(data);
-      count = ALIASED_PTR;
-      CountedDetail::release_ptr(data);
-      add_external(newval, -1);
-    } else {
-      if constexpr (kOwn) {
-        CountedDetail::release_ptr(n);
-      }
+    auto* value = n.get();
+    if (newval) {
       add_external(newval, kOwn ? -1 : 0);
     }
-
+    if constexpr (kOwn) {
+      CountedDetail::release_ptr(n);
+    }
     PackedPtr newptr;
-    newptr.init(newval, count);
-
+    newptr.init(newval, !newval && value ? OWNERLESS_PTR : 0, value);
     return newptr;
   }
 
@@ -314,70 +371,55 @@ class atomic_shared_ptr {
   }
 
   bool owners_eq(const PackedPtr& p, const SharedPtr& expected) {
-    if (p.extra() & ALIASED_PTR) {
-      // The caller's local count keeps the wrapper alive. Read the stored
-      // shared_ptr in place without taking or dropping a reference.
-      const auto* wrapped =
-          CountedDetail::template get_shared_ptr<SharedPtr>(p.get());
-      return values_eq(*wrapped, expected);
-    }
     auto* base = CountedDetail::get_counted_base(expected);
-    if (p.get() != base) {
-      return false;
-    }
-    if (!base) {
-      return expected.get() == nullptr;
-    }
-    return CountedDetail::template get_shared_ptr<T>(base) == expected.get();
+    return p.get() == base && p.value == expected.get();
   }
 
   SharedPtr get_shared_ptr(const PackedPtr& p, bool inc = true) const {
-    bool aliased = p.extra() & ALIASED_PTR;
-
-    auto res = CountedDetail::template get_shared_ptr_from_counted_base<T>(
-        p.get(), inc);
-    if (aliased) {
-      auto aliasedp =
-          CountedDetail::template get_shared_ptr_from_counted_base<SharedPtr>(
-              p.get());
-      res = *aliasedp;
-    }
-    return res;
+    return CountedDetail::template get_shared_ptr_from_counted_base<T>(
+        p.get(), p.value, inc);
   }
 
-  /* Get a reference to the pointer, either from the local batch or
-   * from the global count.
-   *
-   * return is the base ptr, and the previous local count, if it is
-   * needed for compare_and_swap later.
-   */
+  // Returns the control block, stored object pointer and local count or
+  // ownerless discriminator. Owning snapshots reserve a reference; empty and
+  // ownerless snapshots do not. Split ownerless seeds need an ordered reload.
   PackedPtr takeOwnedBase(std::memory_order order) const noexcept {
     const auto acquire = memory_order_load(update_order(order));
     PackedPtr local, newlocal;
-    local = ptr_.load(acquire);
+    local = load_ptr(acquire);
     while (true) {
       if (!local.get()) {
+        if constexpr (kSplitLoad) {
+          if (is_ownerless(local)) {
+            local = ptr_.load(acquire);
+            if (local.get()) {
+              continue;
+            }
+          }
+        }
         return local;
       }
-      newlocal = local;
-      if (get_local_count(newlocal) + 1 > EXTERNAL_OFFSET) {
+
+      if (local.extra() + 1 > EXTERNAL_OFFSET) {
         // spinlock in the rare case we have more than
         // EXTERNAL_OFFSET threads trying to access at once.
         std::this_thread::yield();
         // Force DeterministicSchedule to choose a different thread
-        local = ptr_.load(acquire);
-      } else {
-        newlocal.setExtra(newlocal.extra() + 1);
-        assert(get_local_count(newlocal) > 0);
-        if (ptr_.compare_exchange_weak(local, newlocal, acquire)) {
-          break;
-        }
+        local = load_ptr(acquire);
+        continue;
+      }
+
+      newlocal = local;
+      newlocal.setExtra(newlocal.extra() + 1);
+      assert(newlocal.extra() > 0);
+      if (ptr_.compare_exchange_weak(local, newlocal, acquire)) {
+        break;
       }
     }
 
     // Check if we need to push a batch from local -> global
     std::uint16_t batchcount = EXTERNAL_OFFSET / 2;
-    if (get_local_count(newlocal) > batchcount) {
+    if (newlocal.extra() > batchcount) {
       CountedDetail::inc_shared_count(newlocal.get(), batchcount);
       putOwnedBase(newlocal.get(), batchcount, order);
     }
@@ -387,13 +429,13 @@ class atomic_shared_ptr {
 
   void putOwnedBase(
       BasePtr* p, std::uint16_t count, std::memory_order mo) const noexcept {
-    PackedPtr local = ptr_.load(std::memory_order_acquire);
+    PackedPtr local = load_ptr(std::memory_order_acquire);
     while (true) {
       if (local.get() != p) {
         break;
       }
       auto newlocal = local;
-      if (get_local_count(local) > count) {
+      if (local.extra() > count) {
         newlocal.setExtra(local.extra() - count);
       } else {
         // Otherwise it may be the same pointer, but someone else won
@@ -407,10 +449,10 @@ class atomic_shared_ptr {
       }
     }
 
-    CountedDetail::template release_shared<T>(p, count);
+    CountedDetail::release_shared(p, count);
   }
 
-  mutable AtomicStruct<PackedPtr, Atom> ptr_;
+  mutable AtomicPtr ptr_;
 };
 
 #else

@@ -23,7 +23,6 @@ folly_add_library(
     folly_lang_safe_assert
     folly_memory_sanitize_leak
     folly_packed_sync_ptr
-    folly_synchronization_atomic_struct
     folly_synchronization_atomic_util
 )
 

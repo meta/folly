@@ -52,7 +52,8 @@ struct foo {
 TEST(AtomicSharedPtr, operators) {
   atomic_shared_ptr<int> fooptr;
 #if FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED
-  EXPECT_TRUE(fooptr.is_lock_free());
+  std::atomic<std::array<std::uint64_t, 2>> probe{};
+  EXPECT_EQ(fooptr.is_lock_free(), probe.is_lock_free());
 #endif
   auto i = new int(5);
   std::shared_ptr<int> s(i);
@@ -163,20 +164,20 @@ TEST(AtomicSharedPtr, IncompleteType) {
 
 #if FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED
 TEST(AtomicSharedPtr, BlockDecodingIgnoresT) {
-  // One atomic_shared_ptr<T> can be stored from a TU where T is complete and
-  // loaded from one where it is only forward-declared, so a control block
-  // must decode to the same object whatever T it is read as.
+  // Supplied object pointers round-trip independently of T's completeness.
   struct Polymorphic {
     virtual ~Polymorphic() = default;
   };
   using internals = folly::detail::shared_ptr_internals;
   auto check = [](const std::shared_ptr<Polymorphic>& s) {
     auto* base = internals::get_counted_base(s);
-    EXPECT_EQ(internals::get_shared_ptr<Polymorphic>(base), s.get());
-    EXPECT_EQ(
-        static_cast<const void*>(
-            internals::get_shared_ptr<IncompleteType>(base)),
-        s.get());
+    auto complete =
+        internals::get_shared_ptr_from_counted_base<Polymorphic>(base, s.get());
+    auto incomplete =
+        internals::get_shared_ptr_from_counted_base<IncompleteType>(
+            base, reinterpret_cast<IncompleteType*>(s.get()));
+    EXPECT_EQ(complete.get(), s.get());
+    EXPECT_EQ(static_cast<const void*>(incomplete.get()), s.get());
   };
   check(std::make_shared<Polymorphic>());
   // NOLINTNEXTLINE(facebook-hte-SharedPtrFromNew)
@@ -599,6 +600,9 @@ TEST(AtomicSharedPtr, OwnerlessCompareExchangeAndExchange) {
 }
 
 #if FOLLY_HAS_ATOMIC_SHARED_PTR_HOOKED
+
+static_assert(sizeof(atomic_shared_ptr<int>) == 16);
+static_assert(alignof(atomic_shared_ptr<int>) == 16);
 
 namespace {
 std::atomic<unsigned>& atomic_accesses() {

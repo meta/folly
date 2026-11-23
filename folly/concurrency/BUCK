@@ -143,7 +143,6 @@ fb_dirsync_cpp_library(
         "//folly:packed_sync_ptr",
         "//folly/lang:safe_assert",
         "//folly/memory:sanitize_leak",
-        "//folly/synchronization:atomic_struct",
         "//folly/synchronization:atomic_util",
     ],
 )

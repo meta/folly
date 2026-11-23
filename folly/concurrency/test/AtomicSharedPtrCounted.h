@@ -39,8 +39,6 @@ struct intrusive_shared_count {
     }
   }
   Atom<uint64_t> counts;
-  // Owned object address for the control-block-only reconstruction hooks.
-  void* object_ = nullptr;
 
  private:
   Dispose* dispose_;
@@ -109,9 +107,7 @@ struct counted_storage : intrusive_shared_count<Atom> {
   template <typename... Args>
   explicit counted_storage(Args&&... args)
       : intrusive_shared_count<Atom>(&dispose),
-        value(std::forward<Args>(args)...) {
-    this->object_ = &value;
-  }
+        value(std::forward<Args>(args)...) {}
   static void dispose(intrusive_shared_count<Atom>* base) {
     delete static_cast<counted_storage*>(base);
   }
@@ -149,21 +145,13 @@ class counted_ptr_internals {
     return value;
   }
   template <typename T>
-  static std::remove_extent_t<T>* get_shared_ptr(counted_base* base) {
-    return base
-        ? static_cast<std::remove_extent_t<T>*>(base->object_)
-        : nullptr;
-  }
-  template <typename T>
   static counted_ptr<T, Atom> get_shared_ptr_from_counted_base(
-      counted_base* base, bool inc = true) {
-    return counted_ptr<T, Atom>(
-        counted_shared_tag{}, base, get_shared_ptr<T>(base), inc);
+      counted_base* base, std::remove_extent_t<T>* p, bool inc = true) {
+    return counted_ptr<T, Atom>(counted_shared_tag{}, base, p, inc);
   }
   static void inc_shared_count(counted_base* base, int64_t count) {
     base->add_ref(count);
   }
-  template <typename T>
   static void release_shared(counted_base* base, uint64_t count) {
     base->release(count);
   }
