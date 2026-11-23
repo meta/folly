@@ -264,6 +264,7 @@ fb_dirsync_cpp_unittest(
         "fbsource//xplat/folly:utility",
         "//folly:varint",
         "//folly/debugging/symbolizer:dwarf",
+        "//folly/lang:cstring_view",
         "//folly/portability:gtest",
         "//folly/portability:sys_mman",
     ],

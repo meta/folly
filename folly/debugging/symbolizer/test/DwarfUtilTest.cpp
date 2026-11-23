@@ -18,14 +18,17 @@
 #include <folly/debugging/symbolizer/DwarfSection.h>
 #include <folly/debugging/symbolizer/DwarfUtil.h>
 
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <folly/Utility.h>
 #include <folly/Varint.h>
+#include <folly/lang/cstring_view.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/SysMman.h>
 
@@ -219,6 +222,418 @@ TEST(DwarfImpl, RejectsNonUnitRootTagWithoutAborting) {
 
   EXPECT_FALSE(dwarf.findLocation(
       0, frame, folly::Range<SymbolizedFrame*>{}, [](folly::StringPiece) {}));
+}
+
+// A compilation unit holding one inlined call tree, used to drive
+// DwarfImpl::findLocation over hostile and well formed DIE trees.
+constexpr uintptr_t kUnitLowPc = 0x1000;
+constexpr uintptr_t kUnitHighPc = 0x2000;
+constexpr uintptr_t kUnitAddress = 0x1500;
+constexpr uint64_t kLineFromLineProgram = 1;
+
+enum UnitAbbreviation : uint8_t {
+  kCompileUnitCode = 1,
+  kSubprogramCode = 2,
+  kInlinedSubroutineCode = 3,
+  kLexicalBlockCode = 4,
+  kAbstractSubprogramCode = 5,
+};
+
+void appendCString(std::vector<uint8_t>& bytes, folly::cstring_view value) {
+  if (!value.empty()) {
+    bytes.insert(bytes.end(), value.begin(), value.end());
+  }
+  bytes.push_back(0);
+}
+
+void appendAbbreviation(
+    std::vector<uint8_t>& bytes,
+    uint64_t code,
+    uint64_t tag,
+    bool hasChildren,
+    std::initializer_list<std::pair<uint64_t, uint64_t>> attributes) {
+  appendULEB(bytes, code);
+  appendULEB(bytes, tag);
+  bytes.push_back(hasChildren ? DW_CHILDREN_yes : DW_CHILDREN_no);
+  for (const auto& [name, form] : attributes) {
+    appendULEB(bytes, name);
+    appendULEB(bytes, form);
+  }
+  appendULEB(bytes, 0);
+  appendULEB(bytes, 0);
+}
+
+std::vector<uint8_t> unitAbbreviations() {
+  std::vector<uint8_t> bytes;
+  appendAbbreviation(
+      bytes,
+      kCompileUnitCode,
+      DW_TAG_compile_unit,
+      true,
+      {
+          {DW_AT_stmt_list, DW_FORM_sec_offset},
+          {DW_AT_comp_dir, DW_FORM_string},
+          {DW_AT_name, DW_FORM_string},
+          {DW_AT_low_pc, DW_FORM_addr},
+          {DW_AT_high_pc, DW_FORM_addr},
+      });
+  appendAbbreviation(
+      bytes,
+      kSubprogramCode,
+      DW_TAG_subprogram,
+      true,
+      {
+          {DW_AT_low_pc, DW_FORM_addr},
+          {DW_AT_high_pc, DW_FORM_addr},
+          {DW_AT_name, DW_FORM_string},
+      });
+  appendAbbreviation(
+      bytes,
+      kInlinedSubroutineCode,
+      DW_TAG_inlined_subroutine,
+      true,
+      {
+          {DW_AT_low_pc, DW_FORM_addr},
+          {DW_AT_high_pc, DW_FORM_addr},
+          {DW_AT_abstract_origin, DW_FORM_ref4},
+          {DW_AT_call_file, DW_FORM_data1},
+          {DW_AT_call_line, DW_FORM_data2},
+      });
+  appendAbbreviation(bytes, kLexicalBlockCode, DW_TAG_lexical_block, true, {});
+  appendAbbreviation(
+      bytes,
+      kAbstractSubprogramCode,
+      DW_TAG_subprogram,
+      false,
+      {{DW_AT_name, DW_FORM_string}});
+  appendULEB(bytes, 0); // end of the abbreviation table
+  return bytes;
+}
+
+// One sequence mapping [kUnitLowPc, kUnitHighPc) to src/main.cpp line 1.
+std::vector<uint8_t> unitLineTable() {
+  std::vector<uint8_t> header;
+  append<uint8_t>(header, 1); // minimum instruction length
+  append<uint8_t>(header, 1); // maximum operations per instruction
+  append<uint8_t>(header, 1); // default is_stmt
+  append<int8_t>(header, -5); // line base
+  append<uint8_t>(header, 14); // line range
+  append<uint8_t>(header, 13); // opcode base
+  constexpr uint8_t kStandardOpcodeLengths[] = {
+      0,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      1,
+  };
+  header.insert(
+      header.end(),
+      std::begin(kStandardOpcodeLengths),
+      std::end(kStandardOpcodeLengths));
+  appendCString(header, "src");
+  appendCString(header, "");
+  appendCString(header, "main.cpp");
+  appendULEB(header, 1); // directory index
+  appendULEB(header, 0); // modified time
+  appendULEB(header, 0); // file size
+  appendCString(header, "");
+
+  std::vector<uint8_t> program;
+  program.push_back(0);
+  appendULEB(program, sizeof(uintptr_t) + 1);
+  program.push_back(DW_LNE_set_address);
+  append<uintptr_t>(program, kUnitLowPc);
+  program.push_back(DW_LNS_set_file);
+  appendULEB(program, 1);
+  program.push_back(DW_LNS_copy);
+  program.push_back(DW_LNS_advance_pc);
+  appendULEB(program, kUnitHighPc - kUnitLowPc);
+  program.push_back(0);
+  appendULEB(program, 1);
+  program.push_back(DW_LNE_end_sequence);
+
+  std::vector<uint8_t> payload;
+  append<uint16_t>(payload, 4); // version
+  append<uint32_t>(payload, static_cast<uint32_t>(header.size()));
+  payload.insert(payload.end(), header.begin(), header.end());
+  payload.insert(payload.end(), program.begin(), program.end());
+
+  std::vector<uint8_t> table;
+  append<uint32_t>(table, static_cast<uint32_t>(payload.size()));
+  table.insert(table.end(), payload.begin(), payload.end());
+  return table;
+}
+
+void appendCompileUnitDie(std::vector<uint8_t>& info) {
+  appendULEB(info, kCompileUnitCode);
+  append<uint32_t>(info, 0); // DW_AT_stmt_list
+  appendCString(info, "/build");
+  appendCString(info, "main.cpp");
+  append<uintptr_t>(info, kUnitLowPc);
+  append<uintptr_t>(info, kUnitHighPc);
+}
+
+// Returns the offset to use as DW_AT_abstract_origin.
+size_t appendAbstractSubprogramDie(
+    std::vector<uint8_t>& info, const char* name) {
+  const auto offset = info.size();
+  appendULEB(info, kAbstractSubprogramCode);
+  appendCString(info, name);
+  return offset;
+}
+
+void appendSubprogramDie(std::vector<uint8_t>& info) {
+  appendULEB(info, kSubprogramCode);
+  append<uintptr_t>(info, kUnitLowPc);
+  append<uintptr_t>(info, kUnitHighPc);
+  appendCString(info, "caller");
+}
+
+void appendInlinedSubroutineDie(
+    std::vector<uint8_t>& info, size_t abstractOrigin, uint16_t callLine) {
+  appendULEB(info, kInlinedSubroutineCode);
+  append<uintptr_t>(info, kUnitLowPc);
+  append<uintptr_t>(info, kUnitHighPc);
+  append<uint32_t>(info, static_cast<uint32_t>(abstractOrigin));
+  append<uint8_t>(info, 1); // DW_AT_call_file
+  append<uint16_t>(info, callLine);
+}
+
+void appendLexicalBlockDie(std::vector<uint8_t>& info) {
+  appendULEB(info, kLexicalBlockCode);
+}
+
+void appendChildrenTerminator(std::vector<uint8_t>& info) {
+  info.push_back(0);
+}
+
+void ignoreParameterName(folly::StringPiece) {}
+
+struct InlineUnit {
+  std::vector<uint8_t> info;
+  std::vector<uint8_t> abbrev = unitAbbreviations();
+  std::vector<uint8_t> line = unitLineTable();
+
+  // The sections are not owned by the returned units, so this object has to
+  // outlive them.
+  CompilationUnits units() const {
+    CompilationUnits result{};
+    auto& cu = result.mainCompilationUnit;
+    cu.version = 4;
+    cu.addrSize = sizeof(uintptr_t);
+    cu.size = static_cast<uint32_t>(info.size());
+    cu.firstDie = 0;
+    cu.abbrevOffset = 0;
+    cu.debugSections.debugInfo = info;
+    cu.debugSections.debugAbbrev = abbrev;
+    cu.debugSections.debugLine = line;
+    return result;
+  }
+};
+
+TEST(DwarfImpl, FindsInlinedCallSite) {
+  InlineUnit unit;
+  appendCompileUnitDie(unit.info);
+  const auto origin = appendAbstractSubprogramDie(unit.info, "inlinee");
+  appendSubprogramDie(unit.info);
+  appendInlinedSubroutineDie(unit.info, origin, 100);
+  appendChildrenTerminator(unit.info); // inlined subroutine
+  appendChildrenTerminator(unit.info); // subprogram
+  appendChildrenTerminator(unit.info); // compile unit
+  auto units = unit.units();
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL_WITH_INLINE);
+  SymbolizedFrame frame;
+  std::array<SymbolizedFrame, 2> inlineFrames{};
+
+  ASSERT_TRUE(dwarf.findLocation(
+      kUnitAddress, frame, folly::range(inlineFrames), ignoreParameterName));
+
+  EXPECT_STREQ("caller", frame.name);
+  EXPECT_TRUE(frame.location.hasFileAndLine);
+  EXPECT_EQ("main.cpp", frame.location.file.file());
+  EXPECT_EQ(100, frame.location.line); // the call site of the inlined frame
+  ASSERT_TRUE(inlineFrames[0].found);
+  EXPECT_STREQ("inlinee", inlineFrames[0].name);
+  EXPECT_EQ(kLineFromLineProgram, inlineFrames[0].location.line);
+  EXPECT_FALSE(inlineFrames[1].found);
+}
+
+TEST(DwarfImpl, KeepsInlineFrameWithMalformedTrailingSibling) {
+  InlineUnit unit;
+  appendCompileUnitDie(unit.info);
+  const auto origin = appendAbstractSubprogramDie(unit.info, "inlinee");
+  appendSubprogramDie(unit.info);
+  appendInlinedSubroutineDie(unit.info, origin, 100);
+  appendChildrenTerminator(unit.info); // inlined subroutine
+  appendULEB(unit.info, 127); // unknown abbreviation on a trailing sibling
+  appendChildrenTerminator(unit.info); // subprogram
+  appendChildrenTerminator(unit.info); // compile unit
+  auto units = unit.units();
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL_WITH_INLINE);
+  SymbolizedFrame frame;
+  std::array<SymbolizedFrame, 2> inlineFrames{};
+
+  ASSERT_TRUE(
+      dwarf.findLocation(kUnitAddress, frame, folly::range(inlineFrames), {}));
+
+  EXPECT_STREQ("caller", frame.name);
+  EXPECT_TRUE(frame.location.hasFileAndLine);
+  EXPECT_EQ("main.cpp", frame.location.file.file());
+  EXPECT_EQ(100, frame.location.line);
+  ASSERT_TRUE(inlineFrames[0].found);
+  EXPECT_STREQ("inlinee", inlineFrames[0].name);
+  EXPECT_EQ(kLineFromLineProgram, inlineFrames[0].location.line);
+  EXPECT_FALSE(inlineFrames[1].found);
+}
+
+TEST(DwarfImpl, KeepsInlineFrameWhenIncompleteMatchStopsRootSearch) {
+  InlineUnit unit;
+  appendCompileUnitDie(unit.info);
+  const auto origin = appendAbstractSubprogramDie(unit.info, "inlinee");
+  appendSubprogramDie(unit.info);
+  appendLexicalBlockDie(unit.info);
+  appendInlinedSubroutineDie(unit.info, origin, 100);
+  appendChildrenTerminator(unit.info); // inlined subroutine
+  appendChildrenTerminator(unit.info); // lexical block
+  appendSubprogramDie(unit.info); // matching child without inline call info
+  appendChildrenTerminator(unit.info); // matching child
+  appendULEB(unit.info, 127); // unknown abbreviation on a trailing sibling
+  appendChildrenTerminator(unit.info); // subprogram
+  appendChildrenTerminator(unit.info); // compile unit
+  auto units = unit.units();
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL_WITH_INLINE);
+  SymbolizedFrame frame;
+  std::array<SymbolizedFrame, 2> inlineFrames{};
+
+  ASSERT_TRUE(
+      dwarf.findLocation(kUnitAddress, frame, folly::range(inlineFrames), {}));
+
+  EXPECT_STREQ("caller", frame.name);
+  EXPECT_TRUE(frame.location.hasFileAndLine);
+  EXPECT_EQ("main.cpp", frame.location.file.file());
+  EXPECT_EQ(100, frame.location.line);
+  ASSERT_TRUE(inlineFrames[0].found);
+  EXPECT_STREQ("inlinee", inlineFrames[0].name);
+  EXPECT_EQ(kLineFromLineProgram, inlineFrames[0].location.line);
+  EXPECT_FALSE(inlineFrames[1].found);
+}
+
+TEST(DwarfImpl, StopsInlineSearchWhenCallLocationsAreFull) {
+  // A lexical block whose nested inlined subroutines fill the call location
+  // buffer, followed by a sibling that also contains the address. The sibling
+  // must not be recorded past the end of the buffer; the recorded frames are
+  // the innermost ones from the nested chain.
+  //
+  // The stray write this guards against is invisible to the expectations
+  // below: the extra entry falls outside the window fillInlineFrames keeps,
+  // so only ASAN (stack-buffer-overflow) catches it. This relies on
+  // inlineFrames having exactly kMaxInlineLocationInfoPerFrame entries, which
+  // makes the call-location buffer exactly fill the stack array.
+  constexpr size_t kNested = kMaxInlineLocationInfoPerFrame + 1;
+  InlineUnit unit;
+  appendCompileUnitDie(unit.info);
+  const auto origin = appendAbstractSubprogramDie(unit.info, "inlinee");
+  appendSubprogramDie(unit.info);
+  appendLexicalBlockDie(unit.info);
+  for (size_t i = 0; i < kNested; ++i) {
+    appendInlinedSubroutineDie(
+        unit.info, origin, static_cast<uint16_t>(100 + i));
+  }
+  for (size_t i = 0; i < kNested; ++i) {
+    appendChildrenTerminator(unit.info); // nested inlined subroutine
+  }
+  appendChildrenTerminator(unit.info); // lexical block
+  appendInlinedSubroutineDie(unit.info, origin, 999);
+  appendChildrenTerminator(unit.info); // sibling inlined subroutine
+  appendChildrenTerminator(unit.info); // subprogram
+  appendChildrenTerminator(unit.info); // compile unit
+  auto units = unit.units();
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL_WITH_INLINE);
+  SymbolizedFrame frame;
+  std::array<SymbolizedFrame, kMaxInlineLocationInfoPerFrame> inlineFrames{};
+
+  ASSERT_TRUE(dwarf.findLocation(
+      kUnitAddress, frame, folly::range(inlineFrames), ignoreParameterName));
+
+  EXPECT_EQ(100, frame.location.line);
+  ASSERT_TRUE(inlineFrames.front().found);
+  ASSERT_TRUE(inlineFrames.back().found);
+  EXPECT_EQ(100 + kNested - 1, inlineFrames.front().location.line);
+  EXPECT_EQ(101, inlineFrames.back().location.line);
+  for (const auto& inlineFrame : inlineFrames) {
+    EXPECT_NE(999, inlineFrame.location.line);
+  }
+}
+
+TEST(DwarfImpl, WalksDeeplyNestedDiesWithoutRecursion) {
+  // Nesting depth is bounded only by the size of the unit, so the searches
+  // must not use one call frame per level.
+  constexpr size_t kDepth = 50000;
+  InlineUnit unit;
+  appendCompileUnitDie(unit.info);
+  const auto origin = appendAbstractSubprogramDie(unit.info, "inlinee");
+  // A deep subtree without a subprogram, walked while looking for the
+  // subprogram that contains the address.
+  for (size_t i = 0; i < kDepth; ++i) {
+    appendLexicalBlockDie(unit.info);
+  }
+  for (size_t i = 0; i < kDepth; ++i) {
+    appendChildrenTerminator(unit.info);
+  }
+  // A deeply nested inlined call, walked while looking for inline frames.
+  appendSubprogramDie(unit.info);
+  for (size_t i = 0; i < kDepth; ++i) {
+    appendLexicalBlockDie(unit.info);
+  }
+  appendInlinedSubroutineDie(unit.info, origin, 100);
+  appendChildrenTerminator(unit.info); // inlined subroutine
+  for (size_t i = 0; i < kDepth; ++i) {
+    appendChildrenTerminator(unit.info);
+  }
+  appendChildrenTerminator(unit.info); // subprogram
+  appendChildrenTerminator(unit.info); // compile unit
+  auto units = unit.units();
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL_WITH_INLINE);
+  SymbolizedFrame frame;
+  std::array<SymbolizedFrame, 2> inlineFrames{};
+
+  ASSERT_TRUE(dwarf.findLocation(
+      kUnitAddress, frame, folly::range(inlineFrames), ignoreParameterName));
+
+  EXPECT_STREQ("caller", frame.name);
+  EXPECT_EQ(100, frame.location.line);
+  ASSERT_TRUE(inlineFrames[0].found);
+  EXPECT_STREQ("inlinee", inlineFrames[0].name);
+  EXPECT_EQ(kLineFromLineProgram, inlineFrames[0].location.line);
+}
+
+TEST(DwarfImpl, ReportsLineWhenChildrenTerminatorIsMissing) {
+  // The inlined subroutine, the subprogram and the compile unit all declare
+  // children, but the unit ends before their terminators.
+  InlineUnit unit;
+  appendCompileUnitDie(unit.info);
+  const auto origin = appendAbstractSubprogramDie(unit.info, "inlinee");
+  appendSubprogramDie(unit.info);
+  appendInlinedSubroutineDie(unit.info, origin, 100);
+  auto units = unit.units();
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL_WITH_INLINE);
+  SymbolizedFrame frame;
+  std::array<SymbolizedFrame, 2> inlineFrames{};
+
+  ASSERT_TRUE(
+      dwarf.findLocation(kUnitAddress, frame, folly::range(inlineFrames), {}));
+
+  EXPECT_TRUE(frame.location.hasFileAndLine);
+  EXPECT_EQ("main.cpp", frame.location.file.file());
+  EXPECT_EQ(kLineFromLineProgram, frame.location.line);
+  EXPECT_FALSE(inlineFrames[0].found);
 }
 
 TEST(DwarfUtil, ParsesDwarf4CompilationUnitHeader) {
