@@ -74,3 +74,4 @@ folly_add_library(
 )
 
 add_subdirectory(detail)
+add_subdirectory(testing)

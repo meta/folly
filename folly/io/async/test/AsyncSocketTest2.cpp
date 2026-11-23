@@ -40,8 +40,8 @@
 #include <folly/io/async/test/MockAsyncSocketObserver.h>
 #include <folly/io/async/test/TFOUtil.h>
 #include <folly/io/async/test/Util.h>
-#include <folly/net/test/MockNetOpsDispatcher.h>
-#include <folly/net/test/MockTcpInfoDispatcher.h>
+#include <folly/net/testing/MockNetOpsDispatcher.h>
+#include <folly/net/testing/MockTcpInfoDispatcher.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/Sockets.h>

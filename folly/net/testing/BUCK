@@ -1,0 +1,40 @@
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+
+oncall("fbcode_entropy_wardens_folly")
+
+fb_dirsync_cpp_library(
+    name = "mock_net_ops_dispatcher",
+    headers = [
+        "MockNetOpsDispatcher.h",
+    ],
+    use_raw_headers = True,
+    exported_deps = [
+        "//folly/net:net_ops_dispatcher",
+        "//folly/portability:gmock",
+    ],
+)
+
+fb_dirsync_cpp_library(
+    name = "mock_tcpinfo_dispatcher",
+    headers = [
+        "MockTcpInfoDispatcher.h",
+    ],
+    use_raw_headers = True,
+    exported_deps = [
+        "//folly/net:tcpinfo_dispatcher",
+        "//folly/portability:gmock",
+    ],
+)
+
+fb_dirsync_cpp_library(
+    name = "tcpinfo_test_util",
+    headers = [
+        "TcpInfoTestUtil.h",
+    ],
+    exported_deps = [
+        "//folly/net:tcpinfo",
+        "//folly/net/testing:mock_net_ops_dispatcher",
+        "//folly/portability:gmock",
+        "//folly/portability:gtest",
+    ],
+)

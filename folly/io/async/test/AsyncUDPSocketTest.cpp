@@ -26,7 +26,7 @@
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/AsyncUDPServerSocket.h>
 #include <folly/io/async/EventBase.h>
-#include <folly/net/test/MockNetOpsDispatcher.h>
+#include <folly/net/testing/MockNetOpsDispatcher.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/Sockets.h>

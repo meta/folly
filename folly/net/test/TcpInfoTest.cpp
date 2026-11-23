@@ -16,7 +16,7 @@
 
 #include <cstring>
 #include <folly/net/TcpInfo.h>
-#include <folly/net/test/MockNetOpsDispatcher.h>
+#include <folly/net/testing/MockNetOpsDispatcher.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 
@@ -30,7 +30,7 @@ using us = std::chrono::microseconds;
 #include <linux/sockios.h>
 #include <sys/ioctl.h>
 
-#include <folly/net/test/TcpInfoTestUtil.h>
+#include <folly/net/testing/TcpInfoTestUtil.h>
 
 using namespace folly::test;
 

@@ -41,7 +41,7 @@
 #include <folly/io/async/test/TestSSLServer.h>
 #include <folly/net/NetOps.h>
 #include <folly/net/NetworkSocket.h>
-#include <folly/net/test/MockNetOpsDispatcher.h>
+#include <folly/net/testing/MockNetOpsDispatcher.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/OpenSSL.h>

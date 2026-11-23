@@ -19,7 +19,7 @@
 #include <sys/ioctl.h>
 #include <cstring>
 #include <folly/net/TcpInfo.h>
-#include <folly/net/test/MockNetOpsDispatcher.h>
+#include <folly/net/testing/MockNetOpsDispatcher.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 
