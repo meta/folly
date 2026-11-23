@@ -115,7 +115,7 @@ fb_dirsync_cpp_unittest(
     supports_static_listing = False,
     deps = [
         ":async_socket_test_lib",
-        ":mocks",
+        "//folly/io/async/testing:mocks",
         "//folly/portability:gmock",
         "//folly/portability:gtest",
     ],
@@ -154,11 +154,7 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//xplat/folly/io/async:io_uring_backend",
         ":async_socket_test_lib",  # @manual
-        ":blocking_socket",
-        ":callback_state_enum",
-        ":conn_callback",
         ":io_uring_test_util",
-        ":mocks",
         ":tfo_util",
         ":util",
         "//folly:exception_wrapper",
@@ -170,6 +166,7 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async:async_socket",
         "//folly/io/async:scoped_event_base_thread",
         "//folly/io/async:server_socket",
+        "//folly/io/async/testing:mocks",
         "//folly/net:net_ops",
         "//folly/net:network_socket",
         "//folly/net/testing:mock_net_ops_dispatcher",
@@ -190,9 +187,9 @@ fb_dirsync_cpp_unittest(
     srcs = ["AsyncTransportTest.cpp"],
     supports_static_listing = False,
     deps = [
-        ":mocks",
         "//folly/io/async:async_socket",
         "//folly/io/async:async_transport",
+        "//folly/io/async/testing:mocks",
         "//folly/portability:gtest",
     ],
 )
@@ -478,14 +475,7 @@ fb_dirsync_cpp_library(
     ],
     use_raw_headers = True,
     exported_deps = [
-        "//folly:memory",
-        "//folly/io/async:async_base",
-        "//folly/io/async:async_socket",
-        "//folly/io/async:async_socket_exception",
-        "//folly/io/async:async_ssl_socket",
-        "//folly/io/async:async_transport",
-        "//folly/io/async:async_udp_socket",
-        "//folly/portability:gmock",
+        "//folly/io/async/testing:mocks",  # @shim
     ],
 )
 
@@ -494,9 +484,7 @@ fb_dirsync_cpp_library(
     headers = ["MockAsyncServerSocket.h"],
     use_raw_headers = True,
     exported_deps = [
-        "//folly/io/async:async_base",
-        "//folly/io/async:server_socket",
-        "//folly/portability:gmock",
+        "//folly/io/async/testing:mock_server_socket",  # @shim
     ],
 )
 
@@ -509,6 +497,7 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async:scoped_event_base_thread",
         "//folly/portability:gtest",
         "//folly/synchronization:baton",
+        "//xplat/folly/portability:fcntl",
     ],
 )
 
@@ -567,6 +556,7 @@ fb_dirsync_cpp_unittest(
     deps = [
         "fbsource//third-party/fmt:fmt",
         "fbsource//xplat/folly:scope_guard",
+        ":request_context_benchmark",
         "//folly:memory",
         "//folly:singleton",
         "//folly/container:enumerate",
@@ -862,7 +852,6 @@ fb_dirsync_cpp_unittest(
     deps = [
         ":async_ssl_socket_test_lib",  # @manual
         ":blocking_socket",
-        ":mocks",
         ":test_ssl_server",
         ":tfo_util",
         "//folly:exception_wrapper",
@@ -886,6 +875,7 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async/ssl:basic_transport_certificate",
         "//folly/io/async/ssl:openssl_transport_certificate",
         "//folly/io/async/ssl:ssl_errors",
+        "//folly/io/async/testing:mocks",
         "//folly/net:net_ops",
         "//folly/net:network_socket",
         "//folly/net/testing:mock_net_ops_dispatcher",

@@ -881,3 +881,4 @@ folly_add_library(
 add_subdirectory(fdsock)
 add_subdirectory(observer)
 add_subdirectory(ssl)
+add_subdirectory(testing)

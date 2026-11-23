@@ -36,10 +36,10 @@
 #include <folly/io/async/ScopedEventBaseThread.h>
 #include <folly/io/async/test/AsyncSocketTest.h>
 #include <folly/io/async/test/IoUringTestUtil.h>
-#include <folly/io/async/test/MockAsyncSocketLegacyObserver.h>
-#include <folly/io/async/test/MockAsyncSocketObserver.h>
 #include <folly/io/async/test/TFOUtil.h>
 #include <folly/io/async/test/Util.h>
+#include <folly/io/async/testing/MockAsyncSocketLegacyObserver.h>
+#include <folly/io/async/testing/MockAsyncSocketObserver.h>
 #include <folly/net/testing/MockNetOpsDispatcher.h>
 #include <folly/net/testing/MockTcpInfoDispatcher.h>
 #include <folly/portability/GMock.h>

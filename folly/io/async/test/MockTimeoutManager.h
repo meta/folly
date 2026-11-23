@@ -16,30 +16,4 @@
 
 #pragma once
 
-#include <chrono>
-
-#include <folly/io/async/TimeoutManager.h>
-#include <folly/portability/GMock.h>
-
-namespace folly {
-namespace test {
-
-class MockTimeoutManager : public folly::TimeoutManager {
- public:
-  MOCK_METHOD(
-      void,
-      attachTimeoutManager,
-      (folly::AsyncTimeout*, folly::TimeoutManager::InternalEnum));
-
-  MOCK_METHOD(void, detachTimeoutManager, (folly::AsyncTimeout*));
-
-  MOCK_METHOD(
-      bool, scheduleTimeout, (folly::AsyncTimeout*, std::chrono::milliseconds));
-
-  MOCK_METHOD(void, cancelTimeout, (folly::AsyncTimeout*));
-
-  MOCK_METHOD(void, bumpHandlingTime, ());
-  MOCK_METHOD(bool, isInTimeoutManagerThread, ());
-};
-} // namespace test
-} // namespace folly
+#include <folly/io/async/testing/MockTimeoutManager.h> // @shim

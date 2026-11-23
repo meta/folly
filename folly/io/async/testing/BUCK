@@ -1,0 +1,38 @@
+load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+
+oncall("fbcode_entropy_wardens_folly")
+
+fb_dirsync_cpp_library(
+    name = "mocks",
+    headers = [
+        "MockAsyncSSLSocket.h",
+        "MockAsyncSocket.h",
+        "MockAsyncSocketLegacyObserver.h",
+        "MockAsyncSocketObserver.h",
+        "MockAsyncTransport.h",
+        "MockAsyncUDPSocket.h",
+        "MockTimeoutManager.h",
+    ],
+    use_raw_headers = True,
+    exported_deps = [
+        "//folly:memory",
+        "//folly/io/async:async_base",
+        "//folly/io/async:async_socket",
+        "//folly/io/async:async_socket_exception",
+        "//folly/io/async:async_ssl_socket",
+        "//folly/io/async:async_transport",
+        "//folly/io/async:async_udp_socket",
+        "//folly/portability:gmock",
+    ],
+)
+
+fb_dirsync_cpp_library(
+    name = "mock_server_socket",
+    headers = ["MockAsyncServerSocket.h"],
+    use_raw_headers = True,
+    exported_deps = [
+        "//folly/io/async:async_base",
+        "//folly/io/async:server_socket",
+        "//folly/portability:gmock",
+    ],
+)

@@ -16,34 +16,4 @@
 
 #pragma once
 
-#include <folly/io/async/AsyncServerSocket.h>
-#include <folly/io/async/EventBase.h>
-#include <folly/portability/GMock.h>
-
-namespace folly {
-
-namespace test {
-
-class MockAsyncServerSocket : public AsyncServerSocket {
- public:
-  using UniquePtr = std::unique_ptr<MockAsyncServerSocket, Destructor>;
-
-  // We explicitly do not mock destroy(), since the base class implementation
-  // in DelayedDestruction is what actually deletes the object.
-  // MOCK_METHOD(void, destroy, ());
-  MOCK_METHOD(void, bind, (const folly::SocketAddress& address));
-  MOCK_METHOD(
-      void,
-      bind,
-      (const std::vector<folly::IPAddress>& ipAddresses, uint16_t port));
-  MOCK_METHOD(void, bind, (uint16_t port));
-  MOCK_METHOD(void, listen, (int backlog));
-  MOCK_METHOD(void, startAccepting, ());
-  MOCK_METHOD(
-      void,
-      addAcceptCallback,
-      (AcceptCallback * callback, EventBase* eventBase, uint32_t maxAtOnce));
-};
-
-} // namespace test
-} // namespace folly
+#include <folly/io/async/testing/MockAsyncServerSocket.h> // @shim
