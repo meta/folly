@@ -608,15 +608,19 @@ check_cxx_source_compiles(
     std::atomic<uint16_t> a2;
     std::atomic<uint32_t> a4;
     std::atomic<uint64_t> a8;
-    struct Test { bool val; };
-    std::atomic<Test> s;
+    struct alignas(16) Test { uint64_t lo; uint64_t hi; };
+    std::atomic<Test> s(Test{});
+    s.store(s.load());
     return a1++ + a2++ + a4++ + a8++ + unsigned(s.is_lock_free());
   }"
   FOLLY_CPP_ATOMIC_BUILTIN)
 if (NOT FOLLY_CPP_ATOMIC_BUILTIN)
-  list(APPEND CMAKE_REQUIRED_LIBRARIES atomic)
-  list(APPEND FOLLY_LINK_LIBRARIES atomic)
-  set(ATOMIC_LIBRARY "atomic")
+  find_library(ATOMIC_LIBRARY NAMES libatomic.so.1 atomic)
+  if (NOT ATOMIC_LIBRARY)
+    set(ATOMIC_LIBRARY atomic)
+  endif ()
+  list(APPEND CMAKE_REQUIRED_LIBRARIES ${ATOMIC_LIBRARY})
+  list(APPEND FOLLY_LINK_LIBRARIES ${ATOMIC_LIBRARY})
   check_cxx_source_compiles(
     "
     #include <atomic>
@@ -625,8 +629,9 @@ if (NOT FOLLY_CPP_ATOMIC_BUILTIN)
       std::atomic<uint16_t> a2;
       std::atomic<uint32_t> a4;
       std::atomic<uint64_t> a8;
-      struct Test { bool val; };
-      std::atomic<Test> s;
+      struct alignas(16) Test { uint64_t lo; uint64_t hi; };
+      std::atomic<Test> s(Test{});
+      s.store(s.load());
       return a1++ + a2++ + a4++ + a8++ + unsigned(s.is_lock_free());
     }"
     FOLLY_CPP_ATOMIC_WITH_LIBATOMIC)
