@@ -15,12 +15,15 @@
  */
 
 #include <cerrno>
+#include <optional>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include <folly/File.h>
 #include <folly/io/async/IoUringZeroCopyBufferPool.h>
 #include <folly/portability/SysMman.h>
 #include <folly/portability/Unistd.h>
@@ -54,6 +57,10 @@ class IoUringZeroCopyBufferPoolTestHelper {
   void consumeRefillRingEntries(uint32_t numEntries) {
     *getHead() += numEntries;
   }
+  static IoUringZeroCopyBufferPool::ExportHandle exportHandle(
+      IoUringZeroCopyBufferPool& pool, int fd) {
+    return IoUringZeroCopyBufferPool::ExportHandle(fd, pool.impl_);
+  }
   IoUringZeroCopyBufferPool& pool;
 };
 } // namespace folly
@@ -84,6 +91,65 @@ TEST(IoUringZeroCopyBufferPoolTest, BufferKeepsMappingAliveAfterPoolDestroy) {
   buffer.reset();
   EXPECT_EQ(::mincore(address, pageSize, &resident), -1);
   EXPECT_EQ(errno, ENOMEM);
+}
+
+TEST(IoUringZeroCopyBufferPoolTest, AbandonedExportClosesFd) {
+  const int fd = File::temporary().release();
+  {
+    IoUringZeroCopyBufferPool::ExportHandle handle(fd, nullptr);
+    EXPECT_NE(::fcntl(fd, F_GETFD), -1);
+  }
+  EXPECT_EQ(::fcntl(fd, F_GETFD), -1);
+  EXPECT_EQ(errno, EBADF);
+}
+
+TEST(IoUringZeroCopyBufferPoolTest, MoveExportTransfersFd) {
+  const int fd = File::temporary().release();
+  std::optional<IoUringZeroCopyBufferPool::ExportHandle> original{
+      std::in_place, fd, nullptr};
+  {
+    auto moved = std::move(*original);
+    original.reset();
+    EXPECT_NE(::fcntl(fd, F_GETFD), -1);
+  }
+  EXPECT_EQ(::fcntl(fd, F_GETFD), -1);
+  EXPECT_EQ(errno, EBADF);
+}
+
+TEST(IoUringZeroCopyBufferPoolTest, MoveAssignmentClosesReplacedExport) {
+  const int firstFd = File::temporary().release();
+  const int secondFd = File::temporary().release();
+  {
+    IoUringZeroCopyBufferPool::ExportHandle destination(firstFd, nullptr);
+    {
+      IoUringZeroCopyBufferPool::ExportHandle source(secondFd, nullptr);
+      destination = std::move(source);
+    }
+    EXPECT_EQ(::fcntl(firstFd, F_GETFD), -1);
+    EXPECT_EQ(errno, EBADF);
+    EXPECT_NE(::fcntl(secondFd, F_GETFD), -1);
+  }
+  EXPECT_EQ(::fcntl(secondFd, F_GETFD), -1);
+  EXPECT_EQ(errno, EBADF);
+}
+
+TEST(IoUringZeroCopyBufferPoolTest, FailedImportClosesExport) {
+  IoUringZeroCopyBufferPool::Params params = {
+      .ring = nullptr,
+      .numBuffers = 32,
+      .bufferSizeHint = 4096,
+      .rqEntries = 8,
+      .ifindex = 0,
+      .queueId = 0,
+  };
+  auto pool = IoUringZeroCopyBufferPoolTestHelper::create(params);
+  const int fd = File::temporary().release();
+  auto handle = IoUringZeroCopyBufferPoolTestHelper::exportHandle(*pool, fd);
+  EXPECT_THROW(
+      IoUringZeroCopyBufferPool::importHandle(std::move(handle), nullptr),
+      std::runtime_error);
+  EXPECT_EQ(::fcntl(fd, F_GETFD), -1);
+  EXPECT_EQ(errno, EBADF);
 }
 
 // TODO: T264228475: remove this once liburing/uapi headers are updated.

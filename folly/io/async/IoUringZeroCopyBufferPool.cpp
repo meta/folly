@@ -666,7 +666,7 @@ IoUringZeroCopyBufferPool::IoUringZeroCopyBufferPool(
   }
 
   struct io_uring_zcrx_ifq_reg ifqReg{};
-  ifqReg.if_idx = static_cast<uint32_t>(handle.zcrxFd_);
+  ifqReg.if_idx = static_cast<uint32_t>(handle.zcrxFd_.fd());
   ifqReg.flags = ZCRX_REG_IMPORT;
 
   auto ret = io_uring_register_ifq(ring_, &ifqReg);
@@ -679,8 +679,8 @@ IoUringZeroCopyBufferPool::IoUringZeroCopyBufferPool(
   }
 
   zcrxId_ = ifqReg.zcrx_id;
-  zcrxFd_ = handle.zcrxFd_;
   impl_ = std::move(handle.impl_);
+  zcrxFd_ = handle.zcrxFd_.release();
 }
 
 IoUringZeroCopyBufferPool::~IoUringZeroCopyBufferPool() {

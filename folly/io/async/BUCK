@@ -993,6 +993,7 @@ fb_dirsync_cpp_library(
     ],
     exported_deps = [
         ":liburing",
+        "//folly:file",
         "//folly/io:iobuf",
     ],
 )

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <memory>
+#include <folly/File.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/Liburing.h>
 
@@ -46,14 +47,15 @@ class IoUringZeroCopyBufferPool {
   };
 
   struct ExportHandle {
+    // Takes ownership of zcrxFd.
     explicit ExportHandle(
         int zcrxFd, std::shared_ptr<IoUringZeroCopyBufferPoolImpl> impl)
-        : zcrxFd_(zcrxFd), impl_(std::move(impl)) {}
+        : impl_(std::move(impl)), zcrxFd_(zcrxFd, true) {}
 
     ~ExportHandle() = default;
 
     ExportHandle(ExportHandle&&) = default;
-    ExportHandle& operator=(ExportHandle&&) = default;
+    ExportHandle& operator=(ExportHandle&&) noexcept = default;
     ExportHandle(const ExportHandle&) = delete;
     ExportHandle& operator=(const ExportHandle&) = delete;
 
@@ -63,8 +65,8 @@ class IoUringZeroCopyBufferPool {
    private:
     friend class IoUringZeroCopyBufferPool;
 
-    int zcrxFd_;
     std::shared_ptr<IoUringZeroCopyBufferPoolImpl> impl_;
+    File zcrxFd_;
   };
 
   using UniquePtr = std::unique_ptr<IoUringZeroCopyBufferPool>;

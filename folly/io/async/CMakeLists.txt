@@ -667,6 +667,7 @@ folly_add_library(
     folly_string
     folly_synchronization_distributed_mutex
   EXPORTED_DEPS
+    folly_file
     folly_io_async_liburing
     folly_io_iobuf
 )
