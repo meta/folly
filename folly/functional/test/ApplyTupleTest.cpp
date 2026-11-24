@@ -225,19 +225,11 @@ TEST(ForwardTuple, Basic) {
                decltype(folly::forward_tuple(std::move(tuple))),
                std::tuple<int&&, double&&>>::value));
   EXPECT_EQ(folly::forward_tuple(std::move(tuple)), tuple);
-#if defined(__GLIBCXX__) && (!defined(_GLIBCXX_RELEASE) || _GLIBCXX_RELEASE < 8)
-  constexpr bool before_lwg2485 = true;
-#else
-  constexpr bool before_lwg2485 = false;
-#endif
   EXPECT_TRUE(
       (std::is_same<
           // NOLINTNEXTLINE(performance-move-const-arg)
           decltype(folly::forward_tuple(std::move(std::as_const(tuple)))),
-          std::conditional_t<
-              before_lwg2485,
-              std::tuple<const int&, const double&>,
-              std::tuple<const int&&, const double&&>>>::value));
+          std::tuple<const int&&, const double&&>>::value));
   // NOLINTNEXTLINE(performance-move-const-arg)
   EXPECT_EQ(folly::forward_tuple(std::move(std::as_const(tuple))), tuple);
 

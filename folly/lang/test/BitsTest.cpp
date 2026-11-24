@@ -410,9 +410,7 @@ TYPED_TEST(BitsAllUintsTest, NLeastSignificantBits) {
   }();
   for (std::size_t i = 0; i < kBitSize; ++i) {
     std::uint64_t expected = (std::uint64_t{1} << i) - 1;
-#ifdef __cpp_lib_bitops
     EXPECT_EQ(static_cast<int>(i), std::countr_one(expected));
-#endif
     EXPECT_EQ(expected, cactual[i]);
     EXPECT_EQ(expected, ractual[i]);
   }
@@ -450,9 +448,7 @@ TYPED_TEST(BitsAllUintsTest, NMostSignificantBits) {
   }();
   for (std::size_t i = 0; i < kBitSize; ++i) {
     T expected = ~n_least_significant_bits<T>(kBitSize - i);
-#ifdef __cpp_lib_bitops
     EXPECT_EQ(static_cast<int>(i), std::countl_one(expected));
-#endif
     EXPECT_EQ(expected, cactual[i]);
     EXPECT_EQ(expected, ractual[i]);
   }
@@ -483,9 +479,7 @@ TYPED_TEST(BitsAllUintsTest, ClearNLeastSignificantBits) {
   }();
   for (std::size_t i = 0; i < kBitSize; ++i) {
     T expected = n_most_significant_bits<T>(kBitSize - i);
-#ifdef __cpp_lib_bitops
     EXPECT_EQ(static_cast<int>(i), std::countr_zero(expected));
-#endif
     EXPECT_EQ(expected, cactual[i]);
     EXPECT_EQ(expected, ractual[i]);
   }
@@ -517,9 +511,7 @@ TYPED_TEST(BitsAllUintsTest, SetNLeastSignificantBits) {
   }();
   for (std::size_t i = 0; i < kBitSize; ++i) {
     T expected = n_least_significant_bits<T>(i);
-#ifdef __cpp_lib_bitops
     EXPECT_EQ(static_cast<int>(i), std::countr_one(expected));
-#endif
     EXPECT_EQ(expected, cactual[i]);
     EXPECT_EQ(expected, ractual[i]);
   }
@@ -551,9 +543,7 @@ TYPED_TEST(BitsAllUintsTest, ClearNMostSignificantBits) {
   }();
   for (std::size_t i = 0; i < kBitSize; ++i) {
     T expected = n_least_significant_bits<T>(kBitSize - i);
-#ifdef __cpp_lib_bitops
     EXPECT_EQ(static_cast<int>(i), std::countl_zero(expected));
-#endif
     EXPECT_EQ(expected, cactual[i]);
     EXPECT_EQ(expected, ractual[i]);
   }
@@ -588,9 +578,7 @@ TYPED_TEST(BitsAllUintsTest, SetNMostSignificantBits) {
   }();
   for (std::size_t i = 0; i < kBitSize; ++i) {
     T expected = n_most_significant_bits<T>(i);
-#ifdef __cpp_lib_bitops
     EXPECT_EQ(static_cast<int>(i), std::countl_one(expected));
-#endif
     EXPECT_EQ(expected, cactual[i]);
     EXPECT_EQ(expected, ractual[i]);
   }

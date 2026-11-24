@@ -40,18 +40,9 @@ using namespace std::chrono_literals;
 XLOG_SET_CATEGORY_NAME("xlog_test.main_file")
 
 namespace {
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 9
-// XLOG_SET_CATEGORY_NAME() does not work in gcc < 9.0
-// TODO: remove this when we drop support for gcc 8.x
-constexpr const char* current_xlog_category = "folly.logging.test.XlogTest.cpp";
-constexpr const char* current_xlog_category_original =
-    "folly/logging/test/XlogTest.cpp";
-constexpr const char* current_xlog_parent = "folly.logging.test.XlogTest";
-#else
 constexpr const char* current_xlog_category = "xlog_test.main_file";
 constexpr const char* current_xlog_category_original = "xlog_test.main_file";
 constexpr const char* current_xlog_parent = "xlog_test.main_file";
-#endif
 
 class XlogTest : public testing::Test {
  public:
