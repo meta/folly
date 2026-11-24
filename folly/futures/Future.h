@@ -2169,17 +2169,6 @@ template <class T, class E>
   requires std::is_base_of_v<std::exception, decay_t<E>>
 SemiFuture<T> makeSemiFuture(E&& e);
 
-/** Make a SemiFuture from an exception type E that can be passed to
-  std::make_exception_ptr().
-  NOTE: This is a deprecated const-ref overload for users who explicitly specify
-  both template parameters. Please leave exception type deduction to the
-  compiler.
- */
-template <class T, class E>
-  requires std::is_base_of_v<std::exception, E>
-[[deprecated("do not specify exception type template parameter explicitly")]]
-SemiFuture<T> makeSemiFuture(const std::type_identity_t<E>& e);
-
 /** Make a Future out of a Try */
 template <class T>
 SemiFuture<T> makeSemiFuture(Try<T> t);
@@ -2266,17 +2255,6 @@ Future<T> makeFuture(exception_wrapper ew);
 template <class T, class E>
   requires std::is_base_of_v<std::exception, decay_t<E>>
 Future<T> makeFuture(E&& e);
-
-/** Make a Future from an exception type E that can be passed to
-  std::make_exception_ptr().
-  NOTE: This is a deprecated const-ref overload for users who explicitly specify
-  both template parameters. Please leave exception type deduction to the
-  compiler.
- */
-template <class T, class E>
-  requires std::is_base_of_v<std::exception, E>
-[[deprecated("do not specify exception type template parameter explicitly")]]
-Future<T> makeFuture(const std::type_identity_t<E>& e);
 
 /**
   Make a Future out of a Try
