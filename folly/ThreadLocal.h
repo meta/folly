@@ -200,11 +200,8 @@ class ThreadLocalPtr {
   /**
    * reset() that transfers ownership from a smart pointer
    */
-  template <
-      typename SourceT,
-      typename Deleter,
-      typename = typename std::enable_if<
-          std::is_convertible<SourceT*, T*>::value>::type>
+  template <typename SourceT, typename Deleter>
+    requires std::is_convertible_v<SourceT*, T*>
   void reset(std::unique_ptr<SourceT, Deleter> source) {
     auto deleter =
         [delegate = source.get_deleter()](T* ptr, TLPDestructionMode) {
@@ -217,10 +214,8 @@ class ThreadLocalPtr {
    * reset() that transfers ownership from a smart pointer with the default
    * deleter
    */
-  template <
-      typename SourceT,
-      typename = typename std::enable_if<
-          std::is_convertible<SourceT*, T*>::value>::type>
+  template <typename SourceT>
+    requires std::is_convertible_v<SourceT*, T*>
   void reset(std::unique_ptr<SourceT> source) {
     reset(source.release());
   }

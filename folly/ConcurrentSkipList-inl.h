@@ -55,11 +55,8 @@ class SkipListNode {
   SkipListNode(const SkipListNode&) = delete;
   SkipListNode& operator=(const SkipListNode&) = delete;
 
-  template <
-      typename NodeAlloc,
-      typename U,
-      typename =
-          typename std::enable_if<std::is_convertible<U, T>::value>::type>
+  template <typename NodeAlloc, typename U>
+    requires std::is_convertible_v<U, T>
   static SkipListNode* create(
       NodeAlloc& alloc, int height, U&& data, bool isHead = false) {
     DCHECK(height >= 1 && height < 64) << height;
@@ -237,11 +234,8 @@ template <typename NodeType, typename NodeAlloc, typename = void>
 class NodeRecycler;
 
 template <typename NodeType, typename NodeAlloc>
-class NodeRecycler<
-    NodeType,
-    NodeAlloc,
-    typename std::enable_if<
-        !NodeType::template DestroyIsNoOp<NodeAlloc>::value>::type> {
+  requires(!NodeType::template DestroyIsNoOp<NodeAlloc>::value)
+class NodeRecycler<NodeType, NodeAlloc, void> {
  public:
   explicit NodeRecycler(const NodeAlloc& alloc)
       : refs_(0), dirty_(false), alloc_(alloc) {
@@ -322,11 +316,8 @@ class NodeRecycler<
 // In case of arena allocator, no recycling is necessary, and it's possible
 // to save on ConcurrentSkipList size.
 template <typename NodeType, typename NodeAlloc>
-class NodeRecycler<
-    NodeType,
-    NodeAlloc,
-    typename std::enable_if<
-        NodeType::template DestroyIsNoOp<NodeAlloc>::value>::type> {
+  requires NodeType::template
+DestroyIsNoOp<NodeAlloc>::value class NodeRecycler<NodeType, NodeAlloc, void> {
  public:
   explicit NodeRecycler(const NodeAlloc& alloc) : alloc_(alloc) {}
 

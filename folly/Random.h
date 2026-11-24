@@ -74,6 +74,9 @@ double random_double_std_compatible(double min, double max, RNG& rng) {
   }
 }
 
+template <class RNG>
+concept RandomValidRNG = std::is_unsigned_v<invoke_result_t<RNG&>>;
+
 } // namespace detail
 
 /**
@@ -95,10 +98,6 @@ class ThreadLocalPRNG {
 
 class Random {
  private:
-  template <class RNG>
-  using ValidRNG = typename std::
-      enable_if<std::is_unsigned<invoke_result_t<RNG&>>::value, RNG>::type;
-
   template <class T>
   class SecureRNG {
    public:
@@ -141,10 +140,8 @@ class Random {
    * Shortcut to get a secure random value of integral type.
    */
   template <class T>
-  static typename std::enable_if<
-      std::is_integral<T>::value && !std::is_same<T, bool>::value,
-      T>::type
-  secureRandom() {
+    requires(std::is_integral_v<T> && !std::is_same_v<T, bool>)
+  static T secureRandom() {
     T val;
     secureRandom(&val, sizeof(val));
     return val;
@@ -239,7 +236,8 @@ class Random {
    * to create a RNG with a good seed in production, and seed it yourself
    * in test.
    */
-  template <class RNG = DefaultGenerator, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = DefaultGenerator>
+    requires detail::RandomValidRNG<RNG>
   static void seed(RNG& rng);
 
   /**
@@ -250,7 +248,8 @@ class Random {
    * to create a RNG with a good seed in production, and seed it yourself
    * in test.
    */
-  template <class RNG = DefaultGenerator, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = DefaultGenerator>
+    requires detail::RandomValidRNG<RNG>
   static RNG create();
 
   /**
@@ -270,7 +269,8 @@ class Random {
   /**
    * Returns a random uint32_t given a specific RNG
    */
-  template <class RNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG>
+    requires detail::RandomValidRNG<RNG>
   static uint32_t rand32(RNG&& rng) {
     if constexpr (UniformRNG<std::decay_t<RNG>, uint32_t>) {
       return static_cast<uint32_t>(rng());
@@ -291,7 +291,8 @@ class Random {
    * Returns a random uint32_t in [0, max) given a specific RNG.
    * If max == 0, returns 0.
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static uint32_t rand32(uint32_t max, RNG&& rng) {
     return rand32(0, max, rng);
   }
@@ -307,7 +308,8 @@ class Random {
    * Returns a random uint32_t in [min, max) given a specific RNG.
    * If min == max, returns min.
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static uint32_t rand32(uint32_t min, uint32_t max, RNG&& rng) {
     if (min == max) {
       return min;
@@ -323,7 +325,8 @@ class Random {
   /**
    * Returns a random uint64_t
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static uint64_t rand64(RNG&& rng) {
     if constexpr (UniformRNG<std::decay_t<RNG>, uint64_t>) {
       return rng();
@@ -346,7 +349,8 @@ class Random {
   /**
    * Returns a random uint64_t in [0, max). If max == 0, returns 0.
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static uint64_t rand64(uint64_t max, RNG&& rng) {
     return rand64(0, max, rng);
   }
@@ -361,7 +365,8 @@ class Random {
   /**
    * Returns a random uint64_t in [min, max). If min == max, returns min.
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static uint64_t rand64(uint64_t min, uint64_t max, RNG&& rng) {
     if (min == max) {
       return min;
@@ -382,7 +387,8 @@ class Random {
   /**
    * Returns true 1/n of the time. If n == 0, always returns false
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static bool oneIn(uint32_t n, RNG&& rng) {
     if (n < 2) {
       return n;
@@ -390,7 +396,8 @@ class Random {
     return rand32(0, n, std::forward<RNG>(rng)) == 0;
   }
 
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static bool oneIn64(uint64_t n, RNG&& rng) {
     if (n < 2) {
       return n;
@@ -406,7 +413,8 @@ class Random {
   /**
    * Returns true with the probability of p, false otherwise
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static bool randBool(double p, RNG&& rng) {
     return randDouble01(std::forward<RNG>(rng)) < p;
   }
@@ -419,7 +427,8 @@ class Random {
   /**
    * Returns a double in [0, 1)
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static double randDouble01(RNG&& rng) {
     auto& engine = rng;
     return detail::uniform_real_distribution_canonical<double>(engine);
@@ -437,7 +446,8 @@ class Random {
    * Returns a double in [min, max), if min == max, returns min.
    * Reversed bounds sample (max, min]. Bounds must be finite.
    */
-  template <class RNG = ThreadLocalPRNG, class /* EnableIf */ = ValidRNG<RNG>>
+  template <class RNG = ThreadLocalPRNG>
+    requires detail::RandomValidRNG<RNG>
   static double randDouble(double min, double max, RNG&& rng) {
     if (std::fabs(max - min) < std::numeric_limits<double>::epsilon()) {
       return min;

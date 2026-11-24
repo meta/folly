@@ -606,10 +606,8 @@ class ConcurrentSkipList<T, Comp, NodeAlloc, MAX_HEIGHT>::Accessor {
   const_iterator cbegin() const { return begin(); }
   const_iterator cend() const { return end(); }
 
-  template <
-      typename U,
-      typename =
-          typename std::enable_if<std::is_convertible<U, T>::value>::type>
+  template <typename U>
+    requires std::is_convertible_v<U, T>
   std::pair<iterator, bool> insert(U&& data) {
     auto ret = sl_->addOrGetData(std::forward<U>(data));
     return std::make_pair(iterator(ret.first), ret.second);
@@ -682,10 +680,8 @@ class detail::csl_iterator
   explicit csl_iterator(NodeT* node = nullptr) : node_(node) {}
 
   template <typename OtherVal, typename OtherNode>
-  csl_iterator(
-      const csl_iterator<OtherVal, OtherNode>& other,
-      typename std::enable_if<
-          std::is_convertible<OtherVal*, ValT*>::value>::type* = nullptr)
+    requires std::is_convertible_v<OtherVal*, ValT*>
+  csl_iterator(const csl_iterator<OtherVal, OtherNode>& other)
       : node_(other.node_) {}
 
   size_t nodeSize() const {

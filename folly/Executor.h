@@ -195,10 +195,8 @@ class ExecutorKeepAlive : private detail::ExecutorKeepAliveBase {
 
   ExecutorKeepAlive(const ExecutorKeepAlive& other) noexcept;
 
-  template <
-      typename OtherExecutor,
-      typename = typename std::enable_if<
-          std::is_convertible<OtherExecutor*, ExecutorT*>::value>::type>
+  template <typename OtherExecutor>
+    requires std::is_convertible_v<OtherExecutor*, ExecutorT*>
   /* implicit */ ExecutorKeepAlive(
       ExecutorKeepAlive<OtherExecutor>&& other) noexcept
       : ExecutorKeepAlive(other.get(), other.storage_ & kFlagMask) {
@@ -206,10 +204,8 @@ class ExecutorKeepAlive : private detail::ExecutorKeepAliveBase {
     detail::traceKeepAliveObjMove(&other, this);
   }
 
-  template <
-      typename OtherExecutor,
-      typename = typename std::enable_if<
-          std::is_convertible<OtherExecutor*, ExecutorT*>::value>::type>
+  template <typename OtherExecutor>
+    requires std::is_convertible_v<OtherExecutor*, ExecutorT*>
   /* implicit */ ExecutorKeepAlive(
       const ExecutorKeepAlive<OtherExecutor>& other) noexcept;
 
@@ -228,19 +224,15 @@ class ExecutorKeepAlive : private detail::ExecutorKeepAliveBase {
     return operator=(folly::copy(other));
   }
 
-  template <
-      typename OtherExecutor,
-      typename = typename std::enable_if<
-          std::is_convertible<OtherExecutor*, ExecutorT*>::value>::type>
+  template <typename OtherExecutor>
+    requires std::is_convertible_v<OtherExecutor*, ExecutorT*>
   ExecutorKeepAlive& operator=(
       ExecutorKeepAlive<OtherExecutor>&& other) noexcept {
     return *this = ExecutorKeepAlive(std::move(other));
   }
 
-  template <
-      typename OtherExecutor,
-      typename = typename std::enable_if<
-          std::is_convertible<OtherExecutor*, ExecutorT*>::value>::type>
+  template <typename OtherExecutor>
+    requires std::is_convertible_v<OtherExecutor*, ExecutorT*>
   ExecutorKeepAlive& operator=(const ExecutorKeepAlive<OtherExecutor>& other) {
     return *this = ExecutorKeepAlive(other);
   }
@@ -407,7 +399,8 @@ ExecutorKeepAlive<ExecutorT>::ExecutorKeepAlive(
     : ExecutorKeepAlive(Executor::getKeepAliveToken(other.get())) {}
 
 template <typename ExecutorT>
-template <typename OtherExecutor, typename>
+template <typename OtherExecutor>
+  requires std::is_convertible_v<OtherExecutor*, ExecutorT*>
 ExecutorKeepAlive<ExecutorT>::ExecutorKeepAlive(
     const ExecutorKeepAlive<OtherExecutor>& other) noexcept
     : ExecutorKeepAlive(Executor::getKeepAliveToken(other.get())) {}

@@ -252,8 +252,8 @@ template <typename Clock>
 class BenchmarkingState : public BenchmarkingStateBase {
  public:
   template <typename Lambda>
-  typename std::enable_if<std::is_invocable_v<Lambda, unsigned>>::type
-  addBenchmark(std::string file, std::string name, Lambda&& lambda) {
+    requires std::is_invocable_v<Lambda, unsigned>
+  void addBenchmark(std::string file, std::string name, Lambda&& lambda) {
     auto execute = [=](unsigned int times) {
       BenchmarkSuspender<Clock>::timeSpent = {};
       BenchmarkSuspender<Clock>::suspensionCount = 0;
@@ -276,8 +276,8 @@ class BenchmarkingState : public BenchmarkingStateBase {
   }
 
   template <typename Lambda>
-  typename std::enable_if<std::is_invocable_v<Lambda>>::type addBenchmark(
-      std::string file, std::string name, Lambda&& lambda) {
+    requires std::is_invocable_v<Lambda>
+  void addBenchmark(std::string file, std::string name, Lambda&& lambda) {
     addBenchmark(std::move(file), std::move(name), [=](unsigned int times) {
       unsigned int niter = 0;
       while (times-- > 0) {
@@ -288,9 +288,8 @@ class BenchmarkingState : public BenchmarkingStateBase {
   }
 
   template <typename Lambda>
-  typename std::enable_if<
-      std::is_invocable_v<Lambda, UserCounters&, unsigned>>::type
-  addBenchmark(std::string file, std::string name, Lambda&& lambda) {
+    requires std::is_invocable_v<Lambda, UserCounters&, unsigned>
+  void addBenchmark(std::string file, std::string name, Lambda&& lambda) {
     auto execute = [=](unsigned int times) {
       BenchmarkSuspender<Clock>::timeSpent = {};
       BenchmarkSuspender<Clock>::suspensionCount = 0;
@@ -317,8 +316,8 @@ class BenchmarkingState : public BenchmarkingStateBase {
   }
 
   template <typename Lambda>
-  typename std::enable_if<std::is_invocable_v<Lambda, UserCounters&>>::type
-  addBenchmark(std::string file, std::string name, Lambda&& lambda) {
+    requires std::is_invocable_v<Lambda, UserCounters&>
+  void addBenchmark(std::string file, std::string name, Lambda&& lambda) {
     addBenchmark(
         std::move(file),
         std::move(name),

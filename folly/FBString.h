@@ -1027,10 +1027,6 @@ class basic_fbstring {
       std::is_convertible_v<StringViewLike const&, string_view_type> &&
       !std::is_convertible_v<StringViewLike const&, const_pointer>;
 
-  template <typename StringViewLike, typename Dummy>
-  using if_is_string_view_like_t =
-      std::enable_if_t<is_string_view_like_v<StringViewLike>, Dummy>;
-
   static void procrustes(size_type& n, size_type nmax) {
     if (n > nmax) {
       n = nmax;
@@ -1119,15 +1115,13 @@ class basic_fbstring {
     assign(il.begin(), il.end());
   }
 
-  template <
-      typename StringViewLike,
-      if_is_string_view_like_t<StringViewLike, int> = 0>
+  template <typename StringViewLike>
+    requires is_string_view_like_v<StringViewLike>
   explicit basic_fbstring(const StringViewLike& view, const A& a = A())
       : basic_fbstring(string_view_type(view), a, string_view_ctor{}) {}
 
-  template <
-      typename StringViewLike,
-      if_is_string_view_like_t<StringViewLike, int> = 0>
+  template <typename StringViewLike>
+    requires is_string_view_like_v<StringViewLike>
   basic_fbstring(
       const StringViewLike& view, size_type pos, size_type n, const A& a = A())
       : basic_fbstring(
@@ -1166,15 +1160,13 @@ class basic_fbstring {
   // traits_type::char_type, which won't compare as equal when determining
   // which overload the implementation is referring to.
   template <typename TP>
-  typename std::enable_if<
-      std::is_convertible<
-          TP,
-          typename basic_fbstring<E, T, A, Storage>::value_type>::value &&
-          !std::is_same<
-              typename std::decay<TP>::type,
-              typename basic_fbstring<E, T, A, Storage>::value_type>::value,
-      basic_fbstring<E, T, A, Storage>&>::type
-  operator=(TP c) = delete;
+    requires(std::is_convertible_v<
+                 TP,
+                 typename basic_fbstring<E, T, A, Storage>::value_type> &&
+             !std::is_same_v<
+                 std::decay_t<TP>,
+                 typename basic_fbstring<E, T, A, Storage>::value_type>)
+  basic_fbstring<E, T, A, Storage>& operator=(TP c) = delete;
 
   basic_fbstring& operator=(std::initializer_list<value_type> il) {
     return assign(il.begin(), il.end());
@@ -1313,9 +1305,8 @@ class basic_fbstring {
     return *this;
   }
 
-  template <
-      typename StringViewLike,
-      if_is_string_view_like_t<StringViewLike, int> = 0>
+  template <typename StringViewLike>
+    requires is_string_view_like_v<StringViewLike>
   basic_fbstring& operator+=(const StringViewLike& like) {
     append(like);
     return *this;
@@ -1344,9 +1335,8 @@ class basic_fbstring {
     return append(il.begin(), il.end());
   }
 
-  template <
-      typename StringViewLike,
-      if_is_string_view_like_t<StringViewLike, int> = 0>
+  template <typename StringViewLike>
+    requires is_string_view_like_v<StringViewLike>
   basic_fbstring& append(const StringViewLike& like) {
     string_view_type view = like;
     return append(view.begin(), view.end());
@@ -1535,18 +1525,7 @@ class basic_fbstring {
 
  private:
   template <class FwdIterator>
-  bool replaceAliased(
-      iterator /* i1 */,
-      iterator /* i2 */,
-      FwdIterator /* s1 */,
-      FwdIterator /* s2 */,
-      std::false_type) {
-    return false;
-  }
-
-  template <class FwdIterator>
-  bool replaceAliased(
-      iterator i1, iterator i2, FwdIterator s1, FwdIterator s2, std::true_type);
+  bool replaceAliased(iterator i1, iterator i2, FwdIterator s1, FwdIterator s2);
 
   template <class InputIter>
   void replaceRange(iterator i1, iterator i2, InputIter b, InputIter e);
@@ -2127,7 +2106,7 @@ inline basic_fbstring<E, T, A, S>& basic_fbstring<E, T, A, S>::replaceFill(
 template <typename E, class T, class A, class S>
 template <class FwdIterator>
 inline bool basic_fbstring<E, T, A, S>::replaceAliased(
-    iterator i1, iterator i2, FwdIterator s1, FwdIterator s2, std::true_type) {
+    iterator i1, iterator i2, FwdIterator s1, FwdIterator s2) {
   std::less_equal<const value_type*> le{};
   const bool aliased = le(&*begin(), &*s1) && le(&*s1, &*end());
   if (!aliased) {
@@ -2149,11 +2128,12 @@ inline void basic_fbstring<E, T, A, S>::replaceRange(
     Invariant checker(*this);
 
     // Handle aliased replace
-    using Sel = std::bool_constant<
-        std::is_same<InputIter, iterator>::value ||
-        std::is_same<InputIter, const_iterator>::value>;
-    if (replaceAliased(i1, i2, b, e, Sel())) {
-      return;
+    if constexpr (
+        std::is_same_v<InputIter, iterator> ||
+        std::is_same_v<InputIter, const_iterator>) {
+      if (replaceAliased(i1, i2, b, e)) {
+        return;
+      }
     }
 
     auto const n1 = i2 - i1;

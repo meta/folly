@@ -581,13 +581,11 @@ struct AtomicHashMap<
   explicit ahm_iterator() : ahm_(nullptr) {}
 
   // Conversion ctor for interoperability between const_iterator and
-  // iterator.  The enable_if<> magic keeps us well-behaved for
+  // iterator.  The constraint keeps us well-behaved for
   // is_convertible<> (v. the iterator_facade documentation).
   template <class OtherContT, class OtherVal, class OtherSubIt>
-  ahm_iterator(
-      const ahm_iterator<OtherContT, OtherVal, OtherSubIt>& o,
-      typename std::enable_if<
-          std::is_convertible<OtherSubIt, SubIt>::value>::type* = nullptr)
+    requires std::is_convertible_v<OtherSubIt, SubIt>
+  ahm_iterator(const ahm_iterator<OtherContT, OtherVal, OtherSubIt>& o)
       : ahm_(o.ahm_), subMap_(o.subMap_), subIt_(o.subIt_) {}
 
   /*

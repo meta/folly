@@ -34,13 +34,15 @@ struct SeedSeqSecureRandom {
 
 } // namespace detail
 
-template <class RNG, class /* EnableIf */>
+template <class RNG>
+  requires detail::RandomValidRNG<RNG>
 void Random::seed(RNG& rng) {
   detail::SeedSeqSecureRandom seq;
   rng.seed(seq);
 }
 
-template <class RNG, class /* EnableIf */>
+template <class RNG>
+  requires detail::RandomValidRNG<RNG>
 auto Random::create() -> RNG {
   detail::SeedSeqSecureRandom seq;
   return RNG(seq);

@@ -498,13 +498,11 @@ struct AtomicHashArray<
   explicit aha_iterator() : aha_(nullptr) {}
 
   // Conversion ctor for interoperability between const_iterator and
-  // iterator.  The enable_if<> magic keeps us well-behaved for
+  // iterator.  The constraint keeps us well-behaved for
   // is_convertible<> (v. the iterator_facade documentation).
   template <class OtherContT, class OtherVal>
-  aha_iterator(
-      const aha_iterator<OtherContT, OtherVal>& o,
-      typename std::enable_if<
-          std::is_convertible<OtherVal*, IterVal*>::value>::type* = nullptr)
+    requires std::is_convertible_v<OtherVal*, IterVal*>
+  aha_iterator(const aha_iterator<OtherContT, OtherVal>& o)
       : aha_(o.aha_), offset_(o.offset_) {}
 
   explicit aha_iterator(ContT* array, size_t offset)
