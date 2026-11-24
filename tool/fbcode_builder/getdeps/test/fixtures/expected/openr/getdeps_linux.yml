@@ -71,6 +71,9 @@ jobs:
     - name: Fetch fast_float
       if: ${{ steps.paths.outputs.fast_float_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests fast_float
+    - name: Fetch libatomic
+      if: ${{ steps.paths.outputs.libatomic_SOURCE }}
+      run: python3 build/fbcode_builder/getdeps.py fetch --no-tests libatomic
     - name: Fetch libdwarf
       if: ${{ steps.paths.outputs.libdwarf_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py fetch --no-tests libdwarf

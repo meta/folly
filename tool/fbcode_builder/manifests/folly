@@ -39,10 +39,8 @@ libaio
 [dependencies.os=windows]
 zlib
 
-[rpms.os=linux]
-libatomic
-
 [dependencies.os=linux]
+libatomic
 # The allocation-free folly::demangle() that the symbolizer and the signal
 # handler use has no fallback without libiberty.
 libiberty

@@ -1,0 +1,11 @@
+[manifest]
+name = libatomic
+
+[rpms]
+libatomic
+
+[debs]
+libatomic1
+
+[build]
+builder = nop

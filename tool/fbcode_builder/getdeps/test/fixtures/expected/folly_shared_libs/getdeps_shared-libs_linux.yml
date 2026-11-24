@@ -56,6 +56,9 @@ jobs:
       name: Query paths
       run: python3 tool/fbcode_builder/getdeps.py --allow-system-packages query-paths --recursive --src-dir=. folly  >> "$GITHUB_OUTPUT"
 
+    - name: Fetch libatomic
+      if: ${{ steps.paths.outputs.libatomic_SOURCE }}
+      run: python3 tool/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests libatomic
     - name: Fetch openssl
       if: ${{ steps.paths.outputs.openssl_SOURCE }}
       run: python3 tool/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests openssl

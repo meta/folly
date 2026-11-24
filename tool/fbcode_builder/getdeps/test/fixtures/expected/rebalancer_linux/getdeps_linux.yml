@@ -92,6 +92,9 @@ jobs:
     - name: Fetch glog
       if: ${{ steps.paths.outputs.glog_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests glog
+    - name: Fetch libatomic
+      if: ${{ steps.paths.outputs.libatomic_SOURCE }}
+      run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests libatomic
     - name: Fetch libdwarf
       if: ${{ steps.paths.outputs.libdwarf_SOURCE }}
       run: python3 build/fbcode_builder/getdeps.py --allow-system-packages fetch --no-tests libdwarf
