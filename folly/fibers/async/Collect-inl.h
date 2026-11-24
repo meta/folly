@@ -68,25 +68,17 @@ void foreach(std::index_sequence<I...>, Func&& func, Ts&&... ts) {
 }
 
 template <typename Out, typename T>
-typename std::enable_if<
-    !std::is_same<std::invoke_result_t<T>, Async<void>>::value,
-    Async<void>>::type
-executeAndMaybeAssign(Out& outref, T&& task) {
-  tryEmplaceWith(outref, [task = static_cast<T&&>(task)] {
-    return init_await(task());
-  });
-  return {};
-}
-
-template <typename Out, typename T>
-typename std::enable_if<
-    std::is_same<std::invoke_result_t<T>, Async<void>>::value,
-    Async<void>>::type
-executeAndMaybeAssign(Out& outref, T&& task) {
-  tryEmplaceWith(outref, [task = static_cast<T&&>(task)] {
-    init_await(task());
-    return unit;
-  });
+Async<void> executeAndMaybeAssign(Out& outref, T&& task) {
+  if constexpr (std::is_same_v<std::invoke_result_t<T>, Async<void>>) {
+    tryEmplaceWith(outref, [task = static_cast<T&&>(task)] {
+      init_await(task());
+      return unit;
+    });
+  } else {
+    tryEmplaceWith(outref, [task = static_cast<T&&>(task)] {
+      return init_await(task());
+    });
+  }
   return {};
 }
 
@@ -140,11 +132,9 @@ Async<TResult> collectAllImpl(T&& firstTask, Ts&&... tasks) {
 } // namespace detail
 
 template <class InputIterator, typename FuncType, typename ResultType>
-Async<std::vector<
-    typename std::enable_if<
-        !std::is_same<ResultType, Async<void>>::value,
-        async_inner_type_t<ResultType>>::
-        type>> inline collectAll(InputIterator first, InputIterator last) {
+  requires(!std::is_same_v<ResultType, Async<void>>)
+inline Async<std::vector<async_inner_type_t<ResultType>>> collectAll(
+    InputIterator first, InputIterator last) {
   return Async(
       folly::fibers::collectAll(
           detail::await_iterator<InputIterator>(first),
@@ -152,9 +142,8 @@ Async<std::vector<
 }
 
 template <class InputIterator, typename FuncType, typename ResultType>
-typename std::
-    enable_if<std::is_same<ResultType, Async<void>>::value, Async<void>>::
-        type inline collectAll(InputIterator first, InputIterator last) {
+  requires std::is_same_v<ResultType, Async<void>>
+inline Async<void> collectAll(InputIterator first, InputIterator last) {
   folly::fibers::collectAll(
       detail::await_iterator<InputIterator>(first),
       detail::await_iterator<InputIterator>(last));

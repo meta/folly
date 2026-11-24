@@ -37,37 +37,11 @@ namespace fibers {
  * @param last
  * @param n Number of tasks to wait for
  *
- * @return vector of pairs (task index, return value of task)
+ * @return vector of pairs (task index, return value of task), or, for tasks
+ * returning void, vector of completed task indices
  */
 template <class InputIterator>
-typename std::enable_if<
-    !std::is_same<
-        std::invoke_result_t<
-            typename std::iterator_traits<InputIterator>::value_type>,
-        void>::value,
-    std::vector<std::pair<
-        size_t,
-        std::invoke_result_t<
-            typename std::iterator_traits<InputIterator>::value_type>>>>::
-    type inline collectN(InputIterator first, InputIterator last, size_t n);
-
-/**
- * collectN specialization for functions returning void
- *
- * @param first Range of tasks to be scheduled
- * @param last
- * @param n Number of tasks to wait for
- *
- * @return vector of completed task indices
- */
-template <class InputIterator>
-typename std::enable_if<
-    std::is_same<
-        std::invoke_result_t<
-            typename std::iterator_traits<InputIterator>::value_type>,
-        void>::value,
-    std::vector<size_t>>::
-    type inline collectN(InputIterator first, InputIterator last, size_t n);
+inline auto collectN(InputIterator first, InputIterator last, size_t n);
 
 /**
  * Schedules several tasks and blocks until all of these tasks are completed.
@@ -78,32 +52,10 @@ typename std::enable_if<
  * @param first Range of tasks to be scheduled
  * @param last
  *
- * @return vector of values returned by tasks
+ * @return vector of values returned by tasks, or void for tasks returning void
  */
 template <class InputIterator>
-typename std::vector<
-    typename std::enable_if<
-        !std::is_same<
-            std::invoke_result_t<
-                typename std::iterator_traits<InputIterator>::value_type>,
-            void>::value,
-        std::invoke_result_t<
-            typename std::iterator_traits<InputIterator>::value_type>>::
-        type> inline collectAll(InputIterator first, InputIterator last);
-
-/**
- * collectAll specialization for functions returning void
- *
- * @param first Range of tasks to be scheduled
- * @param last
- */
-template <class InputIterator>
-typename std::enable_if<
-    std::is_same<
-        std::invoke_result_t<
-            typename std::iterator_traits<InputIterator>::value_type>,
-        void>::value,
-    void>::type inline collectAll(InputIterator first, InputIterator last);
+inline auto collectAll(InputIterator first, InputIterator last);
 
 /**
  * Schedules several tasks and blocks until one of them is completed.
@@ -113,35 +65,11 @@ typename std::enable_if<
  * @param first Range of tasks to be scheduled
  * @param last
  *
- * @return pair of index of the first completed task and its return value
+ * @return pair of index of the first completed task and its return value, or,
+ * for tasks returning void, index of the first completed task
  */
 template <class InputIterator>
-typename std::enable_if<
-    !std::is_same<
-        std::invoke_result_t<
-            typename std::iterator_traits<InputIterator>::value_type>,
-        void>::value,
-    typename std::pair<
-        size_t,
-        std::invoke_result_t<
-            typename std::iterator_traits<InputIterator>::value_type>>>::
-    type inline collectAny(InputIterator first, InputIterator last);
-
-/**
- * WhenAny specialization for functions returning void.
- *
- * @param first Range of tasks to be scheduled
- * @param last
- *
- * @return index of the first completed task
- */
-template <class InputIterator>
-typename std::enable_if<
-    std::is_same<
-        std::invoke_result_t<
-            typename std::iterator_traits<InputIterator>::value_type>,
-        void>::value,
-    size_t>::type inline collectAny(InputIterator first, InputIterator last);
+inline auto collectAny(InputIterator first, InputIterator last);
 } // namespace fibers
 } // namespace folly
 

@@ -61,14 +61,16 @@ struct FirstArgOf;
 
 /** Specialization for non-function-object callables */
 template <typename F>
-struct FirstArgOf<F, typename std::enable_if<!std::is_class<F>::value>::type> {
+  requires(!std::is_class_v<F>)
+struct FirstArgOf<F> {
   using type = typename detail::ExtractFirstArg<
       typename std::remove_pointer<F>::type>::type;
 };
 
 /** Specialization for function objects */
 template <typename F>
-struct FirstArgOf<F, typename std::enable_if<std::is_class<F>::value>::type> {
+  requires std::is_class_v<F>
+struct FirstArgOf<F> {
   using type = typename FirstArgOf<decltype(&F::operator())>::type;
 };
 

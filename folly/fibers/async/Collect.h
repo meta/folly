@@ -47,10 +47,9 @@ template <
     typename FuncType =
         typename std::iterator_traits<InputIterator>::value_type,
     typename ResultType = std::invoke_result_t<FuncType>>
-Async<std::vector<typename std::enable_if<
-    !std::is_same<ResultType, Async<void>>::value,
-    async_inner_type_t<ResultType>>::type>>
-collectAll(InputIterator first, InputIterator last);
+  requires(!std::is_same_v<ResultType, Async<void>>)
+Async<std::vector<async_inner_type_t<ResultType>>> collectAll(
+    InputIterator first, InputIterator last);
 
 /**
  * collectAll specialization for functions returning void
@@ -60,9 +59,8 @@ template <
     typename FuncType =
         typename std::iterator_traits<InputIterator>::value_type,
     typename ResultType = std::invoke_result_t<FuncType>>
-typename std::
-    enable_if<std::is_same<ResultType, Async<void>>::value, Async<void>>::
-        type inline collectAll(InputIterator first, InputIterator last);
+  requires std::is_same_v<ResultType, Async<void>>
+inline Async<void> collectAll(InputIterator first, InputIterator last);
 
 /**
  * collectAll version that takes a container instead of iterators for

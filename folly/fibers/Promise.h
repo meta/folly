@@ -96,18 +96,6 @@ class Promise {
   BatonT* baton_;
 
   void throwIfFulfilled() const;
-
-  template <class F>
-  typename std::enable_if<
-      std::is_convertible<std::invoke_result_t<F>, T>::value &&
-      !std::is_same<T, void>::value>::type
-  fulfilHelper(F&& func);
-
-  template <class F>
-  typename std::enable_if<
-      std::is_same<std::invoke_result_t<F>, void>::value &&
-      std::is_same<T, void>::value>::type
-  fulfilHelper(F&& func);
 };
 } // namespace fibers
 } // namespace folly
