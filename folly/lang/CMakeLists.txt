@@ -308,8 +308,6 @@ folly_add_library(
 
 folly_add_library(
   NAME uncaught_exceptions
-  SRCS UncaughtExceptions.cpp
-  HEADERS UncaughtExceptions.h
   EXPORTED_DEPS folly_lang_exception
 )
 

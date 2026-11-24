@@ -1070,7 +1070,6 @@ folly_add_library(
   HEADERS ScopeGuard.h
   EXPORTED_DEPS
     folly_lang_exception
-    folly_lang_uncaught_exceptions
     folly_portability
     folly_preprocessor
     folly_utility

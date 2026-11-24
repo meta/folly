@@ -162,7 +162,6 @@ fb_dirsync_cpp_library(
         ":preprocessor",
         ":utility",
         "//folly/lang:exception",
-        "//folly/lang:uncaught_exceptions",
     ],
 )
 

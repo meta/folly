@@ -414,8 +414,6 @@ fb_dirsync_cpp_library(
 
 fb_dirsync_cpp_library(
     name = "uncaught_exceptions",
-    srcs = ["UncaughtExceptions.cpp"],
-    headers = ["UncaughtExceptions.h"],
     apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [

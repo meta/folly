@@ -85,7 +85,6 @@
 #include <folly/Preprocessor.h>
 #include <folly/Utility.h>
 #include <folly/lang/Exception.h>
-#include <folly/lang/UncaughtExceptions.h>
 
 namespace folly {
 
