@@ -85,12 +85,10 @@ inline std::system_error makeSystemErrorExplicit(
 // through fbstring. A single string-like argument is handled by the overloads
 // above, so it is excluded here to keep those fast paths (an unconstrained
 // template would otherwise be a better match than their conversions).
-template <
-    class... Args,
-    std::enable_if_t<
-        !(sizeof...(Args) == 1 &&
-          (std::is_convertible_v<Args, cstring_view> && ...)),
-        int> = 0>
+template <class... Args>
+  requires(
+      !(sizeof...(Args) == 1 &&
+        (std::is_convertible_v<Args, cstring_view> && ...)))
 std::system_error makeSystemErrorExplicit(int err, Args&&... args) {
   return std::system_error(
       err,

@@ -451,10 +451,9 @@ class Optional : private detail::OptionalCopyAssignBase<Value> {
   }
 
   template <class U, class... Args>
-  typename std::enable_if<
-      std::is_constructible<Value, std::initializer_list<U>&, Args&&...>::value,
-      Value&>::type
-  emplace(std::initializer_list<U> ilist, Args&&... args) {
+    requires(
+        std::is_constructible_v<Value, std::initializer_list<U>&, Args && ...>)
+  Value& emplace(std::initializer_list<U> ilist, Args&&... args) {
     reset();
     this->construct(ilist, std::forward<Args>(args)...);
     return value();

@@ -96,13 +96,11 @@ class TryBase {
 
   /// Implicit conversion from Try<void> to Try<Unit>
   template <class T2 = T>
-  /* implicit */ TryBase(
-      typename std::enable_if<std::is_same<Unit, T2>::value, Try<void> const&>::
-          type t) noexcept;
+    requires std::is_same_v<Unit, T2>
+  /* implicit */ TryBase(Try<void> const& t) noexcept;
   template <class T2 = T>
-  /* implicit */ TryBase(
-      typename std::enable_if<std::is_same<Unit, T2>::value, Try<void>&&>::type
-          t) noexcept;
+    requires std::is_same_v<Unit, T2>
+  /* implicit */ TryBase(Try<void>&& t) noexcept;
 
   /*
    * Construct a Try with an exception_wrapper

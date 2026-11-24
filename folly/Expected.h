@@ -641,11 +641,12 @@ struct ExpectedHelper {
                            (std::declval<No>()(std::declval<This>().error()))),
                        std::declval<AndFns>()...)
                        .value()),
-      typename std::enable_if<!std::is_same<
-          std::remove_reference<RetValue>,
-          std::remove_reference<folly::Unit&&>>::value>::type* = nullptr,
       class Err = decltype(std::declval<No>()(std::declval<This&>().error()))>
-    requires(!std::is_void_v<Err>)
+    requires(
+        !std::is_same_v<
+            std::remove_reference<RetValue>,
+            std::remove_reference<folly::Unit &&>> &&
+        !std::is_void_v<Err>)
   static auto orElse_(This&& ex, No&& no, AndFns&&... fns) -> Expected<V, E> {
     // Note - this basically decays into then_ once the first type (No) is
     // called for the error.
@@ -679,11 +680,12 @@ struct ExpectedHelper {
                            (std::declval<No>()(std::declval<This>().error()))),
                        std::declval<AndFns>()...)
                        .value()),
-      typename std::enable_if<std::is_same<
-          std::remove_reference<RetValue>,
-          std::remove_reference<folly::Unit&&>>::value>::type* = nullptr,
       class Err = decltype(std::declval<No>()(std::declval<This&>().error()))>
-    requires(!std::is_void_v<Err>)
+    requires(
+        std::is_same_v<
+            std::remove_reference<RetValue>,
+            std::remove_reference<folly::Unit &&>> &&
+        !std::is_void_v<Err>)
   static auto orElse_(This&& ex, No&& no, AndFns&&... fns)
       -> Expected<folly::Unit, E> {
     // Note - this basically decays into then_ once the first type (No) is

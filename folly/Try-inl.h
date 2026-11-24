@@ -122,9 +122,8 @@ void TryBase<T>::destroy() noexcept {
 
 template <class T>
 template <class T2>
-TryBase<T>::TryBase(
-    typename std::enable_if<std::is_same<Unit, T2>::value, Try<void> const&>::
-        type t) noexcept
+  requires std::is_same_v<Unit, T2>
+TryBase<T>::TryBase(Try<void> const& t) noexcept
     : contains_(Contains::NOTHING) {
   if (t.hasValue()) {
     contains_ = Contains::VALUE;
@@ -137,10 +136,8 @@ TryBase<T>::TryBase(
 
 template <class T>
 template <class T2>
-TryBase<T>::TryBase(
-    typename std::enable_if<std::is_same<Unit, T2>::value, Try<void>&&>::type
-        t) noexcept
-    : contains_(Contains::NOTHING) {
+  requires std::is_same_v<Unit, T2>
+TryBase<T>::TryBase(Try<void>&& t) noexcept : contains_(Contains::NOTHING) {
   if (t.hasValue()) {
     contains_ = Contains::VALUE;
     ::new (static_cast<void*>(std::addressof(value_))) T();

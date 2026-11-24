@@ -42,12 +42,13 @@ struct exception_wrapper::with_exception_from_fn_ {
   template <typename Void, typename>
   struct arg_type_;
   template <class Sig>
-  struct arg_type_<std::enable_if_t<std::is_function<Sig>::value>, Sig> {
+    requires std::is_function_v<Sig>
+  struct arg_type_<void, Sig> {
     using type = typename impl_<Sig>::template apply<Sig>;
   };
   template <class Ptr>
-  struct arg_type_<std::enable_if_t<std::is_pointer<Ptr>::value>, Ptr>
-      : arg_type_<void, std::remove_pointer_t<Ptr>> {};
+    requires std::is_pointer_v<Ptr>
+  struct arg_type_<void, Ptr> : arg_type_<void, std::remove_pointer_t<Ptr>> {};
   template <class Obj>
   struct arg_type_<std::void_t<decltype(&Obj::operator())>, Obj>
       : arg_type_<void, member_<decltype(&Obj::operator())>> {};
