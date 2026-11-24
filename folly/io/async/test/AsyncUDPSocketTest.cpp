@@ -385,7 +385,7 @@ class UDPNotifyClient : public UDPClient {
 
     ssize_t ret = sock.recvmsg(&msg, 0);
     if (ret < 0) {
-      if (errno != EAGAIN || errno != EWOULDBLOCK) {
+      if (errno != EAGAIN && errno != EWOULDBLOCK) {
         onReadError(
             folly::AsyncSocketException(
                 folly::AsyncSocketException::NETWORK_ERROR, "error"));
