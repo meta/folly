@@ -17,6 +17,7 @@
 #include <folly/debugging/symbolizer/DwarfUtil.h>
 
 #include <array>
+#include <cstring>
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -536,6 +537,20 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
   // Attributes which use FORMs relative to these base attrs
   // will not have valid values during this first pass!
   bool typeMismatch = false;
+  bool deferredPaths = false;
+  auto isIndexedString = [](uint64_t form) {
+    switch (form) {
+      case DW_FORM_strx:
+      case DW_FORM_strx1:
+      case DW_FORM_strx2:
+      case DW_FORM_strx3:
+      case DW_FORM_strx4:
+      case DW_FORM_GNU_str_index:
+        return true;
+      default:
+        return false;
+    }
+  };
   auto assign = [&]<typename T>(T& target, const Attribute& attr) {
     const auto* value = std::get_if<T>(&attr.attrValue);
     if (value == nullptr) {
@@ -558,7 +573,19 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
   auto attributes = forEachMetadataAttr(cu, die, [&](const Attribute& attr) {
     switch (attr.spec.name) {
       case DW_AT_comp_dir:
+        deferredPaths |= isIndexedString(attr.spec.form) &&
+            !cu.strOffsetsBase.has_value() &&
+            !(cu.version < 5 && cu.dwoId.has_value());
         if (!assign(cu.compDir, attr)) {
+          return false;
+        }
+        break;
+      case DW_AT_GNU_dwo_name:
+      case DW_AT_dwo_name:
+        deferredPaths |= isIndexedString(attr.spec.form) &&
+            !cu.strOffsetsBase.has_value() &&
+            !(cu.version < 5 && cu.dwoId.has_value());
+        if (!assignOptional(cu.dwoName, attr)) {
           return false;
         }
         break;
@@ -588,12 +615,6 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
           return false;
         }
         break;
-      case DW_AT_GNU_dwo_name:
-      case DW_AT_dwo_name: // dwo id is set above in dwarf5.
-        if (!assignOptional(cu.dwoName, attr)) {
-          return false;
-        }
-        break;
       case DW_AT_GNU_dwo_id:
         if (!assignOptional(cu.dwoId, attr)) {
           return false;
@@ -604,6 +625,27 @@ DwarfParseResult<bool> parseCompilationUnitMetadata(
   });
   if (attributes.hasError()) {
     return makeUnexpected(attributes.error());
+  }
+  if (typeMismatch) {
+    return parseError<bool>(DwarfParseErrorCode::invalid_value, die.offset);
+  }
+
+  if (!deferredPaths) {
+    return true;
+  }
+  auto paths = forEachAttribute(cu, die, [&](const Attribute& attr) {
+    switch (attr.spec.name) {
+      case DW_AT_comp_dir:
+        return assign(cu.compDir, attr);
+      case DW_AT_GNU_dwo_name:
+      case DW_AT_dwo_name:
+        return assignOptional(cu.dwoName, attr);
+      default:
+        return true;
+    }
+  });
+  if (paths.hasError()) {
+    return makeUnexpected(paths.error());
   }
   if (typeMismatch) {
     return parseError<bool>(DwarfParseErrorCode::invalid_value, die.offset);
@@ -646,8 +688,10 @@ CompilationUnits getCompilationUnits(
     return cu;
   }
 
-  if (!requireSplitDwarf || !cu.mainCompilationUnit.dwoId.hasValue() ||
-      !cu.mainCompilationUnit.dwoName.hasValue()) {
+  if (!requireSplitDwarf || elfCache == nullptr ||
+      !cu.mainCompilationUnit.dwoId.hasValue() ||
+      !cu.mainCompilationUnit.dwoName.hasValue() ||
+      cu.mainCompilationUnit.dwoName->empty()) {
     cu.mainCompilationUnit.rangesBase.reset();
     return cu;
   }
@@ -680,34 +724,35 @@ CompilationUnits getCompilationUnits(
   ElfFile* elf = nullptr;
   {
     char path[kPathLimit];
-    if (cu.mainCompilationUnit.compDir.size() + strlen("/") +
-            cu.mainCompilationUnit.dwoName->size() + 1 >
-        kPathLimit) {
+    const auto directory = cu.mainCompilationUnit.compDir;
+    const auto name = *cu.mainCompilationUnit.dwoName;
+    if (directory.size() > kPathLimit - 2 ||
+        name.size() > kPathLimit - 2 - directory.size()) {
       return cu;
     }
-    path[0] = '\0';
-    strncat(
-        path,
-        cu.mainCompilationUnit.compDir.data(),
-        cu.mainCompilationUnit.compDir.size());
-    strcat(path, "/");
-    strncat(
-        path,
-        cu.mainCompilationUnit.dwoName->data(),
-        cu.mainCompilationUnit.dwoName->size());
+    if (!directory.empty()) {
+      std::memcpy(path, directory.data(), directory.size());
+    }
+    path[directory.size()] = '/';
+    std::memcpy(path + directory.size() + 1, name.data(), name.size());
+    path[directory.size() + 1 + name.size()] = '\0';
     elf = elfCache->getFile(path).get();
   }
 
   // Read from dwp file if dwo file doesn't exist.
   bool useDWP = false;
   if (elf == nullptr) {
-    if (strlen(cu.mainCompilationUnit.debugSections.elf->filepath()) + 5 >
-        kPathLimit) {
+    if (debugSections.elf == nullptr) {
+      return cu;
+    }
+    const auto* filepath = debugSections.elf->filepath();
+    const auto filepathSize = std::strlen(filepath);
+    if (filepathSize > kPathLimit - sizeof(".dwp")) {
       return cu;
     }
     char dwpPath[kPathLimit];
-    strcpy(dwpPath, cu.mainCompilationUnit.debugSections.elf->filepath());
-    strcat(dwpPath, ".dwp");
+    std::memcpy(dwpPath, filepath, filepathSize);
+    std::memcpy(dwpPath + filepathSize, ".dwp", sizeof(".dwp"));
     elf = elfCache->getFile(dwpPath).get();
     if (elf == nullptr) {
       return cu;

@@ -22,12 +22,16 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <span>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <folly/Utility.h>
 #include <folly/Varint.h>
+#include <folly/debugging/symbolizer/ElfCache.h>
 #include <folly/lang/cstring_view.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/SysMman.h>
@@ -261,6 +265,220 @@ void appendAbbreviation(
   }
   appendULEB(bytes, 0);
   appendULEB(bytes, 0);
+}
+
+struct SplitUnit {
+  std::vector<uint8_t> info;
+  std::vector<uint8_t> abbrev;
+  std::vector<uint8_t> strings;
+  std::vector<uint8_t> stringOffsets;
+
+  DebugSections sections(const ElfFile* elf = nullptr) const {
+    DebugSections result{};
+    result.elf = elf;
+    result.debugInfo = info;
+    result.debugAbbrev = abbrev;
+    result.debugStr = strings;
+    result.debugStrOffsets = stringOffsets;
+    return result;
+  }
+};
+
+struct SplitPathOptions {
+  bool indexedDirectory = false;
+  bool indexedName = false;
+  bool includeBase = false;
+};
+
+SplitUnit splitUnit(
+    const std::string& directory,
+    const std::string& name,
+    SplitPathOptions options = {}) {
+  SplitUnit unit;
+  append<uint32_t>(unit.info, 0); // length is filled in below
+  append<uint16_t>(unit.info, 5);
+  append<uint8_t>(unit.info, DW_UT_skeleton);
+  append<uint8_t>(unit.info, sizeof(uintptr_t));
+  append<uint32_t>(unit.info, 0); // abbreviation offset
+  append<uint64_t>(unit.info, 0x1234); // dwo id
+  appendULEB(unit.info, 1);
+
+  appendULEB(unit.abbrev, 1);
+  appendULEB(unit.abbrev, DW_TAG_skeleton_unit);
+  append<uint8_t>(unit.abbrev, DW_CHILDREN_no);
+  appendULEB(unit.abbrev, DW_AT_comp_dir);
+  appendULEB(
+      unit.abbrev, options.indexedDirectory ? DW_FORM_strx1 : DW_FORM_string);
+  appendULEB(unit.abbrev, DW_AT_dwo_name);
+  appendULEB(unit.abbrev, options.indexedName ? DW_FORM_strx1 : DW_FORM_string);
+  if (options.indexedDirectory || options.indexedName) {
+    appendCString(unit.strings, directory);
+    const auto nameOffset = unit.strings.size();
+    appendCString(unit.strings, name);
+    unit.stringOffsets.resize(8);
+    append<uint32_t>(unit.stringOffsets, 0);
+    append<uint32_t>(unit.stringOffsets, static_cast<uint32_t>(nameOffset));
+  }
+  if (options.indexedDirectory) {
+    append<uint8_t>(unit.info, 0);
+  } else {
+    appendCString(unit.info, directory);
+  }
+  if (options.indexedName) {
+    append<uint8_t>(unit.info, 1);
+  } else {
+    appendCString(unit.info, name);
+  }
+  if (options.includeBase) {
+    appendULEB(unit.abbrev, DW_AT_str_offsets_base);
+    appendULEB(unit.abbrev, DW_FORM_sec_offset);
+    append<uint32_t>(unit.info, 8);
+  }
+  appendULEB(unit.abbrev, 0);
+  appendULEB(unit.abbrev, 0);
+  appendULEB(unit.abbrev, 0);
+  overwrite<uint32_t>(
+      unit.info, 0, static_cast<uint32_t>(unit.info.size() - sizeof(uint32_t)));
+  return unit;
+}
+
+class RecordingElfCache : public ElfCacheBase {
+ public:
+  std::vector<std::string> paths;
+
+  std::shared_ptr<ElfFile> getFile(folly::StringPiece path) override {
+    paths.emplace_back(path.data(), path.size());
+    return nullptr;
+  }
+};
+
+TEST(DwarfUtil, SplitDwarfWithoutCacheKeepsMainUnit) {
+  const auto unit = splitUnit("/build", "unit.dwo");
+  const auto result = getCompilationUnits(nullptr, unit.sections(), 0, true);
+
+  EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+  EXPECT_EQ(uint64_t{0x1234}, result.mainCompilationUnit.dwoId);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfWithoutMainElfSkipsDwpFallback) {
+  const auto unit = splitUnit("/build", "unit.dwo");
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(), 0, true);
+
+  const std::vector<std::string> expected{"/build/unit.dwo"};
+  EXPECT_EQ(expected, cache.paths);
+  EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfEmptyNameSkipsFileLookup) {
+  ElfFile elf("/proc/self/exe");
+  const auto unit = splitUnit("/build", "");
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(&elf), 0, true);
+
+  EXPECT_TRUE(cache.paths.empty());
+  EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfMissingStringBaseSkipsFileLookup) {
+  ElfFile elf("/proc/self/exe");
+  const auto unit = splitUnit(
+      "/build", "unit.dwo", {.indexedDirectory = true, .indexedName = true});
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(&elf), 0, true);
+
+  EXPECT_TRUE(cache.paths.empty());
+  EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfResolvesPathsBeforeStringBase) {
+  ElfFile elf("/proc/self/exe");
+  const auto unit = splitUnit(
+      "/build",
+      "unit.dwo",
+      {.indexedDirectory = true, .indexedName = true, .includeBase = true});
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(&elf), 0, true);
+
+  const std::vector<std::string> expected{
+      "/build/unit.dwo",
+      std::string(elf.filepath()) + ".dwp",
+  };
+  EXPECT_EQ(expected, cache.paths);
+  EXPECT_EQ("/build", result.mainCompilationUnit.compDir);
+  ASSERT_TRUE(result.mainCompilationUnit.dwoName.hasValue());
+  EXPECT_EQ("unit.dwo", *result.mainCompilationUnit.dwoName);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfEmptyDirectoryIsSafe) {
+  const auto unit = splitUnit(
+      "",
+      "unit.dwo",
+      {.indexedDirectory = true, .indexedName = true, .includeBase = true});
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(), 0, true);
+
+  const std::vector<std::string> expected{"/unit.dwo"};
+  EXPECT_EQ(expected, cache.paths);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfNullEmptyDirectoryIsSafe) {
+  const auto unit = splitUnit("/build", "unit.dwo", {.indexedDirectory = true});
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(), 0, true);
+
+  const std::vector<std::string> expected{"/unit.dwo"};
+  EXPECT_EQ(expected, cache.paths);
+  EXPECT_TRUE(result.mainCompilationUnit.compDir.empty());
+  EXPECT_EQ(nullptr, result.mainCompilationUnit.compDir.data());
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfPathSizeBoundary) {
+  struct TestCase {
+    size_t directorySize;
+    size_t nameSize;
+    bool accepted;
+  };
+  constexpr TestCase kCases[] = {
+      {4093, 1, true},
+      {4094, 1, false},
+      {1, 4093, true},
+      {1, 4094, false},
+  };
+  for (const auto& test : kCases) {
+    SCOPED_TRACE(test.directorySize);
+    SCOPED_TRACE(test.nameSize);
+    const std::string directory(test.directorySize, 'd');
+    const std::string name(test.nameSize, 'n');
+    const auto unit = splitUnit(directory, name);
+    RecordingElfCache cache;
+    const auto result = getCompilationUnits(&cache, unit.sections(), 0, true);
+
+    std::vector<std::string> expected;
+    if (test.accepted) {
+      expected.push_back(directory + "/" + name);
+    }
+    EXPECT_EQ(expected, cache.paths);
+    EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+    EXPECT_FALSE(result.splitCU.hasValue());
+  }
+}
+
+TEST(DwarfUtil, SplitDwarfRejectsOversizedPath) {
+  const auto unit = splitUnit(std::string(4096, 'x'), "unit.dwo");
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(), 0, true);
+
+  EXPECT_TRUE(cache.paths.empty());
+  EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+  EXPECT_FALSE(result.splitCU.hasValue());
 }
 
 std::vector<uint8_t> unitAbbreviations() {
