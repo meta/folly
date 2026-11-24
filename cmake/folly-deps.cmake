@@ -324,14 +324,17 @@ folly_add_external_library(zlib LIBRARIES ${ZLIB_LIBRARIES})
 # OpenSSL at configure time.
 function (folly_build_openssl)
   fb_manifest_value(openssl download url url)
-  fb_manifest_value(openssl download sha256 sha)
+  # The archive as fb_fetch_from_manifest declares one: each
+  # FB_FETCH_ARCHIVE_MIRRORS prefix before the manifest's own URL.
+  fb_manifest_download(openssl download urls)
   # The trailing letter matters: 1.1.x releases are versioned 1.1.1w and the
   # like, and that is the string FindOpenSSL would have reported.
   if (NOT url MATCHES "openssl-([0-9]+\\.[0-9]+\\.[0-9]+[a-z]*)")
     message(FATAL_ERROR "no version in the openssl url ${url}")
   endif()
   set(version "${CMAKE_MATCH_1}")
-  message(STATUS "OpenSSL not found, building ${url}")
+  list(JOIN urls " or " where)
+  message(STATUS "OpenSSL not found, building ${where}")
   set(prefix "${CMAKE_CURRENT_BINARY_DIR}/openssl")
   # Configure is a Perl script on every platform.
   find_program(FOLLY_OPENSSL_PERL NAMES perl)
@@ -378,8 +381,7 @@ function (folly_build_openssl)
   include(ExternalProject)
   ExternalProject_Add(
     openssl
-    URL "${url}"
-    URL_HASH SHA256=${sha}
+    ${download}
     # Timestamp the extracted tree, so a changed pin rebuilds it.
     DOWNLOAD_EXTRACT_TIMESTAMP FALSE
     BUILD_IN_SOURCE ON

@@ -21,6 +21,21 @@ set(
   "Fetch git dependencies' branches as they were at this time, such as git log -1 --format=%cI or now, ignoring deps/github_hashes"
 )
 
+# For a build behind a mirror of the archives the manifests pin. CMake tries
+# each prefix, followed by /<sha256> of the archive, before the manifest's own
+# URL. It tries the URLs in turn and skips one that answers an HTTP error, so a
+# mirror that lacks an archive costs one request. CMake's download script stops
+# after six URLs that answer an HTTP error (CMake 4.4), so a sixth prefix would
+# leave the manifest's own URL untried: fb_manifest_download() stops the
+# configure instead of building against a mirror alone. It reads each prefix
+# without its surrounding spaces and without a trailing /, and skips an empty
+# one, so a list that a shell variable carries needs no cleaning by its caller.
+set(
+  FB_FETCH_ARCHIVE_MIRRORS ""
+  CACHE STRING
+  "At most five URL prefixes tried before a manifest's [download] url, each as <prefix>/<sha256>"
+)
+
 # Sets <out> to <key> in the first [<section>] or [<section>.<condition>] of
 # getdeps' <manifest> that has it, or to an empty string. The condition isn't
 # evaluated: what getdeps takes from the system on this platform, such as
@@ -43,6 +58,54 @@ function(fb_manifest_value manifest section key out)
     endif()
   endforeach()
   set(${out} "${value}" PARENT_SCOPE)
+endfunction()
+
+# Sets <args> to the arguments that give <manifest>'s [download] archive to
+# FetchContent_Declare() or ExternalProject_Add(): URL with the URLs to try,
+# the FB_FETCH_ARCHIVE_MIRRORS prefixes first, URL_HASH with the manifest's
+# sha256, and DOWNLOAD_NAME with the archive's name, since a mirror URL ends in
+# the hash. A prefix is read without its surrounding spaces and without a
+# trailing /, an empty one is skipped, and more than five of them stop the
+# configure. The name is what follows the last / of the url, without a query or
+# a fragment. Sets <urls> to those URLs alone, for a message. Both are empty
+# when the manifest has no [download] url, and no mirror is tried when it gives
+# no sha256.
+function(fb_manifest_download manifest args urls)
+  fb_manifest_value(${manifest} download url url)
+  fb_manifest_value(${manifest} download sha256 hash)
+  set(list "")
+  set(download "")
+  if(url)
+    if(hash)
+      set(prefixes "")
+      foreach(mirror IN LISTS FB_FETCH_ARCHIVE_MIRRORS)
+        string(STRIP "${mirror}" mirror)
+        string(REGEX REPLACE "/+$" "" mirror "${mirror}")
+        if(NOT mirror STREQUAL "")
+          list(APPEND prefixes "${mirror}")
+        endif()
+      endforeach()
+      list(LENGTH prefixes count)
+      if(count GREATER 5)
+        message(
+          FATAL_ERROR
+          "FB_FETCH_ARCHIVE_MIRRORS names ${count} prefixes, and five is the "
+          "most: CMake stops after six URLs that answer an HTTP error, so a "
+          "sixth prefix leaves a manifest's own url untried. The prefixes: "
+          "${prefixes}"
+        )
+      endif()
+      foreach(mirror IN LISTS prefixes)
+        list(APPEND list "${mirror}/${hash}")
+      endforeach()
+    endif()
+    list(APPEND list "${url}")
+    string(REGEX REPLACE "[?#].*" "" name "${url}")
+    string(REGEX REPLACE ".*/" "" name "${name}")
+    set(download URL ${list} URL_HASH "SHA256=${hash}" DOWNLOAD_NAME "${name}")
+  endif()
+  set(${args} "${download}" PARENT_SCOPE)
+  set(${urls} "${list}" PARENT_SCOPE)
 endfunction()
 
 # Sets <out> to the last commit on <branch> of <repo_url> at or before
@@ -98,7 +161,8 @@ endfunction()
 # deps/github_hashes or project_hashes next to fbcode_builder records, else the
 # manifest's branch, else main, with a warning. FB_FETCH_AS_OF skips the
 # recorded revision and the warning, and takes the branch's commit at that
-# time. Further arguments go to FetchContent_Declare().
+# time. An archive is tried from each FB_FETCH_ARCHIVE_MIRRORS prefix before
+# its own URL. Further arguments go to FetchContent_Declare().
 function(fb_fetch_from_manifest name manifest)
   fb_manifest_value(${manifest} git repo_url repo_url)
   fb_manifest_value(${manifest} build subdir subdir)
@@ -144,17 +208,16 @@ function(fb_fetch_from_manifest name manifest)
     message(STATUS "${name} not found, fetching ${repo_url} ${rev}")
     set(source GIT_REPOSITORY "${repo_url}" GIT_TAG "${rev}")
   else()
-    fb_manifest_value(${manifest} download url url)
-    fb_manifest_value(${manifest} download sha256 sha256)
-    if(NOT url)
+    fb_manifest_download(${manifest} source urls)
+    if(NOT urls)
       message(
         FATAL_ERROR
         "Can't fetch ${name}: getdeps' ${manifest} manifest has neither a "
         "[git] repo_url nor a [download] url."
       )
     endif()
-    message(STATUS "${name} not found, fetching ${url}")
-    set(source URL "${url}" URL_HASH "SHA256=${sha256}")
+    list(JOIN urls " or " where)
+    message(STATUS "${name} not found, fetching ${where}")
     # FetchContent strips the archive's top-level directory, where subdir
     # starts.
     if(subdir MATCHES "^[^/]+/(.+)")
