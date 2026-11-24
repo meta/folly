@@ -61,13 +61,13 @@ struct match_empty_function_protocol_fn {
       require_sizeof<T> && is_detected_v<detect_from_eq_nullptr, T>;
 
  public:
-  template <typename T, std::enable_if_t<!cx_matches_v<T>, int> = 0>
-  constexpr bool operator()(T const&) const noexcept {
-    return false;
-  }
-  template <typename T, std::enable_if_t<cx_matches_v<T>, int> = 0>
-  constexpr bool operator()(T const& t) const noexcept {
-    return static_cast<bool>(t == nullptr);
+  template <typename T>
+  constexpr bool operator()([[maybe_unused]] T const& t) const noexcept {
+    if constexpr (cx_matches_v<T>) {
+      return static_cast<bool>(t == nullptr);
+    } else {
+      return false;
+    }
   }
 };
 inline constexpr match_empty_function_protocol_fn

@@ -179,11 +179,8 @@ template <
     class IntegralType,
     IntegralType DigitCount,
     IntegralType Base = IntegralType(10),
-    bool PrintAllDigits = false,
-    class = typename std::enable_if<
-        std::is_integral<IntegralType>::value &&
-            std::is_unsigned<IntegralType>::value,
-        bool>::type>
+    bool PrintAllDigits = false>
+  requires(std::is_integral_v<IntegralType> && std::is_unsigned_v<IntegralType>)
 inline void writeIntegerString(IntegralType val, char** buffer) {
   char* buf = *buffer;
 

@@ -64,10 +64,8 @@ using Orderable = std::conjunction<
 } // namespace detail
 /// \endcond
 
-template <
-    class I1,
-    class I2,
-    std::enable_if_t<detail::Comparable<I1, I2>::value, int> = 0>
+template <class I1, class I2>
+  requires detail::Comparable<I1, I2>::value
 bool operator==(Poly<I1> const& _this, Poly<I2> const& that) {
   if (poly_empty(_this) != poly_empty(that)) {
     return false;
@@ -79,10 +77,8 @@ bool operator==(Poly<I1> const& _this, Poly<I2> const& that) {
   return ::folly::poly_call<0, poly::IEqualityComparable>(_this, that);
 }
 
-template <
-    class I1,
-    class I2,
-    std::enable_if_t<detail::Orderable<I1, I2>::value, int> = 0>
+template <class I1, class I2>
+  requires detail::Orderable<I1, I2>::value
 bool operator<(Poly<I1> const& _this, Poly<I2> const& that) {
   if (poly_empty(that)) {
     return false;
@@ -94,26 +90,20 @@ bool operator<(Poly<I1> const& _this, Poly<I2> const& that) {
   return ::folly::poly_call<0, poly::IStrictlyOrderable>(_this, that);
 }
 
-template <
-    class I1,
-    class I2,
-    std::enable_if_t<detail::Orderable<I1, I2>::value, int> = 0>
+template <class I1, class I2>
+  requires detail::Orderable<I1, I2>::value
 bool operator>(Poly<I1> const& _this, Poly<I2> const& that) {
   return that < _this;
 }
 
-template <
-    class I1,
-    class I2,
-    std::enable_if_t<detail::Orderable<I1, I2>::value, int> = 0>
+template <class I1, class I2>
+  requires detail::Orderable<I1, I2>::value
 bool operator<=(Poly<I1> const& _this, Poly<I2> const& that) {
   return !(that < _this);
 }
 
-template <
-    class I1,
-    class I2,
-    std::enable_if_t<detail::Orderable<I1, I2>::value, int> = 0>
+template <class I1, class I2>
+  requires detail::Orderable<I1, I2>::value
 bool operator>=(Poly<I1> const& _this, Poly<I2> const& that) {
   return !(_this < that);
 }

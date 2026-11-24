@@ -71,23 +71,16 @@ FutexResult futexWaitImpl(
     uint32_t waitMask);
 
 template <typename Futex, typename Deadline>
-typename std::enable_if<Deadline::clock::is_steady, FutexResult>::type
-futexWaitImpl(
+FutexResult futexWaitImpl(
     Futex* futex,
     uint32_t expected,
     Deadline const& deadline,
     uint32_t waitMask) {
-  return futexWaitImpl(futex, expected, nullptr, &deadline, waitMask);
-}
-
-template <typename Futex, typename Deadline>
-typename std::enable_if<!Deadline::clock::is_steady, FutexResult>::type
-futexWaitImpl(
-    Futex* futex,
-    uint32_t expected,
-    Deadline const& deadline,
-    uint32_t waitMask) {
-  return futexWaitImpl(futex, expected, &deadline, nullptr, waitMask);
+  if constexpr (Deadline::clock::is_steady) {
+    return futexWaitImpl(futex, expected, nullptr, &deadline, waitMask);
+  } else {
+    return futexWaitImpl(futex, expected, &deadline, nullptr, waitMask);
+  }
 }
 
 template <typename Futex>

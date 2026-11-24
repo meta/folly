@@ -532,48 +532,27 @@ constexpr void* vtableForRef(RefType ref) {
   return nullptr;
 }
 
-template <
-    class I,
-    class T,
-    std::enable_if_t<std::is_reference<T>::value, int> = 0>
+template <class I, class T>
 void* execOnHeap(Op op, Data* from, void* to) {
   switch (op) {
     case Op::eNuke:
-      break;
-    case Op::eMove:
-    case Op::eCopy:
-      static_cast<Data*>(to)->pobj_ = from->pobj_;
-      break;
-    case Op::eType:
-      return const_cast<void*>(static_cast<void const*>(&typeid(T)));
-    case Op::eAddr:
-      if (*static_cast<std::type_info const*>(to) == typeid(T)) {
-        return from->pobj_;
+      if constexpr (!std::is_reference_v<T>) {
+        delete &get<T>(*from);
       }
-      throw_exception<BadPolyCast>();
-    case Op::eRefr:
-      return vtableForRef<I, std::remove_cvref_t<T>>(
-          static_cast<RefType>(reinterpret_cast<std::uintptr_t>(to)));
-  }
-  return nullptr;
-}
-
-template <
-    class I,
-    class T,
-    std::enable_if_t<std::negation<std::is_reference<T>>::value, int> = 0>
-void* execOnHeap(Op op, Data* from, void* to) {
-  switch (op) {
-    case Op::eNuke:
-      delete &get<T>(*from);
       break;
     case Op::eMove:
-      static_cast<Data*>(to)->pobj_ = std::exchange(from->pobj_, nullptr);
+      if constexpr (std::is_reference_v<T>) {
+        static_cast<Data*>(to)->pobj_ = from->pobj_;
+      } else {
+        static_cast<Data*>(to)->pobj_ = std::exchange(from->pobj_, nullptr);
+      }
       break;
     case Op::eCopy:
-      detail::if_constexpr(std::is_copy_constructible<T>(), [&](auto id) {
-        static_cast<Data*>(to)->pobj_ = new T(id(get<T>(*from)));
-      });
+      if constexpr (std::is_reference_v<T>) {
+        static_cast<Data*>(to)->pobj_ = from->pobj_;
+      } else if constexpr (std::is_copy_constructible_v<T>) {
+        static_cast<Data*>(to)->pobj_ = new T(get<T>(*from));
+      }
       break;
     case Op::eType:
       return const_cast<void*>(static_cast<void const*>(&typeid(T)));
@@ -633,18 +612,12 @@ struct BasePtr {
 };
 
 template <class I, class T>
-constexpr void* (*getOpsImpl(std::true_type) noexcept)(Op, Data*, void*) {
-  return &execInSitu<I, T>;
-}
-
-template <class I, class T>
-constexpr void* (*getOpsImpl(std::false_type) noexcept)(Op, Data*, void*) {
-  return &execOnHeap<I, T>;
-}
-
-template <class I, class T>
 constexpr void* (*getOps() noexcept)(Op, Data*, void*) {
-  return getOpsImpl<I, T>(std::integral_constant<bool, inSitu<T>()>{});
+  if constexpr (inSitu<T>()) {
+    return &execInSitu<I, T>;
+  } else {
+    return &execOnHeap<I, T>;
+  }
 }
 
 template <class I, auto... Arch, class... S>
@@ -883,24 +856,16 @@ template <class T, class I, class = void>
 struct ModelsInterface2_ : ModelsInterfaceFalse_<T, I> {};
 
 template <class T, class I>
-struct ModelsInterface2_<
-    T,
-    I,
-    std::void_t<
-        std::enable_if_t<
-            std::is_constructible<AddCvrefOf<std::decay_t<T>, I>, T>::value>,
-        MembersOf<std::decay_t<I>, std::decay_t<T>>>> : std::true_type {};
+  requires std::is_constructible_v<AddCvrefOf<std::decay_t<T>, I>, T> &&
+    requires { typename MembersOf<std::decay_t<I>, std::decay_t<T>>; }
+struct ModelsInterface2_<T, I> : std::true_type {};
 
 template <class T, class I, class = void>
 struct ModelsInterface_ : ModelsInterfaceFalse_<T, I> {};
 
 template <class T, class I>
-struct ModelsInterface_<
-    T,
-    I,
-    std::enable_if_t<
-        std::negation_v<std::is_base_of<PolyBase, std::decay_t<T>>>>>
-    : ModelsInterface2_<T, I> {};
+  requires(!std::is_base_of_v<PolyBase, std::decay_t<T>>)
+struct ModelsInterface_<T, I> : ModelsInterface2_<T, I> {};
 
 template <class T, class I>
 struct ModelsInterface : ModelsInterface_<T, I> {};
