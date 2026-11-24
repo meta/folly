@@ -86,6 +86,7 @@ class [[nodiscard]] Unexpected final {
     requires std::is_assignable_v<Error&, Other&&>
   Unexpected& operator=(Unexpected<Other> that) {
     error_ = std::move(that.error());
+    return *this;
   }
 
   /**

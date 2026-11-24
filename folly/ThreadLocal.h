@@ -345,7 +345,7 @@ class ThreadLocalPtr {
         return *this;
       }
 
-      Iterator& operator++(int) {
+      Iterator operator++(int) {
         Iterator copy(*this);
         increment();
         return copy;
@@ -356,7 +356,7 @@ class ThreadLocalPtr {
         return *this;
       }
 
-      Iterator& operator--(int) {
+      Iterator operator--(int) {
         Iterator copy(*this);
         decrement();
         return copy;
@@ -408,6 +408,7 @@ class ThreadLocalPtr {
       swap(id_, other.id_);
       wlockedThreadEntrySet_.unlock();
       swap(wlockedThreadEntrySet_, other.wlockedThreadEntrySet_);
+      return *this;
     }
 
     Accessor() = default;

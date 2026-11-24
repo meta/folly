@@ -272,6 +272,7 @@ class fbstring_core {
   }
 
   fbstring_core& operator=(const fbstring_core& rhs) = delete;
+  fbstring_core& operator=(fbstring_core&& rhs) = delete;
 
   fbstring_core(fbstring_core&& goner) noexcept {
     // Take goner's guts

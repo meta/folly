@@ -105,6 +105,9 @@ class EventBaseManager {
     EventBaseInfo(EventBase* evb, bool owned)
         : eventBase(evb), isOwned(owned) {}
 
+    EventBaseInfo(const EventBaseInfo&) = delete;
+    EventBaseInfo& operator=(const EventBaseInfo&) = delete;
+
     ~EventBaseInfo() {
       if (isOwned) {
         delete eventBase;
