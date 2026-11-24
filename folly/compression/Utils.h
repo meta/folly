@@ -41,8 +41,8 @@ namespace detail {
  * a little endian T.
  */
 template <typename T>
-typename std::enable_if<std::is_unsigned<T>::value, bool>::type
-dataStartsWithLE(const IOBuf* data, T prefix, uint64_t n = sizeof(T)) {
+  requires std::is_unsigned_v<T>
+bool dataStartsWithLE(const IOBuf* data, T prefix, uint64_t n = sizeof(T)) {
   DCHECK_GT(n, 0);
   DCHECK_LE(n, sizeof(T));
   T value;
@@ -55,8 +55,8 @@ dataStartsWithLE(const IOBuf* data, T prefix, uint64_t n = sizeof(T)) {
 }
 
 template <typename T>
-typename std::enable_if<std::is_arithmetic<T>::value, std::string>::type
-prefixToStringLE(T prefix, uint64_t n = sizeof(T)) {
+  requires std::is_arithmetic_v<T>
+std::string prefixToStringLE(T prefix, uint64_t n = sizeof(T)) {
   DCHECK_GT(n, 0);
   DCHECK_LE(n, sizeof(T));
   prefix = Endian::little(prefix);

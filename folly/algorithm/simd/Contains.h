@@ -87,11 +87,8 @@ constexpr bool contains_haystack_needle_test() {
  *
  **/
 struct contains_fn {
-  template <
-      typename R,
-      typename T,
-      typename =
-          std::enable_if_t<detail::contains_haystack_needle_test<R, T>()>>
+  template <typename R, typename T>
+    requires(detail::contains_haystack_needle_test<R, T>())
   FOLLY_ERASE bool operator()(R&& r, T x) const {
     auto castR = detail::asSimdFriendlyUint(std::span(r));
     using value_type = detail::std_range_value_t<decltype(castR)>;

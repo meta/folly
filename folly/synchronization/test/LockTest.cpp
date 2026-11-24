@@ -63,9 +63,6 @@ class Mutex {
   //  - ensure that try-unlock-and-lock functions return bool or state and take
   //        nothing or state
 
-  template <bool C>
-  using if_ = std::enable_if_t<C, int>;
-
   template <typename State>
   using v = State;
 
@@ -125,7 +122,8 @@ class Mutex {
   b<UniqueLockState> try_lock_until(Clock::time_point deadline) {
     return b<UniqueLockState>(try_op_until(Held::Unique, deadline));
   }
-  template <typename... A, if_<a<UniqueLockState, A...>> = 0>
+  template <typename... A>
+    requires a<UniqueLockState, A...>
   void unlock(A&&... state) {
     unop(Held::Unique, state...);
   }
@@ -142,7 +140,8 @@ class Mutex {
   b<SharedLockState> try_lock_shared_until(Clock::time_point deadline) {
     return b<SharedLockState>(try_op_until(Held::Shared, deadline));
   }
-  template <typename... A, if_<a<SharedLockState, A...>> = 0>
+  template <typename... A>
+    requires a<SharedLockState, A...>
   void unlock_shared(A&&... state) {
     unop(Held::Shared, state...);
   }
@@ -159,63 +158,77 @@ class Mutex {
   b<UpgradeLockState> try_lock_upgrade_until(Clock::time_point deadline) {
     return b<UpgradeLockState>(try_op_until(Held::Upgrade, deadline));
   }
-  template <typename... A, if_<a<UpgradeLockState, A...>> = 0>
+  template <typename... A>
+    requires a<UpgradeLockState, A...>
   void unlock_upgrade(A&&... state) {
     unop(Held::Upgrade, state...);
   }
 
-  template <typename... A, if_<a<UniqueLockState, A...>> = 0>
+  template <typename... A>
+    requires a<UniqueLockState, A...>
   v<SharedLockState> unlock_and_lock_shared(A&&... state) {
     return transition_0_(q::unlock, q::lock_shared, state...);
   }
-  template <typename... A, if_<a<UniqueLockState, A...>> = 0>
+  template <typename... A>
+    requires a<UniqueLockState, A...>
   v<UpgradeLockState> unlock_and_lock_upgrade(A&&... state) {
     return transition_0_(q::unlock, q::lock_upgrade, state...);
   }
-  template <typename... A, if_<a<UpgradeLockState, A...>> = 0>
+  template <typename... A>
+    requires a<UpgradeLockState, A...>
   v<UniqueLockState> unlock_upgrade_and_lock(A&&... state) {
     return transition_0_(q::unlock_upgrade, q::lock, state...);
   }
-  template <typename... A, if_<a<UpgradeLockState, A...>> = 0>
+  template <typename... A>
+    requires a<UpgradeLockState, A...>
   v<SharedLockState> unlock_upgrade_and_lock_shared(A&&... state) {
     return transition_0_(q::unlock_upgrade, q::lock_shared, state...);
   }
 
-  template <typename... A, if_<ap_<m_<SharedLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<m_<SharedLockState>, A...>
   b<UpgradeLockState> try_unlock_shared_and_lock_upgrade(A const&... a) {
     return transition_0_(q::unlock_shared, q::try_lock_upgrade, a...);
   }
-  template <typename... A, if_<ap_<md_<SharedLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<md_<SharedLockState>, A...>
   b<UpgradeLockState> try_unlock_shared_and_lock_upgrade_for(A const&... a) {
     return transition_1_(q::unlock_shared, q::try_lock_upgrade_for, a...);
   }
-  template <typename... A, if_<ap_<mt_<SharedLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<mt_<SharedLockState>, A...>
   b<UpgradeLockState> try_unlock_shared_and_lock_upgrade_until(A const&... a) {
     return transition_1_(q::unlock_shared, q::try_lock_upgrade_until, a...);
   }
 
-  template <typename... A, if_<ap_<m_<SharedLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<m_<SharedLockState>, A...>
   b<UniqueLockState> try_unlock_shared_and_lock(A const&... a) {
     return transition_0_(q::unlock_shared, q::try_lock, a...);
   }
-  template <typename... A, if_<ap_<md_<SharedLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<md_<SharedLockState>, A...>
   b<UniqueLockState> try_unlock_shared_and_lock_for(A const&... a) {
     return transition_1_(q::unlock_shared, q::try_lock_for, a...);
   }
-  template <typename... A, if_<ap_<mt_<SharedLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<mt_<SharedLockState>, A...>
   b<UniqueLockState> try_unlock_shared_and_lock_until(A const&... a) {
     return transition_1_(q::unlock_shared, q::try_lock_until, a...);
   }
 
-  template <typename... A, if_<ap_<m_<UpgradeLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<m_<UpgradeLockState>, A...>
   b<UniqueLockState> try_unlock_upgrade_and_lock(A const&... a) {
     return transition_0_(q::unlock_upgrade, q::try_lock, a...);
   }
-  template <typename... A, if_<ap_<md_<UpgradeLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<md_<UpgradeLockState>, A...>
   b<UniqueLockState> try_unlock_upgrade_and_lock_for(A const&... a) {
     return transition_1_(q::unlock_upgrade, q::try_lock_for, a...);
   }
-  template <typename... A, if_<ap_<mt_<UpgradeLockState>, A...>> = 0>
+  template <typename... A>
+    requires ap_<mt_<UpgradeLockState>, A...>
   b<UniqueLockState> try_unlock_upgrade_and_lock_until(A const&... a) {
     return transition_1_(q::unlock_upgrade, q::try_lock_until, a...);
   }
@@ -226,7 +239,8 @@ class Mutex {
   template <bool V>
   struct s_ {
     s_() = default;
-    template <typename S, if_<std::is_constructible_v<bool, S>> = 0>
+    template <typename S>
+      requires std::is_constructible_v<bool, S>
     /* implicit */ s_(S const& s) {
       !!s == V ? void() : folly::throw_exception<MismatchError>();
     }

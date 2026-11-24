@@ -617,10 +617,8 @@ Expected<Tgt, ConversionCode> tryPosixTimeToDuration(
  * struct timespec to std::chrono::duration
  */
 template <typename Tgt>
-typename std::enable_if<
-    detail::is_duration<Tgt>::value,
-    Expected<Tgt, ConversionCode>>::type
-tryTo(const struct timespec& ts) {
+  requires detail::is_duration<Tgt>::value
+Expected<Tgt, ConversionCode> tryTo(const struct timespec& ts) {
   return detail::tryPosixTimeToDuration<Tgt, std::nano>(ts.tv_sec, ts.tv_nsec);
 }
 
@@ -628,10 +626,8 @@ tryTo(const struct timespec& ts) {
  * struct timeval to std::chrono::duration
  */
 template <typename Tgt>
-typename std::enable_if<
-    detail::is_duration<Tgt>::value,
-    Expected<Tgt, ConversionCode>>::type
-tryTo(const struct timeval& tv) {
+  requires detail::is_duration<Tgt>::value
+Expected<Tgt, ConversionCode> tryTo(const struct timeval& tv) {
   return detail::tryPosixTimeToDuration<Tgt, std::micro>(tv.tv_sec, tv.tv_usec);
 }
 
@@ -639,10 +635,10 @@ tryTo(const struct timeval& tv) {
  * timespec or timeval to std::chrono::time_point
  */
 template <typename Tgt, typename Src>
-typename std::enable_if<
-    detail::is_time_point<Tgt>::value && detail::is_posix_time_type<Src>::value,
-    Expected<Tgt, ConversionCode>>::type
-tryTo(const Src& value) {
+  requires(
+      detail::is_time_point<Tgt>::value &&
+      detail::is_posix_time_type<Src>::value)
+Expected<Tgt, ConversionCode> tryTo(const Src& value) {
   return tryTo<typename Tgt::duration>(value).then(
       [](typename Tgt::duration result) { return Tgt(result); });
 }
@@ -651,10 +647,9 @@ tryTo(const Src& value) {
  * std::chrono::duration to struct timespec
  */
 template <typename Tgt, typename Rep, typename Period>
-typename std::enable_if<
-    std::is_same<Tgt, struct timespec>::value,
-    Expected<Tgt, ConversionCode>>::type
-tryTo(const std::chrono::duration<Rep, Period>& duration) {
+  requires std::is_same_v<Tgt, struct timespec>
+Expected<Tgt, ConversionCode> tryTo(
+    const std::chrono::duration<Rep, Period>& duration) {
   auto result = detail::durationToPosixTime<std::nano>(duration);
   if (result.hasError()) {
     return makeUnexpected(result.error());
@@ -670,10 +665,9 @@ tryTo(const std::chrono::duration<Rep, Period>& duration) {
  * std::chrono::duration to struct timeval
  */
 template <typename Tgt, typename Rep, typename Period>
-typename std::enable_if<
-    std::is_same<Tgt, struct timeval>::value,
-    Expected<Tgt, ConversionCode>>::type
-tryTo(const std::chrono::duration<Rep, Period>& duration) {
+  requires std::is_same_v<Tgt, struct timeval>
+Expected<Tgt, ConversionCode> tryTo(
+    const std::chrono::duration<Rep, Period>& duration) {
   auto result = detail::durationToPosixTime<std::micro>(duration);
   if (result.hasError()) {
     return makeUnexpected(result.error());
@@ -689,10 +683,9 @@ tryTo(const std::chrono::duration<Rep, Period>& duration) {
  * std::chrono::time_point to timespec or timeval
  */
 template <typename Tgt, typename Clock, typename Duration>
-typename std::enable_if<
-    detail::is_posix_time_type<Tgt>::value,
-    Expected<Tgt, ConversionCode>>::type
-tryTo(const std::chrono::time_point<Clock, Duration>& timePoint) {
+  requires detail::is_posix_time_type<Tgt>::value
+Expected<Tgt, ConversionCode> tryTo(
+    const std::chrono::time_point<Clock, Duration>& timePoint) {
   return tryTo<Tgt>(timePoint.time_since_epoch());
 }
 
@@ -700,9 +693,8 @@ tryTo(const std::chrono::time_point<Clock, Duration>& timePoint) {
  * For all chrono conversions, to() wraps tryTo()
  */
 template <typename Tgt, typename Src>
-typename std::enable_if<detail::is_chrono_conversion<Tgt, Src>::value, Tgt>::
-    type
-    to(const Src& value) {
+  requires detail::is_chrono_conversion<Tgt, Src>::value
+Tgt to(const Src& value) {
   return tryTo<Tgt>(value).thenOrThrow(
       [](Tgt res) { return res; },
       [&](ConversionCode e) { return makeConversionError(e, StringPiece{}); });

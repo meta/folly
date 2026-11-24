@@ -113,8 +113,8 @@ struct result_promise_base {
 };
 
 template <typename T>
-struct result_promise<T, typename std::enable_if<!std::is_void_v<T>>::type>
-    : public result_promise_base<T> {
+  requires(!std::is_void_v<T>)
+struct result_promise<T, void> : public result_promise_base<T> {
   // For reference types, this deliberately requires users to `co_return`
   // one of `std::ref`, `std::cref`, or `folly::rref`.
   //
@@ -145,8 +145,8 @@ struct result_promise<T, typename std::enable_if<!std::is_void_v<T>>::type>
 };
 
 template <typename T>
-struct result_promise<T, typename std::enable_if<std::is_void_v<T>>::type>
-    : public result_promise_base<T> {
+  requires std::is_void_v<T>
+struct result_promise<T, void> : public result_promise_base<T> {
   // You can fail via `co_await err` since void coros only allow `co_return;`.
   // NB: `has_value_sigil_t` sets `eos_` to "has value", nothing to do.
   void return_void() {}

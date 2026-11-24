@@ -136,12 +136,11 @@ class InlineFunctionRef<ReturnType(Args...), Size> {
    * reference semantics and store the function as a pointer, and add a level
    * of indirection through type erasure.
    */
-  template <
-      typename Func,
-      std::enable_if_t<
-          !std::is_same<std::decay_t<Func>, InlineFunctionRef>{} &&
-          !std::is_reference<Func>{} &&
-          folly::is_invocable_r_v<ReturnType, Func&&, Args&&...>>* = nullptr>
+  template <typename Func>
+    requires(
+        !std::is_same_v<std::decay_t<Func>, InlineFunctionRef> &&
+        !std::is_reference_v<Func> &&
+        folly::is_invocable_r_v<ReturnType, Func &&, Args && ...>)
   InlineFunctionRef(Func&& func) {
     // We disallow construction from lvalues, so assert that this is not a
     // reference type.  When invoked with an lvalue, Func is a lvalue

@@ -96,23 +96,16 @@ struct UnrollUtils {
       typename T,
       std::size_t N,
       typename Op>
-  FOLLY_ALWAYS_INLINE static constexpr std::enable_if_t<l - f == 1, T>
-  arrayReduceImpl(std::array<T, N> const& x, Op /*unused*/) {
-    return x[f];
-  }
-
-  template <
-      std::size_t f,
-      std::size_t l,
-      typename T,
-      std::size_t N,
-      typename Op>
-  FOLLY_ALWAYS_INLINE static constexpr std::enable_if_t<l - f != 1, T>
-  arrayReduceImpl(std::array<T, N> const& x, Op op) {
-    constexpr std::size_t n = l - f;
-    T leftSum = arrayReduceImpl<f, f + n / 2>(x, op);
-    T rightSum = arrayReduceImpl<f + n / 2, l>(x, op);
-    return op(leftSum, rightSum);
+  FOLLY_ALWAYS_INLINE static constexpr T arrayReduceImpl(
+      std::array<T, N> const& x, [[maybe_unused]] Op op) {
+    if constexpr (l - f == 1) {
+      return x[f];
+    } else {
+      constexpr std::size_t n = l - f;
+      T leftSum = arrayReduceImpl<f, f + n / 2>(x, op);
+      T rightSum = arrayReduceImpl<f + n / 2, l>(x, op);
+      return op(leftSum, rightSum);
+    }
   }
 
   template <typename Op, std::size_t... i>

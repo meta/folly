@@ -166,9 +166,8 @@ class unique_hash_key {
 
   alignas(data_align) data_type const data_;
 
-  template <
-      typename Int,
-      std::enable_if_t<is_non_bool_integral_v<Int>, int> = 0>
+  template <typename Int>
+    requires is_non_bool_integral_v<Int>
   static item_type init_item(
       Int const& arg,
       [[maybe_unused]] size_t idx,
@@ -204,20 +203,16 @@ class unique_hash_key {
       (E == data_size / sizeof(T) || E == std::dynamic_extent);
 
  public:
-  template <
-      typename Algo,
-      typename... Arg,
-      std::enable_if_t<is_algo_v<Algo>, int> = 0>
+  template <typename Algo, typename... Arg>
+    requires is_algo_v<Algo>
   explicit unique_hash_key(Algo const algo, Arg const&... arg) noexcept
       : data_{init(algo, arg...)} {
     static_assert(sizeof(self) == Size);
     static_assert(alignof(self) == alignof(size_t));
   }
 
-  template <
-      typename T,
-      std::size_t E,
-      std::enable_if_t<is_span_compatible_v<T, E>, int> = 0>
+  template <typename T, std::size_t E>
+    requires is_span_compatible_v<T, E>
   explicit operator std::span<T const, E>() const noexcept {
     constexpr auto count = E == std::dynamic_extent ? data_size / sizeof(T) : E;
     return std::span<T const, E>{
