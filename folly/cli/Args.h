@@ -64,9 +64,8 @@ class cli_apply_args_files_receiver {
     size_t col = 0;
 
     friend bool operator==(
-        human_location const& lhs, human_location const& rhs) noexcept {
-      return lhs.line == rhs.line && lhs.col == rhs.col;
-    }
+        human_location const& lhs,
+        human_location const& rhs) noexcept = default;
   };
 
   struct location {
@@ -87,10 +86,8 @@ class cli_apply_args_files_receiver {
     /// line and col of the ending char (not past the end!)
     human_location e;
 
-    friend bool operator==(location const& lhs, location const& rhs) noexcept {
-      return lhs.idx == rhs.idx && lhs.off == rhs.off && lhs.len == rhs.len &&
-          lhs.b == rhs.b && lhs.e == rhs.e;
-    }
+    friend bool operator==(location const& lhs, location const& rhs) noexcept =
+        default;
   };
 
   virtual ~cli_apply_args_files_receiver() = default;

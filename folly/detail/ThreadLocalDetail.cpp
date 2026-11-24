@@ -121,7 +121,7 @@ void* ThreadEntrySet::getPtrForThread(ThreadEntry* entry) const {
 
 bool ThreadEntrySet::contains(ThreadEntry* entry) const {
   DCHECK(basicSanity());
-  return entryToVectorSlot.find(entry) != entryToVectorSlot.end();
+  return entryToVectorSlot.contains(entry);
 }
 
 bool ThreadEntrySet::insert(ThreadEntry* entry) {

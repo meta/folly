@@ -47,12 +47,8 @@ struct RecursiveStateHelper {
 
 using State = RecursiveStateHelper::type;
 
-// TODO: use std::string_view::starts_with, starting with C++20
-bool startsWith(std::string_view str, char ch) {
-  return !str.empty() && str.front() == ch;
-}
 std::string_view stripPrefix(std::string_view str, char ch) {
-  if (startsWith(str, ch)) {
+  if (str.starts_with(ch)) {
     return str.substr(1);
   }
   return str;
@@ -101,7 +97,7 @@ class CommandLineParser::Impl {
       }
 
       auto arg = getNext();
-      if (!startsWith(arg, '-') // positional
+      if (!arg.starts_with('-') // positional
           || arg == "-" // stdin
           || arg.empty() // empty?
       ) {
@@ -156,7 +152,7 @@ class CommandLineParser::Impl {
 
       value_in_arg_ = false;
       auto arg = getNext();
-      if (startsWith(arg, '-')) {
+      if (arg.starts_with('-')) {
         pos_ -= 1;
         value_in_arg_ = true;
         return no_value();

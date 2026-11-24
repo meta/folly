@@ -766,7 +766,7 @@ std::exception_ptr make_exception_ptr_with_(
   auto exception = static_cast<abi::__cxa_refcounted_exception*>(object) - 1;
   exception->referenceCount = 1;
   return catch_current_exception_([&] {
-    scope_guard_ rollback{std::bind(abi::__cxa_free_exception, object)};
+    scope_guard_ rollback{[object] { abi::__cxa_free_exception(object); }};
     arg.ctor(object, func);
     rollback.dismiss();
     return make_exception_ptr_from_rep_(object);
@@ -815,7 +815,7 @@ std::exception_ptr make_exception_ptr_with_(
   });
 #endif
   return catch_current_exception_([&] {
-    scope_guard_ rollback{std::bind(abi::__cxa_free_exception, object)};
+    scope_guard_ rollback{[object] { abi::__cxa_free_exception(object); }};
     arg.ctor(object, func);
     rollback.dismiss();
     return make_exception_ptr_from_rep_(object);

@@ -75,12 +75,9 @@ struct ElfFileId {
   ino_t inode;
   off_t size;
   uint64_t mtime;
-};
 
-inline bool operator==(const ElfFileId& lhs, const ElfFileId& rhs) {
-  return lhs.dev == rhs.dev && lhs.inode == rhs.inode && lhs.size == rhs.size &&
-      lhs.mtime == rhs.mtime;
-}
+  friend bool operator==(const ElfFileId& lhs, const ElfFileId& rhs) = default;
+};
 
 /**
  * ELF file parser.

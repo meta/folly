@@ -139,7 +139,7 @@ LogConfig LoggerDB::getConfigImpl(bool includeAllCategories) const {
     while (true) {
       auto name = to<string>("anonymousHandler", anonymousNameIndex);
       ++anonymousNameIndex;
-      if (handlerInfo->handlers.find(name) == handlerInfo->handlers.end()) {
+      if (!handlerInfo->handlers.contains(name)) {
         return name;
       }
     }

@@ -78,7 +78,7 @@ void AtForkList::append(
     Function<void()> parent,
     Function<void()> child) {
   std::unique_lock lg{mutex};
-  if (handle && index.count(handle)) {
+  if (handle && index.contains(handle)) {
     throw_exception<std::invalid_argument>("at-fork: append: duplicate");
   }
   auto task =
@@ -109,7 +109,7 @@ bool AtForkList::contains( //
     return false;
   }
   std::unique_lock lg{mutex};
-  return index.count(handle) != 0;
+  return index.contains(handle);
 }
 
 namespace {

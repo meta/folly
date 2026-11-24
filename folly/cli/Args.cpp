@@ -502,7 +502,7 @@ cli_apply_args_files_receiver::control cli_process_single_arg(
     auto canonical_path = std::filesystem::canonical(full_path, canonical_ec);
     if (!canonical_ec) {
       // Successfully resolved canonical path; check for cycle
-      if (active_files.count(canonical_path) > 0) {
+      if (active_files.contains(canonical_path)) {
         auto cycle_result = receiver.on_file_cycle(
             std::move(filename), loc, std::move(canonical_path));
         switch (cycle_result) {

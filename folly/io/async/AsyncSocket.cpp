@@ -1847,7 +1847,7 @@ void AsyncSocket::setZeroCopyBuf(
 }
 
 bool AsyncSocket::containsZeroCopyBuf(folly::IOBuf* ptr) {
-  return (idZeroCopyBufInfoMap_.find(ptr) != idZeroCopyBufInfoMap_.end());
+  return idZeroCopyBufInfoMap_.contains(ptr);
 }
 
 bool AsyncSocket::isZeroCopyMsg(const cmsghdr& cmsg) const {

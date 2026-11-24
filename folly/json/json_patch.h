@@ -79,10 +79,7 @@ class json_patch {
     Optional<json_pointer> from;
     Optional<dynamic> value;
     friend bool operator==(
-        patch_operation const& lhs, patch_operation const& rhs) {
-      return lhs.op_code == rhs.op_code && lhs.path == rhs.path &&
-          lhs.from == rhs.from && lhs.value == rhs.value;
-    }
+        patch_operation const& lhs, patch_operation const& rhs) = default;
   };
 
   json_patch() = default;

@@ -93,8 +93,6 @@ class AlignedBuf {
     return (0 == ::memcmp(data_, buf.data_, size_));
   }
 
-  bool operator!=(const AlignedBuf& buf) const { return !(*this == buf); }
-
   void* data() const { return data_; }
 
   size_t size() const { return size_; }

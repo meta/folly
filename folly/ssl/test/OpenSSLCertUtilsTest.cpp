@@ -453,7 +453,7 @@ TEST_P(OpenSSLCertUtilsTest, TestAllExtensions) {
   for (auto const& pair : extensions) {
     std::string name = pair.first;
     std::string value = pair.second;
-    if (testCertWithSanExts.find(name) != testCertWithSanExts.end()) {
+    if (testCertWithSanExts.contains(name)) {
       EXPECT_EQ(value, testCertWithSanExts.find(name)->second);
     }
   }

@@ -175,8 +175,8 @@ TEST_F(ElfTest, SymbolsByNameSuccess) {
   auto result = elfFile_.getSymbolsByName(names, {STT_FUNC});
 
   EXPECT_EQ(names.size(), result.size());
-  EXPECT_TRUE(result.find("sum_func") != result.end());
-  EXPECT_TRUE(result.find("sub_func") != result.end());
+  EXPECT_TRUE(result.contains("sum_func"));
+  EXPECT_TRUE(result.contains("sub_func"));
 
   const auto& sumFuncSymbol = result.at("sum_func");
   EXPECT_NE(nullptr, sumFuncSymbol.first);
@@ -192,9 +192,9 @@ TEST_F(ElfTest, SymbolsByNamePartial) {
   auto result = elfFile_.getSymbolsByName(names, {STT_FUNC});
 
   EXPECT_EQ(names.size(), result.size());
-  EXPECT_TRUE(result.find("sum_func") != result.end());
-  EXPECT_TRUE(result.find("sub_func") != result.end());
-  EXPECT_TRUE(result.find("foo_func") != result.end());
+  EXPECT_TRUE(result.contains("sum_func"));
+  EXPECT_TRUE(result.contains("sub_func"));
+  EXPECT_TRUE(result.contains("foo_func"));
 
   const auto& fooFuncSymbol = result.at("foo_func");
   EXPECT_EQ(nullptr, fooFuncSymbol.first);
