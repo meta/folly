@@ -363,27 +363,23 @@ class Range {
   Range(const Range& other, size_type first, size_type length = npos)
       : Range(other.subpiece(first, length)) {}
 
-  template <
-      class Container,
-      class = typename std::enable_if<
-          std::is_same<Iter, typename Container::const_pointer>::value>::type,
-      class = decltype(
-          Iter(std::declval<Container const&>().data()),
-          Iter(
-              std::declval<Container const&>().data() +
-              std::declval<Container const&>().size()))>
+  template <class Container>
+    requires(
+        std::is_same_v<Iter, typename Container::const_pointer> &&
+        requires(Container const& c) {
+          Iter(c.data());
+          Iter(c.data() + c.size());
+        })
   /* implicit */ constexpr Range(Container const& container)
       : Range(container.data(), container.size()) {}
 
-  template <
-      class Container,
-      class = typename std::enable_if<
-          std::is_same<Iter, typename Container::const_pointer>::value>::type,
-      class = decltype(
-          Iter(std::declval<Container const&>().data()),
-          Iter(
-              std::declval<Container const&>().data() +
-              std::declval<Container const&>().size()))>
+  template <class Container>
+    requires(
+        std::is_same_v<Iter, typename Container::const_pointer> &&
+        requires(Container const& c) {
+          Iter(c.data());
+          Iter(c.data() + c.size());
+        })
   Range(Container const& container, typename Container::size_type startFrom) {
     auto const cdata = container.data();
     auto const csize = container.size();
@@ -394,15 +390,13 @@ class Range {
     e_ = cdata + csize;
   }
 
-  template <
-      class Container,
-      class = typename std::enable_if<
-          std::is_same<Iter, typename Container::const_pointer>::value>::type,
-      class = decltype(
-          Iter(std::declval<Container const&>().data()),
-          Iter(
-              std::declval<Container const&>().data() +
-              std::declval<Container const&>().size()))>
+  template <class Container>
+    requires(
+        std::is_same_v<Iter, typename Container::const_pointer> &&
+        requires(Container const& c) {
+          Iter(c.data());
+          Iter(c.data() + c.size());
+        })
   Range(
       Container const& container,
       typename Container::size_type startFrom,
@@ -432,18 +426,13 @@ class Range {
    *
    * @methodset Range
    */
-  template <
-      class Container,
-      class T = Iter,
-      typename detail::IsUnsignedCharPointer<T>::const_type = 0,
-      class = typename std::enable_if<
-            std::is_same<typename Container::const_pointer, const char*>::value
-          >::type,
-      class = decltype(
-          Iter(std::declval<Container const&>().data()),
-          Iter(
-              std::declval<Container const&>().data() +
-              std::declval<Container const&>().size()))>
+  template <class Container>
+    requires(std::is_same_v<Iter, const unsigned char*> &&
+             std::is_same_v<typename Container::const_pointer, const char*> &&
+             requires(Container const& c) {
+               Iter(c.data());
+               Iter(c.data() + c.size());
+             })
   explicit Range(const Container& str)
       : b_(reinterpret_cast<Iter>(str.data())), e_(b_ + str.size()) {}
   /**
@@ -498,19 +487,13 @@ class Range {
    *
    * @methodset Range
    */
-  template <
-      class T,
-      size_t N,
-      typename = typename std::enable_if<
-          std::is_convertible<const T*, Iter>::value>::type>
+  template <class T, size_t N>
+    requires std::is_convertible_v<const T*, Iter>
   constexpr explicit Range(const std::array<T, N>& array)
       : b_{array.empty() ? nullptr : &array.at(0)},
         e_{array.empty() ? nullptr : &array.at(0) + N} {}
-  template <
-      class T,
-      size_t N,
-      typename =
-          typename std::enable_if<std::is_convertible<T*, Iter>::value>::type>
+  template <class T, size_t N>
+    requires std::is_convertible_v<T*, Iter>
   constexpr explicit Range(std::array<T, N>& array)
       : b_{array.empty() ? nullptr : &array.at(0)},
         e_{array.empty() ? nullptr : &array.at(0) + N} {}
@@ -639,49 +622,40 @@ class Range {
   ///
   /// Participates in overload resolution precisely when the target type is
   /// compatible. This allows std::is_constructible compile-time checks to work.
-  template <
-      typename Tgt,
-      std::enable_if_t<
-          std::is_constructible<Tgt, Iter const&, size_type>::value &&
-              !IsConstructibleViaStringView<Tgt>::value,
-          int> = 0>
+  template <typename Tgt>
+    requires(
+        std::is_constructible_v<Tgt, Iter const&, size_type> &&
+        !IsConstructibleViaStringView<Tgt>::value)
   constexpr explicit operator Tgt() const noexcept(
       std::is_nothrow_constructible<Tgt, Iter const&, size_type>::value) {
     return Tgt(b_, walk_size());
   }
-  template <
-      typename Tgt,
-      std::enable_if_t<
-          !std::is_constructible<Tgt, Iter const&, size_type>::value &&
-              std::is_constructible<Tgt, Iter const&, Iter const&>::value &&
-              !IsConstructibleViaStringView<Tgt>::value,
-          int> = 0>
+  template <typename Tgt>
+    requires(
+        !std::is_constructible_v<Tgt, Iter const&, size_type> &&
+        std::is_constructible_v<Tgt, Iter const&, Iter const&> &&
+        !IsConstructibleViaStringView<Tgt>::value)
   constexpr explicit operator Tgt() const noexcept(
       std::is_nothrow_constructible<Tgt, Iter const&, Iter const&>::value) {
     return Tgt(b_, e_);
   }
 
   /// implicit operator conversion to std::string_view
-  template <
-      typename Tgt,
-      typename ValueType = value_type,
-      std::enable_if_t<
-          StrictConjunction<
-              std::is_same<Tgt, _t<StringViewType<ValueType>>>,
-              std::is_constructible<
-                  _t<StringViewType<ValueType>>,
-                  Iter const&,
-                  size_type>>::value,
-          int> = 0>
+  template <typename Tgt>
+    requires(
+        std::is_same_v<Tgt, _t<StringViewType<value_type>>> &&
+        std::is_constructible_v<
+            _t<StringViewType<value_type>>,
+            Iter const&,
+            size_type>)
   constexpr operator Tgt() const noexcept(
       std::is_nothrow_constructible<Tgt, Iter const&, size_type>::value) {
     return Tgt(b_, walk_size());
   }
 
 #if FMT_VERSION < 100000
-  template <
-      typename IterType = Iter,
-      std::enable_if_t<detail::range_is_char_type_v_<IterType>, int> = 0>
+  template <typename IterType = Iter>
+    requires detail::range_is_char_type_v_<IterType>
   constexpr operator fmt::basic_string_view<value_type>() const noexcept {
     return _t<StringViewType<value_type>>(*this);
   }
@@ -701,20 +675,17 @@ class Range {
   /// some specialization of std::vector or std::basic_string in a context which
   /// requires a non-default-constructed allocator.
   template <typename Tgt, typename... Args>
-  constexpr std::enable_if_t<
-      std::is_constructible<Tgt, Iter const&, size_type>::value,
-      Tgt>
-  to(Args&&... args) const noexcept(
+    requires std::is_constructible_v<Tgt, Iter const&, size_type>
+  constexpr Tgt to(Args&&... args) const noexcept(
       std::is_nothrow_constructible<Tgt, Iter const&, size_type, Args&&...>::
           value) {
     return Tgt(b_, walk_size(), static_cast<Args&&>(args)...);
   }
   template <typename Tgt, typename... Args>
-  constexpr std::enable_if_t<
-      !std::is_constructible<Tgt, Iter const&, size_type>::value &&
-          std::is_constructible<Tgt, Iter const&, Iter const&>::value,
-      Tgt>
-  to(Args&&... args) const noexcept(
+    requires(
+        !std::is_constructible_v<Tgt, Iter const&, size_type> &&
+        std::is_constructible_v<Tgt, Iter const&, Iter const&>)
+  constexpr Tgt to(Args&&... args) const noexcept(
       std::is_nothrow_constructible<Tgt, Iter const&, Iter const&, Args&&...>::
           value) {
     return Tgt(b_, e_, static_cast<Args&&>(args)...);
@@ -1554,9 +1525,8 @@ template <class Key, class Enable>
 struct hasher;
 
 template <class T>
-struct hasher<
-    folly::Range<T*>,
-    std::enable_if_t<std::is_integral<T>::value, void>> {
+  requires std::is_integral_v<T>
+struct hasher<folly::Range<T*>, void> {
   using folly_is_avalanching = std::true_type;
 
   size_t operator()(folly::Range<T*> r) const {

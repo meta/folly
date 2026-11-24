@@ -816,13 +816,10 @@ std::string join(
   return output;
 }
 
-template <
-    class Delim,
-    class Iterator,
-    typename std::enable_if<std::is_base_of<
-        std::forward_iterator_tag,
-        typename std::iterator_traits<Iterator>::iterator_category>::value>::
-        type* = nullptr>
+template <class Delim, class Iterator>
+  requires std::is_base_of_v<
+      std::forward_iterator_tag,
+      typename std::iterator_traits<Iterator>::iterator_category>
 std::string join(const Delim& delimiter, Iterator begin, Iterator end) {
   std::string output;
   join(delimiter, begin, end, output);

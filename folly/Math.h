@@ -101,10 +101,12 @@ inline constexpr T divRoundAwayBranchful(T num, T denom) {
 }
 
 template <typename N, typename D>
-using IdivResultType = typename std::enable_if<
-    std::is_integral<N>::value && std::is_integral<D>::value &&
-        !std::is_same<N, bool>::value && !std::is_same<D, bool>::value,
-    decltype(N{1} / D{1})>::type;
+inline constexpr bool idiv_args_v =
+    std::is_integral_v<N> && std::is_integral_v<D> &&
+    !std::is_same_v<N, bool> && !std::is_same_v<D, bool>;
+
+template <typename N, typename D>
+using IdivResultType = decltype(N{1} / D{1});
 } // namespace detail
 
 #if defined(__arm__) && !FOLLY_AARCH64
@@ -131,6 +133,7 @@ constexpr auto kIntegerDivisionGivesRemainder = true;
  * and denom is equal to -1 after conversion to the result type.
  */
 template <typename N, typename D>
+  requires detail::idiv_args_v<N, D>
 inline constexpr detail::IdivResultType<N, D> divFloor(N num, D denom) {
   using R = decltype(num / denom);
   return detail::IdivResultType<N, D>(
@@ -151,6 +154,7 @@ inline constexpr detail::IdivResultType<N, D> divFloor(N num, D denom) {
  * and denom is equal to -1 after conversion to the result type.
  */
 template <typename N, typename D>
+  requires detail::idiv_args_v<N, D>
 inline constexpr detail::IdivResultType<N, D> divCeil(N num, D denom) {
   using R = decltype(num / denom);
   return detail::IdivResultType<N, D>(
@@ -177,6 +181,7 @@ inline constexpr detail::IdivResultType<N, D> divCeil(N num, D denom) {
  * and denom is equal to -1 after conversion to the result type.
  */
 template <typename N, typename D>
+  requires detail::idiv_args_v<N, D>
 inline constexpr detail::IdivResultType<N, D> divTrunc(N num, D denom) {
   return detail::IdivResultType<N, D>(num / denom);
 }
@@ -194,6 +199,7 @@ inline constexpr detail::IdivResultType<N, D> divTrunc(N num, D denom) {
  * and denom is equal to -1 after conversion to the result type.
  */
 template <typename N, typename D>
+  requires detail::idiv_args_v<N, D>
 inline constexpr detail::IdivResultType<N, D> divRoundAway(N num, D denom) {
   using R = decltype(num / denom);
   return detail::IdivResultType<N, D>(

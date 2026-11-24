@@ -647,7 +647,8 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \post `size() == M-1`
    * \post `at(size()) == Char(0)`
    */
-  template <std::size_t M, class = typename std::enable_if<(M - 1u <= N)>::type>
+  template <std::size_t M>
+    requires(M - 1u <= N)
   constexpr /* implicit */ BasicFixedString(const Char (&that)[M]) noexcept
       : BasicFixedString{
             detail::fixedstring::checkNullTerminated(that),
@@ -741,7 +742,8 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \post `at(size()) == Char(0)`
    * \return `*this`
    */
-  template <std::size_t M, class = typename std::enable_if<(M - 1u <= N)>::type>
+  template <std::size_t M>
+    requires(M - 1u <= N)
   constexpr BasicFixedString& operator=(const Char (&that)[M]) noexcept {
     return assign(detail::fixedstring::checkNullTerminated(that), M - 1u);
   }
@@ -891,7 +893,8 @@ class BasicFixedString : private detail::fixedstring::FixedStringBase {
    * \pre `that[M-1] == Char(0)`
    * \note Equivalent to `assign(that, M - 1)`
    */
-  template <std::size_t M, class = typename std::enable_if<(M - 1u <= N)>::type>
+  template <std::size_t M>
+    requires(M - 1u <= N)
   constexpr BasicFixedString& assign(const Char (&that)[M]) noexcept {
     return assign(detail::fixedstring::checkNullTerminated(that), M - 1u);
   }
