@@ -31,7 +31,7 @@ TimePoint roundUpTimePoint(TimePoint t, Duration d) {
 template <class T>
 void removeEmpty(std::vector<T>& v) {
   const auto& isEmpty = [](const T& val) { return val.empty(); };
-  v.erase(std::remove_if(v.begin(), v.end(), isEmpty), v.end());
+  std::erase_if(v, isEmpty);
 }
 
 template <typename DigestT, typename ClockT>

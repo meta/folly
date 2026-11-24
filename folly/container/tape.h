@@ -381,9 +381,7 @@ class tape {
 
   // ordering --------
 
-  friend bool operator==(const tape& x, const tape& y) {
-    return x.markers_ == y.markers_ && x.data_ == y.data_;
-  }
+  friend bool operator==(const tape& x, const tape& y) = default;
 
   friend auto operator<=>(const tape& a, const tape& b)
     requires std::three_way_comparable<scalar_value_type>

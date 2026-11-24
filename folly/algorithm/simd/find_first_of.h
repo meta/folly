@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <utility>
 
 #include <folly/Portability.h>
 #include <folly/Utility.h>
@@ -331,14 +332,6 @@ class shuffle_vector_finder_first_op_of {
   //  invariant: (a in alphabet) <=> (exists k : shufvec[k * 16 + a % 16] = a)
   alignas(hardware_destructive_interference_size) shuffle const shuffle_;
 
-  //  mimic: std::exchange (constexpr), C++20
-  template <typename T, typename U = T>
-  static constexpr T exchange(T& obj, U&& val) noexcept {
-    auto ret = std::move(obj);
-    obj = std::forward<U>(val);
-    return ret;
-  }
-
   static constexpr shuffle make_shuffle(view const alphabet) noexcept {
     //  init requires: forall k, a : result[k * 16 + a % 16] != a
     shufvec table{1}; // 1, 0, 0, ...
@@ -349,7 +342,7 @@ class shuffle_vector_finder_first_op_of {
 
     for (auto const a : alphabet) {
       auto const v = static_cast<uint8_t>(a);
-      if (!exchange(seen[v], true)) {
+      if (!std::exchange(seen[v], true)) {
         auto const k = lo_seen[v % 16]++;
         maxk = maxk < k ? k : maxk;
         table[k * 16 + v % 16] = v;
@@ -455,14 +448,6 @@ class azmatch_vector_finder_first_op_of {
 
   alignas(hardware_destructive_interference_size) meta const meta_;
 
-  //  mimic: std::exchange (constexpr), C++20
-  template <typename T, typename U = T>
-  static constexpr T exchange(T& obj, U&& val) noexcept {
-    auto ret = std::move(obj);
-    obj = std::forward<U>(val);
-    return ret;
-  }
-
   static constexpr size_t next_segment(
       view& alphabet,
       std::span<value_type, 16> out,
@@ -477,7 +462,7 @@ class azmatch_vector_finder_first_op_of {
     while (items < 16 && alphabet.size()) {
       auto const v = static_cast<uint8_t>(alphabet[0]);
       alphabet = alphabet.subspan(1);
-      if (!exchange(seen[v], true)) {
+      if (!std::exchange(seen[v], true)) {
         out[items++] = v;
       }
     }
