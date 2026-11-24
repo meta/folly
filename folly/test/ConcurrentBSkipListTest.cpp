@@ -1520,7 +1520,7 @@ TEST(SkipListComparison, VerifyAgainstStdSet) {
 
   for (int64_t i = 0; i < kCount; ++i) {
     bool bskipHas = bskip.contains(i);
-    bool setHas = stdSet.count(i) > 0;
+    bool setHas = stdSet.contains(i);
     EXPECT_EQ(bskipHas, setHas) << "Mismatch at key " << i;
   }
 

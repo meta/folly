@@ -647,7 +647,7 @@ int deterministicFutexWakeImpl(
   int rv = 0;
   DeterministicSchedule::beforeSharedAccess();
   futexLock.lock();
-  if (futexQueues.count(futex) > 0) {
+  if (futexQueues.contains(futex)) {
     auto& queue = futexQueues[futex];
     auto iter = queue.begin();
     while (iter != queue.end() && rv < count) {
@@ -718,7 +718,7 @@ folly::detail::FutexResult deterministicFutexWaitImpl(
       // a 10% probability if we haven't been woken up already
       if (!awoken && hasTimeout &&
           DeterministicSchedule::getRandNumber(100) < 10) {
-        assert(futexQueues.count(futex) != 0 && &futexQueues[futex] == &queue);
+        assert(futexQueues.contains(futex) && &futexQueues[futex] == &queue);
         queue.erase(ours);
         if (queue.empty()) {
           futexQueues.erase(futex);

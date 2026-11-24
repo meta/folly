@@ -90,9 +90,7 @@ class UserMetric {
   explicit UserMetric(T precision_val, Type typ = Type::CUSTOM)
       : value(convert_helper(precision_val)), type(typ) {}
 
-  friend bool operator==(const UserMetric& x, const UserMetric& y) {
-    return x.value == y.value && x.type == y.type;
-  }
+  friend bool operator==(const UserMetric& x, const UserMetric& y) = default;
 
  private:
   double convert_helper(double val) { return val; }

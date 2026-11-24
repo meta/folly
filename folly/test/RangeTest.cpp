@@ -1689,8 +1689,12 @@ TEST(Range, NoexceptSwap) {
   SUCCEED();
 }
 
-struct ThrowingSwapIter
-    : public std::iterator<std::input_iterator_tag, int, int, const int*, int> {
+struct ThrowingSwapIter {
+  using iterator_category = std::input_iterator_tag;
+  using value_type = int;
+  using difference_type = int;
+  using pointer = const int*;
+  using reference = int;
 };
 
 // @lint-ignore CLANGTIDY facebook-hte-MissingSwapNoExceptDeclaration

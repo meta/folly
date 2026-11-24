@@ -244,7 +244,7 @@ TEST(ConcurrentSkipList, SequentialAccess) {
     for (int i = 0; i < num_skips; ++i) {
       int n = i * kMaxValue / num_skips;
       bool found = skipper.to(n);
-      EXPECT_EQ(found, (verifier.find(n) != verifier.end()));
+      EXPECT_EQ(found, verifier.contains(n));
     }
   }
 }
@@ -356,7 +356,7 @@ void testConcurrentRemoval(int numThreads, int maxValue) {
 
   CHECK_EQ(maxValue, all.size() + skipList.size());
   for (int i = 0; i < maxValue; ++i) {
-    if (all.find(i) != all.end()) {
+    if (all.contains(i)) {
       CHECK(!skipList.contains(i)) << i;
     } else {
       CHECK(skipList.contains(i)) << i;

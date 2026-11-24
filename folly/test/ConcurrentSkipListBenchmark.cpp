@@ -119,7 +119,7 @@ void BM_SetMerge(int iters, int size) {
 
   [[maybe_unused]] int64_t mergedSum = 0;
   for (const auto& value : a_set) {
-    if (b_set.find(value) != b_set.end()) {
+    if (b_set.contains(value)) {
       mergedSum += value;
     }
   }
@@ -407,7 +407,7 @@ class ConcurrentAccessData {
 
   inline bool setFind(int idx, ValueType val) {
     std::shared_lock g(*locks_[idx]);
-    return sets_[idx].find(val) == sets_[idx].end();
+    return !sets_[idx].contains(val);
   }
   inline void setInsert(int idx, ValueType val) {
     std::unique_lock g(*locks_[idx]);

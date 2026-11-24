@@ -232,9 +232,7 @@ class TypeDescriptor {
 
   friend class TypeDescriptorHasher;
 
-  bool operator==(const TypeDescriptor& other) const {
-    return ti_ == other.ti_ && tag_ti_ == other.tag_ti_;
-  }
+  bool operator==(const TypeDescriptor& other) const = default;
 
  private:
   std::type_index ti_;

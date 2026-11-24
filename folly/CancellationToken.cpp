@@ -309,7 +309,7 @@ auto allocAndConstructMergingState(size_t n, Args&&... ctorArgs) {
   void* p = operator_new( // fundamental alignment suffices per above
       sizeof(MergingCancellationState) + n * sizeof(CancellationCallback));
   // Free memory if the ctor throws. NB: Sized `delete` isn't worth it here.
-  auto guard = makeGuard(std::bind(operator_delete, p));
+  auto guard = makeGuard([p] { operator_delete(p); });
   auto res = CancellationStateTokenPtr{
       new (p) MergingCancellationState(std::forward<Args>(ctorArgs)...)};
   guard.dismiss();
