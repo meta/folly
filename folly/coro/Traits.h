@@ -143,7 +143,8 @@ template <typename Awaitable, typename = void>
 struct awaiter_type {};
 
 template <typename Awaitable>
-struct awaiter_type<Awaitable, std::enable_if_t<is_awaitable_v<Awaitable>>> {
+  requires is_awaitable_v<Awaitable>
+struct awaiter_type<Awaitable> {
   using type = decltype(get_awaiter(std::declval<Awaitable>()));
 };
 
@@ -159,7 +160,8 @@ template <typename Awaitable, typename = void>
 struct await_result {};
 
 template <typename Awaitable>
-struct await_result<Awaitable, std::enable_if_t<is_awaitable_v<Awaitable>>> {
+  requires is_awaitable_v<Awaitable>
+struct await_result<Awaitable> {
   using type = decltype(get_awaiter(std::declval<Awaitable>()).await_resume());
 };
 

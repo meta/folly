@@ -101,9 +101,8 @@ class InlineTaskPromise : public InlineTaskPromiseBase {
 
   InlineTask<T> get_return_object() noexcept;
 
-  template <
-      typename Value = T,
-      std::enable_if_t<std::is_convertible<Value&&, T>::value, int> = 0>
+  template <typename Value = T>
+    requires std::is_convertible_v<Value&&, T>
   void return_value(Value&& value) noexcept(
       std::is_nothrow_constructible<T, Value&&>::value) {
     result_.emplace(static_cast<Value&&>(value));

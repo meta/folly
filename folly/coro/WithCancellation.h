@@ -39,9 +39,8 @@ namespace adl {
 
 /// Default implementation that does not hook the cancellation token.
 /// Types must opt-in to hooking cancellation by customising this function.
-template <
-    typename Awaitable,
-    std::enable_if_t<!folly::ext::must_use_immediately_v<Awaitable>, int> = 0>
+template <typename Awaitable>
+  requires(!folly::ext::must_use_immediately_v<Awaitable>)
 // WART: The `Awaitable&&` overload must return `Awaitable&&` to support
 // `Baton`s, which is immovable and awaitable only by lvalue.  We could remove
 // this, and simplify other code, by migrating `Baton`s to emit an explicit
@@ -50,18 +49,16 @@ Awaitable&& co_withCancellation(
     const folly::CancellationToken&, Awaitable&& awaitable) noexcept {
   return static_cast<Awaitable&&>(awaitable);
 }
-template <
-    typename Awaitable,
-    std::enable_if_t<folly::ext::must_use_immediately_v<Awaitable>, int> = 0>
+template <typename Awaitable>
+  requires folly::ext::must_use_immediately_v<Awaitable>
 Awaitable co_withCancellation(
     const folly::CancellationToken&, Awaitable awaitable) noexcept {
   return folly::ext::must_use_immediately_unsafe_mover(std::move(awaitable))();
 }
 
 struct WithCancellationFunction {
-  template <
-      typename Awaitable,
-      std::enable_if_t<!folly::ext::must_use_immediately_v<Awaitable>, int> = 0>
+  template <typename Awaitable>
+    requires(!folly::ext::must_use_immediately_v<Awaitable>)
   auto operator()(
       const folly::CancellationToken& cancelToken, Awaitable&& awaitable) const
       noexcept(noexcept(co_withCancellation(
@@ -71,9 +68,8 @@ struct WithCancellationFunction {
     return co_withCancellation(
         cancelToken, static_cast<Awaitable&&>(awaitable));
   }
-  template <
-      typename Awaitable,
-      std::enable_if_t<folly::ext::must_use_immediately_v<Awaitable>, int> = 0>
+  template <typename Awaitable>
+    requires folly::ext::must_use_immediately_v<Awaitable>
   auto operator()(
       const folly::CancellationToken& cancelToken, Awaitable awaitable) const
       noexcept(noexcept(co_withCancellation(
@@ -88,9 +84,8 @@ struct WithCancellationFunction {
         cancelToken,
         folly::ext::must_use_immediately_unsafe_mover(std::move(awaitable))());
   }
-  template <
-      typename Awaitable,
-      std::enable_if_t<!folly::ext::must_use_immediately_v<Awaitable>, int> = 0>
+  template <typename Awaitable>
+    requires(!folly::ext::must_use_immediately_v<Awaitable>)
   auto operator()(folly::CancellationToken&& cancelToken, Awaitable&& awaitable)
       const noexcept(noexcept(co_withCancellation(
           std::move(cancelToken), static_cast<Awaitable&&>(awaitable))))
@@ -99,9 +94,8 @@ struct WithCancellationFunction {
     return co_withCancellation(
         std::move(cancelToken), static_cast<Awaitable&&>(awaitable));
   }
-  template <
-      typename Awaitable,
-      std::enable_if_t<folly::ext::must_use_immediately_v<Awaitable>, int> = 0>
+  template <typename Awaitable>
+    requires folly::ext::must_use_immediately_v<Awaitable>
   auto operator()(folly::CancellationToken&& cancelToken, Awaitable awaitable)
       const noexcept(noexcept(co_withCancellation(
           std::move(cancelToken),

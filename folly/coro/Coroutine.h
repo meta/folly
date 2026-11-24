@@ -119,8 +119,6 @@ inline constexpr await_suspend_return_coroutine_fn
 
 } // namespace detail
 
-#if __has_include(<variant>)
-
 //  variant_awaitable
 //
 //  An awaitable type which is backed by one of several possible underlying
@@ -154,8 +152,6 @@ class variant_awaitable : private std::variant<A...> {
     return visit([&](auto& a) { return a.await_resume(); });
   }
 };
-
-#endif // __has_include(<variant>)
 
 //  ----
 
@@ -355,9 +351,8 @@ class ExtendedCoroutineHandle {
   /*implicit*/ ExtendedCoroutineHandle(coroutine_handle<> handle) noexcept
       : basic_(handle) {}
 
-  template <
-      typename Promise,
-      std::enable_if_t<use_extended_handle<Promise>::value, int> = 0>
+  template <typename Promise>
+    requires use_extended_handle<Promise>::value
   /*implicit*/ ExtendedCoroutineHandle(Promise* promise) noexcept
       : basic_(coroutine_handle<Promise>::from_promise(*promise)),
         extended_(Promise::getPromiseBase(PrivateTag{}, promise)) {}

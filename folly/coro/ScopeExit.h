@@ -40,15 +40,11 @@ namespace coro {
 namespace detail {
 struct AttachScopeExitFn {
   /// Dispatches to a custom implementation using tag_invoke()
-  template <
-      typename ParentPromise,
-      typename ChildPromise,
-      std::enable_if_t<
-          folly::is_tag_invocable_v<
-              AttachScopeExitFn,
-              ParentPromise&,
-              coroutine_handle<ChildPromise>>,
-          int> = 0>
+  template <typename ParentPromise, typename ChildPromise>
+    requires folly::is_tag_invocable_v<
+        AttachScopeExitFn,
+        ParentPromise&,
+        coroutine_handle<ChildPromise>>
   auto operator()(
       ParentPromise& parent, coroutine_handle<ChildPromise> action) const
       noexcept(folly::is_nothrow_tag_invocable_v<

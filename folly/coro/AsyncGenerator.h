@@ -673,12 +673,10 @@ class AsyncGeneratorPromise final
   /// However, we don't want to allow this for cases where 'Reference' _is_
   /// a reference because this could result in the reference binding to a
   /// temporary that results from an implicit conversion.
-  template <
-      typename U,
-      std::enable_if_t<
-          !std::is_reference_v<Reference> &&
-              std::is_convertible_v<U&&, Reference>,
-          int> = 0>
+  template <typename U>
+    requires(
+        !std::is_reference_v<Reference> &&
+        std::is_convertible_v<U &&, Reference>)
   YieldAwaiter yield_value(U&& value) noexcept(
       std::is_nothrow_constructible_v<Reference, U>) {
     DCHECK(state() == State::INVALID);

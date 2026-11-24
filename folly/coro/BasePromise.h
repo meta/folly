@@ -83,9 +83,8 @@ class BasePromise {
   }
 
  public:
-  template <
-      typename Awaitable,
-      std::enable_if_t<!folly::ext::must_use_immediately_v<Awaitable>, int> = 0>
+  template <typename Awaitable>
+    requires(!folly::ext::must_use_immediately_v<Awaitable>)
   auto await_transform(Awaitable&& awaitable) {
     bypassThrowing_.maybeActivate<Awaitable>();
     return folly::coro::co_withAsyncStack(
@@ -94,9 +93,8 @@ class BasePromise {
             folly::coro::co_withCancellation(
                 cancelToken_, static_cast<Awaitable&&>(awaitable))));
   }
-  template <
-      typename Awaitable,
-      std::enable_if_t<folly::ext::must_use_immediately_v<Awaitable>, int> = 0>
+  template <typename Awaitable>
+    requires folly::ext::must_use_immediately_v<Awaitable>
   auto await_transform(Awaitable awaitable) {
     bypassThrowing_.maybeActivate<Awaitable>();
     return folly::coro::co_withAsyncStack(

@@ -27,12 +27,10 @@ namespace folly::coro {
 /// function, so it is enough to define co_cleanup for a type to be able to use
 /// it with AutoCleanup.
 struct co_cleanup_fn {
-  template <
-      typename T,
-      std::enable_if_t<
-          folly::is_tag_invocable_v<co_cleanup_fn, T&&> &&
-              !std::is_lvalue_reference_v<T>,
-          int> = 0>
+  template <typename T>
+    requires(
+        folly::is_tag_invocable_v<co_cleanup_fn, T &&> &&
+        !std::is_lvalue_reference_v<T>)
   auto operator()(T&& object) const
       noexcept(folly::is_nothrow_tag_invocable_v<co_cleanup_fn, T&&>)
           -> folly::tag_invoke_result_t<co_cleanup_fn, T&&> {

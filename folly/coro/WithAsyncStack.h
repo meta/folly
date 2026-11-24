@@ -231,11 +231,8 @@ class WithAsyncStackAwaitable {
 
 struct WithAsyncStackFunction {
   // Dispatches to a custom implementation using tag_invoke()
-  template <
-      typename Awaitable,
-      std::enable_if_t<
-          folly::is_tag_invocable_v<WithAsyncStackFunction, Awaitable>,
-          int> = 0>
+  template <typename Awaitable>
+    requires folly::is_tag_invocable_v<WithAsyncStackFunction, Awaitable>
   auto operator()(Awaitable&& awaitable) const noexcept(
       folly::is_nothrow_tag_invocable_v<WithAsyncStackFunction, Awaitable>)
       -> folly::tag_invoke_result_t<WithAsyncStackFunction, Awaitable> {
@@ -246,12 +243,10 @@ struct WithAsyncStackFunction {
   // Fallback implementation. Wraps the awaitable in the
   // WithAsyncStackAwaitable which just saves/restores the
   // awaiting coroutine's AsyncStackFrame.
-  template <
-      typename Awaitable,
-      std::enable_if_t<
-          !folly::is_tag_invocable_v<WithAsyncStackFunction, Awaitable>,
-          int> = 0,
-      std::enable_if_t<folly::coro::is_awaitable_v<Awaitable>, int> = 0>
+  template <typename Awaitable>
+    requires(
+        !folly::is_tag_invocable_v<WithAsyncStackFunction, Awaitable> &&
+        folly::coro::is_awaitable_v<Awaitable>)
   WithAsyncStackAwaitable<Awaitable> operator()(Awaitable&& awaitable) const
       noexcept(std::is_nothrow_move_constructible_v<Awaitable>) {
     return WithAsyncStackAwaitable<Awaitable>{

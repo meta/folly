@@ -196,33 +196,29 @@ class Synchronized : public NonCopyableNonMovable {
   using wlock_result_t = invoke_result_t<FuncT, WriteLockedPtr>;
 
   template <typename FuncT, typename ReturnT = rlock_result_t<FuncT>>
-  typename std::enable_if<!is_semi_awaitable_v<ReturnT>, Task<ReturnT>>::type
-  withRLock(FuncT func) const {
+    requires(!is_semi_awaitable_v<ReturnT>)
+  Task<ReturnT> withRLock(FuncT func) const {
     auto lock = co_await Traits::co_readLock(mutex_);
     co_return func(ReadLockedPtr{std::move(lock), &inner_});
   }
 
   template <typename FuncT, typename ReturnT = rlock_result_t<FuncT>>
-  typename std::enable_if<
-      is_semi_awaitable_v<ReturnT>,
-      Task<semi_await_result_t<ReturnT>>>::type
-  withRLock(FuncT func) const {
+    requires is_semi_awaitable_v<ReturnT>
+  Task<semi_await_result_t<ReturnT>> withRLock(FuncT func) const {
     auto lock = co_await Traits::co_readLock(mutex_);
     co_return co_await func(ReadLockedPtr{std::move(lock), &inner_});
   }
 
   template <typename FuncT, typename ReturnT = wlock_result_t<FuncT>>
-  typename std::enable_if<!is_semi_awaitable_v<ReturnT>, Task<ReturnT>>::type
-  withWLock(FuncT func) {
+    requires(!is_semi_awaitable_v<ReturnT>)
+  Task<ReturnT> withWLock(FuncT func) {
     auto lock = co_await Traits::co_writeLock(mutex_);
     co_return func(WriteLockedPtr{std::move(lock), &inner_});
   }
 
   template <typename FuncT, typename ReturnT = wlock_result_t<FuncT>>
-  typename std::enable_if<
-      is_semi_awaitable_v<ReturnT>,
-      Task<semi_await_result_t<ReturnT>>>::type
-  withWLock(FuncT func) {
+    requires is_semi_awaitable_v<ReturnT>
+  Task<semi_await_result_t<ReturnT>> withWLock(FuncT func) {
     auto lock = co_await Traits::co_writeLock(mutex_);
     co_return co_await func(WriteLockedPtr{std::move(lock), &inner_});
   }

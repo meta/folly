@@ -215,7 +215,8 @@ class [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE]] ValueOrFatalAwaitable
       ValueOrFatalAwaitableWithPolicy<Policy>::template apply,
       T>::CommutativeWrapperAwaitable;
 
-  template <typename T2 = T, std::enable_if_t<is_awaitable_v<T2>, int> = 0>
+  template <typename T2 = T>
+    requires is_awaitable_v<T2>
   ValueOrFatalAwaiter<T, Policy> operator co_await() && {
     return ValueOrFatalAwaiter<T, Policy>{std::move(this->inner_)};
   }

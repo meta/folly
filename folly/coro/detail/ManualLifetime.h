@@ -38,9 +38,8 @@ class ManualLifetime {
   ManualLifetime() noexcept {}
   ~ManualLifetime() {}
 
-  template <
-      typename... Args,
-      std::enable_if_t<std::is_constructible<T, Args...>::value, int> = 0>
+  template <typename... Args>
+    requires std::is_constructible_v<T, Args...>
   void construct(Args&&... args) noexcept(
       noexcept(std::is_nothrow_constructible<T, Args...>::value)) {
     ::new (static_cast<void*>(std::addressof(value_)))
@@ -106,10 +105,8 @@ class ManualLifetime<void> {
 // it in-place constructs the ManualLifetime, making it the active
 // member of the union. Then it calls 'construct' on it to construct
 // the value inside it.
-template <
-    typename T,
-    typename... Args,
-    std::enable_if_t<std::is_constructible<T, Args...>::value, int> = 0>
+template <typename T, typename... Args>
+  requires std::is_constructible_v<T, Args...>
 void activate(ManualLifetime<T>& box, Args&&... args) noexcept(
     std::is_nothrow_constructible<T, Args...>::value) {
   auto* p = ::new (&box) ManualLifetime<T>{};

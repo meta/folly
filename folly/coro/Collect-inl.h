@@ -440,12 +440,9 @@ auto collectAllTry(SemiAwaitables... awaitables)
           static_cast<SemiAwaitables&&>(awaitables))...);
 }
 
-template <
-    typename InputRange,
-    std::enable_if_t<
-        !std::is_void_v<
-            semi_await_result_t<detail::range_reference_t<InputRange>>>,
-        int>>
+template <typename InputRange>
+  requires(!std::is_void_v<
+           semi_await_result_t<detail::range_reference_t<InputRange>>>)
 auto collectAllRange(InputRange awaitables)
     -> folly::coro::Task<std::vector<detail::collect_all_range_component_t<
         detail::range_reference_t<InputRange>>>> {
@@ -516,12 +513,9 @@ auto collectAllRange(InputRange awaitables)
   co_return results;
 }
 
-template <
-    typename InputRange,
-    std::enable_if_t<
-        std::is_void_v<
-            semi_await_result_t<detail::range_reference_t<InputRange>>>,
-        int>>
+template <typename InputRange>
+  requires std::is_void_v<
+      semi_await_result_t<detail::range_reference_t<InputRange>>>
 auto collectAllRange(InputRange awaitables) -> folly::coro::Task<void> {
   const folly::Executor::KeepAlive<> executor = co_await co_current_executor;
   const CancellationSource cancelSource;
@@ -644,12 +638,9 @@ auto collectAllTryRange(InputRange awaitables)
   co_return results;
 }
 
-template <
-    typename InputRange,
-    std::enable_if_t<
-        std::is_void_v<
-            semi_await_result_t<detail::range_reference_t<InputRange>>>,
-        int>>
+template <typename InputRange>
+  requires std::is_void_v<
+      semi_await_result_t<detail::range_reference_t<InputRange>>>
 auto collectAllWindowed(InputRange awaitables, std::size_t maxConcurrency)
     -> folly::coro::Task<void> {
   assert(maxConcurrency > 0);
@@ -756,12 +747,9 @@ auto collectAllWindowed(InputRange awaitables, std::size_t maxConcurrency)
   }
 }
 
-template <
-    typename InputRange,
-    std::enable_if_t<
-        !std::is_void_v<
-            semi_await_result_t<detail::range_reference_t<InputRange>>>,
-        int>>
+template <typename InputRange>
+  requires(!std::is_void_v<
+           semi_await_result_t<detail::range_reference_t<InputRange>>>)
 auto collectAllWindowed(InputRange awaitables, std::size_t maxConcurrency)
     -> folly::coro::Task<std::vector<detail::collect_all_range_component_t<
         detail::range_reference_t<InputRange>>>> {

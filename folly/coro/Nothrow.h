@@ -49,9 +49,8 @@ NothrowAwaitable : public CommutativeWrapperAwaitable<NothrowAwaitable, T> {
   using CommutativeWrapperAwaitable<NothrowAwaitable, T>::
       CommutativeWrapperAwaitable;
 
-  template <
-      typename T2 = T,
-      std::enable_if_t<!value_only_awaitable_v<T>, int> = 0>
+  template <typename T2 = T>
+    requires(!value_only_awaitable_v<T>)
   T2&& unwrap() {
     return std::move(this->inner_);
   }
@@ -170,23 +169,19 @@ class BypassExceptionThrowing {
 //
 // `co_awaitTry` is also widely used but has a subtle footgun: it silently
 // interrupts cancellation. Prefer `value_or_error` for new code.
-template <
-    typename Awaitable,
-    std::enable_if_t<
-        !value_only_awaitable_v<Awaitable> && // Comment on `NothrowAwaitable`
-            !folly::ext::must_use_immediately_v<Awaitable>,
-        int> = 0>
+template <typename Awaitable>
+  requires(
+      !value_only_awaitable_v<Awaitable> && // Comment on `NothrowAwaitable`
+      !folly::ext::must_use_immediately_v<Awaitable>)
 detail::NothrowAwaitable<std::remove_cvref_t<Awaitable>> co_nothrow(
     [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE_ARGUMENT]] Awaitable&& awaitable) {
   return detail::NothrowAwaitable<std::remove_cvref_t<Awaitable>>{
       static_cast<Awaitable&&>(awaitable)};
 }
-template <
-    typename Awaitable,
-    std::enable_if_t<
-        !value_only_awaitable_v<Awaitable> && // Comment on `NothrowAwaitable`
-            folly::ext::must_use_immediately_v<Awaitable>,
-        int> = 0>
+template <typename Awaitable>
+  requires(
+      !value_only_awaitable_v<Awaitable> && // Comment on `NothrowAwaitable`
+      folly::ext::must_use_immediately_v<Awaitable>)
 detail::NothrowAwaitable<std::remove_cvref_t<Awaitable>> co_nothrow(
     [[FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE_ARGUMENT]] Awaitable awaitable) {
   return detail::NothrowAwaitable<std::remove_cvref_t<Awaitable>>{
