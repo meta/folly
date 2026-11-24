@@ -257,6 +257,7 @@ struct literal_c_str {
 
 #endif
 
+// TODO: Remove after CUDA 12.8 is retired
 #if !defined(__NVCC__)
 
 /// literal_string
