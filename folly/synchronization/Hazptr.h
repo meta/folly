@@ -21,6 +21,7 @@
 #include <folly/synchronization/HazptrHolder.h>
 #include <folly/synchronization/HazptrObj.h>
 #include <folly/synchronization/HazptrObjLinked.h>
+#include <folly/synchronization/HazptrProtectedPtr.h>
 #include <folly/synchronization/HazptrRec.h>
 #include <folly/synchronization/HazptrThrLocal.h>
 

@@ -196,6 +196,7 @@ fb_dirsync_cpp_unittest(
         "//folly/synchronization/example:hazptr_swmr_set",
         "//folly/synchronization/example:hazptr_wide_cas",
         "//folly/test:deterministic_schedule",
+        "//xplat/folly:portability",
     ],
 )
 

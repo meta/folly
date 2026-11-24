@@ -176,6 +176,7 @@ folly_add_library(
     HazptrHolder.h
     HazptrObj.h
     HazptrObjLinked.h
+    HazptrProtectedPtr.h
     HazptrRec.h
     HazptrThrLocal.h
   DEPS

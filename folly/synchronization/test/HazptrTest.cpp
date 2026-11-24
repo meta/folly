@@ -20,12 +20,14 @@
 #include <bit>
 #include <cstdint>
 #include <thread>
+#include <type_traits>
 
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
 
 #include <iomanip>
+#include <folly/Portability.h>
 #include <folly/Singleton.h>
 #include <folly/portability/GFlags.h>
 #include <folly/portability/GTest.h>
@@ -54,6 +56,7 @@ using folly::hazptr_local;
 using folly::hazptr_obj_base;
 using folly::hazptr_obj_base_linked;
 using folly::hazptr_obj_cohort;
+using folly::hazptr_protected_ptr;
 using folly::hazptr_retire;
 using folly::hazptr_root;
 using folly::hazptr_tc;
@@ -61,12 +64,20 @@ using folly::hazptr_tc_evict;
 using folly::HazptrLockFreeLIFO;
 using folly::HazptrSWMRSet;
 using folly::HazptrWideCAS;
+using folly::kMscVer;
 using folly::make_hazard_pointer;
 using folly::make_hazard_pointer_array;
 using folly::test::Barrier;
 using folly::test::DeterministicAtomic;
 
 using DSched = folly::test::DeterministicSchedule;
+
+// MSVC rejects binding the guard's forwarded argument to an rvalue-reference
+// filter/projection parameter, so tests declare such parameters as plain
+// pointers there. Everywhere else they stay rvalue-only, enforcing the
+// prvalue call.
+template <typename T>
+using FilterParam = std::conditional_t<(kMscVer != 0), T*, T*&&>;
 
 // Structures
 
@@ -183,6 +194,274 @@ static_assert(SupportsHazptrSource<NothrowPointerSource>);
 static_assert(!SupportsHazptrSource<ThrowingPointerSource>);
 static_assert(SupportsHazptrSource<MoveOnlyPointerSource>);
 static_assert(!SupportsHazptrSource<MoveOnlyPointerSource&>);
+
+// Nothrow free-function filter, for exercising function-pointer filters.
+static Node<>* untag_fn(Node<>* ptr) noexcept {
+  return std::bit_cast<Node<>*>(
+      std::bit_cast<std::uintptr_t>(ptr) & ~std::uintptr_t{1});
+}
+
+template <typename T, typename Func>
+concept SupportsProtectedPtrFilter = requires(std::atomic<T*>& src, Func f) {
+  hazptr_protected_ptr<T>(src, f);
+};
+
+static_assert(SupportsProtectedPtrFilter<Node<>, NothrowPointerFilter>);
+static_assert(SupportsProtectedPtrFilter<Node<>, decltype(&untag_fn)>);
+
+template <template <typename> class Atom = std::atomic>
+void protected_ptr_guards_test() {
+  c_.clear();
+  Atom<Node<Atom>*> src{new Node<Atom>(42)};
+  {
+    hazptr_protected_ptr<Node<Atom>, Atom> guard(src);
+    EXPECT_TRUE(static_cast<bool>(guard));
+    EXPECT_EQ(42, guard->value());
+    EXPECT_EQ(42, (*guard).value());
+    Node<Atom>* doomed = src.exchange(new Node<Atom>(7));
+    doomed->retire();
+    hazptr_cleanup<Atom>();
+    EXPECT_EQ(0, c_.dtors()); // guarded: must not be reclaimed
+    hazptr_protected_ptr<Node<Atom>, Atom> moved(std::move(guard));
+    EXPECT_EQ(42, moved->value());
+    EXPECT_FALSE(static_cast<bool>(guard)); // moved-from is empty
+  } // protection released here
+  hazptr_cleanup<Atom>();
+  EXPECT_EQ(1, c_.dtors());
+  Node<Atom>* current = src.exchange(nullptr);
+  current->retire();
+  hazptr_cleanup<Atom>();
+  EXPECT_EQ(2, c_.dtors());
+}
+
+TEST(HazptrProtectedPtr, GuardsRetiredObjectUntilReleased) {
+  protected_ptr_guards_test();
+}
+
+TEST(HazptrProtectedPtr, GuardsInCustomDomain) {
+  c_.clear();
+  hazptr_domain<> domain;
+  std::atomic<Node<>*> src{new Node<>(11)};
+  {
+    hazptr_protected_ptr<Node<>> guard(domain, src);
+    EXPECT_TRUE(static_cast<bool>(guard));
+    EXPECT_EQ(11, guard->value());
+    Node<>* doomed = src.exchange(new Node<>(12));
+    doomed->retire(domain);
+    hazptr_cleanup(domain);
+    EXPECT_EQ(0, c_.dtors()); // guarded in the same domain: not reclaimed
+  } // protection released here
+  hazptr_cleanup(domain);
+  EXPECT_EQ(1, c_.dtors());
+  Node<>* current = src.exchange(nullptr);
+  current->retire(domain);
+  hazptr_cleanup(domain);
+  EXPECT_EQ(2, c_.dtors());
+}
+
+TEST(HazptrProtectedPtr, TaggedPointerFilter) {
+  static_assert(alignof(Node<>) >= 2);
+  c_.clear();
+  auto tag = [](Node<>* ptr) noexcept {
+    return std::bit_cast<Node<>*>(
+        std::bit_cast<std::uintptr_t>(ptr) | std::uintptr_t{1});
+  };
+  auto untag = [](Node<>* ptr) noexcept {
+    return std::bit_cast<Node<>*>(
+        std::bit_cast<std::uintptr_t>(ptr) & ~std::uintptr_t{1});
+  };
+  // A tagged null maps to an empty guard.
+  {
+    std::atomic<Node<>*> nullSrc{tag(nullptr)};
+    hazptr_protected_ptr<Node<>> nullGuard(nullSrc, untag);
+    EXPECT_FALSE(static_cast<bool>(nullGuard));
+    EXPECT_EQ(nullptr, nullGuard.get());
+  }
+  Node<>* raw = new Node<>(5);
+  std::atomic<Node<>*> src{tag(raw)};
+  {
+    hazptr_protected_ptr<Node<>> guard(src, untag);
+    ASSERT_TRUE(static_cast<bool>(guard));
+    EXPECT_EQ(raw, guard.get()); // stored untagged, not the tagged raw value
+    EXPECT_EQ(5, guard->value());
+    Node<>* current = src.exchange(new Node<>(6));
+    untag(current)->retire();
+    hazptr_cleanup();
+    EXPECT_EQ(0, c_.dtors()); // guarded: must not be reclaimed
+  } // protection released here
+  hazptr_cleanup();
+  EXPECT_EQ(1, c_.dtors());
+  // Function-pointer filters work the same as lambdas (src now untagged).
+  {
+    hazptr_protected_ptr<Node<>> fnGuard(src, &untag_fn);
+    ASSERT_TRUE(static_cast<bool>(fnGuard));
+    EXPECT_EQ(6, fnGuard->value());
+  }
+  Node<>* current = untag(src.exchange(nullptr));
+  current->retire();
+  hazptr_cleanup();
+  EXPECT_EQ(2, c_.dtors());
+}
+
+TEST(HazptrProtectedPtr, RvalueOnlyFilter) {
+  static_assert(alignof(Node<>) >= 2);
+  c_.clear();
+  auto tag = [](Node<>* ptr) noexcept {
+    return std::bit_cast<Node<>*>(
+        std::bit_cast<std::uintptr_t>(ptr) | std::uintptr_t{1});
+  };
+  // Rvalue-only filter (see FilterParam): instantiating the guard with this
+  // must compile, since the constraint checks invocation with a prvalue.
+  auto untag = [](FilterParam<Node<>> ptr) noexcept {
+    return std::bit_cast<Node<>*>(
+        std::bit_cast<std::uintptr_t>(ptr) & ~std::uintptr_t{1});
+  };
+  Node<>* raw = new Node<>(15);
+  std::atomic<Node<>*> src{tag(raw)};
+  {
+    hazptr_protected_ptr<Node<>> guard(src, untag);
+    ASSERT_TRUE(static_cast<bool>(guard));
+    EXPECT_EQ(raw, guard.get());
+    EXPECT_EQ(15, guard->value());
+    Node<>* current = src.exchange(new Node<>(16));
+    Node<>* doomed = untag(static_cast<Node<>*>(current));
+    doomed->retire();
+    hazptr_cleanup();
+    EXPECT_EQ(0, c_.dtors()); // guarded: must not be reclaimed
+  } // protection released here
+  hazptr_cleanup();
+  EXPECT_EQ(1, c_.dtors());
+  Node<>* leftover = src.exchange(nullptr);
+  leftover->retire();
+  hazptr_cleanup();
+  EXPECT_EQ(2, c_.dtors());
+}
+
+TEST(HazptrProtectedPtr, ProjectedView) {
+  // Published snapshot analogue: owns its handle, retired as one object.
+  struct Snapshot : public hazptr_obj_base<Snapshot> {
+    explicit Snapshot(Node<>* h) : handle(h) {}
+    ~Snapshot() { delete handle; }
+    Node<>* handle;
+  };
+  auto view = [](Snapshot* p) noexcept { return p->handle; };
+  c_.clear();
+  std::atomic<Snapshot*> src{new Snapshot(new Node<>(3))};
+  {
+    hazptr_protected_ptr<Node<>> guard(src, view);
+    ASSERT_TRUE(static_cast<bool>(guard));
+    EXPECT_EQ(3, guard->value());
+    Snapshot* doomed = src.exchange(new Snapshot(new Node<>(4)));
+    doomed->retire();
+    hazptr_cleanup();
+    EXPECT_EQ(0, c_.dtors()); // guarded container: member not reclaimed
+  } // protection released here
+  hazptr_cleanup();
+  EXPECT_EQ(1, c_.dtors());
+  Snapshot* current = src.exchange(nullptr);
+  current->retire();
+  hazptr_cleanup();
+  EXPECT_EQ(2, c_.dtors());
+  // Empty src yields an empty guard without invoking the projection.
+  {
+    hazptr_protected_ptr<Node<>> empty(src, view);
+    EXPECT_FALSE(static_cast<bool>(empty));
+    EXPECT_EQ(nullptr, empty.get());
+  }
+}
+
+TEST(HazptrProtectedPtr, ProjectedRvalueView) {
+  // Published snapshot analogue: owns its handle, retired as one object.
+  struct Snapshot : public hazptr_obj_base<Snapshot> {
+    explicit Snapshot(Node<>* h) : handle(h) {}
+    ~Snapshot() { delete handle; }
+    Node<>* handle;
+  };
+  // Rvalue-only projection (see FilterParam).
+  auto view = [](FilterParam<Snapshot> p) noexcept { return p->handle; };
+  c_.clear();
+  std::atomic<Snapshot*> src{new Snapshot(new Node<>(25))};
+  {
+    hazptr_protected_ptr<Node<>> guard(src, view);
+    ASSERT_TRUE(static_cast<bool>(guard));
+    EXPECT_EQ(25, guard->value());
+    Snapshot* doomed = src.exchange(new Snapshot(new Node<>(26)));
+    doomed->retire();
+    hazptr_cleanup();
+    EXPECT_EQ(0, c_.dtors()); // guarded container: member not reclaimed
+  } // protection released here
+  hazptr_cleanup();
+  EXPECT_EQ(1, c_.dtors());
+  Snapshot* current = src.exchange(nullptr);
+  current->retire();
+  hazptr_cleanup();
+  EXPECT_EQ(2, c_.dtors());
+}
+
+TEST(HazptrProtectedPtr, ResetReleasesEarly) {
+  c_.clear();
+  std::atomic<Node<>*> src{new Node<>(21)};
+  hazptr_protected_ptr<Node<>> guard(src);
+  ASSERT_TRUE(static_cast<bool>(guard));
+  Node<>* doomed = src.exchange(new Node<>(22));
+  doomed->retire();
+  guard.reset();
+  EXPECT_FALSE(static_cast<bool>(guard));
+  EXPECT_EQ(nullptr, guard.get());
+  hazptr_cleanup();
+  EXPECT_EQ(1, c_.dtors()); // released before cleanup: reclaimed
+  // A new guard may be move-assigned over a reset one.
+  guard = hazptr_protected_ptr<Node<>>(src);
+  EXPECT_TRUE(static_cast<bool>(guard));
+  EXPECT_EQ(22, guard->value());
+  Node<>* current = src.exchange(nullptr);
+  current->retire();
+  guard.reset(); // drop the second protection before reclaiming
+  hazptr_cleanup();
+  EXPECT_EQ(2, c_.dtors());
+  // reset() on moved-from and default-constructed guards is safe (no UB
+  // from touching a null hazard record).
+  {
+    std::atomic<Node<>*> src2{new Node<>(30)};
+    hazptr_protected_ptr<Node<>> g(src2);
+    hazptr_protected_ptr<Node<>> m(std::move(std::move(g)));
+    g.reset();
+    EXPECT_FALSE(static_cast<bool>(g));
+    m.reset();
+    EXPECT_FALSE(static_cast<bool>(m));
+    Node<>* leftover = src2.exchange(nullptr);
+    leftover->retire();
+    hazptr_cleanup();
+    EXPECT_EQ(3, c_.dtors());
+  }
+  {
+    hazptr_protected_ptr<Node<>> empty;
+    empty.reset();
+    EXPECT_FALSE(static_cast<bool>(empty));
+  }
+}
+
+TEST(HazptrProtectedPtr, EmptyGuardAndComparisons) {
+  c_.clear();
+  folly::hazptr_protected_ptr<Node<>> empty;
+  EXPECT_FALSE(static_cast<bool>(empty));
+  EXPECT_EQ(nullptr, empty.get());
+  EXPECT_TRUE(empty == nullptr);
+  EXPECT_TRUE(nullptr == empty);
+  EXPECT_FALSE(empty != nullptr);
+  EXPECT_FALSE(nullptr != empty);
+  std::atomic<Node<>*> src{new Node<>(1)};
+  {
+    folly::hazptr_protected_ptr<Node<>> guard(src);
+    EXPECT_TRUE(guard != nullptr);
+    EXPECT_TRUE(nullptr != guard);
+    EXPECT_FALSE(guard == nullptr);
+  }
+  Node<>* current = src.exchange(nullptr);
+  current->retire();
+  hazptr_cleanup();
+  EXPECT_EQ(1, c_.dtors());
+}
 
 /** NodeRC */
 template <bool Mutable, template <typename> class Atom = std::atomic>
@@ -1490,6 +1769,11 @@ TEST_F(HazptrPreInitTest, dsched_callable_source_try_protect) {
 TEST_F(HazptrPreInitTest, dsched_tagged_pointer_try_protect) {
   DSched sched(DSched::uniform(0));
   tagged_pointer_try_protect_test<DeterministicAtomic>();
+}
+
+TEST_F(HazptrPreInitTest, dsched_protected_ptr_guards) {
+  DSched sched(DSched::uniform(0));
+  protected_ptr_guards_test<DeterministicAtomic>();
 }
 
 TEST(HazptrTest, virtual) {

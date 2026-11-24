@@ -122,6 +122,14 @@ template <
     typename Deleter = std::default_delete<T>>
 class hazptr_obj_base_linked;
 
+/// Classes related to hazard-pointer-guarded views.
+/// Defined in HazptrProtectedPtr.h
+///
+
+/** hazptr_protected_ptr */
+template <typename T, template <typename> class Atom = std::atomic>
+class hazptr_protected_ptr;
+
 ///
 /// Classes and functions related to thread local structures.
 /// Defined in HazptrThrLocal.h
