@@ -184,7 +184,6 @@ fb_dirsync_cpp_library(
         "//folly:utility",
         "//folly/functional:invoke",
         "//folly/lang:exception",
-        "//folly/lang:static_const",
     ],
 )
 

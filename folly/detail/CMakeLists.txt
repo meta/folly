@@ -165,7 +165,6 @@ folly_add_library(
     folly_detail_typelist
     folly_functional_invoke
     folly_lang_exception
-    folly_lang_static_const
     folly_poly_exception
     folly_portability
     folly_traits

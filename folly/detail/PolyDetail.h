@@ -30,7 +30,6 @@
 #include <folly/detail/TypeList.h>
 #include <folly/functional/Invoke.h>
 #include <folly/lang/Exception.h>
-#include <folly/lang/StaticConst.h>
 
 namespace folly {
 /// \cond
@@ -502,9 +501,12 @@ inline constexpr ThunkFn<T, User, I> thunk_() noexcept {
   return ThunkFn<T, User, I>{};
 }
 
+template <class V>
+inline constexpr V staticVTable{};
+
 template <class I>
 constexpr VTable<I> const* vtable() noexcept {
-  return &StaticConst<VTable<I>>::value;
+  return &staticVTable<VTable<I>>;
 }
 
 template <class I, class T>
@@ -514,7 +516,7 @@ struct VTableFor : VTable<I> {
 
 template <class I, class T>
 constexpr VTable<I> const* vtableFor() noexcept {
-  return &StaticConst<VTableFor<I, T>>::value;
+  return &staticVTable<VTableFor<I, T>>;
 }
 
 template <class I, class T>

@@ -147,7 +147,6 @@ fb_dirsync_cpp_library(
     apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
     use_raw_headers = True,
     exported_deps = [
-        ":static_const",
         "//folly:portability",
     ],
 )
@@ -339,16 +338,6 @@ fb_dirsync_cpp_library(
     use_raw_headers = True,
     deps = [
         "fbsource//third-party/fmt:fmt",
-    ],
-)
-
-fb_dirsync_cpp_library(
-    name = "static_const",
-    headers = ["StaticConst.h"],
-    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
-    use_raw_headers = True,
-    exported_deps = [
-        "//folly:portability",
     ],
 )
 
