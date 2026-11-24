@@ -96,6 +96,17 @@
 #define FOLLY_ATTR_GNU_NODEBUG
 #endif
 
+/// FOLLY_ATTR_CLANG_CODE_ALIGN
+///
+/// Aligns the start of the loop that follows to an `n`-byte boundary, e.g. so
+/// a tiny hot loop never straddles a 64-byte fetch line. Expands to nothing
+/// on compilers without `[[clang::code_align]]`.
+#if __has_cpp_attribute(clang::code_align)
+#define FOLLY_ATTR_CLANG_CODE_ALIGN(n) clang::code_align(n)
+#else
+#define FOLLY_ATTR_CLANG_CODE_ALIGN(n)
+#endif
+
 /// FOLLY_ATTR_MAYBE_UNUSED_IF_NDEBUG
 ///
 /// When defined(NDEBUG), expands to maybe_unused; otherwise, expands to empty.
@@ -173,6 +184,17 @@
 #define FOLLY_ATTR_CLANG_PRESERVE_ALL clang::preserve_all
 #else
 #define FOLLY_ATTR_CLANG_PRESERVE_ALL
+#endif
+
+/// FOLLY_ATTR_CLANG_PRESERVE_NONE
+///
+/// Applies the preserve-none calling convention, preserving no registers
+/// across calls. Useful for tail-call dispatch loops, where every handler
+/// ends by tail-calling the next.
+#if __has_cpp_attribute(clang::preserve_none)
+#define FOLLY_ATTR_CLANG_PRESERVE_NONE clang::preserve_none
+#else
+#define FOLLY_ATTR_CLANG_PRESERVE_NONE
 #endif
 
 #if FOLLY_HAS_CPP_ATTRIBUTE(gnu::used)
