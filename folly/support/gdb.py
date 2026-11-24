@@ -207,6 +207,27 @@ class SocketAddressPrinter:
         return "folly::SocketAddress"
 
 
+_F14_PACKED_SCALE_SHIFT = 8
+_F14_PACKED_CHUNK_SHIFT_MASK = (1 << _F14_PACKED_SCALE_SHIFT) - 1
+_F14_PACKED_SIZE_SHIFT = 24
+_F14_LEGACY_PACKED_SIZE_SHIFT = 8
+_F14_PACKED_BEGIN_FIELD_NAME = "sizeAndChunkShiftAndPackedBegin_"
+_F14_SIZE_AND_CHUNK_SHIFT_FIELD_NAME = "sizeAndChunkShift_"
+_F14_PACKED_FIELD_NAME = "packedSizeScaleAndChunkShift_"
+_F14_LEGACY_PACKED_FIELD_NAME = "packedSizeAndChunkShift_"
+
+
+def _f14_size_and_chunk_shift(ht):
+    return ht[_F14_PACKED_BEGIN_FIELD_NAME][_F14_SIZE_AND_CHUNK_SHIFT_FIELD_NAME]
+
+
+def _f14_packed_word_and_size_shift(pair):
+    field_names = {f.name for f in pair.type.fields()}
+    if _F14_PACKED_FIELD_NAME in field_names:
+        return pair[_F14_PACKED_FIELD_NAME], _F14_PACKED_SIZE_SHIFT
+    return pair[_F14_LEGACY_PACKED_FIELD_NAME], _F14_LEGACY_PACKED_SIZE_SHIFT
+
+
 # For Node and Value containers, i.e., kEnableItemIteration == false
 class F14HashtableIterator:
     def __init__(self, ht, is_node_container):
@@ -214,12 +235,13 @@ class F14HashtableIterator:
         self.item_ptr_type = item_type.pointer()
         chunk_type = gdb.lookup_type("{}::{}".format(ht.type.name, "Chunk"))
         self.chunk_ptr = ht["chunks_"].cast(chunk_type.pointer())
-        pair = ht["sizeAndChunkShiftAndPackedBegin_"]["sizeAndChunkShift_"]
+        pair = _f14_size_and_chunk_shift(ht)
         size_of_size_t = gdb.lookup_type("size_t").sizeof
         if size_of_size_t == 4:
             chunk_count = 1 << pair["chunkShift_"]
         else:
-            chunk_count = 1 << (pair["packedSizeAndChunkShift_"] & ((1 << 8) - 1))
+            packed, _ = _f14_packed_word_and_size_shift(pair)
+            chunk_count = 1 << (packed & _F14_PACKED_CHUNK_SHIFT_MASK)
         self.chunks_remaining = chunk_count
         chunk = self.chunk_ptr.dereference()
         self.chunk_stride = int(chunk["kChunkStride"])
@@ -321,14 +343,13 @@ class F14Printer:
         return self.val["table_"]
 
     def size(self):
-        pair = self.hashtable()["sizeAndChunkShiftAndPackedBegin_"][
-            "sizeAndChunkShift_"
-        ]
+        pair = _f14_size_and_chunk_shift(self.hashtable())
         size_of_size_t = gdb.lookup_type("size_t").sizeof
         if size_of_size_t == 4:
             return pair["size_"]
         else:
-            return pair["packedSizeAndChunkShift_"] >> 8
+            packed, size_shift = _f14_packed_word_and_size_shift(pair)
+            return packed >> size_shift
 
     def to_string(self):
         return "%s with %d elements" % (
