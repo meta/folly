@@ -86,9 +86,8 @@ class badge {
 template <typename... Holders>
 class any_badge {
  public:
-  template <
-      typename Holder,
-      typename = std::enable_if_t<folly::IsOneOf<Holder, Holders...>::value>>
+  template <typename Holder>
+    requires folly::IsOneOf<Holder, Holders...>::value
   /* implicit */ constexpr any_badge(badge<Holder>) noexcept {}
 
 // Fedora 34 and 35 ship a gcc with the following regression:
@@ -97,10 +96,8 @@ class any_badge {
   template <typename... OtherHolders>
   /* implicit */ constexpr any_badge(any_badge<OtherHolders...>) noexcept {}
 #else
-  template <
-      typename... OtherHolders,
-      typename = std::enable_if_t<folly::StrictConjunction<
-          folly::IsOneOf<OtherHolders, Holders...>...>::value>>
+  template <typename... OtherHolders>
+    requires(folly::IsOneOf<OtherHolders, Holders...>::value && ...)
   /* implicit */ constexpr any_badge(any_badge<OtherHolders...>) noexcept {}
 #endif
 };

@@ -91,53 +91,39 @@ using compiler_must_force_indirect = std::bool_constant<
     sizeof(long) < sizeof(D) || //
     std::is_pointer<D>::value>;
 
-template <typename T>
-FOLLY_ALWAYS_INLINE void compiler_must_not_elide(T const& t, std::false_type) {
-  // the "r" constraint forces the compiler to make the value available in a
-  // register to the asm block, which means that it must first have been
-  // computed or loaded
-  //
-  // used for small trivial values which the compiler will put into registers
-  //
-  // avoided for pointers to avoid fallout in calling code which mistakenly
-  // applies the hint to the address of a value but not to the value itself
-  asm volatile("" : : "r"(t));
-}
-
-template <typename T>
-FOLLY_ALWAYS_INLINE void compiler_must_not_elide(T const& t, std::true_type) {
-  // tells the compiler that the asm block will read the value from memory,
-  // and that in addition it might read or write from any memory location
-  //
-  // if the memory clobber could be split into input and output, that would be
-  // preferrable
-  asm volatile("" : : "m"(t) : "memory");
-}
-
-template <typename T>
-FOLLY_ALWAYS_INLINE void compiler_must_not_predict(T& t, std::false_type) {
-  asm volatile("" : "+r"(t));
-}
-
-template <typename T>
-FOLLY_ALWAYS_INLINE void compiler_must_not_predict(T& t, std::true_type) {
-  asm volatile("" : : "m"(t) : "memory");
-}
-
 } // namespace detail
 
 template <typename T>
 FOLLY_ALWAYS_INLINE void compiler_must_not_elide_fn::operator()(
     T const& t) const noexcept {
-  using i = detail::compiler_must_force_indirect<T>;
-  detail::compiler_must_not_elide(t, i{});
+  if constexpr (detail::compiler_must_force_indirect<T>::value) {
+    // tells the compiler that the asm block will read the value from memory,
+    // and that in addition it might read or write from any memory location
+    //
+    // if the memory clobber could be split into input and output, that would
+    // be preferrable
+    asm volatile("" : : "m"(t) : "memory");
+  } else {
+    // the "r" constraint forces the compiler to make the value available in a
+    // register to the asm block, which means that it must first have been
+    // computed or loaded
+    //
+    // used for small trivial values which the compiler will put into registers
+    //
+    // avoided for pointers to avoid fallout in calling code which mistakenly
+    // applies the hint to the address of a value but not to the value itself
+    asm volatile("" : : "r"(t));
+  }
 }
 
 template <typename T>
 FOLLY_ALWAYS_INLINE void compiler_must_not_predict_fn::operator()(
     T& t) const noexcept {
-  using i = detail::compiler_must_force_indirect<T>;
-  detail::compiler_must_not_predict(t, i{});
+  if constexpr (detail::compiler_must_force_indirect<T>::value) {
+    asm volatile("" : : "m"(t) : "memory");
+  } else {
+    asm volatile("" : "+r"(t));
+  }
 }
 
 #endif

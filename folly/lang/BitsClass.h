@@ -54,9 +54,8 @@ struct BitsTraits;
 // read-modify-write operation (we write back the bits we won't change);
 // silence the GCC warning in that case.
 template <class T>
-struct BitsTraits<
-    Unaligned<T>,
-    typename std::enable_if<(std::is_integral<T>::value)>::type> {
+  requires std::is_integral_v<T>
+struct BitsTraits<Unaligned<T>> {
   using UnderlyingType = T;
   static T load(const Unaligned<T>& x) { return x; }
   static void store(Unaligned<T>& x, T v) { x = v; }
@@ -71,9 +70,8 @@ struct BitsTraits<
 
 // Special version that allows one to disable address sanitizer on demand.
 template <class T>
-struct BitsTraits<
-    UnalignedNoASan<T>,
-    typename std::enable_if<(std::is_integral<T>::value)>::type> {
+  requires std::is_integral_v<T>
+struct BitsTraits<UnalignedNoASan<T>> {
   using UnderlyingType = T;
   static T FOLLY_DISABLE_ADDRESS_SANITIZER load(const UnalignedNoASan<T>& x) {
     return x.value;
@@ -94,9 +92,8 @@ struct BitsTraits<
 
 // Partial specialization for T, where T is unsigned integral
 template <class T>
-struct BitsTraits<
-    T,
-    typename std::enable_if<(std::is_integral<T>::value)>::type> {
+  requires std::is_integral_v<T>
+struct BitsTraits<T> {
   using UnderlyingType = T;
   static T load(const T& x) { return x; }
   static void store(T& x, T v) { x = v; }

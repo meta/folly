@@ -226,8 +226,8 @@ template <
     typename F,
     typename... A,
     typename FD = std::remove_pointer_t<std::decay_t<F>>,
-    std::enable_if_t<!std::is_function<FD>::value, int> = 0,
     typename R = decltype(FOLLY_DECLVAL(F&&)(FOLLY_DECLVAL(A&&)...))>
+  requires(!std::is_function_v<FD>)
 [[FOLLY_ATTR_GNU_COLD]] FOLLY_NOINLINE R invoke_cold(F&& f, A&&... a) //
     noexcept(noexcept(static_cast<F&&>(f)(static_cast<A&&>(a)...))) {
   return static_cast<F&&>(f)(static_cast<A&&>(a)...);
@@ -236,8 +236,8 @@ template <
     typename F,
     typename... A,
     typename FD = std::remove_pointer_t<std::decay_t<F>>,
-    std::enable_if_t<std::is_function<FD>::value, int> = 0,
     typename R = decltype(FOLLY_DECLVAL(F&&)(FOLLY_DECLVAL(A&&)...))>
+  requires std::is_function_v<FD>
 FOLLY_ERASE R invoke_cold(F&& f, A&&... a) //
     noexcept(noexcept(f(static_cast<A&&>(a)...))) {
   return f(static_cast<A&&>(a)...);

@@ -486,7 +486,8 @@ class wrap_must_use_immediately_t
 // significant risk of object-slicing bugs (next section), so implementations
 // should lock down the type of `T` as much as practical, via patterns like:
 //
-//   template <typename U, std::enable_if_t<std::is_same_v<U, T>, int> = 0>
+//   template <typename U>
+//     requires std::is_same_v<U, T>
 //   static auto unsafe_mover(must_use_immediately_private_t, U&&);
 //
 // ### A note on object slicing when inheriting from must-use-immediately types
