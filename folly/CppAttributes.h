@@ -86,6 +86,16 @@
 #define FOLLY_ATTR_GNU_COLD
 #endif
 
+/// FOLLY_ATTR_GNU_NODEBUG
+///
+/// Excludes the annotated function from debug info. Useful for trivial
+/// functions with many instantiations, such as generated per-field accessors.
+#if __has_cpp_attribute(gnu::nodebug)
+#define FOLLY_ATTR_GNU_NODEBUG gnu::nodebug
+#else
+#define FOLLY_ATTR_GNU_NODEBUG
+#endif
+
 /// FOLLY_ATTR_MAYBE_UNUSED_IF_NDEBUG
 ///
 /// When defined(NDEBUG), expands to maybe_unused; otherwise, expands to empty.
