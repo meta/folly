@@ -723,7 +723,6 @@ constexpr auto kCpplibVer = 0;
 
 #if defined(FOLLY_CFG_NO_COROUTINES)
 #define FOLLY_HAS_COROUTINES 0
-#define FOLLY_HAS_IMMOVABLE_COROUTINES 0
 #else
 #if defined(__NVCC__)
 // For now, NVCC matches other compilers but does not offer coroutines.
@@ -765,7 +764,6 @@ constexpr auto kCpplibVer = 0;
 #define FOLLY_HAS_COROUTINES 0
 #endif
 
-#define FOLLY_HAS_IMMOVABLE_COROUTINES FOLLY_HAS_COROUTINES
 #endif // FOLLY_CFG_NO_COROUTINES
 
 #if FOLLY_HAS_COROUTINES

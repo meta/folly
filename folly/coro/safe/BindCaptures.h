@@ -18,7 +18,7 @@
 
 #include <folly/lang/bind/Bind.h>
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 
 ///
 /// Please read the user- and developer-facing docs in `Capture.md`.

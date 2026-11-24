@@ -36,8 +36,6 @@
 using namespace std::chrono_literals;
 using namespace folly;
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
-
 namespace folly::coro {
 
 // timeout(now_task) -> now_task
@@ -79,8 +77,6 @@ static_assert(
             FOLLY_DECLVAL(capture<Timekeeper&>)))>);
 
 } // namespace folly::coro
-
-#endif
 
 struct Timeout {
   template <typename... Arg>

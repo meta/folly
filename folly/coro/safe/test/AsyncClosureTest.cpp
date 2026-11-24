@@ -21,7 +21,7 @@
 #include <folly/fibers/Semaphore.h>
 #include <folly/init/Init.h>
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 
 namespace folly::coro {
 

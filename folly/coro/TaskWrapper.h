@@ -91,7 +91,7 @@
 /// Future: Once this has a benchmark, see if `FOLLY_ALWAYS_INLINE` makes
 /// any difference on the wrapped functions (it shouldn't).
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 
 namespace folly::coro {
 

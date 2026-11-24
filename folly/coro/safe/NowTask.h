@@ -19,7 +19,7 @@
 #include <folly/coro/TaskWrapper.h>
 #include <folly/lang/SafeAlias-fwd.h>
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 
 /// `now_task<T>` quacks like `Task<T>` but is immovable, and must be
 /// `co_await`ed in the same expression that created it.

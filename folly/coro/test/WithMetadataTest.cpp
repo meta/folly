@@ -73,7 +73,6 @@ static_assert(
     std::is_same_v<WithMetadataResult<TaskWithExecutor<int>>, Task<int>>);
 static_assert(std::is_same_v<WithMetadataResult<Task<int&>>, Task<int&>>);
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
 CO_TEST(WithMetadata, PreservesTaskWrapperProperties) {
   { // `now_task` remains immediately awaitable.
     static_assert(
@@ -105,7 +104,6 @@ CO_TEST(WithMetadata, PreservesTaskWrapperProperties) {
     EXPECT_EQ(metadata, AsyncStackMetadata{29});
   }
 }
-#endif
 
 CO_TEST(WithMetadata, MoveOnlyResult) {
   auto child = []() -> Task<std::unique_ptr<int>> {

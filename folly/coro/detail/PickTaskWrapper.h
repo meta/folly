@@ -63,8 +63,6 @@ struct identity_metafunction {
 template <safe_alias, bool /*must use immediately (now)*/>
 struct pick_task_wrapper_impl;
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
-
 template <>
 struct pick_task_wrapper_impl<safe_alias::unsafe, /*await now*/ false> {
   template <typename T>
@@ -106,20 +104,6 @@ struct pick_task_wrapper_impl<Safety, /*await now*/ false> {
   template <typename T>
   using TaskWithExecutor = safe_task_with_executor<Safety, T>;
 };
-
-#else // no FOLLY_HAS_IMMOVABLE_COROUTINES
-
-// This fallback is required because `coro::Future<SafeType>` is safe and is
-// available on earlier build systems.  We have no choice but to emit `Task`.
-template <safe_alias Safety>
-struct pick_task_wrapper_impl<Safety, /*await now*/ false> {
-  template <typename T>
-  using Task = Task<T>;
-  template <typename T>
-  using TaskWithExecutor = TaskWithExecutor<T>;
-};
-
-#endif // FOLLY_HAS_IMMOVABLE_COROUTINES
 
 // Pass this as `AddWrapperMetaFn` to `pick_task_wrapper` to add
 // `value_or_fatal`.

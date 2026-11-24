@@ -22,7 +22,7 @@
 static_assert(false, "Leaked FOLLY_MOVABLE_AND_DEEP_CONST_LREF_COPYABLE");
 #endif
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 
 namespace folly::coro::detail {
 

@@ -86,7 +86,7 @@
 ///     in `async_closure_regular_arg`.
 ///   * "self-reference hack": See `async_closure_scope_self_ref_hack`.
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 FOLLY_PUSH_WARNING
 FOLLY_DETAIL_LITE_TUPLE_ADJUST_WARNINGS
 

@@ -21,7 +21,7 @@
 #include <folly/coro/safe/detail/BindAsyncClosure.h>
 #include <folly/detail/tuple.h>
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 FOLLY_PUSH_WARNING
 FOLLY_DETAIL_LITE_TUPLE_ADJUST_WARNINGS
 

@@ -18,7 +18,7 @@
 
 #include <folly/coro/safe/detail/AsyncClosure.h>
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 
 namespace folly::coro {
 

@@ -26,7 +26,7 @@
 //    we want it to test.
 //  - Then, flip to `now_task` and confirm that the "move" action fails.
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 
 namespace folly::coro {
 

@@ -21,7 +21,7 @@
 #include <folly/init/Init.h>
 #include <folly/portability/GTest.h>
 
-#if FOLLY_HAS_IMMOVABLE_COROUTINES
+#if FOLLY_HAS_COROUTINES
 
 using namespace folly;
 using namespace folly::coro;
