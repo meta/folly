@@ -2114,14 +2114,21 @@ class F14Table : public Policy {
     adjustSizeAndBeginAfterInsert(pos);
   }
 
-  ItemIter allocateTag(uint8_t* fullness, HashPair hp) {
-    ChunkPtr chunk;
+  // `chunks` and `chunkMask` must be chunksToAddress() and chunkCount() - 1.
+  // Loops that place every item of a table pass them in: the byte stores
+  // below may alias the table's own fields, so the compiler cannot keep
+  // those in registers across items by itself.
+  ItemIter allocateTag(
+      uint8_t* fullness, HashPair hp, Chunk* chunks, std::size_t chunkMask) {
+    FOLLY_SAFE_DCHECK(
+        chunks == chunksToAddress() && chunkMask == chunkCount() - 1, "");
+    Chunk* chunk;
     std::size_t index = hp.first;
     std::size_t delta = probeDelta(hp);
     uint8_t hostedOp = 0;
     while (true) {
-      index = moduloByChunkCount(index);
-      chunk = chunkAt(index);
+      index &= chunkMask;
+      chunk = Chunk::chunkRawAt(chunks, index);
       if (fullness[index] < Chunk::kCapacity) [[likely]] {
         break;
       }
@@ -2132,8 +2139,11 @@ class F14Table : public Policy {
     unsigned itemIndex = fullness[index]++;
     FOLLY_SAFE_DCHECK(!chunk->occupied(itemIndex), "");
     chunk->setTag(itemIndex, hp.second);
-    chunk->adjustHostedOverflowCount(hostedOp);
-    return ItemIter{chunk, itemIndex};
+    if (hostedOp != 0) {
+      chunk->adjustHostedOverflowCount(hostedOp);
+    }
+    return ItemIter{
+        std::pointer_traits<ChunkPtr>::pointer_to(*chunk), itemIndex};
   }
 
   ChunkPtr lastOccupiedChunk() const {
@@ -2290,6 +2300,8 @@ class F14Table : public Policy {
     // lifecycle (F14Vector) then nothing after beforeBuild can throw and
     // we don't have to worry about partial failure.
 
+    Chunk* dstChunks = chunksToAddress();
+    std::size_t dstChunkMask = cc - 1;
     std::size_t srcChunkIndex =
         Chunk::chunkRawIndex(src.chunksToAddress(), &*src.lastOccupiedChunk());
     while (true) {
@@ -2309,7 +2321,7 @@ class F14Table : public Policy {
           auto&& srcArg = std::forward<T>(src).buildArgForItem(srcItem);
           HashPair hp{srcChunkIndex, srcChunk->tag(i)};
           insertAtBlank(
-              allocateTag(fullness, hp),
+              allocateTag(fullness, hp, dstChunks, dstChunkMask),
               hp,
               std::forward<decltype(srcArg)>(srcArg));
         }
@@ -2323,7 +2335,7 @@ class F14Table : public Policy {
           auto hp = computeHash(srcKey);
           FOLLY_SAFE_CHECK(hp.second == srcChunk->tag(i), "");
           insertAtBlank(
-              allocateTag(fullness, hp),
+              allocateTag(fullness, hp, dstChunks, dstChunkMask),
               hp,
               std::forward<decltype(srcArg)>(srcArg));
         }
@@ -2584,6 +2596,8 @@ class F14Table : public Policy {
       // Software pipeline: prefetch each item's destination chunk, then write
       // the item deferred from the previous iteration, so the destination's
       // cold miss overlaps the next item's hash computation.
+      Chunk* dstChunks = chunksToAddress();
+      std::size_t dstChunkMask = newChunkCount - 1;
       Item* pendingItem = nullptr;
       HashPair pendingHp{};
       while (remaining > 0) {
@@ -2600,11 +2614,10 @@ class F14Table : public Policy {
           auto hp = splitHash(
               this->computeItemHash(const_cast<Item const&>(srcItem)));
           FOLLY_SAFE_CHECK(hp.second == srcChunk->tag(srcI), "");
-          prefetchAddr(
-              Chunk::chunkRawAt(
-                  chunksToAddress(), moduloByChunkCount(hp.first)));
+          prefetchAddr(Chunk::chunkRawAt(dstChunks, hp.first & dstChunkMask));
           if (pendingItem != nullptr) {
-            auto dstIter = allocateTag(fullness, pendingHp);
+            auto dstIter =
+                allocateTag(fullness, pendingHp, dstChunks, dstChunkMask);
             this->moveItemDuringRehash(dstIter.itemAddr(), *pendingItem);
           }
           pendingItem = &srcItem;
@@ -2613,7 +2626,8 @@ class F14Table : public Policy {
         srcChunk = Chunk::prevChunkRaw(srcChunk);
       }
       if (pendingItem != nullptr) {
-        auto dstIter = allocateTag(fullness, pendingHp);
+        auto dstIter =
+            allocateTag(fullness, pendingHp, dstChunks, dstChunkMask);
         this->moveItemDuringRehash(dstIter.itemAddr(), *pendingItem);
       }
 
