@@ -174,10 +174,10 @@
 //   std::scoped_lock<folly::rcu_domain> object on the domain. The scoped
 //   lock provides RAII semantics for read region protection over the domain.
 //
-//   rcu_domains should in general be completely separated;
+//   It's intended that most callers should only ever use the default, global
+//   domain. Multiple rcu_domains should in general be disjoint;
 //   std::scoped_lock<folly::rcu_domain> locks created on one domain do not
-//   prevent functions deferred on other domains from running. It's intended
-//   that most callers should only ever use the default, global domain.
+//   prevent functions deferred on other domains from running.
 //
 //   You should use a custom rcu_domain if you can't avoid sleeping
 //   during reader critical sections (because you don't want to block
