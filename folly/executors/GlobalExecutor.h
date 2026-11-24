@@ -213,21 +213,6 @@ setIOExecutor(std::weak_ptr<IOExecutor> executor);
  */
 void setUnsafeMutableGlobalIOExecutor(std::weak_ptr<IOExecutor> executor);
 
-/**
- * @methodset Deprecated
- *
- * To use the global mutable executor use getUnsafeMutableGlobalEventBase.
- * For a better solution use getGlobalIOExecutor and request the EventBase from
- * there.
- *
- */
-[[deprecated(
-    "getEventBase is deprecated. "
-    "To use the global mutable executor use getUnsafeMutableGlobalEventBase. "
-    "For a better solution use getGlobalIOExecutor and request the EventBase "
-    "from there.")]] folly::EventBase*
-getEventBase();
-
 /// getEventBaseKeepAlive
 ///
 /// Retrieve an owning EventBase token from the mutable global IO executor.

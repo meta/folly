@@ -254,10 +254,6 @@ EventBase* getUnsafeMutableGlobalEventBase() {
   return nullptr;
 }
 
-EventBase* getEventBase() {
-  return getUnsafeMutableGlobalEventBase();
-}
-
 Executor::KeepAlive<EventBase> getEventBaseKeepAlive() {
   auto executor = getUnsafeMutableGlobalIOExecutor();
   if (!!executor) [[likely]] {
