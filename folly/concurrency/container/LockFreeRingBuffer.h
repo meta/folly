@@ -39,8 +39,6 @@ template <
 class RingBufferSlot;
 template <typename T>
 class RingBufferTrivialStorage;
-template <typename T>
-class RingBufferBrokenStorage;
 
 } // namespace detail
 
@@ -278,19 +276,6 @@ class RingBufferTrivialStorage {
   // No initialization is necessary because the sequencer is checked before data
   // is returned.
   T data_;
-};
-
-template <typename T>
-class [[deprecated(
-    "It is UB to race loads and stores across multiple threads. "
-    "Use RingBufferTrivialStorage.")]] RingBufferBrokenStorage {
- public:
-  void store(const T& src) { data_ = src; }
-
-  void load(T& dest) const { dest = data_; }
-
- private:
-  T data_{};
 };
 
 } // namespace detail
