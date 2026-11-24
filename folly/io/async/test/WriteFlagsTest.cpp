@@ -16,7 +16,7 @@
 
 #include <folly/io/async/AsyncTransport.h>
 
-// #include <folly/io/async/test/MockAsyncTransport.h>
+// #include <folly/io/async/testing/MockAsyncTransport.h>
 #include <folly/portability/GTest.h>
 
 namespace folly {
