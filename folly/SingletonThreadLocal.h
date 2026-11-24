@@ -131,7 +131,7 @@ class SingletonThreadLocal {
   using WrapperTL = ThreadLocal<Wrapper, TLTag>;
 
   struct LocalLifetime : State::LocalLifetime {
-    ~LocalLifetime() { destroy(getWrapper()); }
+    ~LocalLifetime() { getLocalCache().object = nullptr; }
   };
 
   SingletonThreadLocal() = delete;
