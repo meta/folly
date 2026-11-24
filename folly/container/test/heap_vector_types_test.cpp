@@ -188,8 +188,12 @@ TEST(HeapVectorTypes, SimpleSetTest) {
   EXPECT_TRUE(s == s2);
 
   auto it = s2.lower_bound(32);
-  if (*it == 32) {
-    s2.erase(it);
+  if (it != s2.end()) {
+    if (*it == 32) {
+      s2.erase(it);
+    } else {
+      s2.erase(32);
+    }
     it = s2.lower_bound(32);
   }
   check_invariant(s2);
