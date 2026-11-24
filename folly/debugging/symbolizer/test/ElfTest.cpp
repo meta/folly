@@ -16,6 +16,7 @@
 
 #include <array>
 #include <cstring>
+#include <new>
 #include <span>
 #include <stdexcept>
 #include <string_view>
@@ -199,6 +200,15 @@ TEST_F(ElfTest, SymbolsByNamePartial) {
   const auto& fooFuncSymbol = result.at("foo_func");
   EXPECT_EQ(nullptr, fooFuncSymbol.first);
   EXPECT_EQ(nullptr, fooFuncSymbol.second);
+}
+
+TEST_F(ElfTest, SymbolsByNamePropagatesAllocationFailure) {
+  struct FailingSymbolName {
+    [[noreturn]] operator std::string() const { throw std::bad_alloc(); }
+  };
+  const std::array<FailingSymbolName, 1> names{};
+
+  EXPECT_THROW(elfFile_.getSymbolsByName(names), std::bad_alloc);
 }
 
 TEST_F(ElfTest, SymbolsByNameEmpty) {

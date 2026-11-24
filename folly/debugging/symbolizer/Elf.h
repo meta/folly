@@ -278,13 +278,14 @@ class ElfFile {
    *
    * Returns a map containing a key for each unique symbol name in the provided
    * names container. The corresponding value is either Symbol or <nullptr,
-   * nullptr> if the symbol was not found.
+   * nullptr> if the symbol was not found. Allocation failures propagate to the
+   * caller.
    */
   template <typename C, typename T = typename C::value_type>
   std::unordered_map<std::string, Symbol> getSymbolsByName(
       const C& names,
       std::initializer_list<uint32_t> types = {
-          STT_OBJECT, STT_FUNC, STT_GNU_IFUNC}) const noexcept {
+          STT_OBJECT, STT_FUNC, STT_GNU_IFUNC}) const {
     std::unordered_map<std::string, Symbol> result(names.size());
     if (names.empty()) {
       return result;
