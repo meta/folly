@@ -563,33 +563,14 @@ enum MemberType {
   Mutable,
 };
 
-/**
- * These exist because MSVC has problems with expression SFINAE in templates
- * assignment and comparisons don't work properly without being pulled out
- * of the template declaration
- */
-template <MemberType Constness>
-struct ExprIsConst {
-  enum {
-    value = Constness == Const,
-  };
-};
-
-template <MemberType Constness>
-struct ExprIsMutable {
-  enum {
-    value = Constness == Mutable,
-  };
-};
-
 template <
     MemberType Constness = Const,
     class Class,
     class Return,
     class Mem = ConstMemberFunction<Class, Return>,
     class Map = detail::Map<Mem>>
-typename std::enable_if<ExprIsConst<Constness>::value, Map>::type member(
-    Return (Class::*member)() const) {
+  requires(Constness == Const)
+Map member(Return (Class::*member)() const) {
   return Map(Mem(member));
 }
 
@@ -599,8 +580,8 @@ template <
     class Return,
     class Mem = MemberFunction<Class, Return>,
     class Map = detail::Map<Mem>>
-typename std::enable_if<ExprIsMutable<Constness>::value, Map>::type member(
-    Return (Class::*member)()) {
+  requires(Constness == Mutable)
+Map member(Return (Class::*member)()) {
   return Map(Mem(member));
 }
 

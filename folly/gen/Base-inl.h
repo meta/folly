@@ -2384,12 +2384,8 @@ const T& operator|(const Optional<T>& opt, const UnwrapOr<T>& fallback) {
 }
 
 // Mixed type unwrapping always returns values, moving where possible
-template <
-    class T,
-    class U,
-    class R = typename std::enable_if<
-        !std::is_same<T, U>::value,
-        typename std::common_type<T, U>::type>::type>
+template <class T, class U, class R = std::common_type_t<T, U>>
+  requires(!std::is_same_v<T, U>)
 R operator|(Optional<T>&& opt, UnwrapOr<U>&& fallback) {
   if (T* p = opt.get_pointer()) {
     return std::move(*p);
@@ -2397,12 +2393,8 @@ R operator|(Optional<T>&& opt, UnwrapOr<U>&& fallback) {
   return std::move(fallback.value());
 }
 
-template <
-    class T,
-    class U,
-    class R = typename std::enable_if<
-        !std::is_same<T, U>::value,
-        typename std::common_type<T, U>::type>::type>
+template <class T, class U, class R = std::common_type_t<T, U>>
+  requires(!std::is_same_v<T, U>)
 R operator|(const Optional<T>& opt, UnwrapOr<U>&& fallback) {
   if (const T* p = opt.get_pointer()) {
     return *p;
@@ -2410,12 +2402,8 @@ R operator|(const Optional<T>& opt, UnwrapOr<U>&& fallback) {
   return std::move(fallback.value());
 }
 
-template <
-    class T,
-    class U,
-    class R = typename std::enable_if<
-        !std::is_same<T, U>::value,
-        typename std::common_type<T, U>::type>::type>
+template <class T, class U, class R = std::common_type_t<T, U>>
+  requires(!std::is_same_v<T, U>)
 R operator|(Optional<T>&& opt, const UnwrapOr<U>& fallback) {
   if (T* p = opt.get_pointer()) {
     return std::move(*p);
@@ -2423,12 +2411,8 @@ R operator|(Optional<T>&& opt, const UnwrapOr<U>& fallback) {
   return fallback.value();
 }
 
-template <
-    class T,
-    class U,
-    class R = typename std::enable_if<
-        !std::is_same<T, U>::value,
-        typename std::common_type<T, U>::type>::type>
+template <class T, class U, class R = std::common_type_t<T, U>>
+  requires(!std::is_same_v<T, U>)
 R operator|(const Optional<T>& opt, const UnwrapOr<U>& fallback) {
   if (const T* p = opt.get_pointer()) {
     return *p;

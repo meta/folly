@@ -250,9 +250,8 @@ Chain operator+(
  *   gen | [](Value v) -> void {...};
  */
 template <class Value, class Gen, class Handler>
-typename std::enable_if<
-    IsCompatibleSignature<Handler, void(Value)>::value>::type
-operator|(const GenImpl<Value, Gen>& gen, Handler&& handler) {
+  requires IsCompatibleSignature<Handler, void(Value)>::value
+void operator|(const GenImpl<Value, Gen>& gen, Handler&& handler) {
   static_assert(
       !Gen::infinite, "Cannot pull all values from an infinite sequence.");
   gen.self().foreach(std::forward<Handler>(handler));
@@ -263,9 +262,8 @@ operator|(const GenImpl<Value, Gen>& gen, Handler&& handler) {
  *   gen | [](Value v) -> bool { return shouldContinue(); };
  */
 template <class Value, class Gen, class Handler>
-typename std::
-    enable_if<IsCompatibleSignature<Handler, bool(Value)>::value, bool>::type
-    operator|(const GenImpl<Value, Gen>& gen, Handler&& handler) {
+  requires IsCompatibleSignature<Handler, bool(Value)>::value
+bool operator|(const GenImpl<Value, Gen>& gen, Handler&& handler) {
   return gen.self().apply(std::forward<Handler>(handler));
 }
 
