@@ -190,13 +190,14 @@ constexpr bool kStdNodeContainsHash =
     !std::__is_fast_hash<H>::value || !is_nothrow_invocable_v<H, K const&>;
 
 // mimic internal node of unordered containers in STL to estimate the size
-template <typename K, typename V, typename H, typename Enable = void>
+template <typename K, typename V, typename H>
 struct StdNodeReplica {
   void* next;
   V value;
 };
 template <typename K, typename V, typename H>
-struct StdNodeReplica<K, V, H, std::enable_if_t<kStdNodeContainsHash<K, H>>> {
+  requires kStdNodeContainsHash<K, H>
+struct StdNodeReplica<K, V, H> {
   void* next;
   V value;
   std::size_t hash;
@@ -434,10 +435,6 @@ class F14HashedKey final {
   using EligibleForHeterogeneousCompare =
       detail::EligibleForHeterogeneousFind<TKeyType, Hasher, KeyEqual, K>;
 
-  template <typename K, typename T>
-  using EnableHeterogeneousCompare =
-      std::enable_if_t<EligibleForHeterogeneousCompare<K>::value, T>;
-
   static constexpr void checkTemplateParamContract() {
     static_assert(is_constexpr_default_constructible_v<Hasher>);
     static_assert(is_constexpr_default_constructible_v<KeyEqual>);
@@ -472,15 +469,12 @@ class F14HashedKey final {
   explicit operator const F14HashToken&() const { return hash_; }
 
   template <typename T>
-  using IsRangeConvertible =
-      std::enable_if_t<detail::TransparentlyConvertibleToRange<T>::value>;
-
-  template <typename T>
   using RangeT =
       Range<typename detail::ValueTypeForTransparentConversionToRange<
           T>::type const*>;
 
-  template <typename K = TKeyType, typename Enable = IsRangeConvertible<K>>
+  template <typename K = TKeyType>
+    requires detail::TransparentlyConvertibleToRange<K>::value
   constexpr explicit operator RangeT<K>() const {
     return key_;
   }
@@ -495,13 +489,13 @@ class F14HashedKey final {
     return KeyEqual{}(a, b.key_);
   }
   template <typename K>
-  friend EnableHeterogeneousCompare<K, bool> operator==(
-      const F14HashedKey& a, const K& b) {
+    requires EligibleForHeterogeneousCompare<K>::value
+  friend bool operator==(const F14HashedKey& a, const K& b) {
     return KeyEqual{}(a.key_, b);
   }
   template <typename K>
-  friend EnableHeterogeneousCompare<K, bool> operator==(
-      const K& a, const F14HashedKey& b) {
+    requires EligibleForHeterogeneousCompare<K>::value
+  friend bool operator==(const K& a, const F14HashedKey& b) {
     return KeyEqual{}(a, b.key_);
   }
 

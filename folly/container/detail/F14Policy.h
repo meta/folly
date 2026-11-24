@@ -314,18 +314,15 @@ struct FOLLY_MSVC_DECLSPEC(empty_bases) BasePolicy
   // copy when moving items during rehash, or some sort of UB hack.
   //
   // This code implements the hack.  Use moveValue(v) instead of
-  // std::move(v) as the source of a move construction.  enable_if_t is
-  // used so that this works for maps while being a no-op for sets.
-  template <typename Dummy = int>
-  static std::pair<Key&&, MappedOrBool&&> moveValue(
-      std::pair<Key const, MappedOrBool>& value,
-      std::enable_if_t<kIsMap, Dummy> = 0) {
-    return {std::move(const_cast<Key&>(value.first)), std::move(value.second)};
-  }
-
-  template <typename Dummy = int>
-  static Value&& moveValue(Value& value, std::enable_if_t<!kIsMap, Dummy> = 0) {
-    return std::move(value);
+  // std::move(v) as the source of a move construction.  It is a no-op for
+  // sets.
+  static decltype(auto) moveValue(Value& value) {
+    if constexpr (kIsMap) {
+      return std::pair<Key&&, MappedOrBool&&>{
+          std::move(const_cast<Key&>(value.first)), std::move(value.second)};
+    } else {
+      return std::move(value);
+    }
   }
 
   template <typename P>
@@ -612,14 +609,14 @@ class ValueContainerPolicy
   }
 
   template <typename T>
-  std::enable_if_t<IsNothrowMoveAndDestroy<T>::value>
-  complainUnlessNothrowMoveAndDestroy() {}
+    requires IsNothrowMoveAndDestroy<T>::value
+  void complainUnlessNothrowMoveAndDestroy() {}
 
   template <typename T>
+    requires(!IsNothrowMoveAndDestroy<T>::value)
   [[deprecated(
-      "mark {key_type,mapped_type} {move constructor,destructor} noexcept, or use F14Node* if they aren't")]] std::
-      enable_if_t<!IsNothrowMoveAndDestroy<T>::value>
-      complainUnlessNothrowMoveAndDestroy() {}
+      "mark {key_type,mapped_type} {move constructor,destructor} noexcept, or use F14Node* if they aren't")]] void
+  complainUnlessNothrowMoveAndDestroy() {}
 
   void moveItemDuringRehash(Item* itemAddr, Item& src) {
     complainUnlessNothrowMoveAndDestroy<Key>();
@@ -861,13 +858,13 @@ class NodeContainerPolicy
   }
 
   template <typename T>
-  std::enable_if_t<std::is_nothrow_destructible<T>::value>
-  complainUnlessNothrowDestroy() {}
+    requires std::is_nothrow_destructible_v<T>
+  void complainUnlessNothrowDestroy() {}
 
   template <typename T>
-  [[deprecated("Mark key and mapped type destructor nothrow")]] std::
-      enable_if_t<!std::is_nothrow_destructible<T>::value>
-      complainUnlessNothrowDestroy() {}
+    requires(!std::is_nothrow_destructible_v<T>)
+  [[deprecated("Mark key and mapped type destructor nothrow")]] void
+  complainUnlessNothrowDestroy() {}
 
   void destroyItem(Item& item) noexcept {
     complainUnlessNothrowDestroy<Key>();
@@ -1303,14 +1300,14 @@ class VectorContainerPolicy
   void destroyItem(Item&) noexcept {}
 
   template <typename T>
-  std::enable_if_t<IsNothrowMoveAndDestroy<T>::value>
-  complainUnlessNothrowMoveAndDestroy() {}
+    requires IsNothrowMoveAndDestroy<T>::value
+  void complainUnlessNothrowMoveAndDestroy() {}
 
   template <typename T>
+    requires(!IsNothrowMoveAndDestroy<T>::value)
   [[deprecated(
-      "mark {key_type,mapped_type} {move constructor,destructor} noexcept, or use F14Node* if they aren't")]] std::
-      enable_if_t<!IsNothrowMoveAndDestroy<T>::value>
-      complainUnlessNothrowMoveAndDestroy() {}
+      "mark {key_type,mapped_type} {move constructor,destructor} noexcept, or use F14Node* if they aren't")]] void
+  complainUnlessNothrowMoveAndDestroy() {}
 
   void transfer(Alloc& a, Value* src, Value* dst, std::size_t n) {
     complainUnlessNothrowMoveAndDestroy<Key>();

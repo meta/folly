@@ -176,17 +176,15 @@ struct HasCompatibleTest<
 } // namespace detail
 
 template <typename T>
-struct HeterogeneousAccessEqualTo<
-    T,
-    std::enable_if_t<detail::TransparentlyConvertibleToRange<T>::value>>
+  requires detail::TransparentlyConvertibleToRange<T>::value
+struct HeterogeneousAccessEqualTo<T, void>
     : detail::TransparentRangeEqualTo<
           typename detail::ValueTypeForTransparentConversionToRange<T>::type> {
 };
 
 template <typename T>
-struct HeterogeneousAccessHash<
-    T,
-    std::enable_if_t<detail::TransparentlyConvertibleToRange<T>::value>>
+  requires detail::TransparentlyConvertibleToRange<T>::value
+struct HeterogeneousAccessHash<T, void>
     : detail::TransparentRangeHash<
           typename detail::ValueTypeForTransparentConversionToRange<T>::type> {
 };
@@ -195,32 +193,26 @@ template <typename Hash1, typename Hash2, typename Enable = void>
 struct HeterogeneousPreHashCompatible : std::is_same<Hash1, Hash2> {};
 
 template <typename Hash1, typename Hash2>
-struct HeterogeneousPreHashCompatible<
-    Hash1,
-    Hash2,
-    std::enable_if_t<
-        detail::HasCompatibleTest<Hash1, Hash2>::value &&
-        detail::HasCompatibleTest<Hash2, Hash1>::value>>
+  requires(
+      detail::HasCompatibleTest<Hash1, Hash2>::value &&
+      detail::HasCompatibleTest<Hash2, Hash1>::value)
+struct HeterogeneousPreHashCompatible<Hash1, Hash2, void>
     : std::disjunction<
           typename Hash1::template is_compatible<Hash2>,
           typename Hash2::template is_compatible<Hash1>> {};
 
 template <typename Hash1, typename Hash2>
-struct HeterogeneousPreHashCompatible<
-    Hash1,
-    Hash2,
-    std::enable_if_t<
-        detail::HasCompatibleTest<Hash1, Hash2>::value &&
-        !detail::HasCompatibleTest<Hash2, Hash1>::value>>
+  requires(
+      detail::HasCompatibleTest<Hash1, Hash2>::value &&
+      !detail::HasCompatibleTest<Hash2, Hash1>::value)
+struct HeterogeneousPreHashCompatible<Hash1, Hash2, void>
     : Hash1::template is_compatible<Hash2> {};
 
 template <typename Hash1, typename Hash2>
-struct HeterogeneousPreHashCompatible<
-    Hash1,
-    Hash2,
-    std::enable_if_t<
-        !detail::HasCompatibleTest<Hash1, Hash2>::value &&
-        detail::HasCompatibleTest<Hash2, Hash1>::value>>
+  requires(
+      !detail::HasCompatibleTest<Hash1, Hash2>::value &&
+      detail::HasCompatibleTest<Hash2, Hash1>::value)
+struct HeterogeneousPreHashCompatible<Hash1, Hash2, void>
     : Hash2::template is_compatible<Hash1> {};
 
 } // namespace folly

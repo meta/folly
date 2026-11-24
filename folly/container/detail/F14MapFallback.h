@@ -370,23 +370,18 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
 
  private:
   template <typename Iter, typename LocalIter>
-  static std::
-      enable_if_t<std::is_constructible<Iter, LocalIter const&>::value, Iter>
-      fromLocal(LocalIter const& src, int = 0) {
-    return Iter(src);
-  }
-
-  template <typename Iter, typename LocalIter>
-  static std::
-      enable_if_t<!std::is_constructible<Iter, LocalIter const&>::value, Iter>
-      fromLocal(LocalIter const& src) {
-    Iter dst;
-    static_assert(sizeof(dst) <= sizeof(src));
-    std::memcpy(std::addressof(dst), std::addressof(src), sizeof(dst));
-    FOLLY_SAFE_CHECK(
-        std::addressof(*src) == std::addressof(*dst),
-        "ABI-assuming local_iterator to iterator conversion failed");
-    return dst;
+  static Iter fromLocal(LocalIter const& src) {
+    if constexpr (std::is_constructible_v<Iter, LocalIter const&>) {
+      return Iter(src);
+    } else {
+      Iter dst;
+      static_assert(sizeof(dst) <= sizeof(src));
+      std::memcpy(std::addressof(dst), std::addressof(src), sizeof(dst));
+      FOLLY_SAFE_CHECK(
+          std::addressof(*src) == std::addressof(*dst),
+          "ABI-assuming local_iterator to iterator conversion failed");
+      return dst;
+    }
   }
 
   template <typename Iter, typename Self, typename K2>
