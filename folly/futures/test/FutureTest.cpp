@@ -1446,13 +1446,12 @@ class Try<NoThrowTestResult> : public Try<void> {
   }
 
   template <bool isTry, typename R>
-  typename std::enable_if<isTry, R>::type get() {
-    return std::forward<R>(*this);
-  }
-
-  template <bool isTry, typename R>
-  typename std::enable_if<!isTry, R>::type get() {
-    return std::forward<R>(value());
+  R get() {
+    if constexpr (isTry) {
+      return std::forward<R>(*this);
+    } else {
+      return std::forward<R>(value());
+    }
   }
 };
 } // namespace folly

@@ -38,10 +38,8 @@ class FutureExecutor : public ExecutorImpl {
    *              });
    */
   template <typename F>
-  typename std::enable_if<
-      folly::isFuture<invoke_result_t<F>>::value,
-      invoke_result_t<F>>::type
-  addFuture(F func) {
+    requires folly::isFuture<invoke_result_t<F>>::value
+  invoke_result_t<F> addFuture(F func) {
     using T = typename invoke_result_t<F>::value_type;
     folly::Promise<T> promise;
     auto future = promise.getFuture();
@@ -63,10 +61,8 @@ class FutureExecutor : public ExecutorImpl {
    *              });
    */
   template <typename F>
-  typename std::enable_if<
-      !folly::isFuture<invoke_result_t<F>>::value,
-      folly::Future<folly::lift_unit_t<invoke_result_t<F>>>>::type
-  addFuture(F func) {
+    requires(!folly::isFuture<invoke_result_t<F>>::value)
+  folly::Future<folly::lift_unit_t<invoke_result_t<F>>> addFuture(F func) {
     using T = folly::lift_unit_t<invoke_result_t<F>>;
     folly::Promise<T> promise;
     auto future = promise.getFuture();

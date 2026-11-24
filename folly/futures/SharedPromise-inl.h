@@ -45,8 +45,8 @@ Future<T> SharedPromise<T>::getFuture() const {
 
 template <class T>
 template <class E>
-typename std::enable_if<std::is_base_of<std::exception, E>::value>::type
-SharedPromise<T>::setException(E const& e) {
+  requires std::is_base_of_v<std::exception, E>
+void SharedPromise<T>::setException(E const& e) {
   setTry(Try<T>(e));
 }
 

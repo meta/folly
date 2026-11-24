@@ -169,8 +169,8 @@ class FutureBase {
   /// - `isReady() == true`
   /// - `hasValue() == true`
   template <class T2 = T>
-  /* implicit */ FutureBase(
-      typename std::enable_if<std::is_same<Unit, T2>::value>::type*);
+    requires std::is_same_v<Unit, T2>
+  /* implicit */ FutureBase(void*);
 
   template <class... Args>
     requires std::is_constructible_v<T, Args&&...>
@@ -556,9 +556,8 @@ class SemiFuture : private futures::detail::FutureBase<T> {
   /// - `isReady() == true`
   /// - `hasValue() == true`
   template <class T2 = T>
-  /* implicit */ SemiFuture(
-      typename std::enable_if<std::is_same<Unit, T2>::value>::type* p = nullptr)
-      : Base(p) {}
+    requires std::is_same_v<Unit, T2>
+  /* implicit */ SemiFuture(void* p = nullptr) : Base(p) {}
 
   /// Construct a SemiFuture from a `T` constructed from `args`
   ///
@@ -1083,9 +1082,8 @@ class Future : private futures::detail::FutureBase<T> {
   /// - `isReady() == true`
   /// - `hasValue() == true`
   template <class T2 = T>
-  /* implicit */ Future(
-      typename std::enable_if<std::is_same<Unit, T2>::value>::type* p = nullptr)
-      : Base(p) {}
+    requires std::is_same_v<Unit, T2>
+  /* implicit */ Future(void* p = nullptr) : Base(p) {}
 
   /// Construct a Future from a `T` constructed from `args`
   ///

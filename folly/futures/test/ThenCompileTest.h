@@ -27,64 +27,40 @@ using A = std::unique_ptr<int>;
 struct B {};
 
 template <class T>
-using EnableIfFuture = typename std::enable_if<isFuture<T>::value>::type;
-
-template <class T>
-using EnableUnlessFuture = typename std::enable_if<!isFuture<T>::value>::type;
-
-template <class T>
 Future<T> someFuture() {
   return makeFuture(T());
 }
 
-template <class Ret, class... Params>
-typename std::enable_if<isFuture<Ret>::value, Ret>::type aFunction(Params...) {
-  using T = typename Ret::value_type;
-  return makeFuture(T());
+template <class Ret>
+Ret makeRet() {
+  if constexpr (isFuture<Ret>::value) {
+    using T = typename Ret::value_type;
+    return makeFuture(T());
+  } else {
+    return Ret();
+  }
 }
 
 template <class Ret, class... Params>
-typename std::enable_if<!isFuture<Ret>::value, Ret>::type aFunction(Params...) {
-  return Ret();
+Ret aFunction(Params...) {
+  return makeRet<Ret>();
 }
 
 template <class Ret, class... Params>
-std::function<Ret(Params...)> aStdFunction(
-    typename std::enable_if<!isFuture<Ret>::value, bool>::type = false) {
-  return [](Params...) -> Ret { return Ret(); };
-}
-
-template <class Ret, class... Params>
-std::function<Ret(Params...)> aStdFunction(
-    typename std::enable_if<isFuture<Ret>::value, bool>::type = true) {
-  using T = typename Ret::value_type;
-  return [](Params...) -> Future<T> { return makeFuture(T()); };
+std::function<Ret(Params...)> aStdFunction() {
+  return [](Params...) -> Ret { return makeRet<Ret>(); };
 }
 
 class SomeClass {
  public:
   template <class Ret, class... Params>
-  static typename std::enable_if<!isFuture<Ret>::value, Ret>::type
-  aStaticMethod(Params...) {
-    return Ret();
+  static Ret aStaticMethod(Params...) {
+    return makeRet<Ret>();
   }
 
   template <class Ret, class... Params>
-  static typename std::enable_if<isFuture<Ret>::value, Ret>::type aStaticMethod(
-      Params...) {
-    using T = typename Ret::value_type;
-    return makeFuture(T());
-  }
-
-  template <class Ret, class... Params>
-  typename std::enable_if<!isFuture<Ret>::value, Ret>::type aMethod(Params...) {
-    return Ret();
-  }
-
-  template <class Ret, class... Params>
-  typename std::enable_if<isFuture<Ret>::value, Ret>::type aMethod(Params...) {
-    using T = typename Ret::value_type;
-    return makeFuture(T());
+  Ret aMethod(Params...) {
+    return makeRet<Ret>();
   }
 };
 

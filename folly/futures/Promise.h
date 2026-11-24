@@ -293,10 +293,8 @@ class Promise {
   ///
   /// Please see `setException(exception_wrapper)` for semantics/contract.
   template <class E>
-  typename std::enable_if<
-      std::is_base_of<std::exception, typename std::decay<E>::type>::value>::
-      type
-      setException(E&& e);
+    requires std::is_base_of_v<std::exception, std::decay_t<E>>
+  void setException(E&& e);
 
   /// Sets a handler for the producer to receive a (logical) interruption
   ///   request (exception) sent from the consumer via `future.raise()`.
@@ -361,7 +359,8 @@ class Promise {
   /// - `isFulfilled() == true`
   /// - `valid() == true` (unchanged)
   template <class B = T>
-  typename std::enable_if<std::is_same<Unit, B>::value, void>::type setValue() {
+    requires std::is_same_v<Unit, B>
+  void setValue() {
     setTry(Try<T>(T()));
   }
 

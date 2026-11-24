@@ -66,8 +66,8 @@ class SharedPromise {
     caught an exception the exception_wrapper form is more appropriate.
     */
   template <class E>
-  typename std::enable_if<std::is_base_of<std::exception, E>::value>::type
-  setException(E const&);
+    requires std::is_base_of_v<std::exception, E>
+  void setException(E const&);
 
   /// Set an interrupt handler to handle interrupts. See the documentation for
   /// Future::raise(). Your handler can do whatever it wants, but if you
@@ -78,7 +78,8 @@ class SharedPromise {
 
   /// Sugar to fulfill this SharedPromise<Unit>
   template <class B = T>
-  typename std::enable_if<std::is_same<Unit, B>::value, void>::type setValue() {
+    requires std::is_same_v<Unit, B>
+  void setValue() {
     setTry(Try<T>(T()));
   }
 

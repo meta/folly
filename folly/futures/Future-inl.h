@@ -213,9 +213,8 @@ FutureBase<T>::FutureBase(T2&& val)
 
 template <class T>
 template <typename T2>
-FutureBase<T>::FutureBase(
-    typename std::enable_if<std::is_same<Unit, T2>::value>::type*)
-    : core_(Core::make(Try<T>(T()))) {}
+  requires std::is_same_v<Unit, T2>
+FutureBase<T>::FutureBase(void*) : core_(Core::make(Try<T>(T()))) {}
 
 template <class T>
 void FutureBase<T>::assign(FutureBase<T>&& other) noexcept {
