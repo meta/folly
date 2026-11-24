@@ -716,10 +716,13 @@ class Function final : private detail::function::FunctionTraits<FunctionType> {
    * parameter signature matches (i.e. it returns an object convertible to `R`
    * when called with `Args...`).
    */
-  template <typename Fun>
-    requires(
-        !detail::function::is_instantiation_of_folly_function_v<Fun> &&
-        requires { typename Traits::template IfSafeResult<Fun>; })
+  // SFINAE rather than a requires-clause: GCC 11 rejects the type requirement
+  // `typename Traits::template IfSafeResult<Fun>` ("expected template-name").
+  template <
+      typename Fun,
+      typename = std::enable_if_t<
+          !detail::function::is_instantiation_of_folly_function_v<Fun>>,
+      typename = typename Traits::template IfSafeResult<Fun>>
   /* implicit */ constexpr Function(Fun fun) noexcept(
       detail::function::DispatchOf<Fun>::is_in_situ) {
     using Dispatch = detail::function::DispatchOf<Fun>;
@@ -754,13 +757,13 @@ class Function final : private detail::function::FunctionTraits<FunctionType> {
    * a non-const `operator()` if it is defined, and falls back to
    * `operator() const` otherwise.
    */
-  template <typename Signature>
-    requires(
-        // prevent gcc from making this a better match than move-ctor
-        !std::is_same_v<Function, Function<Signature>> &&
-        requires {
-          typename Traits::template IfSafeResult<Function<Signature>>;
-        })
+  // SFINAE rather than a requires-clause, for GCC 11 (see above).
+  template <
+      typename Signature,
+      typename Fun = Function<Signature>,
+      // prevent gcc from making this a better match than move-ctor
+      typename = std::enable_if_t<!std::is_same<Function, Fun>::value>,
+      typename = typename Traits::template IfSafeResult<Fun>>
   Function(Function<Signature>&& that) noexcept(
       noexcept(Function(std::move(that), CoerceTag{})))
       : Function(std::move(that), CoerceTag{}) {}
