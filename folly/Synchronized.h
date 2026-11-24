@@ -827,32 +827,6 @@ struct Synchronized
   }
 
   /**
-   * @brief Acquire a LockedPtr with timeout.
-   *
-   * Attempts to acquire for a given number of milliseconds. If
-   * acquisition is unsuccessful, the returned LockedPtr is nullptr.
-   *
-   * NOTE: This API is deprecated.  Use lock(), wlock(), or rlock() instead.
-   * In the future it will be marked with a deprecation attribute to emit
-   * build-time warnings, and then it will be removed entirely.
-   */
-  LockedPtr timedAcquire(unsigned int milliseconds) {
-    return LockedPtr(this, std::chrono::milliseconds(milliseconds));
-  }
-
-  /**
-   * Attempts to acquire for a given number of milliseconds. If
-   * acquisition is unsuccessful, the returned ConstLockedPtr is nullptr.
-   *
-   * NOTE: This API is deprecated.  Use lock(), wlock(), or rlock() instead.
-   * In the future it will be marked with a deprecation attribute to emit
-   * build-time warnings, and then it will be removed entirely.
-   */
-  ConstLockedPtr timedAcquire(unsigned int milliseconds) const {
-    return ConstLockedPtr(this, std::chrono::milliseconds(milliseconds));
-  }
-
-  /**
    * @brief Swap datum.
    *
    * Swaps with another Synchronized. Protected against
