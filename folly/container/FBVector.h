@@ -276,9 +276,8 @@ class fbvector {
 
   // scalar optimization
   // TODO we can expand this optimization to: default copyable and assignable
-  template <
-      typename U,
-      typename Enable = typename std::enable_if<std::is_scalar<U>::value>::type>
+  template <typename U>
+    requires std::is_scalar_v<U>
   void M_construct(U* p, U arg) {
     if constexpr (kUsingStdAllocator) {
       *p = arg;
@@ -287,25 +286,21 @@ class fbvector {
     }
   }
 
-  template <
-      typename U,
-      typename Enable = typename std::enable_if<std::is_scalar<U>::value>::type>
+  template <typename U>
+    requires std::is_scalar_v<U>
   static void S_construct(U* p, U arg) {
     *p = arg;
   }
 
-  template <
-      typename U,
-      typename Enable = typename std::enable_if<std::is_scalar<U>::value>::type>
+  template <typename U>
+    requires std::is_scalar_v<U>
   static void S_construct_a(Allocator& a, U* p, U arg) {
     std::allocator_traits<Allocator>::construct(a, p, arg);
   }
 
   // const& optimization
-  template <
-      typename U,
-      typename Enable =
-          typename std::enable_if<!std::is_scalar<U>::value>::type>
+  template <typename U>
+    requires(!std::is_scalar_v<U>)
   void M_construct(U* p, const U& value) {
     if constexpr (kUsingStdAllocator) {
       new (p) U(value);
@@ -314,18 +309,14 @@ class fbvector {
     }
   }
 
-  template <
-      typename U,
-      typename Enable =
-          typename std::enable_if<!std::is_scalar<U>::value>::type>
+  template <typename U>
+    requires(!std::is_scalar_v<U>)
   static void S_construct(U* p, const U& value) {
     new (p) U(value);
   }
 
-  template <
-      typename U,
-      typename Enable =
-          typename std::enable_if<!std::is_scalar<U>::value>::type>
+  template <typename U>
+    requires(!std::is_scalar_v<U>)
   static void S_construct_a(Allocator& a, U* p, const U& value) {
     std::allocator_traits<Allocator>::construct(a, p, value);
   }
@@ -771,7 +762,7 @@ class fbvector {
     if (this == &other) [[unlikely]] {
       return *this;
     }
-    moveFrom(std::move(other), moveIsSwap());
+    moveFrom(std::move(other));
     return *this;
   }
 
@@ -838,10 +829,11 @@ class fbvector {
     }
   }
 
-  // contract dispatch for allocator movement in operator=(fbvector&&)
-  void moveFrom(fbvector&& other, std::true_type) { swap(impl_, other.impl_); }
-  void moveFrom(fbvector&& other, std::false_type) {
-    if (impl_ == other.impl_) {
+  // allocator movement in operator=(fbvector&&)
+  void moveFrom(fbvector&& other) {
+    if constexpr (moveIsSwap::value) {
+      swap(impl_, other.impl_);
+    } else if (impl_ == other.impl_) {
       impl_.swapData(other.impl_);
     } else {
       impl_.reset(other.size());

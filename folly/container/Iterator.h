@@ -738,12 +738,11 @@ class index_iterator : public detail::index_iterator_facade_t<Container> {
 
   // converting constructors --
 
-  template <
-      typename OtherContainer,
-      typename = std::enable_if_t<
-          std::is_same<std::remove_const_t<container_type>, OtherContainer>::
-              value &&
-          std::is_const<container_type>::value>>
+  template <typename OtherContainer>
+    requires(std::is_same_v<
+                 std::remove_const_t<container_type>,
+                 OtherContainer> &&
+             std::is_const_v<container_type>)
   /* implicit */ constexpr index_iterator(index_iterator<OtherContainer> other)
       : container_(other.get_container()), index_(other.get_index()) {}
 

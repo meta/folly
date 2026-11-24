@@ -130,11 +130,10 @@ template <
     typename Alloc,
     typename Func,
     typename Arg1,
-    typename... Args2,
-    std::enable_if_t<
-        std::is_same<std::remove_cvref_t<Arg1>, KeyType>::value ||
-            UsableAsKey<std::remove_cvref_t<Arg1>>::value,
-        int> = 0>
+    typename... Args2>
+  requires(
+      std::is_same_v<std::remove_cvref_t<Arg1>, KeyType> ||
+      UsableAsKey<std::remove_cvref_t<Arg1>>::value)
 auto callWithExtractedKey(
     Alloc& /*unused*/,
     Func&& f,
@@ -251,11 +250,10 @@ template <
     template <typename> class UsableAsKey = ExactKeyMatchOnly,
     typename Alloc,
     typename Func,
-    typename Arg,
-    std::enable_if_t<
-        std::is_same<std::remove_cvref_t<Arg>, KeyType>::value ||
-            UsableAsKey<std::remove_cvref_t<Arg>>::value,
-        int> = 0>
+    typename Arg>
+  requires(
+      std::is_same_v<std::remove_cvref_t<Arg>, KeyType> ||
+      UsableAsKey<std::remove_cvref_t<Arg>>::value)
 auto callWithConstructedKey(Alloc& /*unused*/, Func&& f, Arg&& arg) {
   // we found a usable key in the args :)
   auto const& key = arg;

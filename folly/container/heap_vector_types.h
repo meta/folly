@@ -737,10 +737,8 @@ class heap_vector_container : growth_policy_wrapper<GrowthPolicy> {
       cont_ = const_cast<Container*>(cont);
     }
 
-    template <
-        typename I2,
-        typename = typename std::enable_if<
-            std::is_same<typename Container::iterator, I2>::value>::type>
+    template <typename I2>
+      requires std::is_same_v<typename Container::iterator, I2>
     /* implicit */ heap_iterator(const heap_iterator<I2>& rawIterator)
         : ptr_(rawIterator.ptr_), cont_(rawIterator.cont_) {}
 
@@ -1667,9 +1665,8 @@ template <
     class Container = folly::small_vector<
         std::pair<Key, Value>,
         0,
-        folly::small_vector_policy::policy_size_type<SizeType>>,
-    typename = std::enable_if_t<
-        std::is_integral<Key>::value || std::is_enum<Key>::value>>
+        folly::small_vector_policy::policy_size_type<SizeType>>>
+  requires(std::is_integral_v<Key> || std::is_enum_v<Key>)
 class small_heap_vector_map
     : public folly::heap_vector_map<
           Key,
