@@ -43,96 +43,91 @@ inline void randomSleep(
   std::this_thread::sleep_for(duration);
 }
 
-// testBasic() version for shared lock types
 template <class Mutex>
-std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<Mutex>>
-testBasicImpl() {
-  folly::Synchronized<std::vector<int>, Mutex> obj;
-  const auto& constObj = obj;
+void testBasicImpl() {
+  if constexpr (folly::detail::kSynchronizedMutexIsShared<Mutex>) {
+    folly::Synchronized<std::vector<int>, Mutex> obj;
+    const auto& constObj = obj;
 
-  obj.wlock()->resize(1000);
+    obj.wlock()->resize(1000);
 
-  folly::Synchronized<std::vector<int>, Mutex> obj2{*obj.wlock()};
-  EXPECT_EQ(1000, obj2.rlock()->size());
-
-  {
-    auto lockedObj = obj.wlock();
-    lockedObj->push_back(10);
-    EXPECT_EQ(1001, lockedObj->size());
-    EXPECT_EQ(10, lockedObj->back());
-    EXPECT_EQ(1000, obj2.wlock()->size());
+    folly::Synchronized<std::vector<int>, Mutex> obj2{*obj.wlock()};
     EXPECT_EQ(1000, obj2.rlock()->size());
 
     {
-      auto unlocker = lockedObj.scopedUnlock();
-      EXPECT_EQ(1001, obj.wlock()->size());
-    }
-  }
+      auto lockedObj = obj.wlock();
+      lockedObj->push_back(10);
+      EXPECT_EQ(1001, lockedObj->size());
+      EXPECT_EQ(10, lockedObj->back());
+      EXPECT_EQ(1000, obj2.wlock()->size());
+      EXPECT_EQ(1000, obj2.rlock()->size());
 
-  {
-    auto lockedObj = obj.rlock();
-    EXPECT_EQ(1001, lockedObj->size());
+      {
+        auto unlocker = lockedObj.scopedUnlock();
+        EXPECT_EQ(1001, obj.wlock()->size());
+      }
+    }
+
+    {
+      auto lockedObj = obj.rlock();
+      EXPECT_EQ(1001, lockedObj->size());
+      EXPECT_EQ(1001, obj.rlock()->size());
+      {
+        auto unlocker = lockedObj.scopedUnlock();
+        EXPECT_EQ(1001, obj.wlock()->size());
+      }
+    }
+
+    obj.wlock()->front() = 2;
+
+    {
+      // contextualLock() on a const reference should grab a shared lock
+      auto lockedObj = constObj.contextualLock();
+      EXPECT_EQ(2, lockedObj->front());
+      EXPECT_EQ(2, constObj.rlock()->front());
+      EXPECT_EQ(2, obj.rlock()->front());
+    }
+
     EXPECT_EQ(1001, obj.rlock()->size());
-    {
-      auto unlocker = lockedObj.scopedUnlock();
-      EXPECT_EQ(1001, obj.wlock()->size());
-    }
-  }
-
-  obj.wlock()->front() = 2;
-
-  {
-    // contextualLock() on a const reference should grab a shared lock
-    auto lockedObj = constObj.contextualLock();
-    EXPECT_EQ(2, lockedObj->front());
-    EXPECT_EQ(2, constObj.rlock()->front());
     EXPECT_EQ(2, obj.rlock()->front());
-  }
+    EXPECT_EQ(10, obj.rlock()->back());
+    EXPECT_EQ(1000, obj2.rlock()->size());
+  } else {
+    folly::Synchronized<std::vector<int>, Mutex> obj;
+    const auto& constObj = obj;
 
-  EXPECT_EQ(1001, obj.rlock()->size());
-  EXPECT_EQ(2, obj.rlock()->front());
-  EXPECT_EQ(10, obj.rlock()->back());
-  EXPECT_EQ(1000, obj2.rlock()->size());
-}
+    obj.lock()->resize(1000);
 
-// testBasic() version for non-shared lock types
-template <class Mutex>
-std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<Mutex>>
-testBasicImpl() {
-  folly::Synchronized<std::vector<int>, Mutex> obj;
-  const auto& constObj = obj;
-
-  obj.lock()->resize(1000);
-
-  folly::Synchronized<std::vector<int>, Mutex> obj2{*obj.lock()};
-  EXPECT_EQ(1000, obj2.lock()->size());
-
-  {
-    auto lockedObj = obj.lock();
-    lockedObj->push_back(10);
-    EXPECT_EQ(1001, lockedObj->size());
-    EXPECT_EQ(10, lockedObj->back());
+    folly::Synchronized<std::vector<int>, Mutex> obj2{*obj.lock()};
     EXPECT_EQ(1000, obj2.lock()->size());
 
     {
-      auto unlocker = lockedObj.scopedUnlock();
-      EXPECT_EQ(1001, obj.lock()->size());
+      auto lockedObj = obj.lock();
+      lockedObj->push_back(10);
+      EXPECT_EQ(1001, lockedObj->size());
+      EXPECT_EQ(10, lockedObj->back());
+      EXPECT_EQ(1000, obj2.lock()->size());
+
+      {
+        auto unlocker = lockedObj.scopedUnlock();
+        EXPECT_EQ(1001, obj.lock()->size());
+      }
     }
-  }
-  {
-    auto lockedObj = constObj.lock();
-    EXPECT_EQ(1001, lockedObj->size());
-    EXPECT_EQ(10, lockedObj->back());
+    {
+      auto lockedObj = constObj.lock();
+      EXPECT_EQ(1001, lockedObj->size());
+      EXPECT_EQ(10, lockedObj->back());
+      EXPECT_EQ(1000, obj2.lock()->size());
+    }
+
+    obj.lock()->front() = 2;
+
+    EXPECT_EQ(1001, obj.lock()->size());
+    EXPECT_EQ(2, obj.lock()->front());
+    EXPECT_EQ(2, obj.contextualLock()->front());
+    EXPECT_EQ(10, obj.lock()->back());
     EXPECT_EQ(1000, obj2.lock()->size());
   }
-
-  obj.lock()->front() = 2;
-
-  EXPECT_EQ(1001, obj.lock()->size());
-  EXPECT_EQ(2, obj.lock()->front());
-  EXPECT_EQ(2, obj.contextualLock()->front());
-  EXPECT_EQ(10, obj.lock()->back());
-  EXPECT_EQ(1000, obj2.lock()->size());
 }
 
 template <class Mutex>
@@ -140,145 +135,140 @@ void testBasic() {
   testBasicImpl<Mutex>();
 }
 
-// testWithLock() version for shared lock types
 template <class Mutex>
-std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<Mutex>>
-testWithLock() {
-  folly::Synchronized<std::vector<int>, Mutex> obj;
-  const auto& constObj = obj;
+void testWithLock() {
+  if constexpr (folly::detail::kSynchronizedMutexIsShared<Mutex>) {
+    folly::Synchronized<std::vector<int>, Mutex> obj;
+    const auto& constObj = obj;
 
-  // Test withWLock() and withRLock()
-  obj.withWLock([](std::vector<int>& lockedObj) {
-    lockedObj.resize(1000);
-    lockedObj.push_back(10);
-    lockedObj.push_back(11);
-  });
-  obj.withWLock([](const std::vector<int>& lockedObj) {
-    EXPECT_EQ(1002, lockedObj.size());
-  });
-  constObj.withWLock([](const std::vector<int>& lockedObj) {
-    EXPECT_EQ(1002, lockedObj.size());
-    EXPECT_EQ(11, lockedObj.back());
-  });
-  obj.withRLock([](const std::vector<int>& lockedObj) {
-    EXPECT_EQ(1002, lockedObj.size());
-    EXPECT_EQ(11, lockedObj.back());
-  });
-  constObj.withRLock([](const std::vector<int>& lockedObj) {
-    EXPECT_EQ(1002, lockedObj.size());
-  });
+    // Test withWLock() and withRLock()
+    obj.withWLock([](std::vector<int>& lockedObj) {
+      lockedObj.resize(1000);
+      lockedObj.push_back(10);
+      lockedObj.push_back(11);
+    });
+    obj.withWLock([](const std::vector<int>& lockedObj) {
+      EXPECT_EQ(1002, lockedObj.size());
+    });
+    constObj.withWLock([](const std::vector<int>& lockedObj) {
+      EXPECT_EQ(1002, lockedObj.size());
+      EXPECT_EQ(11, lockedObj.back());
+    });
+    obj.withRLock([](const std::vector<int>& lockedObj) {
+      EXPECT_EQ(1002, lockedObj.size());
+      EXPECT_EQ(11, lockedObj.back());
+    });
+    constObj.withRLock([](const std::vector<int>& lockedObj) {
+      EXPECT_EQ(1002, lockedObj.size());
+    });
 
-  obj.withWLock([](auto& lockedObj) { lockedObj.push_back(12); });
-  obj.withWLock([](const auto& lockedObj) {
-    EXPECT_EQ(1003, lockedObj.size());
-  });
-  constObj.withWLock([](const auto& lockedObj) {
-    EXPECT_EQ(1003, lockedObj.size());
-    EXPECT_EQ(12, lockedObj.back());
-  });
-  obj.withRLock([](const auto& lockedObj) {
-    EXPECT_EQ(1003, lockedObj.size());
-    EXPECT_EQ(12, lockedObj.back());
-  });
-  constObj.withRLock([](const auto& lockedObj) {
-    EXPECT_EQ(1003, lockedObj.size());
-  });
-  obj.withWLock([](auto& lockedObj) { lockedObj.pop_back(); });
+    obj.withWLock([](auto& lockedObj) { lockedObj.push_back(12); });
+    obj.withWLock([](const auto& lockedObj) {
+      EXPECT_EQ(1003, lockedObj.size());
+    });
+    constObj.withWLock([](const auto& lockedObj) {
+      EXPECT_EQ(1003, lockedObj.size());
+      EXPECT_EQ(12, lockedObj.back());
+    });
+    obj.withRLock([](const auto& lockedObj) {
+      EXPECT_EQ(1003, lockedObj.size());
+      EXPECT_EQ(12, lockedObj.back());
+    });
+    constObj.withRLock([](const auto& lockedObj) {
+      EXPECT_EQ(1003, lockedObj.size());
+    });
+    obj.withWLock([](auto& lockedObj) { lockedObj.pop_back(); });
 
-  // Test withWLockPtr() and withRLockPtr()
-  using SynchType = folly::Synchronized<std::vector<int>, Mutex>;
-  obj.withWLockPtr([](auto&& lockedObj) { lockedObj->push_back(13); });
-  obj.withRLockPtr([](auto&& lockedObj) {
-    EXPECT_EQ(1003, lockedObj->size());
-    EXPECT_EQ(13, lockedObj->back());
-  });
-  constObj.withRLockPtr([](auto&& lockedObj) {
-    EXPECT_EQ(1003, lockedObj->size());
-    EXPECT_EQ(13, lockedObj->back());
-  });
-  obj.withWLockPtr([&](auto&& lockedObj) {
-    lockedObj->push_back(14);
-    {
-      auto unlocker = lockedObj.scopedUnlock();
-      obj.wlock()->push_back(15);
-    }
-    EXPECT_EQ(15, lockedObj->back());
-  });
-  constObj.withWLockPtr([](auto&& lockedObj) {
-    EXPECT_EQ(1005, lockedObj->size());
-    EXPECT_EQ(15, lockedObj->back());
-  });
+    // Test withWLockPtr() and withRLockPtr()
+    using SynchType = folly::Synchronized<std::vector<int>, Mutex>;
+    obj.withWLockPtr([](auto&& lockedObj) { lockedObj->push_back(13); });
+    obj.withRLockPtr([](auto&& lockedObj) {
+      EXPECT_EQ(1003, lockedObj->size());
+      EXPECT_EQ(13, lockedObj->back());
+    });
+    constObj.withRLockPtr([](auto&& lockedObj) {
+      EXPECT_EQ(1003, lockedObj->size());
+      EXPECT_EQ(13, lockedObj->back());
+    });
+    obj.withWLockPtr([&](auto&& lockedObj) {
+      lockedObj->push_back(14);
+      {
+        auto unlocker = lockedObj.scopedUnlock();
+        obj.wlock()->push_back(15);
+      }
+      EXPECT_EQ(15, lockedObj->back());
+    });
+    constObj.withWLockPtr([](auto&& lockedObj) {
+      EXPECT_EQ(1005, lockedObj->size());
+      EXPECT_EQ(15, lockedObj->back());
+    });
 
-  obj.withWLockPtr([](typename SynchType::LockedPtr&& lockedObj) {
-    lockedObj->push_back(16);
-    EXPECT_EQ(1006, lockedObj->size());
-  });
-  constObj.withWLockPtr([](typename SynchType::ConstWLockedPtr&& lockedObj) {
-    EXPECT_EQ(1006, lockedObj->size());
-    EXPECT_EQ(16, lockedObj->back());
-  });
-  obj.withRLockPtr([](typename SynchType::RLockedPtr&& lockedObj) {
-    EXPECT_TRUE(
-        (std::is_const<std::remove_reference_t<decltype(*lockedObj)>>{}));
-    EXPECT_EQ(1006, lockedObj->size());
-    EXPECT_EQ(16, lockedObj->back());
-  });
-  constObj.withRLockPtr([](typename SynchType::ConstRLockedPtr&& lockedObj) {
-    EXPECT_TRUE(
-        (std::is_const<std::remove_reference_t<decltype(*lockedObj)>>{}));
-    EXPECT_EQ(1006, lockedObj->size());
-    EXPECT_EQ(16, lockedObj->back());
-  });
-}
+    obj.withWLockPtr([](typename SynchType::LockedPtr&& lockedObj) {
+      lockedObj->push_back(16);
+      EXPECT_EQ(1006, lockedObj->size());
+    });
+    constObj.withWLockPtr([](typename SynchType::ConstWLockedPtr&& lockedObj) {
+      EXPECT_EQ(1006, lockedObj->size());
+      EXPECT_EQ(16, lockedObj->back());
+    });
+    obj.withRLockPtr([](typename SynchType::RLockedPtr&& lockedObj) {
+      EXPECT_TRUE(
+          (std::is_const<std::remove_reference_t<decltype(*lockedObj)>>{}));
+      EXPECT_EQ(1006, lockedObj->size());
+      EXPECT_EQ(16, lockedObj->back());
+    });
+    constObj.withRLockPtr([](typename SynchType::ConstRLockedPtr&& lockedObj) {
+      EXPECT_TRUE(
+          (std::is_const<std::remove_reference_t<decltype(*lockedObj)>>{}));
+      EXPECT_EQ(1006, lockedObj->size());
+      EXPECT_EQ(16, lockedObj->back());
+    });
+  } else {
+    folly::Synchronized<std::vector<int>, Mutex> obj;
 
-// testWithLock() version for non-shared lock types
-template <class Mutex>
-std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<Mutex>>
-testWithLock() {
-  folly::Synchronized<std::vector<int>, Mutex> obj;
+    // Test withLock()
+    obj.withLock([](std::vector<int>& lockedObj) {
+      lockedObj.resize(1000);
+      lockedObj.push_back(10);
+      lockedObj.push_back(11);
+    });
+    obj.withLock([](const std::vector<int>& lockedObj) {
+      EXPECT_EQ(1002, lockedObj.size());
+    });
 
-  // Test withLock()
-  obj.withLock([](std::vector<int>& lockedObj) {
-    lockedObj.resize(1000);
-    lockedObj.push_back(10);
-    lockedObj.push_back(11);
-  });
-  obj.withLock([](const std::vector<int>& lockedObj) {
-    EXPECT_EQ(1002, lockedObj.size());
-  });
+    obj.withLock([](auto& lockedObj) { lockedObj.push_back(12); });
+    obj.withLock([](const auto& lockedObj) {
+      EXPECT_EQ(1003, lockedObj.size());
+    });
+    obj.withLock([](auto& lockedObj) { lockedObj.pop_back(); });
 
-  obj.withLock([](auto& lockedObj) { lockedObj.push_back(12); });
-  obj.withLock([](const auto& lockedObj) {
-    EXPECT_EQ(1003, lockedObj.size());
-  });
-  obj.withLock([](auto& lockedObj) { lockedObj.pop_back(); });
+    // Test withLockPtr()
+    using SynchType = folly::Synchronized<std::vector<int>, Mutex>;
+    obj.withLockPtr([](auto&& lockedObj) { lockedObj->push_back(13); });
+    obj.withLockPtr([](auto&& lockedObj) {
+      EXPECT_EQ(1003, lockedObj->size());
+      EXPECT_EQ(13, lockedObj->back());
+    });
+    obj.withLockPtr([&](auto&& lockedObj) {
+      lockedObj->push_back(14);
+      {
+        auto unlocker = lockedObj.scopedUnlock();
+        obj.lock()->push_back(15);
+      }
+      EXPECT_EQ(1005, lockedObj->size());
+      EXPECT_EQ(15, lockedObj->back());
+    });
 
-  // Test withLockPtr()
-  using SynchType = folly::Synchronized<std::vector<int>, Mutex>;
-  obj.withLockPtr([](auto&& lockedObj) { lockedObj->push_back(13); });
-  obj.withLockPtr([](auto&& lockedObj) {
-    EXPECT_EQ(1003, lockedObj->size());
-    EXPECT_EQ(13, lockedObj->back());
-  });
-  obj.withLockPtr([&](auto&& lockedObj) {
-    lockedObj->push_back(14);
-    {
-      auto unlocker = lockedObj.scopedUnlock();
-      obj.lock()->push_back(15);
-    }
-    EXPECT_EQ(1005, lockedObj->size());
-    EXPECT_EQ(15, lockedObj->back());
-  });
-
-  obj.withLockPtr([](typename SynchType::LockedPtr&& lockedObj) {
-    lockedObj->push_back(16);
-    EXPECT_EQ(1006, lockedObj->size());
-  });
-  const auto& constObj = obj;
-  constObj.withLockPtr([](typename SynchType::ConstLockedPtr&& lockedObj) {
-    EXPECT_EQ(1006, lockedObj->size());
-    EXPECT_EQ(16, lockedObj->back());
-  });
+    obj.withLockPtr([](typename SynchType::LockedPtr&& lockedObj) {
+      lockedObj->push_back(16);
+      EXPECT_EQ(1006, lockedObj->size());
+    });
+    const auto& constObj = obj;
+    constObj.withLockPtr([](typename SynchType::ConstLockedPtr&& lockedObj) {
+      EXPECT_EQ(1006, lockedObj->size());
+      EXPECT_EQ(16, lockedObj->back());
+    });
+  }
 }
 
 template <class Mutex>
@@ -312,71 +302,66 @@ void testUnlockCommon() {
   EXPECT_EQ(9, *value.contextualRLock());
 }
 
-// testUnlock() version for shared lock types
 template <class Mutex>
-std::enable_if_t<folly::detail::kSynchronizedMutexIsShared<Mutex>>
-testUnlock() {
-  folly::Synchronized<int, Mutex> value{10};
-  {
-    auto lv = value.wlock();
-    EXPECT_EQ(10, *lv);
-    *lv = 5;
-    lv.unlock();
-    EXPECT_FALSE(lv);
-    EXPECT_TRUE(lv.isNull());
+void testUnlock() {
+  if constexpr (folly::detail::kSynchronizedMutexIsShared<Mutex>) {
+    folly::Synchronized<int, Mutex> value{10};
+    {
+      auto lv = value.wlock();
+      EXPECT_EQ(10, *lv);
+      *lv = 5;
+      lv.unlock();
+      EXPECT_FALSE(lv);
+      EXPECT_TRUE(lv.isNull());
 
-    auto rlv = value.rlock();
-    EXPECT_EQ(5, *rlv);
-    rlv.unlock();
-    EXPECT_FALSE(rlv);
-    EXPECT_TRUE(rlv.isNull());
+      auto rlv = value.rlock();
+      EXPECT_EQ(5, *rlv);
+      rlv.unlock();
+      EXPECT_FALSE(rlv);
+      EXPECT_TRUE(rlv.isNull());
 
-    auto lv2 = value.wlock();
-    EXPECT_EQ(5, *lv2);
-    *lv2 = 7;
+      auto lv2 = value.wlock();
+      EXPECT_EQ(5, *lv2);
+      *lv2 = 7;
 
-    lv = std::move(lv2);
-    EXPECT_FALSE(lv2);
-    EXPECT_TRUE(lv2.isNull());
-    EXPECT_FALSE(lv.isNull());
-    EXPECT_EQ(7, *lv);
+      lv = std::move(lv2);
+      EXPECT_FALSE(lv2);
+      EXPECT_TRUE(lv2.isNull());
+      EXPECT_FALSE(lv.isNull());
+      EXPECT_EQ(7, *lv);
+    }
+
+    testUnlockCommon<Mutex>();
+  } else {
+    folly::Synchronized<int, Mutex> value{10};
+    {
+      auto lv = value.lock();
+      EXPECT_EQ(10, *lv);
+      *lv = 5;
+      lv.unlock();
+      EXPECT_TRUE(lv.isNull());
+      EXPECT_FALSE(lv);
+
+      auto lv2 = value.lock();
+      EXPECT_EQ(5, *lv2);
+      *lv2 = 6;
+      lv2.unlock();
+      EXPECT_TRUE(lv2.isNull());
+      EXPECT_FALSE(lv2);
+
+      lv = value.lock();
+      EXPECT_EQ(6, *lv);
+      *lv = 7;
+
+      lv2 = std::move(lv);
+      EXPECT_TRUE(lv.isNull());
+      EXPECT_FALSE(lv);
+      EXPECT_FALSE(lv2.isNull());
+      EXPECT_EQ(7, *lv2);
+    }
+
+    testUnlockCommon<Mutex>();
   }
-
-  testUnlockCommon<Mutex>();
-}
-
-// testUnlock() version for non-shared lock types
-template <class Mutex>
-std::enable_if_t<!folly::detail::kSynchronizedMutexIsShared<Mutex>>
-testUnlock() {
-  folly::Synchronized<int, Mutex> value{10};
-  {
-    auto lv = value.lock();
-    EXPECT_EQ(10, *lv);
-    *lv = 5;
-    lv.unlock();
-    EXPECT_TRUE(lv.isNull());
-    EXPECT_FALSE(lv);
-
-    auto lv2 = value.lock();
-    EXPECT_EQ(5, *lv2);
-    *lv2 = 6;
-    lv2.unlock();
-    EXPECT_TRUE(lv2.isNull());
-    EXPECT_FALSE(lv2);
-
-    lv = value.lock();
-    EXPECT_EQ(6, *lv);
-    *lv = 7;
-
-    lv2 = std::move(lv);
-    EXPECT_TRUE(lv.isNull());
-    EXPECT_FALSE(lv);
-    EXPECT_FALSE(lv2.isNull());
-    EXPECT_EQ(7, *lv2);
-  }
-
-  testUnlockCommon<Mutex>();
 }
 
 // Testing the deprecated SYNCHRONIZED and SYNCHRONIZED_CONST APIs

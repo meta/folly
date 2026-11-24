@@ -384,7 +384,8 @@ class CountedAllocator {
   constexpr CountedAllocator(CountedAllocator const&) = default;
   CountedAllocator<T>& operator=(CountedAllocator const&) = default;
 
-  template <typename U, std::enable_if_t<!std::is_same<U, T>::value, int> = 0>
+  template <typename U>
+    requires(!std::is_same_v<U, T>)
   /* implicit */ constexpr CountedAllocator(
       CountedAllocator<U> const& other) noexcept
       : stats_(other.stats_) {}

@@ -564,15 +564,13 @@ class TryLockable {
         onUnlock{std::move(onUnlockIn)} {}
 
   void lock() { EXPECT_TRUE(false); }
-  template <
-      int LockableType = kLockableType,
-      std::enable_if_t<LockableType != kLockable>* = nullptr>
+  template <int LockableType = kLockableType>
+    requires(LockableType != kLockable)
   void lock_shared() {
     EXPECT_TRUE(false);
   }
-  template <
-      int LockableType = kLockableType,
-      std::enable_if_t<LockableType == kULockable>* = nullptr>
+  template <int LockableType = kLockableType>
+    requires(LockableType == kULockable)
   void lock_upgrade() {
     EXPECT_TRUE(false);
   }

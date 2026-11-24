@@ -1650,8 +1650,8 @@ void for_each_argument(F&& f, Args&&... args) {
 
 // float -> integral clamp cast
 template <typename Src, typename Dst>
-static typename std::enable_if<std::is_floating_point<Src>::value, void>::type
-run_constexpr_clamp_cast_test(Src, Dst) {
+  requires std::is_floating_point_v<Src>
+static void run_constexpr_clamp_cast_test(Src, Dst) {
   constexpr auto kQuietNaN = std::numeric_limits<Src>::quiet_NaN();
   constexpr auto kSignalingNaN = std::numeric_limits<Src>::signaling_NaN();
   constexpr auto kPositiveInf = std::numeric_limits<Src>::infinity();
@@ -1685,8 +1685,8 @@ run_constexpr_clamp_cast_test(Src, Dst) {
 
 // integral -> integral clamp cast
 template <typename Src, typename Dst>
-static typename std::enable_if<std::is_integral<Src>::value, void>::type
-run_constexpr_clamp_cast_test(Src, Dst) {
+  requires std::is_integral_v<Src>
+static void run_constexpr_clamp_cast_test(Src, Dst) {
   constexpr auto kSrcMax = std::numeric_limits<Src>::max();
   constexpr auto kSrcMin = std::numeric_limits<Src>::min();
 
