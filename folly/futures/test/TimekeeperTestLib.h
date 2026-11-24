@@ -109,15 +109,6 @@ TYPED_TEST_P(TimekeeperTest, FutureSleep) {
   EXPECT_GE(steady_clock::now() - t1, 1ms);
 }
 
-FOLLY_PUSH_WARNING
-FOLLY_GNU_DISABLE_WARNING("-Wdeprecated-declarations")
-TYPED_TEST_P(TimekeeperTest, FutureSleepUnsafe) {
-  auto t1 = steady_clock::now();
-  futures::sleepUnsafe(1ms).get();
-  EXPECT_GE(steady_clock::now() - t1, 1ms);
-}
-FOLLY_POP_WARNING
-
 TYPED_TEST_P(TimekeeperTest, FutureDelayed) {
   auto t1 = steady_clock::now();
   auto dur =
@@ -616,7 +607,6 @@ REGISTER_TYPED_TEST_SUITE_P(
     FutureGetBeforeTimeout,
     FutureGetTimeout,
     FutureSleep,
-    FutureSleepUnsafe,
     FutureDelayed,
     SemiFutureDelayed,
     FutureDelayedStickyExecutor,

@@ -78,10 +78,6 @@ SemiFuture<Unit> sleep(HighResDuration dur, Timekeeper* tk) {
   return tk->after(dur);
 }
 
-Future<Unit> sleepUnsafe(HighResDuration dur, Timekeeper* tk) {
-  return sleep(dur, tk).toUnsafeFuture();
-}
-
 #if !defined(__wasi__)
 namespace {
 template <typename Ptr>

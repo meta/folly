@@ -1995,11 +1995,6 @@ namespace futures {
 /// needed. If your program never uses any timeouts or other time-based
 /// Futures you will pay no Timekeeper thread overhead.
 SemiFuture<Unit> sleep(HighResDuration, Timekeeper* = nullptr);
-[[deprecated(
-    "futures::sleep now returns a SemiFuture<Unit>. "
-    "sleepUnsafe is deprecated. "
-    "Please call futures::sleep and apply an executor with .via")]] Future<Unit>
-sleepUnsafe(HighResDuration, Timekeeper* = nullptr);
 
 /**
  * Set func as the callback for each input Future and return a vector of
