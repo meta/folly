@@ -448,6 +448,10 @@ struct PolyVal : PolyImpl<I> {
 
   /**
    * Construct a Poly<I> from a concrete type that satisfies the I concept
+   * \note This uses SFINAE rather than a `requires`-clause: `ModelsInterface`
+   *     checks whether `Poly<I>` is constructible from `T`, which recurses
+   *     into this constructor. SFINAE tolerates that, but constraint
+   *     satisfaction rejects it as depending on itself.
    */
   template <class T, std::enable_if_t<ModelsInterface<T, I>::value, int> = 0>
   /* implicit */ PolyVal(T&& t);
@@ -456,12 +460,14 @@ struct PolyVal : PolyImpl<I> {
    * Construct a `Poly` from a compatible `Poly`. "Compatible" here means: the
    * other interface extends this one either directly or indirectly.
    */
-  template <class I2, std::enable_if_t<ValueCompatible<I, I2>::value, int> = 0>
+  template <class I2>
+    requires ValueCompatible<I, I2>::value
   /* implicit */ PolyVal(Poly<I2> that);
 
   /**
    * Assign to this `Poly<I>` from a concrete type that satisfies the `I`
    * concept.
+   * \note Uses SFINAE for the same reason as the converting constructor.
    */
   template <class T, std::enable_if_t<ModelsInterface<T, I>::value, int> = 0>
   Poly<I>& operator=(T&& t);
@@ -470,7 +476,8 @@ struct PolyVal : PolyImpl<I> {
    * Assign a compatible `Poly` to `*this`. "Compatible" here means: the
    * other interface extends this one either directly or indirectly.
    */
-  template <class I2, std::enable_if_t<ValueCompatible<I, I2>::value, int> = 0>
+  template <class I2>
+    requires ValueCompatible<I, I2>::value
   Poly<I>& operator=(Poly<I2> that);
 
   /**
@@ -518,6 +525,10 @@ struct PolyRef : private PolyImpl<I> {
   /**
    * Construct a `Poly<I>` from a concrete type that satisfies concept `I`.
    * \post `!poly_empty(*this)`
+   * \note This uses SFINAE rather than a `requires`-clause: `ModelsInterface`
+   *     checks whether `Poly<I>` is constructible from `T`, which recurses
+   *     into this constructor. SFINAE tolerates that, but constraint
+   *     satisfaction rejects it as depending on itself.
    */
   template <class T, std::enable_if_t<ModelsInterface<T, I>::value, int> = 0>
   /* implicit */ PolyRef(T&& t) noexcept;
@@ -525,21 +536,18 @@ struct PolyRef : private PolyImpl<I> {
   /**
    * Construct a `Poly<I>` from a compatible `Poly<I2>`.
    */
-  template <
-      class I2,
-      std::enable_if_t<ReferenceCompatible<I, I2, I2&&>::value, int> = 0>
+  template <class I2>
+    requires ReferenceCompatible<I, I2, I2&&>::value
   /* implicit */ PolyRef(Poly<I2>&& that) noexcept(
       std::is_reference<I2>::value);
 
-  template <
-      class I2,
-      std::enable_if_t<ReferenceCompatible<I, I2, I2&>::value, int> = 0>
+  template <class I2>
+    requires ReferenceCompatible<I, I2, I2&>::value
   /* implicit */ PolyRef(Poly<I2>& that) noexcept(std::is_reference<I2>::value)
       : PolyRef{that, Type<I2>{}} {}
 
-  template <
-      class I2,
-      std::enable_if_t<ReferenceCompatible<I, I2, I2 const&>::value, int> = 0>
+  template <class I2>
+    requires ReferenceCompatible<I, I2, I2 const&>::value
   /* implicit */ PolyRef(Poly<I2> const& that) noexcept(
       std::is_reference<I2>::value)
       : PolyRef{that, Type<I2>{}} {}
@@ -547,6 +555,7 @@ struct PolyRef : private PolyImpl<I> {
   /**
    * Assign to a `Poly<I>` from a concrete type that satisfies concept `I`.
    * \post `!poly_empty(*this)`
+   * \note Uses SFINAE for the same reason as the converting constructor.
    */
   template <class T, std::enable_if_t<ModelsInterface<T, I>::value, int> = 0>
   Poly<I>& operator=(T&& t) noexcept;
@@ -554,25 +563,22 @@ struct PolyRef : private PolyImpl<I> {
   /**
    * Assign to `*this` from another compatible `Poly`.
    */
-  template <
-      class I2,
-      std::enable_if_t<ReferenceCompatible<I, I2, I2&&>::value, int> = 0>
+  template <class I2>
+    requires ReferenceCompatible<I, I2, I2&&>::value
   Poly<I>& operator=(Poly<I2>&& that) noexcept(std::is_reference<I2>::value);
 
   /**
    * \overload
    */
-  template <
-      class I2,
-      std::enable_if_t<ReferenceCompatible<I, I2, I2&>::value, int> = 0>
+  template <class I2>
+    requires ReferenceCompatible<I, I2, I2&>::value
   Poly<I>& operator=(Poly<I2>& that) noexcept(std::is_reference<I2>::value);
 
   /**
    * \overload
    */
-  template <
-      class I2,
-      std::enable_if_t<ReferenceCompatible<I, I2, I2 const&>::value, int> = 0>
+  template <class I2>
+    requires ReferenceCompatible<I, I2, I2 const&>::value
   Poly<I>& operator=(Poly<I2> const& that) noexcept(
       std::is_reference<I2>::value);
 

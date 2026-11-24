@@ -323,9 +323,8 @@ namespace detail {
 template <typename T>
 struct inheritable_inherit_ : T {
   using T::T;
-  template <
-      typename... A,
-      std::enable_if_t<std::is_constructible<T, A...>::value, int> = 0>
+  template <typename... A>
+    requires std::is_constructible_v<T, A...>
   /* implicit */ FOLLY_ERASE inheritable_inherit_(A&&... a) noexcept(
       noexcept(T(static_cast<A&&>(a)...)))
       : T(static_cast<A&&>(a)...) {}
@@ -334,9 +333,8 @@ struct inheritable_inherit_ : T {
 template <typename T>
 struct inheritable_contain_ {
   T v;
-  template <
-      typename... A,
-      std::enable_if_t<std::is_constructible<T, A...>::value, int> = 0>
+  template <typename... A>
+    requires std::is_constructible_v<T, A...>
   /* implicit */ FOLLY_ERASE inheritable_contain_(A&&... a) noexcept(
       noexcept(T(static_cast<A&&>(a)...)))
       : v(static_cast<A&&>(a)...) {}
@@ -582,7 +580,8 @@ class to_narrow_convertible {
   to_narrow_convertible& operator=(to_narrow_convertible const&) = default;
   to_narrow_convertible& operator=(to_narrow_convertible&&) = default;
 
-  template <typename Dst, std::enable_if_t<to_<Dst>::value, int> = 0>
+  template <typename Dst>
+    requires to_<Dst>::value
   /* implicit */ constexpr operator Dst() const noexcept {
     FOLLY_PUSH_WARNING
     FOLLY_MSVC_DISABLE_WARNING(4244) // lossy conversion: arguments
@@ -634,7 +633,8 @@ class to_integral_convertible {
   to_integral_convertible& operator=(to_integral_convertible const&) = default;
   to_integral_convertible& operator=(to_integral_convertible&&) = default;
 
-  template <typename Dst, std::enable_if_t<to_<Dst>, int> = 0>
+  template <typename Dst>
+    requires to_<Dst>
   /* implicit */ constexpr operator Dst() const noexcept {
     FOLLY_PUSH_WARNING
     FOLLY_MSVC_DISABLE_WARNING(4244) // lossy conversion: arguments
@@ -688,7 +688,8 @@ class to_floating_point_convertible {
   to_floating_point_convertible& operator=(to_floating_point_convertible&&) =
       default;
 
-  template <typename Dst, std::enable_if_t<to_<Dst>, int> = 0>
+  template <typename Dst>
+    requires to_<Dst>
   /* implicit */ constexpr operator Dst() const noexcept {
     FOLLY_PUSH_WARNING
     FOLLY_GNU_DISABLE_WARNING("-Wconversion")
@@ -753,8 +754,6 @@ class invocable_to_convertible : private inheritable<F> {
   template <typename R>
   static constexpr bool detected_v = is_detected_v<invocable_to_detect, R>;
   template <typename R>
-  using if_invocable_as_v = std::enable_if_t<detected_v<R>, int>;
-  template <typename R>
   static constexpr bool nx_v = noexcept(FOLLY_DECLVAL(R)());
   template <typename G>
   static constexpr bool constructible_v = std::is_constructible<F, G&&>::value;
@@ -774,24 +773,29 @@ class invocable_to_convertible : private inheritable<F> {
   using BCR = base const&&;
 
  public:
-  template <typename G, std::enable_if_t<constructible_v<G&&>, int> = 0>
+  template <typename G>
+    requires constructible_v<G&&>
   FOLLY_ERASE explicit constexpr invocable_to_convertible(G&& g) noexcept(
       noexcept(F(static_cast<G&&>(g))))
       : inheritable<F>(static_cast<G&&>(g)) {}
 
-  template <typename..., typename R = FML, if_invocable_as_v<R> = 0>
+  template <typename..., typename R = FML>
+    requires detected_v<R>
   FOLLY_ERASE constexpr operator TML() & noexcept(nx_v<R>) {
     return static_cast<FML>(static_cast<BML>(*this))();
   }
-  template <typename..., typename R = FCL, if_invocable_as_v<R> = 0>
+  template <typename..., typename R = FCL>
+    requires detected_v<R>
   FOLLY_ERASE constexpr operator TCL() const& noexcept(nx_v<R>) {
     return static_cast<FCL>(static_cast<BCL>(*this))();
   }
-  template <typename..., typename R = FMR, if_invocable_as_v<R> = 0>
+  template <typename..., typename R = FMR>
+    requires detected_v<R>
   FOLLY_ERASE constexpr operator TMR() && noexcept(nx_v<R>) {
     return static_cast<FMR>(static_cast<BMR>(*this))();
   }
-  template <typename..., typename R = FCR, if_invocable_as_v<R> = 0>
+  template <typename..., typename R = FCR>
+    requires detected_v<R>
   FOLLY_ERASE constexpr operator TCR() const&& noexcept(nx_v<R>) {
     return static_cast<FCR>(static_cast<BCR>(*this))();
   }
@@ -851,8 +855,8 @@ struct invocable_to_fn {
       typename F,
       typename...,
       typename D = detail::decay_t<F>,
-      typename R = detail::invocable_to_convertible<D>,
-      std::enable_if_t<std::is_constructible<D, F&&>::value, int> = 0>
+      typename R = detail::invocable_to_convertible<D>>
+    requires std::is_constructible_v<D, F&&>
   FOLLY_ERASE constexpr R operator()(F&& f) const
       noexcept(noexcept(R(static_cast<F&&>(f)))) {
     return R(static_cast<F&&>(f));

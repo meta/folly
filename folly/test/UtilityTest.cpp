@@ -497,7 +497,8 @@ class MethodOverloadDelegation {
   }
 
   template <class Self, class T>
-  static constexpr std::enable_if_t<T::value> testSfinaeImpl(Self&&, T) {}
+    requires T::value
+  static constexpr void testSfinaeImpl(Self&&, T) {}
 
  public:
   FOLLY_FOR_EACH_THIS_OVERLOAD_IN_CLASS_BODY_DELEGATE(

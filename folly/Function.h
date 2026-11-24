@@ -716,11 +716,10 @@ class Function final : private detail::function::FunctionTraits<FunctionType> {
    * parameter signature matches (i.e. it returns an object convertible to `R`
    * when called with `Args...`).
    */
-  template <
-      typename Fun,
-      typename = std::enable_if_t<
-          !detail::function::is_instantiation_of_folly_function_v<Fun>>,
-      typename = typename Traits::template IfSafeResult<Fun>>
+  template <typename Fun>
+    requires(
+        !detail::function::is_instantiation_of_folly_function_v<Fun> &&
+        requires { typename Traits::template IfSafeResult<Fun>; })
   /* implicit */ constexpr Function(Fun fun) noexcept(
       detail::function::DispatchOf<Fun>::is_in_situ) {
     using Dispatch = detail::function::DispatchOf<Fun>;
@@ -755,12 +754,13 @@ class Function final : private detail::function::FunctionTraits<FunctionType> {
    * a non-const `operator()` if it is defined, and falls back to
    * `operator() const` otherwise.
    */
-  template <
-      typename Signature,
-      typename Fun = Function<Signature>,
-      // prevent gcc from making this a better match than move-ctor
-      typename = std::enable_if_t<!std::is_same<Function, Fun>::value>,
-      typename = typename Traits::template IfSafeResult<Fun>>
+  template <typename Signature>
+    requires(
+        // prevent gcc from making this a better match than move-ctor
+        !std::is_same_v<Function, Function<Signature>> &&
+        requires {
+          typename Traits::template IfSafeResult<Function<Signature>>;
+        })
   Function(Function<Signature>&& that) noexcept(
       noexcept(Function(std::move(that), CoerceTag{})))
       : Function(std::move(that), CoerceTag{}) {}
@@ -980,9 +980,8 @@ template <typename Void, typename>
 struct function_ctor_deduce_;
 
 template <typename P>
-struct function_ctor_deduce_<
-    std::enable_if_t<std::is_function<std::remove_pointer_t<P>>::value>,
-    P> {
+  requires std::is_function_v<std::remove_pointer_t<P>>
+struct function_ctor_deduce_<void, P> {
   using type = std::remove_pointer_t<P>;
 };
 
@@ -1034,21 +1033,17 @@ class FunctionRef<ReturnType(Args...)> final {
     throw_exception<std::bad_function_call>();
   }
 
-  template <
-      typename Fun,
-      std::enable_if_t<!std::is_pointer<Fun>::value, int> = 0>
+  template <typename Fun>
   static ReturnType call(CallArg<Args>... args, void* object) {
-    using Pointer = std::add_pointer_t<Fun>;
-    return static_cast<ReturnType>(std::invoke(
-        static_cast<Fun&&>(*static_cast<Pointer>(object)),
-        static_cast<Args&&>(args)...));
-  }
-  template <
-      typename Fun,
-      std::enable_if_t<std::is_pointer<Fun>::value, int> = 0>
-  static ReturnType call(CallArg<Args>... args, void* object) {
-    return static_cast<ReturnType>(std::invoke(
-        reinterpret_cast<Fun>(object), static_cast<Args&&>(args)...));
+    if constexpr (std::is_pointer_v<Fun>) {
+      return static_cast<ReturnType>(std::invoke(
+          reinterpret_cast<Fun>(object), static_cast<Args&&>(args)...));
+    } else {
+      using Pointer = std::add_pointer_t<Fun>;
+      return static_cast<ReturnType>(std::invoke(
+          static_cast<Fun&&>(*static_cast<Pointer>(object)),
+          static_cast<Args&&>(args)...));
+    }
   }
 
   void* object_{nullptr};
@@ -1074,13 +1069,10 @@ class FunctionRef<ReturnType(Args...)> final {
    * callable is considered to be an empty callable, the FunctionRef will be
    * empty.
    */
-  template <
-      typename Fun,
-      std::enable_if_t<
-          std::conjunction_v<
-              std::negation<std::is_same<FunctionRef, std::decay_t<Fun>>>,
-              is_invocable_r<ReturnType, Fun&&, Args&&...>>,
-          int> = 0>
+  template <typename Fun>
+    requires(
+        !std::is_same_v<FunctionRef, std::decay_t<Fun>> &&
+        is_invocable_r_v<ReturnType, Fun &&, Args && ...>)
   constexpr /* implicit */ FunctionRef(
       Fun&& fun [[FOLLY_ATTR_CLANG_LIFETIMEBOUND]]) noexcept {
     // `Fun` may be a const type, in which case we have to do a const_cast
@@ -1103,10 +1095,10 @@ class FunctionRef<ReturnType(Args...)> final {
    * Constructs a FunctionRef from a pointer to a function. If the
    * pointer is nullptr, the FunctionRef will be empty.
    */
-  template <
-      typename Fun,
-      std::enable_if_t<std::is_function<Fun>::value, int> = 0,
-      std::enable_if_t<is_invocable_r_v<ReturnType, Fun&, Args&&...>, int> = 0>
+  template <typename Fun>
+    requires(
+        std::is_function_v<Fun> &&
+        is_invocable_r_v<ReturnType, Fun&, Args && ...>)
   constexpr /* implicit */ FunctionRef(Fun* fun) noexcept {
     if (fun) {
       object_ = const_cast<void*>(reinterpret_cast<void const*>(fun));

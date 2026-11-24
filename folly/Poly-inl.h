@@ -66,7 +66,8 @@ inline PolyVal<I>::PolyVal(T&& t) {
 }
 
 template <class I>
-template <class I2, std::enable_if_t<ValueCompatible<I, I2>::value, int>>
+template <class I2>
+  requires ValueCompatible<I, I2>::value
 inline PolyVal<I>::PolyVal(Poly<I2> that) {
   static_assert(
       !Copyable::value || std::is_copy_constructible<Poly<I2>>::value,
@@ -87,7 +88,8 @@ inline Poly<I>& PolyVal<I>::operator=(T&& t) {
 }
 
 template <class I>
-template <class I2, std::enable_if_t<ValueCompatible<I, I2>::value, int>>
+template <class I2>
+  requires ValueCompatible<I, I2>::value
 inline Poly<I>& PolyVal<I>::operator=(Poly<I2> that) {
   *this = PolyVal(std::move(that));
   return static_cast<Poly<I>&>(*this);
@@ -166,9 +168,8 @@ inline PolyRef<I>::PolyRef(T&& t) noexcept {
 }
 
 template <class I>
-template <
-    class I2,
-    std::enable_if_t<ReferenceCompatible<I, I2, I2&&>::value, int>>
+template <class I2>
+  requires ReferenceCompatible<I, I2, I2&&>::value
 inline PolyRef<I>::PolyRef(Poly<I2>&& that) noexcept(
     std::is_reference<I2>::value)
     : PolyRef{that, Type<I2>{}} {
@@ -186,9 +187,8 @@ inline Poly<I>& PolyRef<I>::operator=(T&& t) noexcept {
 }
 
 template <class I>
-template <
-    class I2,
-    std::enable_if_t<ReferenceCompatible<I, I2, I2&&>::value, int>>
+template <class I2>
+  requires ReferenceCompatible<I, I2, I2&&>::value
 inline Poly<I>& PolyRef<I>::operator=(Poly<I2>&& that) noexcept(
     std::is_reference<I2>::value) {
   *this = PolyRef(std::move(that));
@@ -196,9 +196,8 @@ inline Poly<I>& PolyRef<I>::operator=(Poly<I2>&& that) noexcept(
 }
 
 template <class I>
-template <
-    class I2,
-    std::enable_if_t<ReferenceCompatible<I, I2, I2&>::value, int>>
+template <class I2>
+  requires ReferenceCompatible<I, I2, I2&>::value
 inline Poly<I>& PolyRef<I>::operator=(Poly<I2>& that) noexcept(
     std::is_reference<I2>::value) {
   *this = PolyRef(that);
@@ -206,9 +205,8 @@ inline Poly<I>& PolyRef<I>::operator=(Poly<I2>& that) noexcept(
 }
 
 template <class I>
-template <
-    class I2,
-    std::enable_if_t<ReferenceCompatible<I, I2, I2 const&>::value, int>>
+template <class I2>
+  requires ReferenceCompatible<I, I2, I2 const&>::value
 inline Poly<I>& PolyRef<I>::operator=(Poly<I2> const& that) noexcept(
     std::is_reference<I2>::value) {
   *this = PolyRef(that);
