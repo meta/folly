@@ -462,32 +462,6 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
-fb_dirsync_cpp_library(
-    name = "mocks",
-    headers = [
-        "MockAsyncSSLSocket.h",
-        "MockAsyncSocket.h",
-        "MockAsyncSocketLegacyObserver.h",
-        "MockAsyncSocketObserver.h",
-        "MockAsyncTransport.h",
-        "MockAsyncUDPSocket.h",
-        "MockTimeoutManager.h",
-    ],
-    use_raw_headers = True,
-    exported_deps = [
-        "//folly/io/async/testing:mocks",  # @shim
-    ],
-)
-
-fb_dirsync_cpp_library(
-    name = "mock_server_socket",
-    headers = ["MockAsyncServerSocket.h"],
-    use_raw_headers = True,
-    exported_deps = [
-        "//folly/io/async/testing:mock_server_socket",  # @shim
-    ],
-)
-
 fb_dirsync_cpp_unittest(
     name = "notification_queue_test",
     srcs = ["NotificationQueueTest.cpp"],

@@ -272,11 +272,11 @@ list(
   ${FOLLY_DIR}/io/async/test/AsyncSocketTest2.h
   ${FOLLY_DIR}/io/async/test/CallbackStateEnum.h
   ${FOLLY_DIR}/io/async/test/ConnCallback.h
-  ${FOLLY_DIR}/io/async/test/MockAsyncSocket.h
-  ${FOLLY_DIR}/io/async/test/MockAsyncServerSocket.h
-  ${FOLLY_DIR}/io/async/test/MockAsyncTransport.h
-  ${FOLLY_DIR}/io/async/test/MockAsyncUDPSocket.h
-  ${FOLLY_DIR}/io/async/test/MockTimeoutManager.h
+  ${FOLLY_DIR}/io/async/testing/MockAsyncSocket.h
+  ${FOLLY_DIR}/io/async/testing/MockAsyncServerSocket.h
+  ${FOLLY_DIR}/io/async/testing/MockAsyncTransport.h
+  ${FOLLY_DIR}/io/async/testing/MockAsyncUDPSocket.h
+  ${FOLLY_DIR}/io/async/testing/MockTimeoutManager.h
   ${FOLLY_DIR}/io/async/test/ScopedBoundPort.h
   ${FOLLY_DIR}/io/async/test/SocketPair.h
   ${FOLLY_DIR}/io/async/test/TFOUtil.h
@@ -296,7 +296,7 @@ if (FOLLY_HAVE_OPENSSL)
     ${FOLLY_DIR}/io/async/test/AsyncSocketTest.h
     ${FOLLY_DIR}/io/async/test/AsyncSSLSocketTest.h
     ${FOLLY_DIR}/io/async/test/BlockingSocket.h
-    ${FOLLY_DIR}/io/async/test/MockAsyncSSLSocket.h
+    ${FOLLY_DIR}/io/async/testing/MockAsyncSSLSocket.h
     ${FOLLY_DIR}/io/async/test/TestSSLServer.h
   )
 endif ()
@@ -529,11 +529,11 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ${FOLLY_DIR}/executors/testing/SimpleThreadPoolExecutor.h
     ${FOLLY_DIR}/io/async/test/CallbackStateEnum.h
     ${FOLLY_DIR}/io/async/test/ConnCallback.h
-    ${FOLLY_DIR}/io/async/test/MockAsyncServerSocket.h
-    ${FOLLY_DIR}/io/async/test/MockAsyncSocket.h
-    ${FOLLY_DIR}/io/async/test/MockAsyncTransport.h
-    ${FOLLY_DIR}/io/async/test/MockAsyncUDPSocket.h
-    ${FOLLY_DIR}/io/async/test/MockTimeoutManager.h
+    ${FOLLY_DIR}/io/async/testing/MockAsyncServerSocket.h
+    ${FOLLY_DIR}/io/async/testing/MockAsyncSocket.h
+    ${FOLLY_DIR}/io/async/testing/MockAsyncTransport.h
+    ${FOLLY_DIR}/io/async/testing/MockAsyncUDPSocket.h
+    ${FOLLY_DIR}/io/async/testing/MockTimeoutManager.h
     ${FOLLY_DIR}/io/async/test/ScopedBoundPort.cpp
     ${FOLLY_DIR}/io/async/test/ScopedBoundPort.h
     ${FOLLY_DIR}/io/async/test/SocketPair.cpp
@@ -570,7 +570,7 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
       folly_test_support
       PRIVATE
         ${FOLLY_DIR}/io/async/test/BlockingSocket.h
-        ${FOLLY_DIR}/io/async/test/MockAsyncSSLSocket.h
+        ${FOLLY_DIR}/io/async/testing/MockAsyncSSLSocket.h
         ${FOLLY_DIR}/io/async/test/SSLUtil.cpp
         ${FOLLY_DIR}/io/async/test/SSLUtil.h
         ${FOLLY_DIR}/io/async/test/TestSSLServer.cpp
