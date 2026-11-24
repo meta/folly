@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <latch>
 #include <list>
 #include <stdexcept>
 
@@ -501,6 +502,53 @@ TEST_F(MeteredExecutorTest, PauseResumeStress) {
   }
 
   dexec->join();
+}
+
+TEST_F(MeteredExecutorTest, RealThreadConcurrentStress) {
+  createAdapter(1, std::make_unique<CPUThreadPoolExecutor>(4));
+  MeteredExecutor* metered =
+      dynamic_cast<MeteredExecutor*>(getKeepAlive(1).get());
+
+  constexpr int kNumProducers = 8;
+  constexpr int kTasksPerProducer = 2000;
+  const auto completed =
+      std::make_shared<std::latch>(kNumProducers * kTasksPerProducer);
+  std::atomic<uint64_t> executed{0};
+  const auto task = [&executed, completed] {
+    executed.fetch_add(1, std::memory_order_relaxed);
+    completed->count_down();
+  };
+
+  std::vector<std::thread> producers;
+  for (int p = 0; p < kNumProducers; ++p) {
+    producers.emplace_back([&] {
+      for (int i = 0; i < kTasksPerProducer; ++i) {
+        add(task, 1);
+      }
+    });
+  }
+
+  std::atomic<bool> stopPauser{false};
+  std::thread pauser([&] {
+    while (!stopPauser.load(std::memory_order_relaxed)) {
+      metered->pause();
+      metered->resume();
+    }
+  });
+
+  for (auto& t : producers) {
+    t.join();
+  }
+  stopPauser.store(true, std::memory_order_relaxed);
+  pauser.join();
+
+  metered->resume();
+  completed->wait();
+
+  EXPECT_EQ(
+      static_cast<uint64_t>(kNumProducers) * kTasksPerProducer,
+      executed.load());
+  EXPECT_EQ(0, metered->pendingTasks());
 }
 
 namespace {

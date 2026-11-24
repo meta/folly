@@ -72,7 +72,7 @@ std::unique_ptr<QueueObserver> MeteredExecutorImpl<Atom>::setupQueueObserver() {
 }
 
 template <template <typename> class Atom>
-template <class F>
+template <std::memory_order SuccessOrder, class F>
 void MeteredExecutorImpl<Atom>::modifyState(F f) {
   uint64_t oldState = state_.load(std::memory_order_relaxed);
   uint64_t newState;
@@ -83,10 +83,7 @@ void MeteredExecutorImpl<Atom>::modifyState(F f) {
     // No more in queue than pending tasks.
     DCHECK_LE(newState >> kInQueueShift, newState & kSizeMask);
   } while (!state_.compare_exchange_strong(
-      oldState,
-      newState,
-      std::memory_order_seq_cst,
-      std::memory_order_relaxed));
+      oldState, newState, SuccessOrder, std::memory_order_relaxed));
 }
 
 template <template <typename> class Atom>
@@ -100,7 +97,7 @@ void MeteredExecutorImpl<Atom>::add(Func func) {
   queue_.enqueue(std::move(task));
 
   bool shouldScheduleWorker;
-  modifyState([&](uint64_t state) {
+  modifyState<std::memory_order_release>([&](uint64_t state) {
     state += kSizeInc;
     CHECK_NE(state & kSizeMask, 0)
         << "Too many pending tasks in MeteredExecutor";
@@ -129,7 +126,7 @@ template <template <typename> class Atom>
 bool MeteredExecutorImpl<Atom>::resume() {
   bool wasPaused = false;
   size_t workersToSchedule = 0;
-  modifyState([&](uint64_t state) {
+  modifyState<std::memory_order_relaxed>([&](uint64_t state) {
     if (state & kPausedBit) {
       wasPaused = true;
     } else {
@@ -169,7 +166,7 @@ template <template <typename> class Atom>
 void MeteredExecutorImpl<Atom>::worker() {
   bool shouldAbort = false;
   bool shouldRescheduleWorker = false;
-  modifyState([&](uint64_t state) {
+  modifyState<std::memory_order_acquire>([&](uint64_t state) {
     if (state & kPausedBit) {
       shouldAbort = true;
       shouldRescheduleWorker = false;

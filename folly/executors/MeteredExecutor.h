@@ -121,7 +121,7 @@ class MeteredExecutorImpl : public DefaultKeepAliveExecutor {
     intptr_t queueObserverPayload_;
   };
 
-  template <class F>
+  template <std::memory_order SuccessOrder, class F>
   void modifyState(F f);
 
   std::unique_ptr<folly::QueueObserver> setupQueueObserver();
