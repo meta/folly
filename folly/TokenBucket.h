@@ -68,8 +68,11 @@ class TokenBucketStorage {
    * Constructor.
    *
    * @param zeroTime Initial time at which to consider the token bucket
-   *                 starting to fill. Defaults to 0, so by default token
-   *                 buckets are "empty" after construction.
+   *                 starting to fill. Defaults to 0, the clock epoch. The
+   *                 balance at any time is min((time - zeroTime) * rate,
+   *                 burstSize), so the default yields a full bucket at all
+   *                 but very low rates. Pass the current time to start with
+   *                 an empty bucket.
    */
   explicit TokenBucketStorage(double zeroTime = 0) noexcept
       : zeroTime_(zeroTime) {}
@@ -100,8 +103,9 @@ class TokenBucketStorage {
    * Thread-safe.
    *
    * @param zeroTime Initial time at which to consider the token bucket
-   *                 starting to fill. Defaults to 0, so by default token
-   *                 bucket is reset to "empty".
+   *                 starting to fill. Defaults to 0, the clock epoch, which
+   *                 yields a full bucket at all but very low rates. Pass the
+   *                 current time to reset to an empty bucket.
    */
   void reset(double zeroTime = 0) noexcept {
     zeroTime_.store(zeroTime, std::memory_order_relaxed);
@@ -265,8 +269,11 @@ class BasicDynamicTokenBucket {
    * Constructor.
    *
    * @param zeroTime Initial time at which to consider the token bucket
-   *                 starting to fill. Defaults to 0, so by default token
-   *                 buckets are "empty" after construction.
+   *                 starting to fill. Defaults to 0, the clock epoch. The
+   *                 balance at any time is min((time - zeroTime) * rate,
+   *                 burstSize), so the default yields a full bucket at all
+   *                 but very low rates. Pass defaultClockNow() to start with
+   *                 an empty bucket.
    */
   explicit BasicDynamicTokenBucket(double zeroTime = 0) noexcept
       : bucket_(zeroTime) {}
@@ -288,8 +295,9 @@ class BasicDynamicTokenBucket {
    * Thread-safe.
    *
    * @param zeroTime Initial time at which to consider the token bucket
-   *                 starting to fill. Defaults to 0, so by default token
-   *                 bucket is reset to "empty".
+   *                 starting to fill. Defaults to 0, the clock epoch, which
+   *                 yields a full bucket at all but very low rates. Pass
+   *                 defaultClockNow() to reset to an empty bucket.
    */
   void reset(double zeroTime = 0) noexcept { bucket_.reset(zeroTime); }
 
@@ -495,8 +503,11 @@ class BasicTokenBucket {
    * @param genRate Number of tokens to generate per second.
    * @param burstSize Maximum burst size. Must be greater than 0.
    * @param zeroTime Initial time at which to consider the token bucket
-   *                 starting to fill. Defaults to 0, so by default token
-   *                 bucket is "empty" after construction.
+   *                 starting to fill. Defaults to 0, the clock epoch. The
+   *                 balance at any time is min((time - zeroTime) * rate,
+   *                 burstSize), so the default yields a full bucket at all
+   *                 but very low rates. Pass defaultClockNow() to start with
+   *                 an empty bucket.
    */
   BasicTokenBucket(
       double genRate, double burstSize, double zeroTime = 0) noexcept
