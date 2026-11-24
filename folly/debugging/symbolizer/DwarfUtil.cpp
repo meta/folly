@@ -1721,19 +1721,57 @@ DwarfParseResult<Die> findDefinitionDie(
     const CompilationUnit& cu, const Die& die) {
   // Find the real definition instead of declaration.
   // DW_AT_specification: Incomplete, non-defining, or separate declaration
-  // corresponding to a declaration
-  auto offset = getAttribute<uint64_t>(cu, die, DW_AT_specification);
-  if (offset.hasError()) {
-    return makeUnexpected(offset.error());
+  // corresponding to a declaration.
+  //
+  // The attribute is a reference. Most reference forms (DW_FORM_ref1,
+  // DW_FORM_ref2, DW_FORM_ref4, DW_FORM_ref8, DW_FORM_ref_udata) are
+  // offsets from the first byte of the compilation unit header.
+  // DW_FORM_ref_addr is an offset from the first byte of the .debug_info
+  // section, so it must not be offset by cu.offset. This lookup stays
+  // within one CU: a ref_addr outside it, including a cross-CU reference
+  // (unlike DW_AT_abstract_origin in DwarfImpl, which can switch CUs),
+  // reports invalid_offset.
+  uint64_t offset = 0;
+  bool isRefAddr = false;
+  bool found = false;
+  bool typeMismatch = false;
+  auto iteration = forEachAttribute(cu, die, [&](const Attribute& attr) {
+    if (attr.spec.name == DW_AT_specification) {
+      const auto* value = std::get_if<uint64_t>(&attr.attrValue);
+      if (value == nullptr) {
+        typeMismatch = true;
+        return false;
+      }
+      offset = *value;
+      isRefAddr = attr.spec.form == DW_FORM_ref_addr;
+      found = true;
+      return false;
+    }
+    return true;
+  });
+  if (iteration.hasError()) {
+    return makeUnexpected(iteration.error());
   }
-  if (!offset->hasValue()) {
+  if (typeMismatch) {
+    return makeUnexpected(
+        DwarfParseError{DwarfParseErrorCode::invalid_value, die.offset});
+  }
+  if (!found) {
     return die;
   }
-  if (**offset > cu.size) {
+  if (isRefAddr) {
+    if (offset < cu.offset || offset - cu.offset > cu.size ||
+        offset > cu.debugSections.debugInfo.size()) {
+      return makeUnexpected(
+          DwarfParseError{DwarfParseErrorCode::invalid_offset, die.offset});
+    }
+    return getDieAtOffset(cu, offset);
+  }
+  if (offset > cu.size) {
     return makeUnexpected(
         DwarfParseError{DwarfParseErrorCode::invalid_offset, die.offset});
   }
-  return getDieAtOffset(cu, cu.offset + **offset);
+  return getDieAtOffset(cu, cu.offset + offset);
 }
 
 } // namespace symbolizer

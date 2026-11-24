@@ -1318,6 +1318,71 @@ TEST(DwarfUtil, FindDefinitionDiePropagatesInvalidReference) {
   EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
 }
 
+TEST(DwarfUtil, FindDefinitionDieResolvesRefAddrAsSectionOffset) {
+  // CU covers [0x10, 0x30). The target null DIE lives at absolute 0x10,
+  // so only a section-relative lookup finds it.
+  std::vector<uint8_t> info(0x30);
+  // Referencing DIE at 0x20: DW_AT_specification/DW_FORM_ref_addr = 0x10.
+  info[0x20] = 0x10;
+  const std::vector<uint8_t> attributes{
+      DW_AT_specification, DW_FORM_ref_addr, 0, 0};
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.offset = 0x10;
+  cu.size = 0x20;
+  Die die{
+      .is64Bit = false,
+      .attrOffset = 0,
+      .offset = 0x20,
+      .code = 1,
+      .abbr =
+          {
+              .code = 1,
+              .tag = DW_TAG_subprogram,
+              .hasChildren = false,
+              .attributes = attributes,
+          },
+  };
+
+  auto result = findDefinitionDie(cu, die);
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_EQ(uint64_t{0x10}, result->offset);
+}
+
+TEST(DwarfUtil, FindDefinitionDieRejectsCrossCuRefAddr) {
+  // Same CU as above, but the ref_addr points outside it: a cross-CU
+  // reference reports invalid_offset instead of resolving in the wrong CU.
+  std::vector<uint8_t> info(0x30);
+  // Referencing DIE at 0x20: DW_AT_specification/DW_FORM_ref_addr = 0x08,
+  // absolute and outside [0x10, 0x30).
+  info[0x20] = 0x08;
+  const std::vector<uint8_t> attributes{
+      DW_AT_specification, DW_FORM_ref_addr, 0, 0};
+  CompilationUnit cu{};
+  cu.debugSections.debugInfo = info;
+  cu.offset = 0x10;
+  cu.size = 0x20;
+  Die die{
+      .is64Bit = false,
+      .attrOffset = 0,
+      .offset = 0x20,
+      .code = 1,
+      .abbr =
+          {
+              .code = 1,
+              .tag = DW_TAG_subprogram,
+              .hasChildren = false,
+              .attributes = attributes,
+          },
+  };
+
+  auto result = findDefinitionDie(cu, die);
+
+  ASSERT_TRUE(result.hasError());
+  EXPECT_EQ(DwarfParseErrorCode::invalid_offset, result.error().code);
+}
+
 TEST(DwarfUtil, ReadAttributeRejectsTruncatedFixedValue) {
   const std::vector<uint8_t> bytes{0x01, 0x02, 0x03};
   DwarfCursor cursor(bytes);
