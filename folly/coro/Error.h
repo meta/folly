@@ -58,7 +58,4 @@ class co_stopped_may_throw_t final {
 
 inline constexpr co_stopped_may_throw_t co_stopped_may_throw{};
 
-[[deprecated("Use co_stopped_may_throw")]]
-inline constexpr co_stopped_may_throw_t co_cancelled{};
-
 } // namespace folly::coro
