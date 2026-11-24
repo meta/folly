@@ -85,28 +85,79 @@ TEST_F(F14HashedKeyTest, transparent) {
   EXPECT_FALSE(HKey(Key(0., 8)) == key);
 }
 
-TEST(F14SizeAndChunkShift, packed) {
-  folly::f14::detail::SizeAndChunkShift sz;
-  static_assert(sizeof(sz) == sizeof(size_t));
+template <typename SizeAndChunkShiftT>
+void testSizeAndChunkShift() {
+  SizeAndChunkShiftT sz;
   EXPECT_EQ(sz.size(), 0);
   EXPECT_EQ(sz.chunkShift(), 0);
+  EXPECT_EQ(sz.scale(), 0);
 
   sz.setSize(12345678);
   EXPECT_EQ(sz.size(), 12345678);
   EXPECT_EQ(sz.chunkShift(), 0);
+  EXPECT_EQ(sz.scale(), 0);
 
-  sz.setChunkCount(1);
+  sz.setChunkCountAndScale(1, 40960);
   EXPECT_EQ(sz.size(), 12345678);
   EXPECT_EQ(sz.chunkCount(), 1);
   EXPECT_EQ(sz.chunkShift(), 0);
+  EXPECT_EQ(sz.scale(), 40960);
 
-  for (int shift = 0;
-       shift <= folly::f14::detail::SizeAndChunkShift::kMaxSupportedChunkShift;
+  sz.incrementSize();
+  EXPECT_EQ(sz.size(), 12345679);
+  EXPECT_EQ(sz.chunkShift(), 0);
+  EXPECT_EQ(sz.scale(), 40960);
+
+  sz.decrementSize();
+  EXPECT_EQ(sz.size(), 12345678);
+  EXPECT_EQ(sz.chunkShift(), 0);
+  EXPECT_EQ(sz.scale(), 40960);
+
+  SizeAndChunkShiftT other;
+  other.setSize(42);
+  other.setChunkCountAndScale(8, 123);
+  sz.swap(other);
+  EXPECT_EQ(sz.size(), 42);
+  EXPECT_EQ(sz.chunkCount(), 8);
+  EXPECT_EQ(sz.scale(), 123);
+  EXPECT_EQ(other.size(), 12345678);
+  EXPECT_EQ(other.chunkCount(), 1);
+  EXPECT_EQ(other.scale(), 40960);
+  sz.swap(other);
+
+  for (int shift = 0; shift <= SizeAndChunkShiftT::kMaxSupportedChunkShift;
        ++shift) {
-    const auto count = (1ULL << shift);
-    sz.setChunkCount(count);
+    const auto count = (std::size_t{1} << shift);
+    const std::size_t scale = (shift * 997) & 0xffff;
+    sz.setChunkCountAndScale(count, scale);
     EXPECT_EQ(sz.size(), 12345678);
     EXPECT_EQ(sz.chunkCount(), count);
     EXPECT_EQ(sz.chunkShift(), shift);
+    EXPECT_EQ(sz.scale(), scale);
+
+    sz.setSize(SizeAndChunkShiftT::kMaxSize);
+    EXPECT_EQ(sz.size(), SizeAndChunkShiftT::kMaxSize);
+    EXPECT_EQ(sz.chunkShift(), shift);
+    EXPECT_EQ(sz.scale(), scale);
+
+    sz.setSize(12345678);
+    EXPECT_EQ(sz.size(), 12345678);
+    EXPECT_EQ(sz.chunkShift(), shift);
+    EXPECT_EQ(sz.scale(), scale);
   }
+}
+
+TEST(F14SizeAndChunkShift, packed) {
+  static_assert(
+      sizeof(folly::f14::detail::PackedSizeAndChunkShift) == sizeof(uint64_t));
+  if constexpr (sizeof(uint64_t) == sizeof(std::size_t)) {
+    testSizeAndChunkShift<folly::f14::detail::PackedSizeAndChunkShift>();
+  }
+}
+
+TEST(F14SizeAndChunkShift, unpacked) {
+  static_assert(
+      sizeof(folly::f14::detail::UnpackedSizeAndChunkShift) ==
+      2 * sizeof(std::size_t));
+  testSizeAndChunkShift<folly::f14::detail::UnpackedSizeAndChunkShift>();
 }

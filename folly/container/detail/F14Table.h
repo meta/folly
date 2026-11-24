@@ -1321,21 +1321,27 @@ class F14ItemIter {
 
 struct PackedSizeAndChunkShift {
  private:
-  // F14Table's chunk count is a power of 2 that is at least 1 and at
-  // most 1 << 63. In order to encode it efficiently, we store its base 2
-  // logarithm `n`, so that (1UL << n) is the chunkCount. Despite
-  // needing only 6 bits to encode the shift, we reserve 8 bits to
-  // avoid extra masking, leaving 56 bits for the size, which is
-  // plenty.
-
-  // We use the least significant bits of
-  // packedSizeAndChunkShift_ for the shift so that size access
-  // is just a single shift and shift access is a normal 8-bit load.
-  static constexpr uint32_t kSizeShift = 8;
-  static constexpr uint32_t kChunkCountShiftMask = (1 << kSizeShift) - 1;
-  uint64_t packedSizeAndChunkShift_{0};
+  // 64-bit layout (MSB to LSB):
+  // +------------------------+-----------------+---------------+
+  // |          size          |      scale      |  chunkShift   |
+  // |    63..24 (40 bits)    | 23..8 (16 bits) | 7..0 (8 bits) |
+  // +------------------------+-----------------+---------------+
+  //
+  // chunkShift stores log2(chunkCount); it only needs 6 bits, but reserving
+  // the low 8 bits gives a byte load without masking. scale mirrors
+  // Chunk::capacityScale (0 when unallocated) at a byte-aligned 16-bit offset.
+  // Keeping size in the upper 40 bits (~1T max; repack if ever insufficient)
+  // makes size() a single shift.
+  static constexpr uint32_t kScaleShift = 8;
+  static constexpr uint32_t kSizeShift = 24;
+  static constexpr uint32_t kChunkCountShiftMask = (1u << kScaleShift) - 1;
+  static constexpr uint32_t kScaleMask = (1u << (kSizeShift - kScaleShift)) - 1;
+  static constexpr uint64_t kSizeMask = ~((uint64_t{1} << kSizeShift) - 1);
+  uint64_t packedSizeScaleAndChunkShift_{0};
 
  public:
+  static constexpr uint32_t kScaleBits = kSizeShift - kScaleShift;
+
   // subtract 1 because we can't represent 1 << 64, triggering UBSAN.
   static constexpr uint8_t kMaxSupportedChunkShift =
       std::numeric_limits<uint64_t>::digits - 1;
@@ -1345,11 +1351,11 @@ struct PackedSizeAndChunkShift {
       1;
 
   uint64_t size() const noexcept {
-    return packedSizeAndChunkShift_ >> kSizeShift;
+    return packedSizeScaleAndChunkShift_ >> kSizeShift;
   }
 
   uint8_t chunkShift() const noexcept {
-    return packedSizeAndChunkShift_ & kChunkCountShiftMask;
+    return packedSizeScaleAndChunkShift_ & kChunkCountShiftMask;
   }
 
   std::size_t chunkCount() const noexcept {
@@ -1357,22 +1363,40 @@ struct PackedSizeAndChunkShift {
     return std::size_t(1) << chunkCountShift;
   }
 
-  void setSize(std::size_t sz) noexcept {
-    packedSizeAndChunkShift_ =
-        chunkShift() | (static_cast<uint64_t>(sz) << kSizeShift);
+  uint16_t scale() const noexcept {
+    return static_cast<uint16_t>(
+        (packedSizeScaleAndChunkShift_ >> kScaleShift) & kScaleMask);
   }
 
-  void setChunkCount(std::size_t newCount) {
+  void setSize(std::size_t sz) noexcept {
+    FOLLY_SAFE_DCHECK(sz <= kMaxSize, sz);
+    packedSizeScaleAndChunkShift_ =
+        (packedSizeScaleAndChunkShift_ & ~kSizeMask) |
+        (static_cast<uint64_t>(sz) << kSizeShift);
+  }
+
+  void incrementSize() noexcept {
+    packedSizeScaleAndChunkShift_ += (uint64_t{1} << kSizeShift);
+  }
+
+  void decrementSize() noexcept {
+    packedSizeScaleAndChunkShift_ -= (uint64_t{1} << kSizeShift);
+  }
+
+  void setChunkCountAndScale(std::size_t newCount, std::size_t newScale) {
     FOLLY_SAFE_DCHECK(
         folly::isPowTwo(newCount), newCount); // note that this forbids 0!
+    FOLLY_SAFE_DCHECK(newScale <= kScaleMask, newScale);
     const auto shift = findFirstSet(newCount) - 1; // firstSet is 1-based.
-    packedSizeAndChunkShift_ =
-        (static_cast<uint64_t>(size()) << kSizeShift) | shift;
+    packedSizeScaleAndChunkShift_ =
+        (packedSizeScaleAndChunkShift_ & kSizeMask) |
+        (static_cast<uint64_t>(newScale) << kScaleShift) | shift;
     FOLLY_SAFE_DCHECK(chunkCount() == newCount, "");
+    FOLLY_SAFE_DCHECK(scale() == newScale, "");
   }
 
   void swap(PackedSizeAndChunkShift& rhs) noexcept {
-    std::swap(packedSizeAndChunkShift_, rhs.packedSizeAndChunkShift_);
+    std::swap(packedSizeScaleAndChunkShift_, rhs.packedSizeScaleAndChunkShift_);
   }
 };
 
@@ -1381,8 +1405,11 @@ struct UnpackedSizeAndChunkShift {
   // Simple implementation for 32-bit systems: just use two words.
   std::size_t size_ = 0;
   uint8_t chunkShift_ = 0;
+  uint16_t scale_ = 0;
 
  public:
+  static constexpr uint32_t kScaleBits = std::numeric_limits<uint16_t>::digits;
+
   // subtract 1 because we can't represent 1 << 32, triggering UBSAN.
   static constexpr uint8_t kMaxSupportedChunkShift =
       std::numeric_limits<std::size_t>::digits - 1;
@@ -1399,20 +1426,31 @@ struct UnpackedSizeAndChunkShift {
     return std::size_t(1) << chunkCountShift;
   }
 
+  uint16_t scale() const noexcept { return scale_; }
+
   void setSize(std::size_t sz) noexcept { size_ = sz; }
 
-  void setChunkCount(std::size_t newCount) {
+  void incrementSize() noexcept { ++size_; }
+
+  void decrementSize() noexcept { --size_; }
+
+  void setChunkCountAndScale(std::size_t newCount, std::size_t newScale) {
     FOLLY_SAFE_DCHECK(
         folly::isPowTwo(newCount), newCount); // note that this forbids 0!
     const auto shift = findFirstSet(newCount) - 1; // firstSet is 1-based.
     FOLLY_SAFE_DCHECK(shift <= std::numeric_limits<uint8_t>::max(), "");
+    FOLLY_SAFE_DCHECK(
+        newScale <= std::numeric_limits<uint16_t>::max(), newScale);
     chunkShift_ = static_cast<uint8_t>(shift);
+    scale_ = static_cast<uint16_t>(newScale);
     FOLLY_SAFE_DCHECK(chunkCount() == newCount, "");
+    FOLLY_SAFE_DCHECK(scale() == newScale, "");
   }
 
   void swap(UnpackedSizeAndChunkShift& rhs) noexcept {
     std::swap(size_, rhs.size_);
     std::swap(chunkShift_, rhs.chunkShift_);
+    std::swap(scale_, rhs.scale_);
   }
 };
 
@@ -1435,14 +1473,16 @@ struct SizeAndChunkShiftAndPackedBegin {
 
   std::size_t chunkCount() const { return sizeAndChunkShift_.chunkCount(); }
 
+  uint16_t scale() const { return sizeAndChunkShift_.scale(); }
+
   void setSize(uint64_t sz) { sizeAndChunkShift_.setSize(sz); }
 
-  void incrementSize() { sizeAndChunkShift_.setSize(size() + 1); }
+  void incrementSize() { sizeAndChunkShift_.incrementSize(); }
 
-  void decrementSize() { sizeAndChunkShift_.setSize(size() - 1); }
+  void decrementSize() { sizeAndChunkShift_.decrementSize(); }
 
-  void setChunkCount(std::size_t count) {
-    sizeAndChunkShift_.setChunkCount(count);
+  void setChunkCountAndScale(std::size_t count, std::size_t s) {
+    sizeAndChunkShift_.setChunkCountAndScale(count, s);
   }
 
   typename ItemIter::Packed& packedBegin() { return packedBegin_; }
@@ -1467,14 +1507,16 @@ struct SizeAndChunkShiftAndPackedBegin<ItemIter, false> {
 
   std::size_t chunkCount() const { return sizeAndChunkShift_.chunkCount(); }
 
+  uint16_t scale() const { return sizeAndChunkShift_.scale(); }
+
   void setSize(uint64_t sz) { sizeAndChunkShift_.setSize(sz); }
 
-  void incrementSize() { sizeAndChunkShift_.setSize(size() + 1); }
+  void incrementSize() { sizeAndChunkShift_.incrementSize(); }
 
-  void decrementSize() { sizeAndChunkShift_.setSize(size() - 1); }
+  void decrementSize() { sizeAndChunkShift_.decrementSize(); }
 
-  void setChunkCount(std::size_t count) {
-    sizeAndChunkShift_.setChunkCount(count);
+  void setChunkCountAndScale(std::size_t count, std::size_t s) {
+    sizeAndChunkShift_.setChunkCountAndScale(count, s);
   }
 
   [[noreturn]] typename ItemIter::Packed& packedBegin() {
@@ -1518,6 +1560,7 @@ class F14Table : public Policy {
   using BytePtr = typename std::allocator_traits<ByteAlloc>::pointer;
 
   using Chunk = F14Chunk<Item>;
+  static_assert(Chunk::kCapacityScaleBits <= SizeAndChunkShift::kScaleBits);
   using ChunkPtr =
       typename std::pointer_traits<BytePtr>::template rebind<Chunk>;
   using ChunkHeaderPtr =
@@ -2483,7 +2526,8 @@ class F14Table : public Policy {
 
     chunks_ = initializeChunks(rawAllocation, newChunkCount, newCapacityScale);
 
-    sizeAndChunkShiftAndPackedBegin_.setChunkCount(newChunkCount);
+    sizeAndChunkShiftAndPackedBegin_.setChunkCountAndScale(
+        newChunkCount, newCapacityScale);
 
     this->afterRehash(
         std::move(undoState), true, 0, 0, newCapacity, nullptr, 0);
@@ -2506,11 +2550,12 @@ class F14Table : public Policy {
         origSize, origCapacity, newCapacity, newAllocSize, rawAllocation);
     chunks_ = initializeChunks(rawAllocation, newChunkCount, newCapacityScale);
 
-    sizeAndChunkShiftAndPackedBegin_.setChunkCount(newChunkCount);
+    sizeAndChunkShiftAndPackedBegin_.setChunkCountAndScale(
+        newChunkCount, newCapacityScale);
 
     bool success = false;
     SCOPE_EXIT {
-      // this SCOPE_EXIT reverts chunks_ and chunkShift if necessary
+      // this SCOPE_EXIT reverts chunks_, chunkShift, and scale if necessary
       BytePtr finishedRawAllocation = nullptr;
       std::size_t finishedAllocSize = 0;
       if (success) [[likely]] {
@@ -2523,7 +2568,8 @@ class F14Table : public Policy {
         finishedRawAllocation = rawAllocation;
         finishedAllocSize = newAllocSize;
         chunks_ = origChunks;
-        sizeAndChunkShiftAndPackedBegin_.setChunkCount(origChunkCount);
+        sizeAndChunkShiftAndPackedBegin_.setChunkCountAndScale(
+            origChunkCount, origCapacityScale);
         F14LinkCheck<getF14IntrinsicsMode()>::check();
       }
 
@@ -2808,8 +2854,12 @@ class F14Table : public Policy {
   template <bool Reset>
   void clearImpl() noexcept {
     FOLLY_SAFE_DCHECK(!!chunks_);
-    if (Chunk::isEmptyInstance(chunksToAddress())) {
-      FOLLY_SAFE_DCHECK(empty() && bucket_count() == 0, "");
+    auto const origScale = sizeAndChunkShiftAndPackedBegin_.scale();
+    if (origScale == 0) {
+      FOLLY_SAFE_DCHECK(
+          Chunk::isEmptyInstance(chunksToAddress()) && empty() &&
+              bucket_count() == 0,
+          "");
       return;
     }
 
@@ -2818,7 +2868,7 @@ class F14Table : public Policy {
     bool willReset = Reset || chunkCount() >= 16;
 
     auto origSize = size();
-    auto origCapacity = bucket_count();
+    auto origCapacity = computeCapacity(chunkCount(), origScale);
     if (willReset) {
       this->beforeReset(origSize, origCapacity);
     } else {
@@ -2847,11 +2897,10 @@ class F14Table : public Policy {
         // It's okay to do this in a separate loop because we only do it
         // when the chunk count is small.  That avoids a branch when we
         // are promoting a clear to a reset for a large table.
-        auto scale = Chunk::capacityScale(chunks);
         for (std::size_t ci = 0; ci < cc; ++ci) {
           Chunk::chunkRawAt(chunks, ci)->clear();
         }
-        chunkAt(0)->markEof(scale);
+        chunkAt(0)->markEof(origScale);
       }
       if constexpr (kEnableItemIteration) {
         sizeAndChunkShiftAndPackedBegin_.packedBegin() = ItemIter{}.pack();
@@ -2862,11 +2911,10 @@ class F14Table : public Policy {
     if (willReset) {
       BytePtr rawAllocation = std::pointer_traits<BytePtr>::pointer_to(
           *static_cast<uint8_t*>(static_cast<void*>(&*chunks_)));
-      std::size_t rawSize =
-          chunkAllocSize(chunkCount(), Chunk::capacityScale(chunksToAddress()));
+      std::size_t rawSize = chunkAllocSize(chunkCount(), origScale);
 
       chunks_ = Chunk::getSomeEmptyInstance();
-      sizeAndChunkShiftAndPackedBegin_.setChunkCount(1);
+      sizeAndChunkShiftAndPackedBegin_.setChunkCountAndScale(1, 0);
 
       this->afterReset(origSize, origCapacity, rawAllocation, rawSize);
     } else {
@@ -3025,6 +3073,10 @@ class F14Table : public Policy {
 
     FOLLY_SAFE_DCHECK(
         (Chunk::isEmptyInstance(chunksToAddress())) == (bucket_count() == 0),
+        "");
+    FOLLY_SAFE_DCHECK(
+        sizeAndChunkShiftAndPackedBegin_.scale() ==
+            Chunk::capacityScale(chunksToAddress()),
         "");
 
     std::size_t n1 = 0;
