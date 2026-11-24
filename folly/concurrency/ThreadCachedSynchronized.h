@@ -99,29 +99,30 @@ class thread_cached_synchronized {
   static constexpr bool nx =
       noexcept(truth_state{std::in_place, FOLLY_DECLVAL(A)...});
 
-  template <bool C>
-  using if_ = std::enable_if_t<C, int>;
-
   using swap_fn = access::swap_fn;
 
  public:
-  template <typename A = value_type, if_<std::is_constructible<A>{}> = 0>
+  template <typename A = value_type>
+    requires std::is_constructible_v<A>
   thread_cached_synchronized() noexcept(nx<>) : truth_{std::in_place} {}
   explicit thread_cached_synchronized(value_type const& a) //
       noexcept(nx<value_type const&>)
       : truth_{a} {}
   explicit thread_cached_synchronized(value_type&& a) noexcept(nx<value_type&&>)
       : truth_{static_cast<value_type&&>(a)} {}
-  template <typename A, if_<std::is_constructible<value_type, A>{}> = 0>
+  template <typename A>
+    requires std::is_constructible_v<value_type, A>
   explicit thread_cached_synchronized(A&& a) noexcept(nx<A&&>)
       : truth_{static_cast<A&&>(a)} {}
-  template <typename... A, if_<std::is_constructible<value_type, A...>{}> = 0>
+  template <typename... A>
+    requires std::is_constructible_v<value_type, A...>
   explicit thread_cached_synchronized(std::in_place_t, A&&... a) noexcept(
       nx<A&&...>)
       : truth_{static_cast<A&&>(a)...} {}
 
-  template <typename A, if_<std::is_assignable<value_type&, A>{}> = 0>
-  thread_cached_synchronized& operator=(A && a) noexcept(false) {
+  template <typename A>
+    requires std::is_assignable_v<value_type&, A>
+  thread_cached_synchronized& operator=(A&& a) noexcept(false) {
     store(static_cast<A&&>(a));
     return *this;
   }
@@ -148,7 +149,8 @@ class thread_cached_synchronized {
     mutate([&](auto& value) { access::swap(value, that); });
   }
 
-  template <typename A, if_<std::is_invocable_v<swap_fn, value_type&, A&>> = 0>
+  template <typename A>
+    requires std::is_invocable_v<swap_fn, value_type&, A&>
   friend void swap(thread_cached_synchronized& self, A& that) noexcept(false) {
     self.swap(that);
   }
@@ -163,23 +165,16 @@ class thread_cached_synchronized {
     truth_.version = truth_.version + 1; // intentionally not +=
   }
 
-  // TODO: past C++17, just use if-constexpr in mutate()
-  template <
-      typename F,
-      typename R = invoke_result_t<F, value_type&>,
-      if_<std::is_void<R>{}> = 0>
+  template <typename F, typename R = invoke_result_t<F, value_type&>>
   R mutate_locked(F f) {
-    f(truth_.value); // value first: mutation may throw
-    invalidate_caches();
-  }
-  template <
-      typename F,
-      typename R = invoke_result_t<F, value_type&>,
-      if_<!std::is_void<R>{}> = 0>
-  R mutate_locked(F f) {
-    decltype(auto) ret = f(truth_.value); // value first: mutation may throw
-    invalidate_caches();
-    return ret;
+    if constexpr (std::is_void_v<R>) {
+      f(truth_.value); // value first: mutation may throw
+      invalidate_caches();
+    } else {
+      decltype(auto) ret = f(truth_.value); // value first: mutation may throw
+      invalidate_caches();
+      return ret;
+    }
   }
   template <typename F, typename R = invoke_result_t<F, value_type&>>
   R mutate(F f) {

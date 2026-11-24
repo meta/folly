@@ -153,12 +153,6 @@ class reentrant_allocator : private detail::reentrant_allocator_base {
 
   using base = detail::reentrant_allocator_base;
 
-  template <typename S>
-  using if_is_not_void = std::enable_if_t<!std::is_void<S>::value, int>;
-
-  template <typename S>
-  using undeducible = std::enable_if_t<true, S>;
-
  public:
   using value_type = T;
   using pointer = T*;
@@ -175,7 +169,8 @@ class reentrant_allocator : private detail::reentrant_allocator_base {
 
   using base::base;
 
-  template <typename U, std::enable_if_t<!std::is_same<U, T>::value, int> = 0>
+  template <typename U>
+    requires(!std::is_same_v<U, T>)
   FOLLY_ERASE /* implicit */ reentrant_allocator(
       reentrant_allocator<U> const& that) noexcept
       : base{that} {}
@@ -188,33 +183,36 @@ class reentrant_allocator : private detail::reentrant_allocator_base {
   //  * address
   //
   //  The clever tricks include:
+  //  * requires(!std::is_void_v<T>) to enable members only for non-void
+  //    instances.
   //  * typename... to make it impossible for call-sites to override the
-  //    defaults for the following template params.
-  //  * typename S = T to enable member SFINAE over S since T is not a member
-  //    template param and therefore SFINAE over T is not possible.
-  //  * if_is_not_void<S> = 0 to enable members only for non-void instances.
-  //    A method being enabled when C is shorthand for the method participating
-  //    in overload resolution when C.
-  //  * undeducible<S>& to enforce that S, a member template param defaulted to
-  //    T, is not deducible from the template arg and therefore must only be T.
+  //    default for the following template param.
+  //  * typename S = T so that the parameter type of address is formed only
+  //    when address is used, since T& is ill-formed when T is void.
+  //  * std::type_identity_t<S>& to enforce that S, a member template param
+  //    defaulted to T, is not deducible from the argument and therefore must
+  //    only be T.
 
   //  allocate
-  template <typename..., typename S = T, if_is_not_void<S> = 0>
-  [[nodiscard]] FOLLY_ERASE T* allocate(std::size_t n) {
+  [[nodiscard]] FOLLY_ERASE T* allocate(std::size_t n)
+    requires(!std::is_void_v<T>)
+  {
     return static_cast<T*>(base::allocate(n * sizeof(T), alignof(T)));
   }
 
   //  deallocate
-  template <typename..., typename S = T, if_is_not_void<S> = 0>
-  FOLLY_ERASE void deallocate(T* p, std::size_t n) {
+  FOLLY_ERASE void deallocate(T* p, std::size_t n)
+    requires(!std::is_void_v<T>)
+  {
     base::deallocate(p, n * sizeof(T));
   }
 
   //  max_size
   //
   //  Deprecated in C++17. Removed in C++20.
-  template <typename..., typename S = T, if_is_not_void<S> = 0>
-  FOLLY_ERASE std::size_t max_size() const noexcept {
+  FOLLY_ERASE std::size_t max_size() const noexcept
+    requires(!std::is_void_v<T>)
+  {
     return base::max_size() / sizeof(T);
   }
 
@@ -222,11 +220,12 @@ class reentrant_allocator : private detail::reentrant_allocator_base {
   //
   //  Deprecated in C++17. Removed in C++20.
   template <typename..., typename S = T>
-  FOLLY_ERASE T* address(undeducible<S>& v) const noexcept {
+  FOLLY_ERASE T* address(std::type_identity_t<S>& v) const noexcept {
     return std::addressof(v);
   }
   template <typename..., typename S = T>
-  FOLLY_ERASE T const* address(undeducible<S> const& v) const noexcept {
+  FOLLY_ERASE T const* address(
+      std::type_identity_t<S> const& v) const noexcept {
     return std::addressof(v);
   }
 

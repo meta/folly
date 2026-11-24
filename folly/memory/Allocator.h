@@ -51,7 +51,8 @@ class SysAllocator {
 
   constexpr SysAllocator(SysAllocator const&) = default;
 
-  template <typename U, std::enable_if_t<!std::is_same<U, T>::value, int> = 0>
+  template <typename U>
+    requires(!std::is_same_v<U, T>)
   constexpr SysAllocator(SysAllocator<U> const&) noexcept {}
 
   T* allocate(size_t count) {
@@ -134,14 +135,14 @@ class AlignedSysAllocator : private Align {
   using Align::Align;
 
   // TODO: remove this ctor, which is is no longer required as of under gcc7
-  template <
-      typename S = Align,
-      std::enable_if_t<std::is_default_constructible<S>::value, int> = 0>
+  template <typename S = Align>
+    requires std::is_default_constructible_v<S>
   constexpr AlignedSysAllocator() noexcept(noexcept(Align())) : Align() {}
 
   constexpr AlignedSysAllocator(AlignedSysAllocator const&) = default;
 
-  template <typename U, std::enable_if_t<!std::is_same<U, T>::value, int> = 0>
+  template <typename U>
+    requires(!std::is_same_v<U, T>)
   constexpr AlignedSysAllocator(
       AlignedSysAllocator<U, Align> const& other) noexcept
       : Align(other.align()) {}
@@ -192,21 +193,24 @@ class CxxAllocatorAdaptor : private std::allocator<T> {
   using propagate_on_container_move_assignment = std::true_type;
   using propagate_on_container_swap = std::true_type;
 
-  template <bool X = FallbackToStdAlloc, std::enable_if_t<X, int> = 0>
+  template <bool X = FallbackToStdAlloc>
+    requires X
   constexpr explicit CxxAllocatorAdaptor() {}
 
   constexpr explicit CxxAllocatorAdaptor(Inner& ref) : inner_(&ref) {}
 
   constexpr CxxAllocatorAdaptor(CxxAllocatorAdaptor const&) = default;
 
-  template <typename U, std::enable_if_t<!std::is_same<U, T>::value, int> = 0>
+  template <typename U>
+    requires(!std::is_same_v<U, T>)
   constexpr CxxAllocatorAdaptor(
       CxxAllocatorAdaptor<U, Inner, FallbackToStdAlloc> const& other)
       : inner_(other.inner_) {}
 
   CxxAllocatorAdaptor& operator=(CxxAllocatorAdaptor const& other) = default;
 
-  template <typename U, std::enable_if_t<!std::is_same<U, T>::value, int> = 0>
+  template <typename U>
+    requires(!std::is_same_v<U, T>)
   CxxAllocatorAdaptor& operator=(
       CxxAllocatorAdaptor<U, Inner, FallbackToStdAlloc> const& other) noexcept {
     inner_ = other.inner_;

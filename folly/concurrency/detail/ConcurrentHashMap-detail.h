@@ -130,14 +130,10 @@ template <
     typename ValueType,
     typename Allocator,
     template <typename> class Atom>
-class ValueHolder<
-    KeyType,
-    ValueType,
-    Allocator,
-    Atom,
-    std::enable_if_t<
-        !std::is_nothrow_copy_constructible<ValueType>::value ||
-        !std::is_nothrow_copy_constructible<KeyType>::value>> {
+  requires(
+      !std::is_nothrow_copy_constructible_v<ValueType> ||
+      !std::is_nothrow_copy_constructible_v<KeyType>)
+class ValueHolder<KeyType, ValueType, Allocator, Atom, void> {
   using value_type = std::pair<const KeyType, ValueType>;
 
   struct CountedItem {

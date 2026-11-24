@@ -62,18 +62,14 @@ class EnablePrimaryFromThis {
   //
   // used by the PrimaryPtr for this, to invoke the EnablePrimaryFromThis base
   // of T, if it exists.
-  template <
-      class O,
-      class Master,
-      std::enable_if_t<is_enable_master_from_this_v<O>, int> = 0>
+  template <class O, class Master>
+    requires is_enable_master_from_this_v<O>
   static void set(EnablePrimaryFromThis<O>* that, Master& m) {
     that->outerPtrWeak_ = m.outerPtrWeak_;
   }
 
-  template <
-      class O,
-      class Master,
-      std::enable_if_t<!is_enable_master_from_this_v<O>, int> = 0>
+  template <class O, class Master>
+    requires(!is_enable_master_from_this_v<O>)
   static void set(O*, Master&) {}
 
  public:
@@ -137,14 +133,13 @@ class PrimaryPtr {
   // retrieves nested cleanup() work from innerPtr_. Called when the PrimaryPtr
   // cleanup() task has finished waiting for outstanding references
   //
-  template <class Cleanup, std::enable_if_t<is_cleanup_v<Cleanup>, int> = 0>
-  static folly::SemiFuture<folly::Unit> getCleanup(Cleanup* cleanup) {
-    return std::move(*cleanup).cleanup();
-  }
-
-  template <class O, std::enable_if_t<!is_cleanup_v<O>, int> = 0>
-  static folly::SemiFuture<folly::Unit> getCleanup(O*) {
-    return folly::makeSemiFuture();
+  template <class O>
+  static folly::SemiFuture<folly::Unit> getCleanup(O* cleanup) {
+    if constexpr (is_cleanup_v<O>) {
+      return std::move(*cleanup).cleanup();
+    } else {
+      return folly::makeSemiFuture();
+    }
   }
 
  public:

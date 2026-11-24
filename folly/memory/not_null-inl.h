@@ -29,9 +29,8 @@ inline constexpr bool is_not_null_v = is_instantiation_of_v<not_null, T>;
 template <typename T>
 struct is_not_null : std::bool_constant<is_not_null_v<T>> {};
 
-template <
-    typename T,
-    typename = std::enable_if_t<!is_not_null_v<std::remove_cvref_t<T>>>>
+template <typename T>
+  requires(!is_not_null_v<std::remove_cvref_t<T>>)
 auto maybeUnwrap(T&& t) {
   return std::forward<T>(t);
 }
