@@ -680,7 +680,6 @@ struct WeirdContainer {
 };
 
 // iterator concepts ------------------------
-#if defined(__cpp_lib_concepts)
 
 using vit = folly::index_iterator<std::vector<int>>;
 using cvit = folly::index_iterator<const std::vector<int>>;
@@ -691,8 +690,6 @@ static_assert(std::random_access_iterator<vit>);
 static_assert(std::random_access_iterator<cvit>);
 static_assert(std::random_access_iterator<vit_weird>);
 static_assert(std::random_access_iterator<cvit_weird>);
-
-#endif
 
 // dependent type computations ------------------------
 struct ref_type {};

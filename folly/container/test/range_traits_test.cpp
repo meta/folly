@@ -23,9 +23,7 @@
 #include <type_traits>
 #include <vector>
 
-#if __has_include(<span>)
 #include <span>
-#endif
 
 #include <folly/portability/GTest.h>
 
@@ -90,10 +88,8 @@ TEST_F(RangeTraitsTest, is_contiguous_range_v) {
   EXPECT_TRUE((folly::is_contiguous_range_v<std::string_view>));
   EXPECT_TRUE((folly::is_contiguous_range_v<std::vector<int>>));
   EXPECT_FALSE((folly::is_contiguous_range_v<std::vector<bool>>));
-#if __has_include(<span>)
   EXPECT_TRUE((folly::is_contiguous_range_v<std::span<int>>));
   EXPECT_TRUE((folly::is_contiguous_range_v<std::span<int const>>));
   EXPECT_TRUE((folly::is_contiguous_range_v<std::span<int, 7>>));
   EXPECT_TRUE((folly::is_contiguous_range_v<std::span<int const, 7>>));
-#endif
 }

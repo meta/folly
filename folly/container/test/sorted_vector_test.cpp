@@ -1587,7 +1587,7 @@ TEST(SortedVectorTypes, Comparisons) {
   EXPECT_FALSE(set1 > set2);
   EXPECT_TRUE(set1 >= set2);
 
-#if FOLLY_CPLUSPLUS >= 202002L && defined(__cpp_lib_three_way_comparison)
+#if defined(__cpp_lib_three_way_comparison)
   EXPECT_EQ(set1 <=> set2, std::strong_ordering::equal);
 #endif
 
@@ -1599,7 +1599,7 @@ TEST(SortedVectorTypes, Comparisons) {
   EXPECT_FALSE(set1 > set2);
   EXPECT_FALSE(set1 >= set2);
 
-#if FOLLY_CPLUSPLUS >= 202002L && defined(__cpp_lib_three_way_comparison)
+#if defined(__cpp_lib_three_way_comparison)
   EXPECT_EQ(set1 <=> set2, std::strong_ordering::less);
   EXPECT_EQ(set2 <=> set1, std::strong_ordering::greater);
 #endif
@@ -1614,7 +1614,7 @@ TEST(SortedVectorTypes, Comparisons) {
   EXPECT_FALSE(map1 > map2);
   EXPECT_TRUE(map1 >= map2);
 
-#if FOLLY_CPLUSPLUS >= 202002L && defined(__cpp_lib_three_way_comparison)
+#if defined(__cpp_lib_three_way_comparison)
   EXPECT_EQ(map1 <=> map2, std::strong_ordering::equal);
 #endif
   map1.insert({4, 4});
@@ -1627,7 +1627,7 @@ TEST(SortedVectorTypes, Comparisons) {
   EXPECT_FALSE(map1 > map2);
   EXPECT_FALSE(map1 >= map2);
 
-#if FOLLY_CPLUSPLUS >= 202002L && defined(__cpp_lib_three_way_comparison)
+#if defined(__cpp_lib_three_way_comparison)
   EXPECT_EQ(map1 <=> map2, std::strong_ordering::less);
   EXPECT_EQ(map2 <=> map1, std::strong_ordering::greater);
 #endif

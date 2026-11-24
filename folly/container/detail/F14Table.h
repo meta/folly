@@ -55,9 +55,7 @@
 #include <arm_sve.h>
 #endif
 
-#if __has_include(<concepts>)
 #include <concepts>
-#endif
 
 #if FOLLY_F14_VECTOR_INTRINSICS_AVAILABLE
 

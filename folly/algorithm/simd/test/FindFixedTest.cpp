@@ -16,8 +16,6 @@
 
 #include <folly/Portability.h>
 
-#ifdef __cpp_lib_concepts // these tests need C++ concepts
-
 #include <folly/algorithm/simd/FindFixed.h>
 
 #include <fmt/core.h>
@@ -141,5 +139,3 @@ TEST(FollyFindFixed, SfianeFriendlyUnsupportedTypes) {
   EXPECT_FALSE((findFixedWorksFor<std::span<const std::vector<int>, 3>>))
       << "find fixed works only for some trivial types.";
 }
-
-#endif
