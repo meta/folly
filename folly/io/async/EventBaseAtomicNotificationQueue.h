@@ -128,9 +128,8 @@ class EventBaseAtomicNotificationQueue
  public:
   explicit EventBaseAtomicNotificationQueue(Consumer&& consumer);
 
-  template <
-      typename C = Consumer,
-      typename = std::enable_if_t<std::is_default_constructible<C>::value>>
+  template <typename C = Consumer>
+    requires std::is_default_constructible_v<C>
   EventBaseAtomicNotificationQueue()
       : EventBaseAtomicNotificationQueue(Consumer()) {}
 

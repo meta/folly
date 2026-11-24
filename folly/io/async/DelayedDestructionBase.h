@@ -124,17 +124,13 @@ class DelayedDestructionBase {
     IntrusivePtr(const IntrusivePtr&) = default;
     IntrusivePtr(IntrusivePtr&&) noexcept = default;
 
-    template <
-        typename CopyAliasType,
-        typename = typename std::enable_if<
-            std::is_convertible<CopyAliasType*, AliasType*>::value>::type>
+    template <typename CopyAliasType>
+      requires std::is_convertible_v<CopyAliasType*, AliasType*>
     IntrusivePtr(const IntrusivePtr<CopyAliasType>& copy)
         : DestructorGuard(copy) {}
 
-    template <
-        typename CopyAliasType,
-        typename = typename std::enable_if<
-            std::is_convertible<CopyAliasType*, AliasType*>::value>::type>
+    template <typename CopyAliasType>
+      requires std::is_convertible_v<CopyAliasType*, AliasType*>
     IntrusivePtr(IntrusivePtr<CopyAliasType>&& copy)
         : DestructorGuard(std::move(copy)) {}
 
@@ -143,21 +139,16 @@ class DelayedDestructionBase {
     // Copying from a unique_ptr is safe because if the upcast to
     // DelayedDestructionBase works, then the instance is already using
     // intrusive ref-counting.
-    template <
-        typename CopyAliasType,
-        typename Deleter,
-        typename = typename std::enable_if<
-            std::is_convertible<CopyAliasType*, AliasType*>::value>::type>
+    template <typename CopyAliasType, typename Deleter>
+      requires std::is_convertible_v<CopyAliasType*, AliasType*>
     explicit IntrusivePtr(const std::unique_ptr<CopyAliasType, Deleter>& copy)
         : DestructorGuard(copy.get()) {}
 
     IntrusivePtr& operator=(const IntrusivePtr&) = default;
     IntrusivePtr& operator=(IntrusivePtr&&) noexcept = default;
 
-    template <
-        typename CopyAliasType,
-        typename = typename std::enable_if<
-            std::is_convertible<CopyAliasType*, AliasType*>::value>::type>
+    template <typename CopyAliasType>
+      requires std::is_convertible_v<CopyAliasType*, AliasType*>
     IntrusivePtr& operator=(IntrusivePtr<CopyAliasType> copy) noexcept {
       DestructorGuard::operator=(copy);
       return *this;

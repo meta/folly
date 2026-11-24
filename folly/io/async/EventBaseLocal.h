@@ -86,11 +86,6 @@ class EventBaseLocalBase {
 template <typename T>
 class EventBaseLocal : public detail::EventBaseLocalBase {
  private:
-  template <typename U, typename... A>
-  using if_ilist_emplaceable_t = std::enable_if_t<
-      std::is_constructible<T, std::initializer_list<U>, A...>::value,
-      int>;
-
   T& store(EventBase& evb, T* const ptr) {
     setVoid(evb, ptr, detail::thunk::ruin<T>);
     return *ptr;
@@ -106,7 +101,8 @@ class EventBaseLocal : public detail::EventBaseLocalBase {
     return store(evb, new T(static_cast<A&&>(a)...));
   }
 
-  template <typename U, typename... A, if_ilist_emplaceable_t<U, A...> = 0>
+  template <typename U, typename... A>
+    requires std::is_constructible_v<T, std::initializer_list<U>, A...>
   T& emplace(EventBase& evb, std::initializer_list<U> i, A&&... a) {
     return store(evb, new T(i, static_cast<A&&>(a)...));
   }
@@ -122,7 +118,8 @@ class EventBaseLocal : public detail::EventBaseLocalBase {
     return FOLLY_LIKELY(!!ptr) ? *ptr : emplace(evb, static_cast<A&&>(a)...);
   }
 
-  template <typename U, typename... A, if_ilist_emplaceable_t<U, A...> = 0>
+  template <typename U, typename... A>
+    requires std::is_constructible_v<T, std::initializer_list<U>, A...>
   T& try_emplace(EventBase& evb, std::initializer_list<U> i, A&&... a) {
     auto const ptr = get(evb);
     return FOLLY_LIKELY(!!ptr) ? *ptr : emplace(evb, i, static_cast<A&&>(a)...);

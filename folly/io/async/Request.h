@@ -154,10 +154,8 @@ class RequestData {
 template <typename T>
 class ImmutableRequestData : public folly::RequestData {
  public:
-  template <
-      typename... Args,
-      typename = typename std::enable_if<
-          std::is_constructible<T, Args...>::value>::type>
+  template <typename... Args>
+    requires std::is_constructible_v<T, Args...>
   explicit ImmutableRequestData(Args&&... args) noexcept(
       std::is_nothrow_constructible<T, Args...>::value)
       : val_(std::forward<Args>(args)...) {}

@@ -606,10 +606,9 @@ class IOBuf {
    * TODO T154818309
    */
   template <class UniquePtr>
-  static typename std::enable_if<
-      detail::IsUniquePtrToSL<UniquePtr>::value,
-      std::unique_ptr<IOBuf>>::type
-  takeOwnership(UniquePtr&& buf, size_t count = 1);
+    requires detail::IsUniquePtrToSL<UniquePtr>::value
+  static std::unique_ptr<IOBuf> takeOwnership(
+      UniquePtr&& buf, size_t count = 1);
 
   /**
    * Create an IOBuf pointing to a buffer, without taking ownership.
@@ -2367,10 +2366,8 @@ struct IOBufGreater : compare_greater<IOBufCompare> {};
 struct IOBufGreaterEqual : compare_greater_equal<IOBufCompare> {};
 
 template <class UniquePtr>
-typename std::enable_if<
-    detail::IsUniquePtrToSL<UniquePtr>::value,
-    std::unique_ptr<IOBuf>>::type
-IOBuf::takeOwnership(UniquePtr&& buf, size_t count) {
+  requires detail::IsUniquePtrToSL<UniquePtr>::value
+std::unique_ptr<IOBuf> IOBuf::takeOwnership(UniquePtr&& buf, size_t count) {
   size_t size = count * sizeof(typename UniquePtr::element_type);
   auto deleter = new UniquePtrDeleter<UniquePtr>(buf.get_deleter());
   return takeOwnership(
