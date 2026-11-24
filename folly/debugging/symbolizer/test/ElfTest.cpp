@@ -171,6 +171,27 @@ TEST_F(ElfTest, NullNamesReturnNoResults) {
   EXPECT_EQ(nullptr, symbol.second);
 }
 
+TEST_F(ElfTest, UnopenedFileDegradesGracefully) {
+  ElfFile unopened;
+  EXPECT_EQ(ET_NONE, unopened.elfHeader().e_type);
+  EXPECT_EQ(0U, unopened.getBaseAddress());
+  EXPECT_EQ(nullptr, unopened.getSectionByIndex(0));
+  EXPECT_EQ(nullptr, unopened.getSectionByName(".text"));
+  EXPECT_EQ(nullptr, unopened.getSymbolByName("main").first);
+  EXPECT_EQ(nullptr, unopened.iterateSections([](const ElfShdr&) {
+    return true;
+  }));
+  EXPECT_EQ(nullptr, unopened.iterateProgramHeaders([](const ElfPhdr&) {
+    return true;
+  }));
+
+  ElfFile failed;
+  EXPECT_NE(ElfFile::kSuccess, failed.openNoThrow("/nonexistent-elf-file"));
+  EXPECT_EQ(ET_NONE, failed.elfHeader().e_type);
+  EXPECT_EQ(nullptr, failed.getSectionByName(".text"));
+  EXPECT_EQ(nullptr, failed.getSymbolByName("main").first);
+}
+
 TEST_F(ElfTest, SymbolsByNameSuccess) {
   std::vector<std::string> names = {"sum_func", "sub_func"};
   auto result = elfFile_.getSymbolsByName(names, {STT_FUNC});

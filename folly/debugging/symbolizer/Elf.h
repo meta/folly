@@ -146,8 +146,20 @@ class ElfFile {
   ElfFile(ElfFile&& other) noexcept;
   ElfFile& operator=(ElfFile&& other) noexcept;
 
-  /** Retrieve the ELF header */
-  const ElfEhdr& elfHeader() const noexcept { return at<ElfEhdr>(0); }
+  /**
+   * Retrieve the ELF header.
+   *
+   * If the file is too short to contain a header (the object was never
+   * opened, or opening failed), returns an empty header so that queries
+   * degrade gracefully instead of aborting.
+   */
+  const ElfEhdr& elfHeader() const noexcept {
+    if (const auto* header = atIfValid<ElfEhdr>(0)) {
+      return *header;
+    }
+    static constexpr ElfEhdr kEmpty{};
+    return kEmpty;
+  }
 
   /**
    * Get the base address, the address where the file should be loaded if
@@ -637,22 +649,6 @@ class ElfFile {
       return nullptr;
     }
     return value;
-  }
-
-  template <class T>
-  const T& at(ElfOff offset) const noexcept {
-    const auto* value = atIfValid<T>(offset);
-    FOLLY_SAFE_CHECK(
-        value != nullptr,
-        "Offset (",
-        static_cast<size_t>(offset),
-        " + ",
-        sizeof(T),
-        ") is not contained within our mapped file (",
-        filepath_,
-        ") of length ",
-        length_);
-    return *value;
   }
 
   template <class T>
