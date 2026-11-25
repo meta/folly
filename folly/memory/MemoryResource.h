@@ -20,7 +20,7 @@
 
 #ifndef FOLLY_HAS_MEMORY_RESOURCE
 
-#if __has_include(<memory_resource>)
+#if defined(__cpp_lib_memory_resource)
 
 #define FOLLY_HAS_MEMORY_RESOURCE 1
 #include <memory_resource> // @manual
