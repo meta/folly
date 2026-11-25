@@ -15,7 +15,14 @@ builder = make
 subdir = src
 patchfile = bpftool_install_to_bin.patch
 
+# bpftool's own BPF skeletons (pid_iter, profiler) need llvm-strip, which is
+# not always installed alongside clang. Consumers only need `gen skeleton` and
+# `btf dump`, so skip them. Install must match, or make rebuilds with them.
+[make.build_args]
+feature-clang-bpf-co-re=0
+
 [make.install_args]
+feature-clang-bpf-co-re=0
 install-bin
 
 [dependencies]
