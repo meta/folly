@@ -30,7 +30,6 @@
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/ssl/SSLErrors.h>
 #include <folly/io/async/test/CallbackStateEnum.h>
-#include <folly/portability/GTest.h>
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
 #include <folly/testing/TestUtil.h>
@@ -54,7 +53,7 @@ class SSLServerAcceptCallbackBase : public AsyncServerSocket::AcceptCallback {
   explicit SSLServerAcceptCallbackBase(HandshakeCallback* hcb)
       : state(STATE_WAITING), hcb_(hcb) {}
 
-  ~SSLServerAcceptCallbackBase() override { EXPECT_EQ(STATE_SUCCEEDED, state); }
+  ~SSLServerAcceptCallbackBase() override { CHECK_EQ(state, STATE_SUCCEEDED); }
 
   void acceptError(folly::exception_wrapper ex) noexcept override {
     LOG(WARNING) << "SSLServerAcceptCallbackBase::acceptError " << ex;

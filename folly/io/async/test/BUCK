@@ -9,6 +9,23 @@ load("../../../io/async/test/certs/defs.bzl", "alias_pem")
 
 oncall("fbcode_entropy_wardens_folly")
 
+# Provides the SSL test certificates under the legacy
+# `folly/io/async/test/certs/` resource keys for consumers of the moved
+# `//folly/io/async/testing:test_ssl_server`. The cert files stay in `test/`;
+# this target preserves the original keys that `FOLLY_CERTS_DIR` looks up.
+fb_dirsync_cpp_library(
+    name = "ssl_test_certs",
+    resources = {
+        "certs/ca-cert.pem": ":ca-cert.pem",
+        "certs/client_ca_cert.pem": ":client_ca_cert.pem",
+        "certs/client_cert.pem": ":client_cert.pem",
+        "certs/client_chain.pem": ":client_chain.pem",
+        "certs/client_key.pem": ":client_key.pem",
+        "certs/tests-cert.pem": ":tests-cert.pem",
+        "certs/tests-key.pem": ":tests-key.pem",
+    },
+)
+
 fb_dirsync_cpp_library(
     name = "tfo_util",
     srcs = [
@@ -47,34 +64,6 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async:async_pipe",
         "//folly/portability:gtest",
         "//folly/portability:unistd",
-    ],
-)
-
-fb_dirsync_cpp_library(
-    name = "async_ssl_socket_test_lib",
-    headers = [
-        "AsyncSSLSocketTest.h",
-    ],
-    use_raw_headers = True,
-    exported_deps = [
-        ":test_ssl_server",
-        "//folly:exception_wrapper",
-        "//folly:network_address",
-        "//folly/fibers:fiber_manager_map",
-        "//folly/io:socket_option_map",
-        "//folly/io/async:async_base",
-        "//folly/io/async:async_socket",
-        "//folly/io/async:async_ssl_socket",
-        "//folly/io/async:async_transport",
-        "//folly/io/async:server_socket",
-        "//folly/io/async/ssl:ssl_errors",
-        "//folly/portability:gmock",
-        "//folly/portability:gtest",
-        "//folly/portability:pthread",
-        "//folly/portability:sockets",
-        "//folly/portability:string",
-        "//folly/portability:unistd",
-        "//folly/testing:test_util",
     ],
 )
 
@@ -765,43 +754,6 @@ alias_pem(
     ],
 )
 
-fb_dirsync_cpp_library(
-    name = "test_ssl_server",
-    srcs = [
-        "TestSSLServer.cpp",
-    ],
-    headers = [
-        "TestSSLServer.h",
-    ],
-    labels = fbcode_ci_default_labels(),
-    resources = {
-        "certs/ca-cert.pem": ":ca-cert.pem",
-        "certs/client_ca_cert.pem": ":client_ca_cert.pem",
-        "certs/client_cert.pem": ":client_cert.pem",
-        "certs/client_chain.pem": ":client_chain.pem",
-        "certs/client_key.pem": ":client_key.pem",
-        "certs/tests-cert.pem": ":tests-cert.pem",
-        "certs/tests-key.pem": ":tests-key.pem",
-    },
-    deps = [
-        "//folly/portability:openssl",
-    ],
-    exported_deps = [
-        ":callback_state_enum",
-        "//folly:network_address",
-        "//folly/io/async:async_base",
-        "//folly/io/async:async_socket",
-        "//folly/io/async:async_ssl_socket",
-        "//folly/io/async:async_transport",
-        "//folly/io/async:server_socket",
-        "//folly/io/async/ssl:ssl_errors",
-        "//folly/portability:gtest",
-        "//folly/portability:sockets",
-        "//folly/portability:unistd",
-        "//folly/testing:test_util",
-    ],
-)
-
 fb_dirsync_cpp_unittest(
     name = "async_ssl_socket_test",
     srcs = [
@@ -819,14 +771,9 @@ fb_dirsync_cpp_unittest(
         "certs/tests-cert.pem": ":tests-cert.pem",
         "certs/tests-key.pem": ":tests-key.pem",
     },
-    source_headers = [
-        "AsyncSSLSocketTest.h",
-    ],
     supports_static_listing = False,
     deps = [
-        ":async_ssl_socket_test_lib",  # @manual
         ":blocking_socket",
-        ":test_ssl_server",
         ":tfo_util",
         "//folly:exception_wrapper",
         "//folly:network_address",
@@ -849,7 +796,9 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async/ssl:basic_transport_certificate",
         "//folly/io/async/ssl:openssl_transport_certificate",
         "//folly/io/async/ssl:ssl_errors",
+        "//folly/io/async/testing:async_ssl_socket_test_lib",  # @manual
         "//folly/io/async/testing:mocks",
+        "//folly/io/async/testing:test_ssl_server",
         "//folly/net:net_ops",
         "//folly/net:network_socket",
         "//folly/net/testing:mock_net_ops_dispatcher",
@@ -946,7 +895,7 @@ fb_dirsync_cpp_unittest(
         "certs/tests-key.pem": ":tests-key.pem",
     },
     deps = [
-        ":async_ssl_socket_test_lib",
+        "//folly/io/async/testing:async_ssl_socket_test_lib",  # @manual
         "//folly/net:net_ops",
         "//folly/net:network_socket",
         "//folly/portability:gtest",

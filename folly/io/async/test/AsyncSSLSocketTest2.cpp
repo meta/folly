@@ -21,7 +21,7 @@
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/SSLContext.h>
 #include <folly/io/async/ScopedEventBaseThread.h>
-#include <folly/io/async/test/AsyncSSLSocketTest.h>
+#include <folly/io/async/testing/AsyncSSLSocketTest.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/PThread.h>
 

@@ -18,7 +18,7 @@
 
 #include <memory>
 
-#include <folly/io/async/test/AsyncSSLSocketTest.h>
+#include <folly/io/async/testing/AsyncSSLSocketTest.h>
 #include <folly/net/NetOps.h>
 #include <folly/net/NetworkSocket.h>
 #include <folly/portability/GTest.h>

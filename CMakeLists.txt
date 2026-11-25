@@ -294,10 +294,10 @@ if (FOLLY_HAVE_OPENSSL)
     APPEND
     hfiles
     ${FOLLY_DIR}/io/async/test/AsyncSocketTest.h
-    ${FOLLY_DIR}/io/async/test/AsyncSSLSocketTest.h
+    ${FOLLY_DIR}/io/async/testing/AsyncSSLSocketTest.h
     ${FOLLY_DIR}/io/async/test/BlockingSocket.h
     ${FOLLY_DIR}/io/async/testing/MockAsyncSSLSocket.h
-    ${FOLLY_DIR}/io/async/test/TestSSLServer.h
+    ${FOLLY_DIR}/io/async/testing/TestSSLServer.h
   )
 endif ()
 
@@ -573,8 +573,8 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
         ${FOLLY_DIR}/io/async/testing/MockAsyncSSLSocket.h
         ${FOLLY_DIR}/io/async/test/SSLUtil.cpp
         ${FOLLY_DIR}/io/async/test/SSLUtil.h
-        ${FOLLY_DIR}/io/async/test/TestSSLServer.cpp
-        ${FOLLY_DIR}/io/async/test/TestSSLServer.h
+        ${FOLLY_DIR}/io/async/testing/TestSSLServer.cpp
+        ${FOLLY_DIR}/io/async/testing/TestSSLServer.h
     )
   endif ()
   apply_folly_compile_options_to_target(folly_test_support)

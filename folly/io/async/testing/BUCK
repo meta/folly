@@ -1,4 +1,5 @@
 load("@fbsource//tools/build_defs/dirsync:fb_dirsync_cpp_library.bzl", "fb_dirsync_cpp_library")
+load("../../../defs.bzl", "fbcode_ci_default_labels")
 
 oncall("fbcode_entropy_wardens_folly")
 
@@ -34,5 +35,70 @@ fb_dirsync_cpp_library(
         "//folly/io/async:async_base",
         "//folly/io/async:server_socket",
         "//folly/portability:gmock",
+    ],
+)
+
+fb_dirsync_cpp_library(
+    name = "test_ssl_server",
+    srcs = [
+        "TestSSLServer.cpp",
+    ],
+    headers = [
+        "TestSSLServer.h",
+    ],
+    labels = fbcode_ci_default_labels(),
+    resources = {
+        "certs/ca-cert.pem": "fbsource//xplat/folly/io/async/test:ca-cert.pem",
+        "certs/client_ca_cert.pem": "fbsource//xplat/folly/io/async/test:client_ca_cert.pem",
+        "certs/client_cert.pem": "fbsource//xplat/folly/io/async/test:client_cert.pem",
+        "certs/client_chain.pem": "fbsource//xplat/folly/io/async/test:client_chain.pem",
+        "certs/client_key.pem": "fbsource//xplat/folly/io/async/test:client_key.pem",
+        "certs/tests-cert.pem": "fbsource//xplat/folly/io/async/test:tests-cert.pem",
+        "certs/tests-key.pem": "fbsource//xplat/folly/io/async/test:tests-key.pem",
+    },
+    deps = [
+        "//folly/portability:openssl",
+    ],
+    exported_deps = [
+        "//folly:network_address",
+        "//folly/io/async:async_base",
+        "//folly/io/async:async_socket",
+        "//folly/io/async:async_ssl_socket",
+        "//folly/io/async:async_transport",
+        "//folly/io/async:server_socket",
+        "//folly/io/async/ssl:ssl_errors",
+        "//folly/io/async/test:callback_state_enum",
+        "//folly/io/async/test:ssl_test_certs",
+        "//folly/portability:sockets",
+        "//folly/portability:unistd",
+        "//folly/testing:test_util",
+    ],
+)
+
+fb_dirsync_cpp_library(
+    name = "async_ssl_socket_test_lib",
+    headers = [
+        "AsyncSSLSocketTest.h",
+    ],
+    use_raw_headers = True,
+    exported_deps = [
+        ":test_ssl_server",
+        "//folly:exception_wrapper",
+        "//folly:network_address",
+        "//folly/fibers:fiber_manager_map",
+        "//folly/io:socket_option_map",
+        "//folly/io/async:async_base",
+        "//folly/io/async:async_socket",
+        "//folly/io/async:async_ssl_socket",
+        "//folly/io/async:async_transport",
+        "//folly/io/async:server_socket",
+        "//folly/io/async/ssl:ssl_errors",
+        "//folly/portability:gmock",
+        "//folly/portability:gtest",
+        "//folly/portability:pthread",
+        "//folly/portability:sockets",
+        "//folly/portability:string",
+        "//folly/portability:unistd",
+        "//folly/testing:test_util",
     ],
 )

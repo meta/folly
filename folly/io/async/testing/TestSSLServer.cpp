@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <folly/io/async/test/TestSSLServer.h>
+#include <folly/io/async/testing/TestSSLServer.h>
 
 #include <folly/portability/OpenSSL.h>
 #include <folly/testing/TestUtil.h>

@@ -36,7 +36,7 @@
 #include <folly/io/async/AsyncTransport.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/ssl/SSLErrors.h>
-#include <folly/io/async/test/TestSSLServer.h>
+#include <folly/io/async/testing/TestSSLServer.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/PThread.h>
