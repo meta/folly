@@ -1357,6 +1357,8 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async:async_base",
         "//folly/portability:gmock",
         "//folly/portability:gtest",
+        "//folly/portability:sys_resource",
+        "//folly/portability:unistd",
         "//folly/synchronization/test:barrier",
     ],
 )

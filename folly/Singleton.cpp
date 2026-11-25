@@ -585,8 +585,16 @@ void SingletonVault::startShutdownTimer() {
   timer_t timerId = nullptr;
   // glibc starts its SIGEV_THREAD helper thread without ASan's interceptor.
   lsan_disable();
-  int const created = timer_create(CLOCK_MONOTONIC, &sig, &timerId);
+  int created = timer_create(CLOCK_MONOTONIC, &sig, &timerId);
   lsan_enable();
+  if (created != 0) {
+    // Under thread exhaustion glibc cannot start the SIGEV_THREAD thread; a
+    // signal timer needs none.
+    PLOG(WARNING) << "Singleton shutdown timer falls back to SIGABRT";
+    sig.sigev_notify = SIGEV_SIGNAL;
+    sig.sigev_signo = SIGABRT;
+    created = timer_create(CLOCK_MONOTONIC, &sig, &timerId);
+  }
   PCHECK(created == 0);
 
   struct itimerspec newValue, oldValue;

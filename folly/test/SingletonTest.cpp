@@ -16,8 +16,15 @@
 
 #include <folly/Singleton.h>
 
+#include <csignal>
 #include <cstdlib>
+#include <ctime>
+#include <system_error>
 #include <thread>
+
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 #include <glog/logging.h>
 #include <folly/synchronization/test/Barrier.h>
@@ -25,6 +32,8 @@
 #include <folly/io/async/EventBase.h>
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
+#include <folly/portability/SysResource.h>
+#include <folly/portability/Unistd.h>
 #include <folly/test/SingletonTestStructs.h>
 #include <folly/test/TestUtils.h>
 
@@ -1160,6 +1169,107 @@ TEST(Singleton, ShutdownTimerDisable) {
   SingletonObject::try_get()->shutdownDuration = 100ms;
   vault.destroyInstancesFinal();
 }
+
+#if FOLLY_HAVE_LIBRT
+
+namespace {
+
+constexpr int kNoThreads = 1;
+constexpr int kNoSignalTimers = 2;
+
+// Which of the limits the test relies on bind here. RLIMIT_NPROC does not
+// bind root or a process with CAP_SYS_RESOURCE or CAP_SYS_ADMIN, and not every
+// kernel charges a signal timer to RLIMIT_SIGPENDING.
+int bindingLimits() {
+  pid_t const pid = fork();
+  PCHECK(pid >= 0);
+  if (pid == 0) {
+    int limits = 0;
+    rlimit zero{};
+    if (setrlimit(RLIMIT_NPROC, &zero) == 0) {
+      try {
+        std::thread([] {}).join();
+      } catch (const std::system_error&) {
+        limits |= kNoThreads;
+      }
+    }
+    sigevent sig{};
+    sig.sigev_notify = SIGEV_SIGNAL;
+    sig.sigev_signo = SIGUSR1;
+    timer_t timerId{};
+    if (setrlimit(RLIMIT_SIGPENDING, &zero) == 0 &&
+        timer_create(CLOCK_MONOTONIC, &sig, &timerId) != 0) {
+      limits |= kNoSignalTimers;
+    }
+    _exit(limits);
+  }
+  int status = 0;
+  PCHECK(waitpid(pid, &status, 0) == pid);
+  return WIFEXITED(status) ? WEXITSTATUS(status) : 0;
+}
+
+} // namespace
+
+TEST(Singleton, ShutdownTimerWithoutThreads) {
+  int const limits = bindingLimits();
+  if (!(limits & kNoThreads)) {
+    GTEST_SKIP() << "RLIMIT_NPROC does not stop thread creation here";
+  }
+  struct VaultTag {};
+  struct PrivateTag {};
+  static bool hang = false;
+  struct Object {
+    ~Object() {
+      if (hang) {
+        // Without a deadline, SIGALRM ends the hung destructor instead.
+        alarm(5);
+        pause();
+      }
+    }
+  };
+  using SingletonObject = Singleton<Object, PrivateTag, VaultTag>;
+
+  auto& vault = *SingletonVault::singleton<VaultTag>();
+  SingletonObject object;
+  vault.registrationComplete();
+  SingletonObject::try_get();
+
+  // glibc cannot start the SIGEV_THREAD timer's thread under RLIMIT_NPROC=0.
+  auto destroyWithoutThreads =
+      [&](bool hangInDestructor, bool noSignals = false) {
+        hang = hangInDestructor;
+        if (hang) {
+          vault.setShutdownTimeout(10ms);
+        }
+        rlimit zero{};
+        PCHECK(setrlimit(RLIMIT_NPROC, &zero) == 0);
+        if (noSignals) {
+          PCHECK(setrlimit(RLIMIT_SIGPENDING, &zero) == 0);
+        }
+        vault.destroyInstancesFinal();
+        std::_Exit(0);
+      };
+  auto const deathTestStyle = GTEST_FLAG_GET(death_test_style);
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
+  EXPECT_EXIT(
+      destroyWithoutThreads(false),
+      testing::ExitedWithCode(0),
+      "falls back to SIGABRT");
+  EXPECT_EXIT(
+      destroyWithoutThreads(true),
+      testing::KilledBySignal(SIGABRT),
+      "falls back to SIGABRT");
+  if (limits & kNoSignalTimers) {
+    // With no timer at all the shutdown cannot be bounded, so it aborts.
+    EXPECT_EXIT(
+        destroyWithoutThreads(false, /* noSignals */ true),
+        testing::KilledBySignal(SIGABRT),
+        "Check failed: created == 0");
+  }
+  GTEST_FLAG_SET(death_test_style, deathTestStyle);
+}
+
+#endif
 
 TEST(Singleton, ForkInChild) {
   struct VaultTag {};
