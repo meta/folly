@@ -127,14 +127,19 @@ std::shared_ptr<ElfFile> SignalSafeElfCache::getFile(StringPiece p) {
     state_.emplace();
   }
 
-  Entry const& entry = *findOrAdd(state_->entries, p, state_->alloc);
+  auto it = findOrAdd(state_->entries, p, state_->alloc);
+  Entry const& entry = *it;
 
   if (!entry.init) {
     int r = entry.file->openAndFollow(cstring_view(entry.path).c_str());
-    entry.init = r == ElfFile::kSuccess;
-  }
-  if (!entry.init) {
-    return nullptr;
+    if (r != ElfFile::kSuccess) {
+      // No negative caching: a retained failure would still retry the open
+      // on every lookup, so keeping it only accumulates dead state. Erase
+      // it; a file appearing later is picked up by re-insertion.
+      state_->entries.erase(it);
+      return nullptr;
+    }
+    entry.init = true;
   }
 
   return entry.file;

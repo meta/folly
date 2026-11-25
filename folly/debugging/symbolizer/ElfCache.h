@@ -52,10 +52,22 @@ class ElfCacheBase {
  * Cache ELF files. Async-signal-safe: does memory allocation via mmap.
  *
  * Not MT-safe. May not be used concurrently from multiple threads.
+ *
+ * Memory contract: allocation failure aborts the process by design -- the
+ * underlying reentrant allocator is noexcept (it must stay usable from
+ * malloc hooks), and throwing through a signal handler would terminate
+ * anyway. Successfully opened files are retained without bound: entries are
+ * small next to the mappings they describe, and real workloads need them all
+ * resident. Failed lookups are deliberately not retained -- every lookup
+ * would retry the open regardless, so keeping them would only accumulate
+ * dead state; a file appearing later is picked up by re-insertion.
  */
 class SignalSafeElfCache : public ElfCacheBase {
  public:
   std::shared_ptr<ElfFile> getFile(StringPiece path) override;
+
+  /// Number of retained entries, for tests and diagnostics.
+  size_t size() const noexcept { return state_ ? state_->entries.size() : 0; }
 
   /// Eagerly resolve comparison and length-check bindings before installing
   /// signal handlers: binding resolution is not async-signal-safe. No stack

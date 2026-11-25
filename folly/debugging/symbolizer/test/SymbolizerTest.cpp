@@ -214,6 +214,15 @@ TEST(SignalSafeElfCache, NonNullTerminatedLookup) {
   EXPECT_EQ(first, cache.getFile("/proc/self/exe"));
 }
 
+TEST(SignalSafeElfCache, MissingPathLeavesNoEntry) {
+  SignalSafeElfCache cache;
+  const size_t before = cache.size();
+  EXPECT_EQ(nullptr, cache.getFile("/nonexistent-elf-file-for-test"));
+  EXPECT_EQ(before, cache.size());
+  EXPECT_EQ(nullptr, cache.getFile("/nonexistent-elf-file-for-test"));
+  EXPECT_EQ(before, cache.size());
+}
+
 TEST(SymbolizerTest, SymbolCache) {
   SKIP_IF(!Symbolizer::isAvailable());
 
