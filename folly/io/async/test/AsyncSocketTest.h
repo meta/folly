@@ -20,9 +20,9 @@
 
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/EventBaseBackendBase.h>
-#include <folly/io/async/test/BlockingSocket.h>
 #include <folly/io/async/test/CallbackStateEnum.h>
 #include <folly/io/async/test/ConnCallback.h>
+#include <folly/io/async/testing/BlockingSocket.h>
 #include <folly/net/NetOps.h>
 #include <folly/net/NetworkSocket.h>
 #include <folly/portability/Sockets.h>

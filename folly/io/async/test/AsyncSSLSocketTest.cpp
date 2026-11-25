@@ -35,8 +35,8 @@
 #include <folly/io/async/ScopedEventBaseThread.h>
 #include <folly/io/async/ssl/BasicTransportCertificate.h>
 #include <folly/io/async/ssl/OpenSSLTransportCertificate.h>
-#include <folly/io/async/test/BlockingSocket.h>
 #include <folly/io/async/test/TFOUtil.h>
+#include <folly/io/async/testing/BlockingSocket.h>
 #include <folly/io/async/testing/MockAsyncSocketLegacyObserver.h>
 #include <folly/io/async/testing/TestSSLServer.h>
 #include <folly/net/NetOps.h>

@@ -42,6 +42,21 @@ else ()
   folly_exclude_headers(AsyncSSLSocketTest.h)
 endif ()
 
+if (FOLLY_HAVE_OPENSSL)
+  folly_add_library(
+    NAME blocking_socket
+    HEADERS BlockingSocket.h
+    EXPORTED_DEPS
+      folly_io_async_async_socket
+      folly_io_async_async_ssl_socket
+      folly_io_async_ssl_context
+      folly_net_network_socket
+      folly_optional
+  )
+else ()
+  folly_exclude_headers(BlockingSocket.h)
+endif ()
+
 folly_add_library(
   NAME event_base_test_lib
   HEADERS EventBaseTestLib.h

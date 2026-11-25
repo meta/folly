@@ -17,7 +17,7 @@
 #include <iostream>
 
 #include <folly/ExceptionWrapper.h>
-#include <folly/io/async/test/BlockingSocket.h>
+#include <folly/io/async/testing/BlockingSocket.h>
 #include <folly/portability/GFlags.h>
 
 using namespace folly;

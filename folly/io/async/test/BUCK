@@ -118,12 +118,12 @@ fb_dirsync_cpp_library(
     ],
     use_raw_headers = True,
     exported_deps = [
-        ":blocking_socket",
         ":callback_state_enum",
         ":conn_callback",
         "//folly/io/async:async_base",
         "//folly/io/async:async_socket",
         "//folly/io/async:server_socket",
+        "//folly/io/async/testing:blocking_socket",
         "//folly/net:net_ops",
         "//folly/net:network_socket",
         "//folly/portability:sockets",
@@ -274,19 +274,6 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async:async_udp_socket",
         "//folly/portability:gtest",
         "//folly/portability:sockets",
-    ],
-)
-
-fb_dirsync_cpp_library(
-    name = "blocking_socket",
-    headers = ["BlockingSocket.h"],
-    use_raw_headers = True,
-    exported_deps = [
-        "//folly:optional",
-        "//folly/io/async:async_socket",
-        "//folly/io/async:async_ssl_socket",
-        "//folly/io/async:ssl_context",
-        "//folly/net:network_socket",
     ],
 )
 
@@ -545,8 +532,8 @@ fb_dirsync_cpp_binary(
     srcs = ["SocketClient.cpp"],
     headers = [],
     deps = [
-        ":blocking_socket",
         "//folly:exception_wrapper",
+        "//folly/io/async/testing:blocking_socket",
         "//folly/portability:gflags",
     ],
 )
@@ -750,7 +737,6 @@ fb_dirsync_cpp_unittest(
     },
     supports_static_listing = False,
     deps = [
-        ":blocking_socket",
         ":tfo_util",
         "//folly:exception_wrapper",
         "//folly:network_address",
@@ -774,6 +760,7 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async/ssl:openssl_transport_certificate",
         "//folly/io/async/ssl:ssl_errors",
         "//folly/io/async/testing:async_ssl_socket_test_lib",  # @manual
+        "//folly/io/async/testing:blocking_socket",
         "//folly/io/async/testing:mocks",
         "//folly/io/async/testing:test_ssl_server",
         "//folly/net:net_ops",

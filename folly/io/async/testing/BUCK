@@ -125,3 +125,16 @@ fb_dirsync_cpp_library(
         "//folly/system:thread_name",
     ],
 )
+
+fb_dirsync_cpp_library(
+    name = "blocking_socket",
+    headers = ["BlockingSocket.h"],
+    use_raw_headers = True,
+    exported_deps = [
+        "//folly:optional",
+        "//folly/io/async:async_socket",
+        "//folly/io/async:async_ssl_socket",
+        "//folly/io/async:ssl_context",
+        "//folly/net:network_socket",
+    ],
+)

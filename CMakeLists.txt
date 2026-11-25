@@ -295,7 +295,7 @@ if (FOLLY_HAVE_OPENSSL)
     hfiles
     ${FOLLY_DIR}/io/async/test/AsyncSocketTest.h
     ${FOLLY_DIR}/io/async/testing/AsyncSSLSocketTest.h
-    ${FOLLY_DIR}/io/async/test/BlockingSocket.h
+    ${FOLLY_DIR}/io/async/testing/BlockingSocket.h
     ${FOLLY_DIR}/io/async/testing/MockAsyncSSLSocket.h
     ${FOLLY_DIR}/io/async/testing/TestSSLServer.h
   )
@@ -569,7 +569,7 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     target_sources(
       folly_test_support
       PRIVATE
-        ${FOLLY_DIR}/io/async/test/BlockingSocket.h
+        ${FOLLY_DIR}/io/async/testing/BlockingSocket.h
         ${FOLLY_DIR}/io/async/testing/MockAsyncSSLSocket.h
         ${FOLLY_DIR}/io/async/test/SSLUtil.cpp
         ${FOLLY_DIR}/io/async/test/SSLUtil.h
