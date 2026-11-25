@@ -664,6 +664,42 @@ void appendSubprogramDie(std::vector<uint8_t>& info) {
   appendCString(info, "caller");
 }
 
+std::vector<uint8_t> indexedHighPcAbbreviations() {
+  std::vector<uint8_t> bytes;
+  appendAbbreviation(
+      bytes,
+      kCompileUnitCode,
+      DW_TAG_compile_unit,
+      true,
+      {
+          {DW_AT_stmt_list, DW_FORM_sec_offset},
+          {DW_AT_comp_dir, DW_FORM_string},
+          {DW_AT_name, DW_FORM_string},
+          {DW_AT_low_pc, DW_FORM_addr},
+          {DW_AT_high_pc, DW_FORM_addr},
+      });
+  appendAbbreviation(
+      bytes,
+      kSubprogramCode,
+      DW_TAG_subprogram,
+      false,
+      {
+          {DW_AT_low_pc, DW_FORM_addr},
+          {DW_AT_high_pc, DW_FORM_GNU_addr_index},
+          {DW_AT_name, DW_FORM_string},
+      });
+  appendULEB(bytes, 0); // end of the abbreviation table
+  return bytes;
+}
+
+void appendIndexedHighPcSubprogramDie(
+    std::vector<uint8_t>& info, uint64_t index) {
+  appendULEB(info, kSubprogramCode);
+  append<uintptr_t>(info, kUnitLowPc);
+  appendULEB(info, index);
+  appendCString(info, "indexed");
+}
+
 void appendInlinedSubroutineDie(
     std::vector<uint8_t>& info, size_t abstractOrigin, uint16_t callLine) {
   appendULEB(info, kInlinedSubroutineCode);
@@ -902,6 +938,35 @@ TEST(DwarfImpl, ReportsLineWhenChildrenTerminatorIsMissing) {
   EXPECT_EQ("main.cpp", frame.location.file.file());
   EXPECT_EQ(kLineFromLineProgram, frame.location.line);
   EXPECT_FALSE(inlineFrames[0].found);
+}
+
+TEST(DwarfImpl, TreatsGnuAddrIndexHighPcAsAddress) {
+  // The address table holds kUnitLowPc at index 0, so the subprogram range is
+  // the empty [kUnitLowPc, kUnitLowPc): the query address is covered by the
+  // compilation unit and the line program but not by the subprogram. Reading
+  // the indexed high_pc as an offset would instead produce
+  // [kUnitLowPc, 2 * kUnitLowPc) and match.
+  InlineUnit unit;
+  unit.abbrev = indexedHighPcAbbreviations();
+  appendCompileUnitDie(unit.info);
+  appendIndexedHighPcSubprogramDie(unit.info, 0);
+  appendChildrenTerminator(unit.info); // compile unit
+  std::vector<uint8_t> addresses;
+  append<uintptr_t>(addresses, kUnitLowPc);
+  auto units = unit.units();
+  units.mainCompilationUnit.addrBase = 0;
+  units.mainCompilationUnit.debugSections.debugAddr = addresses;
+  DwarfImpl dwarf(nullptr, units, LocationInfoMode::FULL);
+  SymbolizedFrame frame;
+
+  ASSERT_TRUE(dwarf.findLocation(
+      kUnitAddress,
+      frame,
+      folly::Range<SymbolizedFrame*>{},
+      ignoreParameterName));
+
+  EXPECT_TRUE(frame.location.hasFileAndLine);
+  EXPECT_EQ(nullptr, frame.name);
 }
 
 TEST(DwarfUtil, ParsesDwarf4CompilationUnitHeader) {

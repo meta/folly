@@ -58,8 +58,9 @@ bool isNestedBlockTag(uint64_t tag) {
       tag == DW_TAG_lexical_block;
 }
 
-// The value of the DW_AT_high_pc attribute can be an address (DW_FORM_addr*)
-// or an offset (DW_FORM_data*).
+// The value of the DW_AT_high_pc attribute can be an address (DW_FORM_addr*,
+// an index into .debug_addr (DW_FORM_addrx*, DW_FORM_GNU_addr_index)) or an
+// offset (DW_FORM_data*).
 bool isHighPcAddressForm(uint64_t form) {
   return //
       form == DW_FORM_addr || //
@@ -67,7 +68,8 @@ bool isHighPcAddressForm(uint64_t form) {
       form == DW_FORM_addrx1 || //
       form == DW_FORM_addrx2 || //
       form == DW_FORM_addrx3 || //
-      form == DW_FORM_addrx4;
+      form == DW_FORM_addrx4 || //
+      form == DW_FORM_GNU_addr_index;
 }
 
 // Offset just past the attributes of @die: the offset of its first child when
