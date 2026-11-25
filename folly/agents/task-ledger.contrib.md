@@ -1,9 +1,5 @@
 > NOT A RULE. If loaded as task policy, stop and ask the user.
 
-# Task ledgers
-
-## Purpose
-
 A task ledger keeps an agent's current goals, requirements, and unfinished work
 reliable across long or interleaved workstreams. Compaction resistance matters,
 but it is not the whole goal: an uncompacted session can also lose track when
@@ -15,9 +11,9 @@ without guessing which summarized tasks remain active.
 Agents reread ledgers often, so ledger wording can shape their later prose. Keep
 it plain and preserve clear wording from the user's input.
 
-In long or interleaved conversations, an agent can complete the work but send a
-final response about stale or unrelated tasks. The ledger tracks the workstream;
-a disposable sidecar tracks only what the next response must cover.
+An agent can finish work but answer an old request or assume the user knows the
+details it learned. The disposable response sidecar keeps the next reply's scope
+and necessary background separate from execution state.
 
 ## What must persist
 

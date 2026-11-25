@@ -46,8 +46,14 @@ direct messages and artifacts; ask the user if ambiguity remains.
 
 Immediately before the final response:
 
-- Draft the final from the response sidecar. “Self-contained” adds only context
-  needed to understand the response, not a recap of prior turns.
+- Start from the user's question and stated background. Do not assume the reader
+  has seen your investigation notes or newly written artifacts.
+- Compare the planned reply's assumptions with that starting point. Which
+  concepts or connections are available only to you? Explain the needed ones in
+  the response sidecar using [write.md](write.md#substance). Prepare framing,
+  not just a reader label or reporting checklist.
+- Draft the final from the response sidecar. Make each answer understandable
+  without rereading its question; a short, plain paraphrase may be enough.
 - Prune tasks fully delivered in this final.
 - Delete the sidecar.
 - Send the final.

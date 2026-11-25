@@ -12,10 +12,10 @@ Surface the full rejection text even if a retry succeeds.
 ## Retry with evidence
 
 Guardian evaluates the transcript, including command output. Show the ambient
-Codex command and the wrapper's fixed interface:
+Codex executable path and the wrapper's fixed interface:
 
 ```bash
-codex --version
+command -v codex
 "{FA}/critic-iterate/codex-reviewer.py" --help
 ```
 
