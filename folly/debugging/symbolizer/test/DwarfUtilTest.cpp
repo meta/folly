@@ -16,6 +16,7 @@
 
 #include <folly/debugging/symbolizer/Dwarf.h>
 #include <folly/debugging/symbolizer/DwarfImpl.h>
+#include <folly/debugging/symbolizer/DwarfLineNumberVM.h>
 #include <folly/debugging/symbolizer/DwarfSection.h>
 #include <folly/debugging/symbolizer/DwarfUtil.h>
 
@@ -578,9 +579,11 @@ std::vector<uint8_t> unitAbbreviations() {
   return bytes;
 }
 
-// One sequence mapping [kUnitLowPc, kUnitHighPc) to src/main.cpp line 1.
-std::vector<uint8_t> unitLineTable() {
-  std::vector<uint8_t> header;
+// Line table header shared by the tests below. The entry for
+// DW_LNS_fixed_advance_pc claims one LEB operand although the opcode takes a
+// fixed uint16_t operand; step() and nextDefineFile() must both special-case
+// it rather than trust the table.
+void appendUnitLineTableHeader(std::vector<uint8_t>& header) {
   append<uint8_t>(header, 1); // minimum instruction length
   append<uint8_t>(header, 1); // maximum operations per instruction
   append<uint8_t>(header, 1); // default is_stmt
@@ -612,6 +615,26 @@ std::vector<uint8_t> unitLineTable() {
   appendULEB(header, 0); // modified time
   appendULEB(header, 0); // file size
   appendCString(header, "");
+}
+
+std::vector<uint8_t> finishLineTable(
+    const std::vector<uint8_t>& header, const std::vector<uint8_t>& program) {
+  std::vector<uint8_t> payload;
+  append<uint16_t>(payload, 4); // version
+  append<uint32_t>(payload, static_cast<uint32_t>(header.size()));
+  payload.insert(payload.end(), header.begin(), header.end());
+  payload.insert(payload.end(), program.begin(), program.end());
+
+  std::vector<uint8_t> table;
+  append<uint32_t>(table, static_cast<uint32_t>(payload.size()));
+  table.insert(table.end(), payload.begin(), payload.end());
+  return table;
+}
+
+// One sequence mapping [kUnitLowPc, kUnitHighPc) to src/main.cpp line 1.
+std::vector<uint8_t> unitLineTable() {
+  std::vector<uint8_t> header;
+  appendUnitLineTableHeader(header);
 
   std::vector<uint8_t> program;
   program.push_back(0);
@@ -627,16 +650,42 @@ std::vector<uint8_t> unitLineTable() {
   appendULEB(program, 1);
   program.push_back(DW_LNE_end_sequence);
 
-  std::vector<uint8_t> payload;
-  append<uint16_t>(payload, 4); // version
-  append<uint32_t>(payload, static_cast<uint32_t>(header.size()));
-  payload.insert(payload.end(), header.begin(), header.end());
-  payload.insert(payload.end(), program.begin(), program.end());
+  return finishLineTable(header, program);
+}
 
-  std::vector<uint8_t> table;
-  append<uint32_t>(table, static_cast<uint32_t>(payload.size()));
-  table.insert(table.end(), payload.begin(), payload.end());
-  return table;
+// One sequence committing file index 2 (past the initial table) before a
+// DW_LNS_fixed_advance_pc and a DW_LNE_define_file for extra.cpp.
+std::vector<uint8_t> defineFileLineTable() {
+  std::vector<uint8_t> header;
+  appendUnitLineTableHeader(header);
+
+  std::vector<uint8_t> defineFile;
+  defineFile.push_back(DW_LNE_define_file);
+  appendCString(defineFile, "extra.cpp");
+  appendULEB(defineFile, 0); // directory index
+  appendULEB(defineFile, 0); // modified time
+  appendULEB(defineFile, 0); // file size
+
+  std::vector<uint8_t> program;
+  program.push_back(0);
+  appendULEB(program, sizeof(uintptr_t) + 1);
+  program.push_back(DW_LNE_set_address);
+  append<uintptr_t>(program, kUnitLowPc);
+  program.push_back(DW_LNS_set_file);
+  appendULEB(program, 2);
+  program.push_back(DW_LNS_copy);
+  program.push_back(DW_LNS_fixed_advance_pc);
+  append<uint16_t>(program, 1);
+  program.push_back(0);
+  appendULEB(program, defineFile.size());
+  program.insert(program.end(), defineFile.begin(), defineFile.end());
+  program.push_back(DW_LNS_advance_pc);
+  appendULEB(program, kUnitHighPc - kUnitLowPc);
+  program.push_back(0);
+  appendULEB(program, 1);
+  program.push_back(DW_LNE_end_sequence);
+
+  return finishLineTable(header, program);
 }
 
 void appendCompileUnitDie(std::vector<uint8_t>& info) {
@@ -938,6 +987,19 @@ TEST(DwarfImpl, ReportsLineWhenChildrenTerminatorIsMissing) {
   EXPECT_EQ("main.cpp", frame.location.file.file());
   EXPECT_EQ(kLineFromLineProgram, frame.location.line);
   EXPECT_FALSE(inlineFrames[0].found);
+}
+
+TEST(DwarfLineNumberVM, FindsDefineFileAfterFixedAdvancePc) {
+  const auto table = defineFileLineTable();
+  DebugSections sections{};
+  DwarfLineNumberVM vm(table, "", sections);
+  Path file;
+  uint64_t line = 0;
+
+  ASSERT_TRUE(vm.findAddress(kUnitLowPc, file, line));
+
+  EXPECT_EQ("extra.cpp", file.file());
+  EXPECT_EQ(1, line);
 }
 
 TEST(DwarfImpl, TreatsGnuAddrIndexHighPcAsAddress) {

@@ -707,6 +707,15 @@ DwarfLineNumberVM::nextDefineFile(DwarfCursor& program) const {
     }
 
     if (*opcode != 0) { // standard opcode
+      if (*opcode == DW_LNS_fixed_advance_pc) {
+        // Unlike the other standard opcodes this one takes a fixed-size
+        // operand rather than LEBs; see step().
+        auto increment = program.read<uint16_t>();
+        if (increment.hasError()) {
+          return makeUnexpected(increment.error());
+        }
+        continue;
+      }
       // Skip, slurp the appropriate number of LEB arguments
       uint8_t argCount = standardOpcodeLengths_[*opcode - 1];
       while (argCount--) {
