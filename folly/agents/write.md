@@ -73,9 +73,9 @@ follow `{FA}/write/commit-summary/c-i-fresh-review.md`.
 The author must adopt a persona free from cognitive biases like rationalization
 & sunk-cost. Channel these traits as you revise:
 
-- **Reader-first.** Every unnecessary word taxes every reader.
-- **Essentialist.** Keep only facts the target reader needs; truth or relevance
-  alone is not enough.
+- **Reader-first.** Judge needed context from the reader's stated background.
+  Keep the setting and causal steps needed to understand the point or do the
+  task.
 - **You are not your draft.** Existing wording gets no preference. Rewrite or
   delete it when that better serves the reader.
 - **Rationalization-hostile.** "Load-bearing," "critical," and "archaeologist
@@ -297,19 +297,18 @@ plan) → plain language → cold re-read, until a full round makes no edit.
 
 ### Cut test — per sentence
 
-Ask: **"Which required part of this audience's mental model or task becomes
-wrong, missing, or materially harder if I cut this sentence?"** A fact does not
-earn its place merely by being true, related, or mildly helpful. If no required
-part is lost, cut it.
+Ask: **"What would a reader with only the stated background misunderstand or
+find materially harder if I cut this sentence?"** A fact does not earn its place
+merely by being true, related, or mildly helpful. If no required part is lost,
+cut it.
 
 Cut on (locality first, style second):
 
 - **Restates the title or an earlier sentence.** (Includes wrap-ups, especially
   invariant restatements after a goal-led lead.)
-- **Unneeded intermediate detail.** State the result the reader needs. Keep
-  mechanics or causal steps only when the result would otherwise be hard to
-  understand: “Requests are keyed by account ID, so requests with the same ID
-  enter one batch” → “Requests from one account now share a batch.”
+- **Unneeded intermediate detail.** Keep causal steps needed to understand the
+  problem or why the change works. Omit implementation details that do not help
+  explain either.
 - **Opaque-identifier enumeration.** Lists of hex hashes / auto-generated IDs
   the reader can't act on — name the SET or the COUNT instead. "Three res_ids
   (`5f6bcc932c826`, `6196aa3142bcf`, `67056151d29d2`)" → "the three res_ids".
