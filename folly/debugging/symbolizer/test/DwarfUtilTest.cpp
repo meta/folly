@@ -481,6 +481,48 @@ TEST(DwarfUtil, SplitDwarfRejectsOversizedPath) {
   EXPECT_FALSE(result.splitCU.hasValue());
 }
 
+TEST(DwarfUtil, SplitDwarfAllowsDotDotName) {
+  // dwo_name is the compiler's output path relative to comp_dir, so ".."
+  // segments are legitimate (e.g. "../obj/a.dwo" for "-o ../obj/a.o").
+  const auto unit = splitUnit("/build", "../escape.dwo");
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(), 0, true);
+
+  const std::vector<std::string> expected{"/build/../escape.dwo"};
+  EXPECT_EQ(expected, cache.paths);
+  EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfAllowsDotDotDirectory) {
+  const auto unit = splitUnit("/build/../escape", "unit.dwo");
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(), 0, true);
+
+  const std::vector<std::string> expected{"/build/../escape/unit.dwo"};
+  EXPECT_EQ(expected, cache.paths);
+  EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
+TEST(DwarfUtil, SplitDwarfAllowsDotDotIndexedName) {
+  ElfFile elf("/proc/self/exe");
+  const auto unit = splitUnit(
+      "/build",
+      "../escape.dwo",
+      {.indexedDirectory = true, .indexedName = true, .includeBase = true});
+  RecordingElfCache cache;
+  const auto result = getCompilationUnits(&cache, unit.sections(&elf), 0, true);
+
+  const std::vector<std::string> expected{
+      "/build/../escape.dwo",
+      std::string(elf.filepath()) + ".dwp",
+  };
+  EXPECT_EQ(expected, cache.paths);
+  EXPECT_EQ(unit.info.size(), result.mainCompilationUnit.size);
+  EXPECT_FALSE(result.splitCU.hasValue());
+}
+
 std::vector<uint8_t> unitAbbreviations() {
   std::vector<uint8_t> bytes;
   appendAbbreviation(

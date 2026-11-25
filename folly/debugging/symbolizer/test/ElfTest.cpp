@@ -192,6 +192,31 @@ TEST_F(ElfTest, UnopenedFileDegradesGracefully) {
   EXPECT_EQ(nullptr, failed.getSymbolByName("main").first);
 }
 
+TEST_F(ElfTest, ElfHasDotDotSegment) {
+  using folly::symbolizer::detail::elfHasDotDotSegment;
+  EXPECT_FALSE(elfHasDotDotSegment(""));
+  EXPECT_FALSE(elfHasDotDotSegment("unit.dwo"));
+  EXPECT_FALSE(elfHasDotDotSegment("/build/unit.dwo"));
+  EXPECT_FALSE(elfHasDotDotSegment("..."));
+  EXPECT_FALSE(elfHasDotDotSegment("..foo"));
+  EXPECT_FALSE(elfHasDotDotSegment("foo.."));
+  EXPECT_FALSE(elfHasDotDotSegment("a/.../b"));
+  EXPECT_TRUE(elfHasDotDotSegment(".."));
+  EXPECT_TRUE(elfHasDotDotSegment("../escape.dwo"));
+  EXPECT_TRUE(elfHasDotDotSegment("/build/../escape"));
+  EXPECT_TRUE(elfHasDotDotSegment("a/../b"));
+  EXPECT_TRUE(elfHasDotDotSegment("a/.."));
+  EXPECT_TRUE(elfHasDotDotSegment("/.."));
+}
+
+TEST_F(ElfTest, OpenFifoFailsWithoutBlocking) {
+  folly::test::TemporaryDirectory dir("elf_test");
+  const auto fifo = dir.path() / "fifo";
+  ASSERT_EQ(0, ::mkfifo(fifo.c_str(), 0600));
+  ElfFile file;
+  EXPECT_EQ(ElfFile::kInvalidElfFile, file.openNoThrow(fifo.c_str()));
+}
+
 TEST_F(ElfTest, SymbolsByNameSuccess) {
   std::vector<std::string> names = {"sum_func", "sub_func"};
   auto result = elfFile_.getSymbolsByName(names, {STT_FUNC});

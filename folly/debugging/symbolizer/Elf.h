@@ -27,6 +27,7 @@
 #include <limits>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <system_error>
 #include <unordered_map>
 
@@ -78,6 +79,28 @@ struct ElfFileId {
 
   friend bool operator==(const ElfFileId& lhs, const ElfFileId& rhs) = default;
 };
+
+namespace detail {
+
+/**
+ * True if any '/'-delimited segment of path is exactly "..".
+ *
+ * .gnu_debuglink names are attacker-controlled strings joined onto the
+ * executable's directory; callers use this to keep the joined lookup from
+ * escaping it. Names are stored verbatim by objcopy and in practice are
+ * often full paths rather than bare filenames, so this policy only screens
+ * relative escapes -- and is stricter than other consumers, which do not
+ * sanitize. The failure mode is graceful (the original file is used).
+ *
+ * Note: this is deliberately not applied to DW_AT_comp_dir/DW_AT_dwo_name.
+ * dwo_name is the compiler's output path relative to comp_dir (e.g.
+ * "../obj/a.dwo" for "-o ../obj/a.o"), so legitimate builds contain ".."
+ * segments; and comp_dir itself is an arbitrary absolute path, so the check
+ * would add no containment there.
+ */
+bool elfHasDotDotSegment(std::string_view path) noexcept;
+
+} // namespace detail
 
 /**
  * ELF file parser.

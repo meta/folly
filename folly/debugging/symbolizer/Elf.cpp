@@ -54,6 +54,24 @@
 namespace folly {
 namespace symbolizer {
 
+namespace detail {
+
+bool elfHasDotDotSegment(std::string_view path) noexcept {
+  for (size_t i = 0; i < path.size();) {
+    size_t end = i;
+    while (end < path.size() && path[end] != '/') {
+      ++end;
+    }
+    if (end - i == 2 && path[i] == '.' && path[i + 1] == '.') {
+      return true;
+    }
+    i = end + 1;
+  }
+  return false;
+}
+
+} // namespace detail
+
 void ElfFile::warmUp() noexcept {
   detail::signal_safe_libc::warmUp();
 }
@@ -90,8 +108,10 @@ ElfFile::OpenResult ElfFile::openNoThrow(
   // check failure above if we leave fd != -1 and the object is recycled
   auto guard = makeGuard([&] { reset(); });
   detail::signal_safe_libc::strlcpy(filepath_, name, kFilepathMaxLen - 1);
+  // O_NONBLOCK is ignored for regular files but keeps opening a fifo from
+  // blocking; non-regular files are rejected below via fstat.
   fd_ = detail::signal_safe_libc::open(
-      name, (options.writable() ? O_RDWR : O_RDONLY) | O_CLOEXEC);
+      name, (options.writable() ? O_RDWR : O_RDONLY) | O_CLOEXEC | O_NONBLOCK);
   if (fd_ == -1) {
     return {kSystemError, "open"};
   }
@@ -99,6 +119,12 @@ ElfFile::OpenResult ElfFile::openNoThrow(
   int r = detail::signal_safe_libc::fstat(fd_, &st);
   if (r == -1) {
     return {kSystemError, "fstat"};
+  }
+  // Only regular files can be meaningfully mapped; fstat follows symlinks,
+  // so symlinked binaries keep working.
+  if (!S_ISREG(st.st_mode)) {
+    errno = EINVAL;
+    return {kInvalidElfFile, "not a regular file"};
   }
 
   uint64_t mtime_ns = st.st_mtim.tv_sec * 1000'000'000LL + st.st_mtim.tv_nsec;
@@ -157,6 +183,16 @@ ElfFile::OpenResult ElfFile::openAndFollow(
   auto debugFileEnd =
       std::find(debugFileName.begin(), debugFileName.end(), uint8_t{0});
   if (debugFileEnd == debugFileName.end()) {
+    return result;
+  }
+  // The name is stored verbatim and in practice is often a full path, which
+  // this dirname-joined lookup deliberately does not resolve. Reject ".."
+  // segments so a hostile name cannot escape the executable's directory via
+  // the joined path; a rejection falls back to the original file below.
+  const std::string_view debugName(
+      reinterpret_cast<const char*>(debugFileName.data()),
+      static_cast<size_t>(debugFileEnd - debugFileName.begin()));
+  if (detail::elfHasDotDotSegment(debugName)) {
     return result;
   }
   auto debugFileLen = std::distance(debugFileName.begin(), debugFileEnd);
