@@ -1943,6 +1943,18 @@ class F14Table : public Policy {
 
   enum class Prefetch { DISABLED, ENABLED };
 
+  // Called while a lookup compares a chunk's tags. Prefetches the first cache
+  // line after the header's line that holds item storage: chunk + 64, or
+  // item 0 when the items start further in. Slots fill from index 0, so that
+  // line is the first to hold items. Chunks that fit in one line need none.
+  FOLLY_ALWAYS_INLINE static void prefetchChunkItems(ChunkPtr chunk) {
+    if constexpr (Chunk::kChunkStride > 64) {
+      prefetchAddr(
+          reinterpret_cast<unsigned char const*>(&*chunk) +
+          constexpr_max(std::size_t{64}, Chunk::kItemsOffset));
+    }
+  }
+
   template <typename K>
   FOLLY_ALWAYS_INLINE ItemIter
   findImpl(HashPair hp, K const& key, Prefetch prefetch) const {
@@ -1952,8 +1964,8 @@ class F14Table : public Policy {
     auto needleV = loadNeedleV(hp.second);
     for (std::size_t tries = chunkCount(); tries > 0;) {
       ChunkPtr chunk = chunkAt(moduloByChunkCount(index));
-      if (prefetch == Prefetch::ENABLED && Chunk::kChunkStride > 64) {
-        prefetchAddr(chunk->itemAddr(8));
+      if (prefetch == Prefetch::ENABLED) {
+        prefetchChunkItems(chunk);
       }
       ItemIter found{};
       if (chunk->forEachTagMatch(needleV, [&](unsigned i) {
@@ -2058,9 +2070,7 @@ class F14Table : public Policy {
     std::size_t step = probeDelta(hp);
     for (std::size_t tries = chunkCount(); tries > 0; --tries) {
       ChunkPtr chunk = chunkAt(moduloByChunkCount(index));
-      if (Chunk::kChunkStride > 64) {
-        prefetchAddr(chunk->itemAddr(8));
-      }
+      prefetchChunkItems(chunk);
       ItemIter found{};
       if (chunk->forEachTagMatch(needleV, [&](unsigned i) {
             if (func(this->keyForValue(this->valueAtItem(chunk->item(i)))))
