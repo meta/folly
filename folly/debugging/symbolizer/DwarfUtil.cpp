@@ -37,6 +37,11 @@ namespace folly {
 namespace symbolizer {
 
 std::span<const uint8_t> getElfSection(const ElfFile* elf, const char* name) {
+  // Tolerate null so Dwarf can be constructed without a file; callers check
+  // for missing sections (and findAddress checks for a null elf).
+  if (elf == nullptr) {
+    return {};
+  }
   const ElfShdr* elfSection = elf->getSectionByName(name);
   if (!elfSection) {
     return {};

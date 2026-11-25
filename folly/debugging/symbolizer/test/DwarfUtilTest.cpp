@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <folly/debugging/symbolizer/Dwarf.h>
 #include <folly/debugging/symbolizer/DwarfImpl.h>
 #include <folly/debugging/symbolizer/DwarfSection.h>
 #include <folly/debugging/symbolizer/DwarfUtil.h>
@@ -351,6 +352,13 @@ class RecordingElfCache : public ElfCacheBase {
     return nullptr;
   }
 };
+
+TEST(DwarfUtil, NullElfKeepsFindAddressSafe) {
+  Dwarf dwarf(nullptr, nullptr);
+  SymbolizedFrame frame;
+  EXPECT_FALSE(dwarf.findAddress(
+      0, LocationInfoMode::FULL, frame, {}, [](folly::StringPiece) {}));
+}
 
 TEST(DwarfUtil, SplitDwarfWithoutCacheKeepsMainUnit) {
   const auto unit = splitUnit("/build", "unit.dwo");
