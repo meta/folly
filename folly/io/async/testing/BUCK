@@ -102,3 +102,26 @@ fb_dirsync_cpp_library(
         "//folly/testing:test_util",
     ],
 )
+
+fb_dirsync_cpp_library(
+    name = "event_base_test_lib",
+    headers = [
+        "EventBaseTestLib.h",
+    ],
+    use_raw_headers = True,
+    exported_deps = [
+        "//folly:math",
+        "//folly:memory",
+        "//folly:scope_guard",
+        "//folly/futures:core",
+        "//folly/io/async:async_base",
+        "//folly/io/async/test:util",
+        "//folly/portability:gmock",
+        "//folly/portability:stdlib",
+        "//folly/portability:unistd",
+        "//folly/synchronization:baton",
+        "//folly/synchronization:relaxed_atomic",
+        "//folly/system:thread_id",
+        "//folly/system:thread_name",
+    ],
+)

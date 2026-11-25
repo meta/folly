@@ -30,8 +30,8 @@
 #include <folly/io/async/IoUringOptions.h>
 #include <folly/io/async/IoUringProvidedBufferRing.h>
 #include <folly/io/async/test/AsyncSignalHandlerTestLib.h>
-#include <folly/io/async/test/EventBaseTestLib.h>
 #include <folly/io/async/test/IoTestTempFileUtil.h>
+#include <folly/io/async/testing/EventBaseTestLib.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/SysResource.h>
 

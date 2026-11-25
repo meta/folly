@@ -43,6 +43,24 @@ else ()
 endif ()
 
 folly_add_library(
+  NAME event_base_test_lib
+  HEADERS EventBaseTestLib.h
+  EXPORTED_DEPS
+    folly_futures_core
+    folly_io_async_async_base
+    folly_math
+    folly_memory
+    folly_portability_gmock
+    folly_portability_stdlib
+    folly_portability_unistd
+    folly_scope_guard
+    folly_synchronization_baton
+    folly_synchronization_relaxed_atomic
+    folly_system_thread_id
+    folly_system_thread_name
+)
+
+folly_add_library(
   NAME mock_server_socket
   HEADERS MockAsyncServerSocket.h
   EXPORTED_DEPS

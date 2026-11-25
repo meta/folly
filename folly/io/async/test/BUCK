@@ -354,29 +354,6 @@ fb_dirsync_cpp_binary(
     ],
 )
 
-fb_dirsync_cpp_library(
-    name = "event_base_test_lib",
-    headers = [
-        "EventBaseTestLib.h",
-    ],
-    use_raw_headers = True,
-    exported_deps = [
-        ":util",
-        "//folly:math",
-        "//folly:memory",
-        "//folly:scope_guard",
-        "//folly/futures:core",
-        "//folly/io/async:async_base",
-        "//folly/portability:gmock",
-        "//folly/portability:stdlib",
-        "//folly/portability:unistd",
-        "//folly/synchronization:baton",
-        "//folly/synchronization:relaxed_atomic",
-        "//folly/system:thread_id",
-        "//folly/system:thread_name",
-    ],
-)
-
 fb_dirsync_cpp_unittest(
     name = "event_base_test",
     srcs = ["EventBaseTest.cpp"],
@@ -389,9 +366,9 @@ fb_dirsync_cpp_unittest(
     supports_static_listing = False,
     deps = [
         ":async_signal_handler_test_lib",  # @manual
-        ":event_base_test_lib",  # @manual
         "//folly/init:init",
         "//folly/io/async:async_base",
+        "//folly/io/async/testing:event_base_test_lib",  # @manual
         "//folly/portability:gtest",
     ],
 )
@@ -1082,7 +1059,7 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async:async_base",
         "//folly/io/async:epoll_backend",
         "//folly/io/async/test:async_signal_handler_test_lib",  # @manual
-        "//folly/io/async/test:event_base_test_lib",  # @manual
+        "//folly/io/async/testing:event_base_test_lib",  # @manual
         "//folly/portability:sockets",
         "//folly/portability:unistd",
         "//folly/synchronization:baton",
@@ -1192,8 +1169,8 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async:io_uring_backend",
         "//folly/io/async:io_uring_provided_buffer_ring",
         "//folly/io/async/test:async_signal_handler_test_lib",
-        "//folly/io/async/test:event_base_test_lib",
         "//folly/io/async/test:io_test_temp_file_util_lib",
+        "//folly/io/async/testing:event_base_test_lib",
         "//folly/portability:gtest",
     ],
 )

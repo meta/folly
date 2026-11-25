@@ -19,7 +19,7 @@
 #include <folly/init/Init.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/test/AsyncSignalHandlerTestLib.h>
-#include <folly/io/async/test/EventBaseTestLib.h>
+#include <folly/io/async/testing/EventBaseTestLib.h>
 #include <folly/portability/GTest.h>
 
 namespace folly {

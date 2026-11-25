@@ -28,7 +28,7 @@
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/EventHandler.h>
 #include <folly/io/async/test/AsyncSignalHandlerTestLib.h>
-#include <folly/io/async/test/EventBaseTestLib.h>
+#include <folly/io/async/testing/EventBaseTestLib.h>
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
 #include <folly/synchronization/Baton.h>
