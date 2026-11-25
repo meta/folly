@@ -82,6 +82,14 @@ class BasePromise {
     return std::nullopt;
   }
 
+  // Slow path, gated behind fast path. Kept out of line so that each
+  // `await_transform` inlines only the `hasCancelTokenOverride_` check.
+  FOLLY_NOINLINE void copyCancellationTokenOverride(
+      const folly::CancellationToken& cancelToken) noexcept {
+    cancelToken_ = folly::CancellationToken{cancelToken};
+    hasCancelTokenOverride_ = true;
+  }
+
  public:
   template <typename Awaitable>
     requires(!folly::ext::must_use_immediately_v<Awaitable>)
@@ -133,8 +141,7 @@ class BasePromise {
     // Only keep the first cancellation token.  This is usually the inner-most
     // cancellation scope of the consumer's calling context.
     if (!hasCancelTokenOverride_) {
-      cancelToken_ = folly::CancellationToken{cancelToken};
-      hasCancelTokenOverride_ = true;
+      copyCancellationTokenOverride(cancelToken);
     }
   }
 
