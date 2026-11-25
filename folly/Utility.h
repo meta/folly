@@ -244,8 +244,6 @@ struct transparent : T {
   using T::T;
 };
 
-#if !defined(__NVCC__)
-
 /// literal_c_str
 ///
 /// This can only wrap literal strings, since the constructor is marked
@@ -254,11 +252,6 @@ struct literal_c_str {
   const char* const ptr;
   /* implicit */ consteval literal_c_str(const char* p) : ptr(p) {}
 };
-
-#endif
-
-// TODO: Remove after CUDA 12.8 is retired
-#if !defined(__NVCC__)
 
 /// literal_string
 ///
@@ -316,8 +309,6 @@ consteval vtag_t<Str> operator""_litv() noexcept {
 
 } // namespace string_literals
 } // namespace literals
-
-#endif
 
 namespace detail {
 

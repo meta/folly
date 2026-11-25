@@ -910,8 +910,6 @@ exception_shared_string& exception_shared_string::operator=(
   return *this;
 }
 
-#if !defined(__NVCC__)
-
 exception_shared_string& exception_shared_string::operator=(
     exception_shared_string&& that) noexcept {
   if (this != &that) {
@@ -922,8 +920,6 @@ exception_shared_string& exception_shared_string::operator=(
   }
   return *this;
 }
-
-#endif
 
 void exception_shared_string::ruin_state() noexcept {
   state::ruin(to_state(tagged_what_));
