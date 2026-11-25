@@ -16,11 +16,64 @@
 
 #include <folly/container/EvictingCacheMap.h>
 
+#include <memory>
+#include <new>
 #include <set>
+#include <utility>
 
 #include <folly/portability/GTest.h>
 
 using namespace folly;
+
+TEST(EvictingCacheMap, SetReleasesNodeWhenIndexInsertThrows) {
+  struct Key {
+    explicit Key(int id, bool failAfterCopy = false)
+        : id(id), failAfterCopy(failAfterCopy) {}
+
+    Key(const Key& other)
+        : id(other.id),
+          failAfterCopy(other.failAfterCopy),
+          failOnHash(other.failAfterCopy) {}
+
+    Key& operator=(const Key& other) {
+      id = other.id;
+      failAfterCopy = other.failAfterCopy;
+      failOnHash = other.failAfterCopy;
+      return *this;
+    }
+
+    bool operator==(const Key& other) const { return id == other.id; }
+
+    int id;
+    bool failAfterCopy;
+    bool failOnHash{false};
+  };
+  struct Hash {
+    size_t operator()(const Key& key) const {
+      if (key.failOnHash) {
+        throw std::bad_alloc();
+      }
+      return key.id;
+    }
+  };
+
+  EvictingCacheMap<Key, std::shared_ptr<int>, Hash> map(1);
+  map.set(Key{1}, std::make_shared<int>(1));
+  auto value = std::make_shared<int>(2);
+  std::weak_ptr<int> weakValue = value;
+
+  // Lookup hashes the original key. Index insertion hashes the node's copy.
+  EXPECT_THROW(map.set(Key{2, true}, std::move(value)), std::bad_alloc);
+  EXPECT_TRUE(weakValue.expired());
+  ASSERT_EQ(map.size(), 1);
+  EXPECT_TRUE(map.exists(Key{1}));
+  EXPECT_FALSE(map.exists(Key{2}));
+
+  map.set(Key{2}, std::make_shared<int>(2));
+  ASSERT_EQ(map.size(), 1);
+  EXPECT_FALSE(map.exists(Key{1}));
+  EXPECT_TRUE(map.exists(Key{2}));
+}
 
 TEST(EvictingCacheMap, SanityTest) {
   EvictingCacheMap<int, int> map(0);

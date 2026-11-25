@@ -727,9 +727,9 @@ class EvictingCacheMap {
         lru_.splice(lru_.begin(), lru_, lru_.iterator_to(*ptr));
       }
     } else {
-      auto node = new Node(key, std::move(value));
-      index_.insert(node);
-      lru_.push_front(*node);
+      auto node = std::make_unique<Node>(key, std::move(value));
+      index_.insert(node.get());
+      lru_.push_front(*node.release());
 
       // no evictions if maxSize_ is 0 i.e. unlimited capacity
       if (maxSize_ > 0 && size() > maxSize_) {
