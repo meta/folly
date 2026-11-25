@@ -1231,6 +1231,30 @@ TEST(DwarfUtil, ResolvesStrxThroughDwarf64DwpContributionOfDwarf32Unit) {
   EXPECT_EQ("b", std::get<folly::StringPiece>(result->attrValue));
 }
 
+TEST(DwarfUtil, DwpStrOffsetsBaseSaturatesInsteadOfWrapping) {
+  for (const auto is64Bit : {false, true}) {
+    SCOPED_TRACE(is64Bit);
+    CompilationUnit cu{};
+    cu.strOffsetsIs64Bit = is64Bit;
+    cu.strOffsetsBase =
+        std::numeric_limits<uint64_t>::max() - (is64Bit ? 15 : 7);
+
+    setDwpStrOffsetsBase(cu);
+
+    ASSERT_TRUE(cu.strOffsetsBase.hasValue());
+    EXPECT_EQ(std::numeric_limits<uint64_t>::max(), *cu.strOffsetsBase);
+  }
+
+  CompilationUnit cu{};
+  cu.strOffsetsIs64Bit = false;
+  cu.strOffsetsBase = 0;
+
+  setDwpStrOffsetsBase(cu);
+
+  ASSERT_TRUE(cu.strOffsetsBase.hasValue());
+  EXPECT_EQ(uint64_t{8}, *cu.strOffsetsBase);
+}
+
 TEST(DwarfUtil, ParsesAbbreviationDeclaration) {
   const auto bytes = abbreviation();
   DwarfCursor cursor(bytes, 0x20);

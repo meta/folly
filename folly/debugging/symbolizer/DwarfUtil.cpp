@@ -500,7 +500,12 @@ void setDwpStrOffsetsBase(CompilationUnit& cu) {
           *initialLength == std::numeric_limits<uint32_t>::max();
     }
   }
-  cu.strOffsetsBase = contribution + (cu.strOffsetsIs64Bit ? 16 : 8);
+  const uint64_t headerSize = cu.strOffsetsIs64Bit ? 16 : 8;
+  uint64_t base;
+  if (!folly::checked_add(&base, contribution, headerSize)) {
+    base = std::numeric_limits<uint64_t>::max();
+  }
+  cu.strOffsetsBase = base;
 }
 
 namespace {
