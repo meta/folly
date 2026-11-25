@@ -155,12 +155,13 @@ def validate_symbolizer_dwp(name, binary, mode = "fbcode//mode/opt", modifiers =
     # The binary is pinned to its validation mode by an opt-only constraint,
     # so the remaining default schedules can only record omit noise; drop
     # those too.
+    ci_labels.append(ci.remove_mode_prefixes("fbcode//mode/dev-"))
     ci_labels.append(
         ci.remove(
             ci.linux(ci.dev()),
-            ci.linux(ci.mode("fbcode//mode/dev-nosan")),
-            ci.linux(ci.mode("fbcode//mode/dev-tsan")),
+            ci.linux(ci.mode("fbcode//mode/dev")),
             ci.linux(ci.mode("fbcode//mode/libcxx")),
+            ci.linux(ci.selective_coverage()),
         )
     )
     fb_dirsync_rule(
