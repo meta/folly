@@ -16,8 +16,10 @@
 
 #include <folly/lang/Thunk.h>
 
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include <folly/Traits.h>
 #include <folly/portability/GTest.h>
@@ -91,6 +93,54 @@ TEST_F(ThunkTest, ctor_dtor) {
     dtor(str);
     EXPECT_EQ("", src);
   }
+}
+
+namespace {
+struct CtorExceptionSpec {
+  int value = 0;
+
+  CtorExceptionSpec() noexcept = default;
+  explicit CtorExceptionSpec(int v) noexcept : value(v) {}
+  explicit CtorExceptionSpec(std::string_view input) {
+    if (input == "failure") {
+      throw std::runtime_error("ctor");
+    }
+  }
+};
+} // namespace
+
+TEST_F(ThunkTest, ctor_exception_spec) {
+  static_assert(noexcept(thunk::ctor<CtorExceptionSpec>(nullptr)));
+  static_assert(noexcept(thunk::ctor<CtorExceptionSpec, int>(nullptr, 7)));
+  static_assert(!noexcept(
+      thunk::ctor<CtorExceptionSpec, std::string_view>(nullptr, "failure")));
+  static_assert(
+      std::is_same_v<
+          decltype(&thunk::ctor<CtorExceptionSpec>),
+          void* (*)(void*) noexcept>);
+
+  aligned_storage_for_t<CtorExceptionSpec> buf;
+  auto* defaultValue =
+      static_cast<CtorExceptionSpec*>(thunk::ctor<CtorExceptionSpec>(&buf));
+  EXPECT_EQ(&buf, static_cast<void*>(defaultValue));
+  EXPECT_EQ(0, defaultValue->value);
+  thunk::dtor<CtorExceptionSpec>(defaultValue);
+
+  auto ctor = &thunk::ctor<CtorExceptionSpec, int>;
+  auto* value = static_cast<CtorExceptionSpec*>(ctor(&buf, 7));
+  EXPECT_EQ(&buf, static_cast<void*>(value));
+  EXPECT_EQ(7, value->value);
+  thunk::dtor<CtorExceptionSpec>(value);
+
+  auto* successValue = static_cast<CtorExceptionSpec*>(
+      thunk::ctor<CtorExceptionSpec, std::string_view>(&buf, "success"));
+  EXPECT_EQ(&buf, static_cast<void*>(successValue));
+  EXPECT_EQ(0, successValue->value);
+  thunk::dtor<CtorExceptionSpec>(successValue);
+
+  EXPECT_THROW(
+      (thunk::ctor<CtorExceptionSpec, std::string_view>(&buf, "failure")),
+      std::runtime_error);
 }
 
 TEST_F(ThunkTest, operator_new_delete) {
