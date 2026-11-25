@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cassert>
 #include <compare>
+#include <cstddef>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
@@ -135,7 +136,7 @@ class fbvector {
     // allocation
     // note that 'allocate' and 'deallocate' are inherited from Allocator
     T* D_allocate(size_type n) {
-      if constexpr (kUsingStdAllocator) {
+      if constexpr (usingMalloc()) {
         return static_cast<T*>(checkedMalloc(n * sizeof(T)));
       } else {
         return std::allocator_traits<Allocator>::allocate(*this, n);
@@ -143,7 +144,7 @@ class fbvector {
     }
 
     void D_deallocate(T* p, size_type n) noexcept {
-      if constexpr (kUsingStdAllocator) {
+      if constexpr (usingMalloc()) {
         free(p);
       } else {
         std::allocator_traits<Allocator>::deallocate(*this, p, n);
@@ -230,6 +231,15 @@ class fbvector {
  private:
   static constexpr bool kUsingStdAllocator =
       std::is_same<Allocator, std::allocator<T>>::value;
+  // extended alignment requires the allocator's aligned allocation path
+  // NB: this must be a function, not a variable: alignof(T) needs T complete,
+  // and a member variable is evaluated at class instantiation time, when T may
+  // still be incomplete; a member function body is evaluated only when called,
+  // from function bodies where T is complete; never call it from member
+  // variable or member type initializers
+  static constexpr bool usingMalloc() {
+    return kUsingStdAllocator && alignof(T) <= alignof(std::max_align_t);
+  }
   using moveIsSwap = std::bool_constant<
       kUsingStdAllocator || A::propagate_on_container_move_assignment::value>;
 
@@ -991,7 +1001,7 @@ class fbvector {
     void* p = impl_.b_;
     // xallocx() will shrink to precisely newCapacityBytes (which was generated
     // by goodMallocSize()) if it successfully shrinks in place.
-    if ((usingJEMalloc() && kUsingStdAllocator) &&
+    if ((usingJEMalloc() && usingMalloc()) &&
         newCapacityBytes >= folly::jemallocMinInPlaceExpandable &&
         xallocx(p, newCapacityBytes, 0, 0) == newCapacityBytes) {
       impl_.z_ += newCap - oldCap;
@@ -1018,7 +1028,7 @@ class fbvector {
 
  private:
   bool reserve_in_place(size_type n) {
-    if (!kUsingStdAllocator || !usingJEMalloc()) {
+    if (!usingMalloc() || !usingJEMalloc()) {
       return false;
     }
 
@@ -1174,7 +1184,7 @@ class fbvector {
       pointer& z,
       pointer b) {
     byte_sz = folly::goodMallocSize(push_back_capacity * sizeof(T));
-    if (kUsingStdAllocator && usingJEMalloc() &&
+    if (usingMalloc() && usingJEMalloc() &&
         ((z - b) * sizeof(T) >= folly::jemallocMinInPlaceExpandable)) {
       // Try to reserve in place.
       // Ask xallocx to allocate in place at least size()+1 and at most sz
