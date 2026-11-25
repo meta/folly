@@ -15,6 +15,7 @@
  */
 
 #include <algorithm>
+#include <string_view>
 
 #include <folly/Range.h>
 #include <folly/portability/GFlags.h>
@@ -29,6 +30,27 @@ TEST(CaseInsensitiveMatch, CompareWithLegacy) {
     EXPECT_TRUE(cmp(tolower(i), toupper(i)));
     EXPECT_TRUE(cmp(toupper(i), tolower(i)));
   }
+}
+
+TEST(AsciiCaseInsensitiveEqual, Basic) {
+  EXPECT_TRUE(asciiCaseInsensitiveEqual("", ""));
+  EXPECT_TRUE(asciiCaseInsensitiveEqual("hello", "hello"));
+  EXPECT_TRUE(asciiCaseInsensitiveEqual("Hello", "hELLO"));
+  EXPECT_TRUE(asciiCaseInsensitiveEqual("a1-B2_c3", "A1-b2_C3"));
+  EXPECT_FALSE(asciiCaseInsensitiveEqual("hello", "hell"));
+  EXPECT_FALSE(asciiCaseInsensitiveEqual("hell", "hello"));
+  EXPECT_FALSE(asciiCaseInsensitiveEqual("hello", "world"));
+  EXPECT_FALSE(asciiCaseInsensitiveEqual("", "a"));
+  // These pairs differ only in the case bit but are not letters.
+  EXPECT_FALSE(asciiCaseInsensitiveEqual("@", "`"));
+  EXPECT_FALSE(asciiCaseInsensitiveEqual("[", "{"));
+}
+
+TEST(AsciiCaseInsensitiveEqual, EmbeddedNul) {
+  using namespace std::string_view_literals;
+  EXPECT_TRUE(asciiCaseInsensitiveEqual("a\0B"sv, "A\0b"sv));
+  EXPECT_FALSE(asciiCaseInsensitiveEqual("a\0b"sv, "a\0c"sv));
+  EXPECT_FALSE(asciiCaseInsensitiveEqual("a\0b"sv, "a"sv));
 }
 
 int main(int argc, char** argv) {

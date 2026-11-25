@@ -1429,6 +1429,15 @@ struct AsciiCaseInsensitive {
   }
 };
 
+/**
+ * Returns whether lhs and rhs are equal, ignoring the case of ASCII letters.
+ */
+inline bool asciiCaseInsensitiveEqual(
+    std::string_view lhs, std::string_view rhs) {
+  return lhs.size() == rhs.size() &&
+      std::equal(lhs.begin(), lhs.end(), rhs.begin(), AsciiCaseInsensitive{});
+}
+
 template <class Iter>
 size_t qfind(
     const Range<Iter>& haystack,
