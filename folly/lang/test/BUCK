@@ -119,6 +119,15 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_unittest(
+    name = "memory_test",
+    srcs = ["MemoryTest.cpp"],
+    deps = [
+        "//folly/lang:memory",
+        "//folly/portability:gtest",
+    ],
+)
+
+fb_dirsync_cpp_unittest(
     name = "must_use_immediately_test",
     srcs = ["MustUseImmediatelyTest.cpp"],
     deps = [

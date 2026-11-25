@@ -173,6 +173,14 @@ folly_add_library(
 )
 
 folly_add_library(
+  NAME memory
+  HEADERS Memory.h
+  EXPORTED_DEPS
+    folly_c_portability
+    folly_lang_bits
+)
+
+folly_add_library(
   NAME must_use_immediately
   HEADERS MustUseImmediately.h
   EXPORTED_DEPS

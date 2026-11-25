@@ -222,6 +222,17 @@ fb_dirsync_cpp_library(
 )
 
 fb_dirsync_cpp_library(
+    name = "memory",
+    headers = ["Memory.h"],
+    apple_sdks = (IOS, APPLETVOS, MACOSX, WATCHOS),
+    use_raw_headers = True,
+    exported_deps = [
+        ":bits",
+        "//folly:c_portability",
+    ],
+)
+
+fb_dirsync_cpp_library(
     name = "must_use_immediately",
     headers = ["MustUseImmediately.h"],
     use_raw_headers = True,

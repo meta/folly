@@ -98,6 +98,7 @@ fb_dirsync_cpp_library(
         "//folly/hash:hash",
         "//folly/hash:rapidhash",
         "//folly/hash/detail:random_seed",
+        "//folly/lang:memory",
     ],
 )
 

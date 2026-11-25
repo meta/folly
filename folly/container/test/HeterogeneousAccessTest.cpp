@@ -210,3 +210,21 @@ TEST(HeterogeneousAccess, transparentMatches) {
       std::is_convertible<small_vector<int, 2>, Range<int const*>>::value);
   runTestMatches<small_vector<int, 2>>({1, 2, 3, 4});
 }
+
+TEST(HeterogeneousAccess, stringEqualityAtEveryLengthAndPosition) {
+  HeterogeneousAccessEqualTo<std::string> equal;
+  for (std::size_t n = 0; n <= 80; ++n) {
+    std::string const a(n, 'x');
+    EXPECT_TRUE(equal(a, std::string(a)));
+    EXPECT_TRUE(equal(a, std::string_view(a)));
+    EXPECT_TRUE(equal(StringPiece(a), a));
+    EXPECT_FALSE(equal(a, std::string(n + 1, 'x')));
+    for (std::size_t i = 0; i < n; ++i) {
+      std::string b = a;
+      b[i] = 'y';
+      EXPECT_FALSE(equal(a, b)) << "length " << n << ", position " << i;
+      EXPECT_FALSE(equal(std::string_view(b), a))
+          << "length " << n << ", position " << i;
+    }
+  }
+}

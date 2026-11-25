@@ -173,6 +173,7 @@ folly_add_library(
     folly_hash_detail_random_seed
     folly_hash_hash
     folly_hash_rapidhash
+    folly_lang_memory
     folly_range
     folly_traits
 )

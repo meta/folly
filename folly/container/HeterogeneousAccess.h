@@ -27,6 +27,7 @@
 #include <folly/hash/Hash.h>
 #include <folly/hash/detail/RandomSeed.h>
 #include <folly/hash/rapidhash.h>
+#include <folly/lang/Memory.h>
 
 namespace folly {
 
@@ -107,6 +108,27 @@ struct TransparentRangeEqualTo {
   // HeterogeneousAccessEqualTo<std::string> is truly zero overhead
   bool operator()(std::string const& lhs, std::string const& rhs) const {
     return lhs == rhs;
+  }
+};
+
+template <>
+struct TransparentRangeEqualTo<char> {
+  using is_transparent = void;
+
+  template <typename TOtherHash>
+  using is_compatible =
+      std::is_base_of<detail::TransparentRangeEqualTo<char>, TOtherHash>;
+
+  template <typename U1, typename U2>
+  bool operator()(U1 const& lhs, U2 const& rhs) const {
+    StringPiece l{lhs};
+    StringPiece r{rhs};
+    return l.size() == r.size() && memeq(l.data(), r.data(), l.size());
+  }
+
+  bool operator()(std::string const& lhs, std::string const& rhs) const {
+    return lhs.size() == rhs.size() &&
+        memeq(lhs.data(), rhs.data(), lhs.size());
   }
 };
 
