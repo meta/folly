@@ -110,7 +110,7 @@ class ptr_immortal_exception_storage : immortal_exception_storage {
   [[FOLLY_ATTR_CLANG_NO_DESTROY]] constinit inline static const mutable_std_exception_leaf_rich_error_singleton
       mutable_eptr_singleton_{};
   static_assert(
-      FOLLY_HAS_CPP_ATTRIBUTE(clang::no_destroy) ||
+      __has_cpp_attribute(clang::no_destroy) ||
       std::is_trivially_destructible_v<
           mutable_std_exception_leaf_rich_error_singleton>);
 

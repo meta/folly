@@ -28,12 +28,6 @@
 #define FOLLY_HAS_ATTRIBUTE(x) __has_attribute(x)
 #endif
 
-#ifndef __has_cpp_attribute
-#define FOLLY_HAS_CPP_ATTRIBUTE(x) 0
-#else
-#define FOLLY_HAS_CPP_ATTRIBUTE(x) __has_cpp_attribute(x)
-#endif
-
 #ifndef __has_extension
 #define FOLLY_HAS_EXTENSION(x) 0
 #else
@@ -80,7 +74,7 @@
  * optimizer both when processing the function body and when analyzing
  * call-sites.
  */
-#if FOLLY_HAS_CPP_ATTRIBUTE(gnu::cold)
+#if __has_cpp_attribute(gnu::cold)
 #define FOLLY_ATTR_GNU_COLD gnu::cold
 #else
 #define FOLLY_ATTR_GNU_COLD
@@ -148,21 +142,21 @@
  *  sizeof(NonEmpty1); // may be == sizeof(int)
  *  sizeof(NonEmpty2); // must be > sizeof(int)
  */
-#if FOLLY_HAS_CPP_ATTRIBUTE(no_unique_address)
+#if __has_cpp_attribute(no_unique_address)
 #define FOLLY_ATTR_NO_UNIQUE_ADDRESS no_unique_address
-#elif FOLLY_HAS_CPP_ATTRIBUTE(msvc::no_unique_address)
+#elif __has_cpp_attribute(msvc::no_unique_address)
 #define FOLLY_ATTR_NO_UNIQUE_ADDRESS msvc::no_unique_address
 #else
 #define FOLLY_ATTR_NO_UNIQUE_ADDRESS
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(clang::no_destroy)
+#if __has_cpp_attribute(clang::no_destroy)
 #define FOLLY_ATTR_CLANG_NO_DESTROY clang::no_destroy
 #else
 #define FOLLY_ATTR_CLANG_NO_DESTROY
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(clang::uninitialized)
+#if __has_cpp_attribute(clang::uninitialized)
 #define FOLLY_ATTR_CLANG_UNINITIALIZED clang::uninitialized
 #else
 #define FOLLY_ATTR_CLANG_UNINITIALIZED
@@ -173,25 +167,25 @@
  * type-based alias analysis, but are instead assumed to be able to alias any
  * other type of objects, just like the char type.
  */
-#if FOLLY_HAS_CPP_ATTRIBUTE(gnu::may_alias)
+#if __has_cpp_attribute(gnu::may_alias)
 #define FOLLY_ATTR_GNU_MAY_ALIAS gnu::may_alias
 #else
 #define FOLLY_ATTR_GNU_MAY_ALIAS
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(gnu::pure)
+#if __has_cpp_attribute(gnu::pure)
 #define FOLLY_ATTR_GNU_PURE gnu::pure
 #else
 #define FOLLY_ATTR_GNU_PURE
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(clang::preserve_most)
+#if __has_cpp_attribute(clang::preserve_most)
 #define FOLLY_ATTR_CLANG_PRESERVE_MOST clang::preserve_most
 #else
 #define FOLLY_ATTR_CLANG_PRESERVE_MOST
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(clang::preserve_all)
+#if __has_cpp_attribute(clang::preserve_all)
 #define FOLLY_ATTR_CLANG_PRESERVE_ALL clang::preserve_all
 #else
 #define FOLLY_ATTR_CLANG_PRESERVE_ALL
@@ -208,50 +202,50 @@
 #define FOLLY_ATTR_CLANG_PRESERVE_NONE
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(gnu::used)
+#if __has_cpp_attribute(gnu::used)
 #define FOLLY_ATTR_GNU_USED gnu::used
 #else
 #define FOLLY_ATTR_GNU_USED
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(gnu::retain)
+#if __has_cpp_attribute(gnu::retain)
 #define FOLLY_ATTR_GNU_RETAIN gnu::retain
 #else
 #define FOLLY_ATTR_GNU_RETAIN
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(gnu::noclone)
+#if __has_cpp_attribute(gnu::noclone)
 #define FOLLY_ATTR_GNU_NOCLONE gnu::noclone
 #else
 #define FOLLY_ATTR_GNU_NOCLONE
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(gnu::flatten)
+#if __has_cpp_attribute(gnu::flatten)
 #define FOLLY_ATTR_GNU_FLATTEN gnu::flatten
 #else
 #define FOLLY_ATTR_GNU_FLATTEN
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(clang::lifetimebound)
+#if __has_cpp_attribute(clang::lifetimebound)
 #define FOLLY_ATTR_CLANG_LIFETIMEBOUND clang::lifetimebound
 #else
 #define FOLLY_ATTR_CLANG_LIFETIMEBOUND
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(clang::coro_await_elidable)
+#if __has_cpp_attribute(clang::coro_await_elidable)
 #define FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE clang::coro_await_elidable
 #else
 #define FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(clang::coro_await_elidable_argument)
+#if __has_cpp_attribute(clang::coro_await_elidable_argument)
 #define FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE_ARGUMENT \
   clang::coro_await_elidable_argument
 #else
 #define FOLLY_ATTR_CLANG_CORO_AWAIT_ELIDABLE_ARGUMENT
 #endif
 
-#if FOLLY_HAS_CPP_ATTRIBUTE(clang::no_thread_safety_analysis)
+#if __has_cpp_attribute(clang::no_thread_safety_analysis)
 #define FOLLY_ATTR_CLANG_NO_THREAD_SAFETY_ANALYSIS \
   clang::no_thread_safety_analysis
 #else
@@ -271,11 +265,11 @@
  *    FOLLY_ATTR_MUSTTAIL return factorial_impl(n - 1, n * acc);
  *  }
  */
-#if FOLLY_HAS_CPP_ATTRIBUTE(gnu::musttail)
+#if __has_cpp_attribute(gnu::musttail)
 #define FOLLY_ATTR_MUSTTAIL [[gnu::musttail]]
-#elif FOLLY_HAS_CPP_ATTRIBUTE(clang::musttail)
+#elif __has_cpp_attribute(clang::musttail)
 #define FOLLY_ATTR_MUSTTAIL [[clang::musttail]]
-#elif FOLLY_HAS_CPP_ATTRIBUTE(msvc::musttail)
+#elif __has_cpp_attribute(msvc::musttail)
 #define FOLLY_ATTR_MUSTTAIL [[msvc::musttail]]
 #else
 #define FOLLY_ATTR_MUSTTAIL
