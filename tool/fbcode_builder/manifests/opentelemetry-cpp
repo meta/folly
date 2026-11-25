@@ -1,0 +1,25 @@
+[manifest]
+name = opentelemetry-cpp
+
+[git]
+repo_url = https://github.com/open-telemetry/opentelemetry-cpp.git
+rev = b9cf499ff5715433848b316059714b5c59af1f2c
+
+[build.not(os=linux)]
+builder = nop
+
+[build.os=linux]
+builder = cmake
+
+[cmake.defines]
+BUILD_TESTING = OFF
+OPENTELEMETRY_INSTALL = ON
+WITH_EXAMPLES = OFF
+WITH_FUNC_TESTS = OFF
+WITH_OTLP_HTTP = ON
+
+[dependencies]
+libcurl
+nlohmann-json
+protobuf
+zlib

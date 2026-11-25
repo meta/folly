@@ -10,3 +10,6 @@ sha256 = 5daca6ca216495edf89d167f808d1d03c4a4d929cef7da5e10f135ae1540c7e4
 [build]
 builder = cmake
 subdir = json-3.10.5
+
+[cmake.defines]
+JSON_BuildTests = OFF

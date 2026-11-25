@@ -1,0 +1,16 @@
+[manifest]
+name = protobuf
+
+[rpms]
+protobuf-devel
+protobuf-compiler
+
+[debs]
+libprotobuf-dev
+protobuf-compiler
+
+[homebrew]
+protobuf
+
+[build]
+builder = nop
