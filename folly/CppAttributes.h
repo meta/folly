@@ -107,6 +107,17 @@
 #define FOLLY_ATTR_CLANG_CODE_ALIGN(n)
 #endif
 
+/// FOLLY_ATTR_CLANG_OPTNONE
+///
+/// Disables optimization for the annotated function, e.g. to work around a
+/// compiler miscompile. Expands to nothing on compilers without
+/// `[[clang::optnone]]`.
+#if __has_cpp_attribute(clang::optnone)
+#define FOLLY_ATTR_CLANG_OPTNONE clang::optnone
+#else
+#define FOLLY_ATTR_CLANG_OPTNONE
+#endif
+
 /// FOLLY_ATTR_MAYBE_UNUSED_IF_NDEBUG
 ///
 /// When defined(NDEBUG), expands to maybe_unused; otherwise, expands to empty.
