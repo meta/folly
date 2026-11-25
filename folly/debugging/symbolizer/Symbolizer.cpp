@@ -264,6 +264,10 @@ size_t spliceFrames(
     size_t index,
     size_t addrCount,
     const CachedSymbolizedFrames& src) {
+  if (src.empty()) {
+    FOLLY_SAFE_DFATAL("spliceFrames called with no frames");
+    return 0;
+  }
   size_t const numInlined = src.size() - 1;
   if (numInlined != 0) {
     std::move_backward(

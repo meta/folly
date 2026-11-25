@@ -171,6 +171,10 @@ TEST_F(ElfTest, NullNamesReturnNoResults) {
   EXPECT_EQ(nullptr, symbol.second);
 }
 
+TEST_F(ElfTest, NullSymbolValueReturnsNull) {
+  EXPECT_EQ(nullptr, elfFile_.getSymbolValue<uint64_t>(nullptr));
+}
+
 TEST_F(ElfTest, UnopenedFileDegradesGracefully) {
   ElfFile unopened;
   EXPECT_EQ(ET_NONE, unopened.elfHeader().e_type);

@@ -368,6 +368,9 @@ class ElfFile {
    */
   template <class T>
   const T* getSymbolValue(const ElfSym* symbol) const noexcept {
+    if (symbol == nullptr) {
+      return nullptr;
+    }
     const ElfShdr* section = getSectionByIndex(symbol->st_shndx);
     if (section == nullptr) {
       return nullptr;

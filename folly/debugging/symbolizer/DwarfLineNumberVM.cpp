@@ -604,6 +604,10 @@ DwarfParseResult<DwarfLineNumberVM::FileName> DwarfLineNumberVM::getFileName(
 
 DwarfParseResult<folly::StringPiece> DwarfLineNumberVM::getIncludeDirectory(
     uint64_t index) const {
+  if (!initializationSuccess_) {
+    return parseError<folly::StringPiece>(
+        DwarfParseErrorCode::invalid_value, 0);
+  }
   if (version_ <= 4) {
     if (index == 0) {
       // In DWARF <= 4 the current directory is not represented in the

@@ -454,8 +454,12 @@ bool ElfFile::validateStringTable(const ElfShdr& stringTable) const noexcept {
   if (body.size() != stringTable.sh_size) {
     return false;
   }
+  if (stringTable.sh_size == 0) {
+    // Even an empty table must start inside the file.
+    return stringTable.sh_offset <= length_;
+  }
   // First and last bytes must be 0
-  return body.empty() || (body.front() == 0 && body.back() == 0);
+  return body.front() == 0 && body.back() == 0;
 }
 
 const char* ElfFile::getString(
