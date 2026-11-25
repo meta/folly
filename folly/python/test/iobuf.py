@@ -19,7 +19,7 @@ import array
 import struct
 import unittest
 
-from folly.iobuf import IOBuf, WritableIOBuf
+from folly.iobuf import copy_from_buffer, IOBuf, WritableIOBuf
 from folly.python.test.iobuf_helper import (
     get_empty_chain,
     get_empty_writable_chain,
@@ -167,6 +167,30 @@ class IOBufTests(unittest.TestCase):
         """
         data = b"1234567890"
         wrap_and_delayed_free(mv=memoryview(data), free_delay_ms=1000)
+
+
+class CopyFromBufferTests(unittest.TestCase):
+    def test_copies_whole_typed_buffer(self) -> None:
+        data = array.array("i", [1, 2, 3])
+        self.assertEqual(bytes(copy_from_buffer(data)), data.tobytes())
+        self.assertEqual(bytes(copy_from_buffer(memoryview(data))), data.tobytes())
+        nbytes = data.itemsize * len(data)
+        self.assertEqual(bytes(copy_from_buffer(data, nbytes)), data.tobytes())
+
+    def test_copies_whole_multidimensional_buffer(self) -> None:
+        data = memoryview(bytearray(b"abcdef")).cast("B", [2, 3])
+        self.assertEqual(bytes(copy_from_buffer(data)), b"abcdef")
+
+    def test_length_within_buffer(self) -> None:
+        self.assertEqual(bytes(copy_from_buffer(b"abcdef", 3)), b"abc")
+        self.assertEqual(bytes(copy_from_buffer(b"abcdef", 6)), b"abcdef")
+        self.assertEqual(bytes(copy_from_buffer(b"abcdef", 0)), b"")
+
+    def test_length_beyond_buffer(self) -> None:
+        with self.assertRaises(ValueError):
+            copy_from_buffer(bytearray(b"abc"), 4096)
+        with self.assertRaises(ValueError):
+            copy_from_buffer(b"abc", -1)
 
 
 class WritableIOBufTests(unittest.TestCase):

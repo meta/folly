@@ -86,14 +86,17 @@ def copy_from_buffer(data, length=None):
 
     Args:
         data: buffer-protocol object (bytes, bytearray, memoryview)
-        length: byte length to copy. If None, uses len(data).
+        length: number of leading bytes to copy, at most the buffer's size in
+            bytes. If None, copies the whole buffer.
     """
     # Convert Python memoryview to bytes (Cython can't wrap a Python memoryview
     # in a typed memoryview due to __cinit__ signature mismatch)
     if isinstance(data, memoryview):
         data = bytes(data)
-    cdef Py_ssize_t nbytes = length if length is not None else len(data)
     cdef memoryview view = memoryview(data, PyBUF_C_CONTIGUOUS)
+    cdef Py_ssize_t nbytes = view.view.len if length is None else length
+    if nbytes < 0 or nbytes > view.view.len:
+        raise ValueError(f"length must be between 0 and {view.view.len}, got {nbytes}")
     return from_unique_ptr(move(
         iobuf_copy_from_buffer(view.view.buf, nbytes)
     ))
