@@ -1038,7 +1038,9 @@ void runCopyFindsKeyOverflowedFromEmptyChunk() {
   // Four chunks for every policy: with an identity hash, multiples of 4 share
   // chunk 0, so once it is full (12 or 14 slots) the rest overflow out of it.
   S set;
-  set.reserve(32);
+  // 39 inserts in all: reserving for each keeps ASAN builds from rehashing
+  // spuriously, which would move key 56 back into the empty chunk.
+  set.reserve(39);
   for (uint64_t key = 0; key < 60; key += 4) {
     set.insert(key);
   }
