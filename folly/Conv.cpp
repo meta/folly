@@ -528,10 +528,17 @@ Expected<Tgt, ConversionCode> str_to_floating_from_chars(
     return makeUnexpected(ConversionCode::EMPTY_INPUT_STRING);
   }
 
+  // Older fast_float, such as Ubuntu 24.04's 3.9, has no allow_leading_plus,
+  // so skip the '+' here; skipping it must not also admit "+-1".
+  if (*b == '+') {
+    ++b;
+    if (b != e && (*b == '+' || *b == '-')) {
+      return makeUnexpected(ConversionCode::STRING_TO_FLOAT_ERROR);
+    }
+  }
+
   Tgt result;
-  fast_float::parse_options options{
-      fast_float::chars_format::general |
-      fast_float::chars_format::allow_leading_plus};
+  fast_float::parse_options options{fast_float::chars_format::general};
   // Out of range is not an error: fast_float saturates, which is what folly
   // reports.
   auto [ptr, ec] = fast_float::from_chars_advanced(b, e, result, options);
