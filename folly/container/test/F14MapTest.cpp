@@ -1076,6 +1076,74 @@ TEST(F14FastMap, rehash) {
   runRehash<F14VectorMap<std::string, std::string>>();
 }
 
+namespace {
+struct IdentityAvalanchingHasher {
+  // this is a lie for testing purposes: it makes the low bits of the key pick
+  // the chunk directly
+  using folly_is_avalanching = std::true_type;
+  std::size_t operator()(uint64_t key) const { return key; }
+};
+
+template <typename M>
+void runCopyFindsKeyOverflowedFromEmptyChunk() {
+  // Four chunks for every policy: with an identity hash, multiples of 4 share
+  // chunk 0, so once it is full (12 or 14 slots) the rest overflow out of it.
+  M map;
+  map.reserve(32);
+  for (uint64_t key = 0; key < 60; key += 4) {
+    map[key];
+  }
+  // Chunk 0 is now empty but still counts the overflowed key 56.
+  for (uint64_t key = 0; key < 56; key += 4) {
+    map.erase(key);
+  }
+  for (uint64_t key = 1; key < 32; ++key) {
+    if (key % 4 != 0) {
+      map[key];
+    }
+  }
+#if FOLLY_F14_VECTOR_INTRINSICS_AVAILABLE
+  auto stats = F14TableStats::compute(map);
+  ASSERT_EQ(stats.chunkCount, std::size_t{4});
+  if (!FOLLY_F14_PERTURB_INSERTION_ORDER) {
+    // The layout the test relies on: one chunk is empty while it still counts
+    // the overflowed key.  Debug builds randomise placement, so it is only
+    // guaranteed without that.
+    ASSERT_GE(stats.chunkOccupancyHisto.at(0), 1);
+    ASSERT_GE(stats.chunkOutboundOverflowHisto.size(), std::size_t{2});
+  }
+#endif
+
+  M copy{map};
+  EXPECT_EQ(copy.size(), map.size());
+#if FOLLY_F14_VECTOR_INTRINSICS_AVAILABLE
+  auto copyStats = F14TableStats::compute(copy);
+  if (copyStats.chunkCount == stats.chunkCount) {
+    EXPECT_EQ(
+        copyStats.chunkOutboundOverflowHisto, stats.chunkOutboundOverflowHisto);
+  }
+#endif
+  for (auto const& entry : map) {
+    EXPECT_TRUE(copy.contains(entry.first)) << "key " << entry.first;
+  }
+}
+} // namespace
+
+TEST(F14ValueMap, copyFindsKeyOverflowedFromEmptyChunk) {
+  runCopyFindsKeyOverflowedFromEmptyChunk<
+      F14ValueMap<uint64_t, std::string, IdentityAvalanchingHasher>>();
+}
+
+TEST(F14NodeMap, copyFindsKeyOverflowedFromEmptyChunk) {
+  runCopyFindsKeyOverflowedFromEmptyChunk<
+      F14NodeMap<uint64_t, std::string, IdentityAvalanchingHasher>>();
+}
+
+TEST(F14VectorMap, copyFindsKeyOverflowedFromEmptyChunk) {
+  runCopyFindsKeyOverflowedFromEmptyChunk<
+      F14VectorMap<uint64_t, std::string, IdentityAvalanchingHasher>>();
+}
+
 template <typename T>
 void runPrehash() {
   T h;

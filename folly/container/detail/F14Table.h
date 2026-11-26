@@ -2250,13 +2250,15 @@ class F14Table : public Policy {
       }
     } else {
       // Happy path, no rehash but pack items toward bottom of chunk
-      // and use copy constructor.  Don't try to optimize by using
-      // lastOccupiedChunk() because there may be higher unoccupied chunks
-      // with the overflow bit set.
+      // and use copy constructor.  Visit every chunk, not just the occupied
+      // ones: unoccupied chunks above and below them may still count items
+      // that overflowed out of them, and find() stops at a chunk whose count
+      // is zero.
       auto* srcChunk =
           Chunk::chunkRawAt(src.chunksToAddress(), chunkCount() - 1);
       Chunk* dstChunk = Chunk::chunkRawAt(chunksToAddress(), chunkCount() - 1);
-      do {
+      for (std::size_t chunksLeft = chunkCount(); chunksLeft > 0;
+           --chunksLeft) {
         dstChunk->copyOverflowInfoFrom(*srcChunk);
 
         auto iter = srcChunk->occupiedIter();
@@ -2280,7 +2282,8 @@ class F14Table : public Policy {
 
         srcChunk = Chunk::prevChunkRaw(srcChunk);
         dstChunk = Chunk::prevChunkRaw(dstChunk);
-      } while (size() != src.size());
+      }
+      FOLLY_SAFE_DCHECK(size() == src.size(), "");
 
       // reset doesn't care about packedBegin, so we don't fix it until the end
       if constexpr (kEnableItemIteration) {
