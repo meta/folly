@@ -410,6 +410,7 @@ fb_dirsync_cpp_unittest(
     deps = [
         ":util",
         "//folly/io/async:async_base",
+        "//folly/io/async:delayed_destruction",
         "//folly/portability:gtest",
         "//folly/portability:unistd",
     ],
@@ -570,7 +571,6 @@ fb_dirsync_cpp_library(
     headers = [
         "SocketPair.h",
         "TimeUtil.h",
-        "UndelayedDestruction.h",
         "Util.h",
     ],
     use_raw_headers = True,
@@ -790,6 +790,7 @@ fb_dirsync_cpp_unittest(
         ":util",
         "//folly:random",
         "//folly/io/async:async_base",
+        "//folly/io/async:delayed_destruction",
         "//folly/portability:gtest",
     ],
 )
@@ -919,6 +920,7 @@ fb_dirsync_cpp_unittest(
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly/io/async:async_base",
+        "//folly/io/async:delayed_destruction",
         "//folly/io/async:timerfd",
         "//folly/io/async/test:util",
         "//folly/portability:gtest",
@@ -933,8 +935,8 @@ fb_dirsync_cpp_binary(
     target_compatible_with = ["ovr_config//runtime:fbcode"],
     deps = [
         "//folly:benchmark",
+        "//folly/io/async:delayed_destruction",
         "//folly/io/async:timerfd",
-        "//folly/io/async/test:util",
     ],
 )
 

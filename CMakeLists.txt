@@ -281,7 +281,7 @@ list(
   ${FOLLY_DIR}/io/async/test/SocketPair.h
   ${FOLLY_DIR}/io/async/test/TFOUtil.h
   ${FOLLY_DIR}/io/async/test/TimeUtil.h
-  ${FOLLY_DIR}/io/async/test/UndelayedDestruction.h
+  ${FOLLY_DIR}/io/async/DelayedDestruction.h
   ${FOLLY_DIR}/io/async/test/Util.h
   ${FOLLY_DIR}/logging/test/TestLogHandler.h
   ${FOLLY_DIR}/synchronization/test/Barrier.h
@@ -542,7 +542,7 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ${FOLLY_DIR}/io/async/test/TFOUtil.h
     ${FOLLY_DIR}/io/async/test/TimeUtil.cpp
     ${FOLLY_DIR}/io/async/test/TimeUtil.h
-    ${FOLLY_DIR}/io/async/test/UndelayedDestruction.h
+    ${FOLLY_DIR}/io/async/DelayedDestruction.h
     ${FOLLY_DIR}/io/async/test/Util.h
     ${FOLLY_DIR}/logging/test/ConfigHelpers.cpp
     ${FOLLY_DIR}/logging/test/ConfigHelpers.h

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cassert>
+#include <cstdlib>
 #include <memory>
 
 #include <folly/io/async/DelayedDestructionBase.h>
@@ -122,5 +124,77 @@ template <typename T, typename... A>
 DelayedDestructionUniquePtr<T> makeDelayedDestructionUniquePtr(A&&... a) {
   return DelayedDestructionUniquePtr<T>{new T(static_cast<A&&>(a)...)};
 }
+
+/**
+ * A helper class to allow a DelayedDestruction object to be instantiated on
+ * the stack.
+ *
+ * This class derives from an existing DelayedDestruction type and makes the
+ * destructor public again.  This allows objects of this type to be declared on
+ * the stack or directly inside another class.  Normally DelayedDestruction
+ * objects must be dynamically allocated on the heap.
+ *
+ * However, the trade-off is that you lose some of the protections provided by
+ * DelayedDestruction::destroy().  DelayedDestruction::destroy() will
+ * automatically delay destruction of the object until it is safe to do so.
+ * If you use UndelayedDestruction, you become responsible for ensuring that
+ * you only destroy the object where it is safe to do so.  Attempting to
+ * destroy a UndelayedDestruction object while it has a non-zero destructor
+ * guard count will abort the program.
+ */
+template <typename TDD>
+class UndelayedDestruction : public TDD {
+ public:
+  using TDD::TDD;
+
+  /**
+   * Public destructor.
+   *
+   * The caller is responsible for ensuring that the object is only destroyed
+   * where it is safe to do so.  (i.e., when the destructor guard count is 0).
+   *
+   * The exact conditions for meeting this may be dependent upon your class
+   * semantics.  Typically you are only guaranteed that it is safe to destroy
+   * the object directly from the event loop (e.g., directly from a
+   * EventBase::LoopCallback), or when the event loop is stopped.
+   */
+  ~UndelayedDestruction() override {
+    // Crash if the caller is destroying us with outstanding destructor guards.
+    if (this->getDestructorGuardCount() != 0) {
+      abort();
+    }
+    // Invoke destroy.  This is necessary since our base class may have
+    // implemented custom behavior in destroy().
+    this->destroy();
+  }
+
+  // Defaulted (and implicitly deleted while the base is unmovable) to
+  // satisfy special-member-function checks.
+  UndelayedDestruction(UndelayedDestruction&&) = default;
+  UndelayedDestruction& operator=(UndelayedDestruction&&) = default;
+
+  void onDelayedDestroy(bool delayed) override {
+    if (delayed && !this->TDD::getDestroyPending()) {
+      return;
+    }
+    // Do nothing.  This will always be invoked from the call to destroy
+    // inside our destructor.
+    assert(!delayed);
+    // prevent unused variable warnings when asserts are compiled out.
+    (void)delayed;
+  }
+
+ protected:
+  /**
+   * Override our parent's destroy() method to make it protected.
+   * Callers should use the normal destructor instead of destroy
+   */
+  void destroy() override { this->TDD::destroy(); }
+
+ private:
+  // Forbidden copy constructor and assignment operator
+  UndelayedDestruction(UndelayedDestruction const&) = delete;
+  UndelayedDestruction& operator=(UndelayedDestruction const&) = delete;
+};
 
 } // namespace folly

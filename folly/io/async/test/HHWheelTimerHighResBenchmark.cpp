@@ -15,9 +15,9 @@
  */
 
 #include <folly/Benchmark.h>
+#include <folly/io/async/DelayedDestruction.h>
 #include <folly/io/async/STTimerFDTimeoutManager.h>
 #include <folly/io/async/TimerFDTimeoutManager.h>
-#include <folly/io/async/test/UndelayedDestruction.h>
 
 using namespace folly;
 using std::chrono::microseconds;
