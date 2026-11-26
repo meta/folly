@@ -30,10 +30,10 @@
 #include <folly/io/async/IoUringOptions.h>
 #include <folly/io/async/IoUringProvidedBufferRing.h>
 #include <folly/io/async/test/AsyncSignalHandlerTestLib.h>
-#include <folly/io/async/test/IoTestTempFileUtil.h>
 #include <folly/io/async/testing/EventBaseTestLib.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/SysResource.h>
+#include <folly/testing/TestUtil.h>
 
 #ifndef RESOLVE_IN_ROOT
 #define RESOLVE_IN_ROOT 0x10
@@ -1043,7 +1043,7 @@ TEST(IoUringBackend, FileReadWrite) {
   static constexpr size_t kNumBlocks = 512;
   static constexpr size_t kBlockSize = 4096;
   static constexpr size_t kFileSize = kNumBlocks * kBlockSize;
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kFileSize);
+  auto tempFile = folly::test::makeTemporaryFileWithRandomData(kFileSize);
 
   int fd = folly::fileops::open(tempFile.path().c_str(), O_DIRECT | O_RDWR);
   if (fd == -1) {
@@ -1112,7 +1112,7 @@ TEST(IoUringBackend, FileReadvWritev) {
   static constexpr size_t kIovSize = 4096;
   static constexpr size_t kBlockSize = kNumIov * kIovSize;
   static constexpr size_t kFileSize = kNumBlocks * kBlockSize;
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kFileSize);
+  auto tempFile = folly::test::makeTemporaryFileWithRandomData(kFileSize);
 
   int fd = folly::fileops::open(tempFile.path().c_str(), O_DIRECT | O_RDWR);
   if (fd == -1) {
@@ -1207,7 +1207,7 @@ TEST(IoUringBackend, FileReadMany) {
   static constexpr size_t kBigBlockSize = 2 * 1024 * 1024;
 
   static constexpr size_t kFileSize = kNumBlocks * kBlockSize;
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kFileSize);
+  auto tempFile = folly::test::makeTemporaryFileWithRandomData(kFileSize);
 
   int fd = folly::fileops::open(tempFile.path().c_str(), O_DIRECT | O_RDWR);
   if (fd == -1) {
@@ -1270,7 +1270,7 @@ TEST(IoUringBackend, FileWriteMany) {
   static constexpr size_t kBigBlockSize = 2 * 1024 * 1024;
 
   static constexpr size_t kFileSize = kNumBlocks * kBlockSize;
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kFileSize);
+  auto tempFile = folly::test::makeTemporaryFileWithRandomData(kFileSize);
 
   int fd = folly::fileops::open(tempFile.path().c_str(), O_DIRECT | O_RDWR);
   if (fd == -1) {

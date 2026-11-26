@@ -19,8 +19,8 @@
 #include <folly/io/async/AsyncIO.h>
 #include <folly/io/async/IoUring.h>
 #include <folly/io/async/test/AsyncBaseTestLib.h>
-#include <folly/io/async/test/IoTestTempFileUtil.h>
 #include <folly/portability/GFlags.h>
+#include <folly/testing/TestUtil.h>
 
 namespace {
 
@@ -33,7 +33,7 @@ static folly::test::TemporaryFile& getTempFile(size_t num) {
   CHECK_LE(num, kNumBlocks);
 
   static auto sTempFile =
-      folly::test::TempFileUtil::getTempFile(kNumBlocks * kBlockSize);
+      folly::test::makeTemporaryFileWithRandomData(kNumBlocks * kBlockSize);
 
   return sTempFile;
 }

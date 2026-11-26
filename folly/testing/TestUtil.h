@@ -84,6 +84,13 @@ class TemporaryFile {
 };
 
 /**
+ * Returns a TemporaryFile filled with `size` bytes of reproducible seeded
+ * random data, synced to disk and closed (but deleted on destruction),
+ * for io tests.
+ */
+TemporaryFile makeTemporaryFileWithRandomData(size_t size);
+
+/**
  * Temporary directory.
  *
  * By default, the temporary directory is created in a system-specific

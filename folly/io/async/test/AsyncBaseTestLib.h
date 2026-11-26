@@ -37,7 +37,7 @@
 #include <folly/test/TestUtils.h>
 
 #include <folly/io/async/AsyncBase.h>
-#include <folly/io/async/test/IoTestTempFileUtil.h>
+#include <folly/testing/TestUtil.h>
 
 namespace folly {
 namespace test {
@@ -83,7 +83,8 @@ void testReadsSerially(
   SKIP_IF(!aioReader) << "TAsync not available";
 
   typename TAsync::Op op;
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kDefaultFileSize);
+  auto tempFile =
+      folly::test::makeTemporaryFileWithRandomData(kDefaultFileSize);
   int fd = ::open(tempFile.path().c_str(), O_DIRECT | O_RDONLY);
   if (fd == -1) {
     fd = ::open(tempFile.path().c_str(), O_RDONLY);
@@ -125,7 +126,8 @@ void testReadsParallel(
   std::vector<TestUtil::ManagedBuffer> bufs;
   bufs.reserve(specs.size());
 
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kDefaultFileSize);
+  auto tempFile =
+      folly::test::makeTemporaryFileWithRandomData(kDefaultFileSize);
   int fd = ::open(tempFile.path().c_str(), O_DIRECT | O_RDONLY);
   if (fd == -1) {
     fd = ::open(tempFile.path().c_str(), O_RDONLY);
@@ -199,7 +201,8 @@ void testReadsQueued(
   uintptr_t sizeOf = sizeof(typename TAsync::Op);
   std::vector<TestUtil::ManagedBuffer> bufs;
 
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kDefaultFileSize);
+  auto tempFile =
+      folly::test::makeTemporaryFileWithRandomData(kDefaultFileSize);
   int fd = ::open(tempFile.path().c_str(), O_DIRECT | O_RDONLY);
   if (fd == -1) {
     fd = ::open(tempFile.path().c_str(), O_RDONLY);
@@ -394,7 +397,8 @@ TYPED_TEST_P(AsyncTest, ManyAsyncDataPollable) {
 TYPED_TEST_P(AsyncTest, NonBlockingWait) {
   TypeParam aioReader(1, folly::AsyncBase::NOT_POLLABLE);
   typename TypeParam::Op op;
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kDefaultFileSize);
+  auto tempFile =
+      folly::test::makeTemporaryFileWithRandomData(kDefaultFileSize);
   int fd = ::open(tempFile.path().c_str(), O_DIRECT | O_RDONLY);
   if (fd == -1) {
     fd = ::open(tempFile.path().c_str(), O_RDONLY);
@@ -429,7 +433,8 @@ TYPED_TEST_P(AsyncTest, Cancel) {
 
   TypeParam aioReader(
       kNumOpsBatch1 + kNumOpsBatch2, folly::AsyncBase::NOT_POLLABLE);
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kDefaultFileSize);
+  auto tempFile =
+      folly::test::makeTemporaryFileWithRandomData(kDefaultFileSize);
   int fd = ::open(tempFile.path().c_str(), O_DIRECT | O_RDONLY);
   if (fd == -1) {
     fd = ::open(tempFile.path().c_str(), O_RDONLY);
@@ -498,7 +503,8 @@ TYPED_TEST_SUITE_P(AsyncBatchTest);
 
 TYPED_TEST_P(AsyncBatchTest, BatchRead) {
   TypeParam aioReader;
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kDefaultFileSize);
+  auto tempFile =
+      folly::test::makeTemporaryFileWithRandomData(kDefaultFileSize);
   int fd = ::open(tempFile.path().c_str(), O_DIRECT | O_RDONLY);
   if (fd == -1) {
     fd = ::open(tempFile.path().c_str(), O_RDONLY);

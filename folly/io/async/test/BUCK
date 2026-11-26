@@ -1079,8 +1079,8 @@ fb_dirsync_cpp_binary(
         "//folly/io/async:async_io",
         "//folly/io/async:io_uring",
         "//folly/io/async/test:async_base_test_lib",
-        "//folly/io/async/test:io_test_temp_file_util_lib",
         "//folly/portability:gflags",
+        "//folly/testing:test_util",
     ],
 )
 
@@ -1156,9 +1156,9 @@ fb_dirsync_cpp_unittest(
         "//folly/io/async:io_uring_backend",
         "//folly/io/async:io_uring_provided_buffer_ring",
         "//folly/io/async/test:async_signal_handler_test_lib",
-        "//folly/io/async/test:io_test_temp_file_util_lib",
         "//folly/io/async/testing:event_base_test_lib",
         "//folly/portability:gtest",
+        "//folly/testing:test_util",
     ],
 )
 
@@ -1362,23 +1362,6 @@ fb_dirsync_cpp_unittest(
 )
 
 fb_dirsync_cpp_library(
-    name = "io_test_temp_file_util_lib",
-    srcs = ["IoTestTempFileUtil.cpp"],
-    headers = ["IoTestTempFileUtil.h"],
-    labels = fbcode_ci_default_labels(),
-    target_compatible_with = ["ovr_config//runtime:fbcode"],
-    deps = [
-        "//folly:file_util",
-        "//folly:string",
-    ],
-    exported_deps = [
-        "fbsource//third-party/glog:glog",
-        "//folly/io:fs_util",
-        "//folly/testing:test_util",
-    ],
-)
-
-fb_dirsync_cpp_library(
     name = "async_base_test_lib",
     srcs = ["AsyncBaseTestLib.cpp"],
     headers = ["AsyncBaseTestLib.h"],
@@ -1390,11 +1373,11 @@ fb_dirsync_cpp_library(
         "//folly:string",
         "//folly/io:fs_util",
         "//folly/io/async:async_base_class",
-        "//folly/io/async/test:io_test_temp_file_util_lib",
         "//folly/portability:gtest",
         "//folly/portability:sockets",
         "//folly/portability:unistd",
         "//folly/test:test_utils",
+        "//folly/testing:test_util",
     ],
 )
 

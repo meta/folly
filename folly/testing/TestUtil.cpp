@@ -16,6 +16,9 @@
 
 #include <folly/testing/TestUtil.h>
 
+#include <algorithm>
+#include <random>
+
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -249,6 +252,40 @@ void report_resource_exhaustion(
   if (const auto ext = folly::ext::test_report_resource_exhaustion) {
     ext(operation, error, message);
   }
+}
+
+TemporaryFile makeTemporaryFileWithRandomData(size_t size) {
+  CHECK_EQ(size % sizeof(uint32_t), 0);
+  size /= sizeof(uint32_t);
+
+  TemporaryFile tmpFile;
+  int fd = tmpFile.fd();
+  CHECK_GE(fd, 0);
+
+  // fill the file with reproducible random data
+  const uint32_t seed = 42;
+  std::mt19937 rnd(seed);
+
+  constexpr size_t bufferSize = 1U << 16;
+  uint32_t buffer[bufferSize];
+
+  while (size) {
+    size_t n = std::min(size, bufferSize);
+    for (size_t i = 0; i < n; ++i) {
+      buffer[i] = rnd();
+    }
+    size_t written = folly::writeFull(fd, buffer, sizeof(uint32_t) * n);
+    CHECK_EQ(written, sizeof(uint32_t) * n);
+    size -= n;
+  }
+
+  CHECK_EQ(folly::fdatasyncNoInt(fd), 0);
+
+  // the file was opened with O_EXCL so we need to close to be able
+  // to open it again
+  tmpFile.close();
+
+  return tmpFile;
 }
 
 fs::path find_resource(std::string_view resource) {

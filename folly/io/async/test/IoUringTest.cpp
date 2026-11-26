@@ -54,7 +54,8 @@ TEST(IoUringTest, RegisteredBuffers) {
   auto ioUring = getAIO<IoUring>(kNumEntries, folly::AsyncBase::NOT_POLLABLE);
   SKIP_IF(!ioUring) << "IOUring not available";
 
-  auto tempFile = folly::test::TempFileUtil::getTempFile(kDefaultFileSize);
+  auto tempFile =
+      folly::test::makeTemporaryFileWithRandomData(kDefaultFileSize);
   int fd = ::open(tempFile.path().c_str(), O_DIRECT | O_RDWR);
   if (fd == -1) {
     fd = ::open(tempFile.path().c_str(), O_RDWR);

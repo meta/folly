@@ -2286,7 +2286,6 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
       SOURCES
       AsyncIOTest.cpp
       AsyncBaseTestLib.cpp
-      IoTestTempFileUtil.cpp
     )
   endif ()
 
