@@ -39,8 +39,7 @@ namespace detail {
 
 template <typename Key>
 using map_util_format_key_t = typename std::conditional_t<
-    FMT_VERSION >= 100000 && std::is_enum_v<Key> &&
-        !fmt::is_formattable<Key>::value,
+    std::is_enum_v<Key> && !fmt::is_formattable<Key>::value,
     std::underlying_type<Key>,
     std::type_identity<const Key&>>::type;
 
