@@ -277,7 +277,7 @@ list(
   ${FOLLY_DIR}/io/async/testing/MockAsyncTransport.h
   ${FOLLY_DIR}/io/async/testing/MockAsyncUDPSocket.h
   ${FOLLY_DIR}/io/async/testing/MockTimeoutManager.h
-  ${FOLLY_DIR}/io/async/test/ScopedBoundPort.h
+  ${FOLLY_DIR}/io/async/testing/ScopedBoundPort.h
   ${FOLLY_DIR}/io/async/test/SocketPair.h
   ${FOLLY_DIR}/io/async/test/TFOUtil.h
   ${FOLLY_DIR}/io/async/test/TimeUtil.h
@@ -534,8 +534,8 @@ if (BUILD_TESTS OR BUILD_BENCHMARKS)
     ${FOLLY_DIR}/io/async/testing/MockAsyncTransport.h
     ${FOLLY_DIR}/io/async/testing/MockAsyncUDPSocket.h
     ${FOLLY_DIR}/io/async/testing/MockTimeoutManager.h
-    ${FOLLY_DIR}/io/async/test/ScopedBoundPort.cpp
-    ${FOLLY_DIR}/io/async/test/ScopedBoundPort.h
+    ${FOLLY_DIR}/io/async/testing/ScopedBoundPort.cpp
+    ${FOLLY_DIR}/io/async/testing/ScopedBoundPort.h
     ${FOLLY_DIR}/io/async/test/SocketPair.cpp
     ${FOLLY_DIR}/io/async/test/SocketPair.h
     ${FOLLY_DIR}/io/async/test/TFOUtil.cpp

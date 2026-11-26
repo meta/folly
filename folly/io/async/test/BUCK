@@ -498,21 +498,6 @@ fb_dirsync_cpp_unittest(
     ],
 )
 
-fb_dirsync_cpp_library(
-    name = "scoped_bound_port",
-    srcs = ["ScopedBoundPort.cpp"],
-    headers = ["ScopedBoundPort.h"],
-    use_raw_headers = True,
-    deps = [
-        "//folly:memory",
-        "//folly/io/async:scoped_event_base_thread",
-        "//folly/io/async:server_socket",
-    ],
-    exported_deps = [
-        "//folly:network_address",
-    ],
-)
-
 fb_dirsync_cpp_unittest(
     name = "scoped_event_base_thread_test",
     srcs = ["ScopedEventBaseThreadTest.cpp"],

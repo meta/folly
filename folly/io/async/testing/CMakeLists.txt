@@ -117,6 +117,17 @@ else ()
   )
 endif ()
 
+folly_add_library(
+  NAME scoped_bound_port
+  SRCS ScopedBoundPort.cpp
+  HEADERS ScopedBoundPort.h
+  DEPS
+    folly_io_async_scoped_event_base_thread
+    folly_io_async_server_socket
+    folly_memory
+  EXPORTED_DEPS folly_network_address
+)
+
 if (FOLLY_HAVE_OPENSSL)
   folly_add_library(
     NAME test_ssl_server

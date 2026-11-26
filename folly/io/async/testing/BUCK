@@ -138,3 +138,18 @@ fb_dirsync_cpp_library(
         "//folly/net:network_socket",
     ],
 )
+
+fb_dirsync_cpp_library(
+    name = "scoped_bound_port",
+    srcs = ["ScopedBoundPort.cpp"],
+    headers = ["ScopedBoundPort.h"],
+    use_raw_headers = True,
+    deps = [
+        "//folly:memory",
+        "//folly/io/async:scoped_event_base_thread",
+        "//folly/io/async:server_socket",
+    ],
+    exported_deps = [
+        "//folly:network_address",
+    ],
+)
