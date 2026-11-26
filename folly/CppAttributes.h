@@ -226,6 +226,13 @@
 #define FOLLY_ATTR_GNU_FLATTEN
 #endif
 
+// Can annotate call-site statements, unlike FOLLY_ALWAYS_INLINE.
+#if __has_cpp_attribute(clang::always_inline)
+#define FOLLY_ATTR_CLANG_ALWAYS_INLINE clang::always_inline
+#else
+#define FOLLY_ATTR_CLANG_ALWAYS_INLINE
+#endif
+
 #if __has_cpp_attribute(clang::lifetimebound)
 #define FOLLY_ATTR_CLANG_LIFETIMEBOUND clang::lifetimebound
 #else
