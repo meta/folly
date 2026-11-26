@@ -469,7 +469,7 @@ class F14BasicMap : public std::unordered_map<K, M, H, E, A> {
       const_iterator last,
       BeforeDestroy&& beforeDestroy) {
     iterator pos = erase(first, first);
-    FOLLY_SAFE_CHECK(std::addressof(*pos) == std::addressof(*first), "");
+    FOLLY_SAFE_CHECK(pos == first, "");
     while (pos != last) {
       pos = eraseInto(pos, beforeDestroy);
     }
