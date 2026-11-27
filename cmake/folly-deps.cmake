@@ -786,6 +786,31 @@ list(REMOVE_DUPLICATES FOLLY_INCLUDE_DIRECTORIES)
 # A failed find_path() leaves <VAR>-NOTFOUND behind, which would reach the
 # compiler as a relative include directory.
 list(FILTER FOLLY_INCLUDE_DIRECTORIES EXCLUDE REGEX "-NOTFOUND$")
+# Drop directories the compiler already searches, such as the macOS SDK's
+# usr/include that FindZLIB, FindBZip2 and FindLibUnwind report. CMake omits
+# them when compiling folly, but an exported interface keeps the literal path,
+# and a consumer whose compiler sees it under another spelling (MacOSX26.sdk
+# vs MacOSX.sdk, or Xcode.app vs CommandLineTools) passes it as -isystem ahead
+# of libc++'s headers, which libc++ rejects.
+set(_folly_implicit_include_dirs)
+set(_folly_implicit_candidates
+    ${CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES}
+    ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+if (APPLE AND IS_ABSOLUTE "${CMAKE_OSX_SYSROOT}")
+  list(APPEND _folly_implicit_candidates "${CMAKE_OSX_SYSROOT}/usr/include")
+endif ()
+foreach (_dir IN LISTS _folly_implicit_candidates)
+  get_filename_component(_real_dir "${_dir}" REALPATH)
+  list(APPEND _folly_implicit_include_dirs "${_real_dir}")
+endforeach ()
+set(_folly_explicit_include_dirs)
+foreach (_dir IN LISTS FOLLY_INCLUDE_DIRECTORIES)
+  get_filename_component(_real_dir "${_dir}" REALPATH)
+  if (NOT _real_dir IN_LIST _folly_implicit_include_dirs)
+    list(APPEND _folly_explicit_include_dirs "${_dir}")
+  endif ()
+endforeach ()
+set(FOLLY_INCLUDE_DIRECTORIES ${_folly_explicit_include_dirs})
 foreach (_dir IN LISTS FOLLY_INCLUDE_DIRECTORIES)
   # Wrap build-tree paths in BUILD_INTERFACE so they do not leak into an
   # install interface, whether folly is the top project or a subproject. An
