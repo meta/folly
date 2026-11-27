@@ -65,8 +65,19 @@ struct OneAtATimePolicy {
 
 template <typename T>
 struct CountingAllocator : std::allocator<T> {
+  // Default-construct with a fresh shared counter.
+  CountingAllocator() : nAllocations(std::make_shared<int>(0)) {}
+
+  // Converting (rebind) copy constructor: share the same counter across all
+  // rebound copies so that allocations made through a rebound allocator
+  // (e.g. the internal allocator copy that libc++ 22 keeps) are still visible
+  // from the original instance.
+  template <typename U>
+  /* implicit */ CountingAllocator(const CountingAllocator<U>& other) noexcept
+      : nAllocations(other.nAllocations) {}
+
   T* allocate(std::size_t n) {
-    nAllocations += 1;
+    ++*nAllocations;
     return std::allocator<T>::allocate(n);
   }
   // std::vector may allocate via allocator_traits::allocate_at_least, which
@@ -79,10 +90,10 @@ struct CountingAllocator : std::allocator<T> {
   template <typename Base = std::allocator<T>>
     requires requires(Base& b, std::size_t n) { b.allocate_at_least(n); }
   auto allocate_at_least(std::size_t n) {
-    nAllocations += 1;
+    ++*nAllocations;
     return std::allocator<T>::allocate_at_least(n);
   }
-  int nAllocations{0};
+  std::shared_ptr<int> nAllocations;
 
   template <typename U>
   struct rebind {
@@ -894,7 +905,7 @@ TEST(HeapVectorTypes, GrowthPolicy) {
   SetT::iterator it = a.begin();
   ASSERT_FALSE(it == a.end());
   EXPECT_EQ(it->count_, 20);
-  EXPECT_EQ(a.get_container().get_allocator().nAllocations, 20);
+  EXPECT_EQ(*a.get_container().get_allocator().nAllocations, 20);
 
   std::list<CountCopyCtor> v;
   for (int i = 0; i < 20; ++i) {
@@ -902,7 +913,7 @@ TEST(HeapVectorTypes, GrowthPolicy) {
   }
   a.insert(v.begin(), v.end());
   check_invariant(a);
-  EXPECT_EQ(a.get_container().get_allocator().nAllocations, 21);
+  EXPECT_EQ(*a.get_container().get_allocator().nAllocations, 21);
 }
 
 TEST(HeapVectorTest, EmptyTest) {
