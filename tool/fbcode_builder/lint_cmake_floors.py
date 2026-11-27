@@ -13,7 +13,7 @@ compatibility band. The floor lives in exactly one place (FLOOR below).
 This linter is a pure function of the files arc lint passes it: every input
 is checked, nothing else is read. The set of covered files is owned by the
 lint engine glob; the value they must meet is owned by FLOOR here.
-See https://github.com/facebook/folly/issues/2703.
+See https://github.com/meta/folly/issues/2703.
 
 Usage:
     python3 lint_cmake_floors.py @pathsfile
@@ -128,7 +128,7 @@ def check_content(display: str, content: str) -> None:
             f"cmake_minimum_required is {found_str}, below the OSS floor "
             f"{floor_str} (folly requires {floor_str}). Run `arc lint -a` "
             "to apply the bump. See "
-            "https://github.com/facebook/folly/issues/2703.",
+            "https://github.com/meta/folly/issues/2703.",
         )
 
 

@@ -16,7 +16,7 @@ fbcode/opensource/fbcode_builder/lint_test_fixtures/ok_at_floor/CMakeLists.txt
   "code": "OSSCMAKEFLOOR",
   "severity": "error",
   "name": "cmake-floor",
-  "description": "cmake_minimum_required is 3.5, below the OSS floor 3.14 (folly requires 3.14). Run `arc lint -a` to apply the bump. See https://github.com/facebook/folly/issues/2703.",
+  "description": "cmake_minimum_required is 3.5, below the OSS floor 3.14 (folly requires 3.14). Run `arc lint -a` to apply the bump. See https://github.com/meta/folly/issues/2703.",
   "original": "cmake_minimum_required(VERSION 3.5)",
   "replacement": "cmake_minimum_required(VERSION 3.14)",
   "bypassChangedLineFiltering": null

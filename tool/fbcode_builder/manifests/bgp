@@ -5,7 +5,7 @@ shipit_project = bgp
 shipit_fbcode_builder = true
 
 [git]
-repo_url = https://github.com/facebook/BGP.git
+repo_url = https://github.com/meta/BGP.git
 
 [build.os=linux]
 builder = cmake

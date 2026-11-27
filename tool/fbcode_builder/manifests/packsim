@@ -17,7 +17,7 @@ fbsource_path = fbcode/ai_simulation/packsim
 # every run.
 
 [git]
-repo_url = https://github.com/facebook/ai_simulation.git
+repo_url = https://github.com/meta/ai_simulation.git
 
 [build]
 builder = cmake

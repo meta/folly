@@ -5,7 +5,7 @@ shipit_project = cachelib
 shipit_fbcode_builder = true
 
 [git]
-repo_url = https://github.com/facebook/cachelib.git
+repo_url = https://github.com/meta/cachelib.git
 
 [build]
 builder = cmake

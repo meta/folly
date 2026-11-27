@@ -5,7 +5,7 @@ shipit_project = mcrouter
 shipit_fbcode_builder = true
 
 [git]
-repo_url = https://github.com/facebook/mcrouter.git
+repo_url = https://github.com/meta/mcrouter.git
 
 [dependencies]
 # mcrouter's LZ4 codecs need folly built with LZ4 and use <lz4.h> directly.

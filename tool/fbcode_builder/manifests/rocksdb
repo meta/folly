@@ -2,7 +2,7 @@
 name = rocksdb
 
 [download]
-url = https://github.com/facebook/rocksdb/archive/refs/tags/v8.7.3.zip
+url = https://github.com/meta/rocksdb/archive/refs/tags/v8.7.3.zip
 sha256 = 36c06b61dc167f2455990d60dd88d734b73aa8c4dfc095243efd0243834c6cd3
 
 [dependencies]

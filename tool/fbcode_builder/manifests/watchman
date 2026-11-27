@@ -5,7 +5,7 @@ shipit_project = watchman
 shipit_fbcode_builder = true
 
 [git]
-repo_url = https://github.com/facebook/watchman.git
+repo_url = https://github.com/meta/watchman.git
 
 [build]
 builder = nop

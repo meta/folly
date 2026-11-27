@@ -8,7 +8,7 @@ shipit_fbcode_builder = true
 required_locales = en_US.UTF-8
 
 [git]
-repo_url = https://github.com/facebook/sapling.git
+repo_url = https://github.com/meta/sapling.git
 
 [build.not(os=windows)]
 builder = make
