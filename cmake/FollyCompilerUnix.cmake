@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(CMAKE_CXX_FLAGS_COMMON "-g -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_COMMON "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CMAKE_CXX_FLAGS_COMMON}")
 set(CMAKE_CXX_FLAGS_RELEASE
     "${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_COMMON} -O3")
@@ -22,8 +22,7 @@ function (apply_folly_compile_options_to_target THETARGET)
   target_compile_definitions(${THETARGET} PRIVATE _REENTRANT _GNU_SOURCE)
   target_compile_options(
     ${THETARGET}
-    PRIVATE -g
-            -finput-charset=UTF-8
+    PRIVATE -finput-charset=UTF-8
             -fsigned-char
             -Wall
             -Wno-deprecated
