@@ -85,8 +85,10 @@ void SignalSafeElfCache::warmUp() noexcept {
     compiler_must_not_predict(piece);
     findOrAdd(state.entries, piece, state.alloc);
   }
-  for (Entry const& entry : state.entries) {
-    compiler_must_not_elide(entry.init);
+  while (!state.entries.empty()) {
+    auto it = state.entries.begin();
+    compiler_must_not_elide(it->init);
+    state.entries.erase(it);
   }
 }
 
