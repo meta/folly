@@ -162,6 +162,7 @@ def validate_symbolizer_dwp(name, binary, mode = "fbcode//mode/opt", modifiers =
             ci.linux(ci.mode("fbcode//mode/dev")),
             ci.linux(ci.mode("fbcode//mode/libcxx")),
             ci.linux(ci.selective_coverage()),
+            ci.linux(ci.opt()),
         )
     )
     fb_dirsync_rule(
