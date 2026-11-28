@@ -33,8 +33,33 @@
 #include <malloc_np.h> // @manual
 #define FOLLY_HAS_JEMALLOC_DEFS 0
 #else
+// Keep jemalloc's stable API aliases without remapping malloc/free macros.
+#ifndef JEMALLOC_NO_DEMANGLE
+#define JEMALLOC_NO_DEMANGLE
+#endif
 #include <jemalloc/jemalloc.h> // @manual
 #define FOLLY_HAS_JEMALLOC_DEFS 1
+
+#ifdef USE_JEMALLOC
+// Explicit jemalloc builds can bind its helpers directly. Leave the weak-symbol
+// path unchanged when the allocator is selected at runtime (e.g. TCMalloc).
+namespace folly {
+inline constexpr auto malloc_usable_size = ::je_malloc_usable_size;
+inline constexpr auto mallocx = ::je_mallocx;
+inline constexpr auto rallocx = ::je_rallocx;
+inline constexpr auto xallocx = ::je_xallocx;
+inline constexpr auto sallocx = ::je_sallocx;
+inline constexpr auto dallocx = ::je_dallocx;
+inline constexpr auto sdallocx = ::je_sdallocx;
+inline constexpr auto nallocx = ::je_nallocx;
+inline constexpr auto mallctl = ::je_mallctl;
+inline constexpr auto mallctlnametomib = ::je_mallctlnametomib;
+inline constexpr auto mallctlbymib = ::je_mallctlbymib;
+#ifdef je_free_aligned_sized
+inline constexpr auto free_aligned_sized = ::je_free_aligned_sized;
+#endif
+} // namespace folly
+#endif
 #endif
 #else
 #if !defined(__FreeBSD__)
